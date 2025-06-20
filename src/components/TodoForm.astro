@@ -3,13 +3,13 @@
 ---
 
 <div class="todo-form-container">
-  <form id="todo-form" class="space-y-4 p-6 bg-white rounded-lg shadow">
+  <form id="todo-form" class="space-y-4 card">
     <div>
       <label for="project_id" class="block text-sm font-medium text-gray-700">Project</label>
       <select 
         id="project_id" 
         name="project_id" 
-        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+        class="form-select mt-1"
       >
         <option value="">Select a project...</option>
       </select>
@@ -22,7 +22,7 @@
         id="title" 
         name="title" 
         required
-        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+        class="form-input mt-1"
       >
     </div>
 
@@ -32,7 +32,7 @@
         id="description" 
         name="description" 
         rows="3"
-        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+        class="form-textarea mt-1"
       ></textarea>
     </div>
 
@@ -42,7 +42,7 @@
         <select 
           id="priority" 
           name="priority"
-          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+          class="form-select mt-1"
         >
           <option value="low">Low</option>
           <option value="medium" selected>Medium</option>
@@ -60,7 +60,7 @@
           step="0.5" 
           min="0.5" 
           value="1.0"
-          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+          class="form-input mt-1"
         >
       </div>
     </div>
@@ -71,7 +71,7 @@
         type="date" 
         id="due_date" 
         name="due_date"
-        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+        class="form-input mt-1"
       >
     </div>
 
@@ -82,13 +82,13 @@
         id="tags" 
         name="tags" 
         placeholder="backend, urgent, review"
-        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+        class="form-input mt-1"
       >
     </div>
 
     <button 
       type="submit"
-      class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+      class="btn btn-primary w-full"
     >
       Add Todo
     </button>
@@ -163,16 +163,5 @@
 <style>
   .todo-form-container {
     max-width: 600px;
-  }
-  
-  /* Basic styling for form elements */
-  input, select, textarea {
-    border: 1px solid #d1d5db;
-  }
-  
-  input:focus, select:focus, textarea:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
   }
 </style>

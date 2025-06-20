@@ -4,7 +4,7 @@ import TodoForm from '../components/TodoForm.astro';
 ---
 
 <Layout title="Todo Manager">
-  <main class="container mx-auto px-4 py-8">
+  <main class="container py-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-8">Todo Manager</h1>
     
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -50,13 +50,13 @@ import TodoForm from '../components/TodoForm.astro';
       // Render each project's todos
       Object.entries(todosByProject).forEach(([projectName, projectTodos]) => {
         const projectDiv = document.createElement('div');
-        projectDiv.className = 'bg-white rounded-lg shadow p-4';
+        projectDiv.className = 'card';
         
         projectDiv.innerHTML = `
           <h3 class="font-semibold text-lg mb-3 text-gray-800">${projectName}</h3>
           <div class="space-y-2">
             ${projectTodos.map(todo => `
-              <div class="flex items-center justify-between p-3 border rounded-lg">
+              <div class="flex items-center justify-between p-3 border rounded">
                 <div class="flex-1">
                   <div class="font-medium">${todo.title}</div>
                   <div class="text-sm text-gray-600">${todo.description || ''}</div>
@@ -67,7 +67,7 @@ import TodoForm from '../components/TodoForm.astro';
                 </div>
                 <button 
                   onclick="completeTodo(${todo.id})"
-                  class="ml-4 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                  class="btn btn-success btn-sm ml-4"
                 >
                   Complete
                 </button>

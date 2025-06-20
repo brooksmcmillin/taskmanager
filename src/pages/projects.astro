@@ -4,14 +4,14 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Manage Projects">
-  <main class="container mx-auto px-4 py-8">
+  <main class="container py-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-8">Manage Projects</h1>
     
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       <!-- Create Project Form -->
       <div>
         <h2 class="text-xl font-semibold mb-4">Create New Project</h2>
-        <form id="project-form" class="space-y-4 p-6 bg-white rounded-lg shadow">
+        <form id="project-form" class="space-y-4 card">
           <div>
             <label for="name" class="block text-sm font-medium text-gray-700">Project Name</label>
             <input 
@@ -19,7 +19,7 @@ import Layout from '../layouts/Layout.astro';
               id="name" 
               name="name" 
               required
-              class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+              class="form-input mt-1"
             >
           </div>
 
@@ -29,7 +29,7 @@ import Layout from '../layouts/Layout.astro';
               id="description" 
               name="description" 
               rows="3"
-              class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2"
+              class="form-textarea mt-1"
             ></textarea>
           </div>
 
@@ -40,13 +40,13 @@ import Layout from '../layouts/Layout.astro';
               id="color" 
               name="color" 
               value="#3b82f6"
-              class="mt-1 block w-full h-10 rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              class="form-input mt-1 h-10"
             >
           </div>
 
           <button 
             type="submit"
-            class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            class="btn btn-primary w-full"
           >
             Create Project
           </button>
@@ -62,11 +62,6 @@ import Layout from '../layouts/Layout.astro';
       </div>
     </div>
     
-    <div class="mt-8 text-center">
-      <a href="/" class="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700">
-        Back to Todos
-      </a>
-    </div>
   </main>
 </Layout>
 
@@ -86,7 +81,7 @@ import Layout from '../layouts/Layout.astro';
       
       projects.forEach(project => {
         const projectDiv = document.createElement('div');
-        projectDiv.className = 'bg-white rounded-lg shadow p-4 border-l-4';
+        projectDiv.className = 'card border-l-4';
         projectDiv.style.borderLeftColor = project.color;
         
         projectDiv.innerHTML = `
