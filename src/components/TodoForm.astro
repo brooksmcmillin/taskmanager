@@ -1,0 +1,178 @@
+---
+// src/components/TodoForm.astro
+---
+
+<div class="todo-form-container">
+  <form id="todo-form" class="space-y-4 p-6 bg-white rounded-lg shadow">
+    <div>
+      <label for="project_id" class="block text-sm font-medium text-gray-700">Project</label>
+      <select 
+        id="project_id" 
+        name="project_id" 
+        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+      >
+        <option value="">Select a project...</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+      <input 
+        type="text" 
+        id="title" 
+        name="title" 
+        required
+        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+      >
+    </div>
+
+    <div>
+      <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+      <textarea 
+        id="description" 
+        name="description" 
+        rows="3"
+        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+      ></textarea>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="priority" class="block text-sm font-medium text-gray-700">Priority</label>
+        <select 
+          id="priority" 
+          name="priority"
+          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+        >
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="estimated_hours" class="block text-sm font-medium text-gray-700">Estimated Hours</label>
+        <input 
+          type="number" 
+          id="estimated_hours" 
+          name="estimated_hours" 
+          step="0.5" 
+          min="0.5" 
+          value="1.0"
+          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+        >
+      </div>
+    </div>
+
+    <div>
+      <label for="due_date" class="block text-sm font-medium text-gray-700">Due Date (Optional)</label>
+      <input 
+        type="date" 
+        id="due_date" 
+        name="due_date"
+        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+      >
+    </div>
+
+    <div>
+      <label for="tags" class="block text-sm font-medium text-gray-700">Tags (comma-separated)</label>
+      <input 
+        type="text" 
+        id="tags" 
+        name="tags" 
+        placeholder="backend, urgent, review"
+        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border p-2"
+      >
+    </div>
+
+    <button 
+      type="submit"
+      class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+    >
+      Add Todo
+    </button>
+  </form>
+</div>
+
+<script>
+  // Load projects into dropdown
+  async function loadProjects() {
+    try {
+      const response = await fetch('/api/projects');
+      const projects = await response.json();
+      const select = document.getElementById('project_id');
+      
+      // Clear existing options except the first one
+      while (select.children.length > 1) {
+        select.removeChild(select.lastChild);
+      }
+      
+      projects.forEach(project => {
+        const option = document.createElement('option');
+        option.value = project.id;
+        option.textContent = project.name;
+        select.appendChild(option);
+      });
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+    }
+  }
+
+  // Handle form submission
+  document.getElementById('todo-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const todoData = {
+      project_id: formData.get('project_id') || null,
+      title: formData.get('title'),
+      description: formData.get('description'),
+      priority: formData.get('priority'),
+      estimated_hours: parseFloat(formData.get('estimated_hours')),
+      due_date: formData.get('due_date') || null,
+      tags: formData.get('tags') ? formData.get('tags').split(',').map(t => t.trim()) : [],
+      context: 'work'
+    };
+
+    try {
+      const response = await fetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(todoData)
+      });
+
+      if (response.ok) {
+        e.target.reset();
+        // Trigger a custom event to refresh the todo list
+        window.dispatchEvent(new CustomEvent('todoAdded'));
+        alert('Todo added successfully!');
+      } else {
+        const error = await response.json();
+        alert('Error creating todo: ' + (error.message || 'Unknown error'));
+      }
+    } catch (error) {
+      alert('Network error: ' + error.message);
+    }
+  });
+
+  // Load projects when page loads
+  loadProjects();
+</script>
+
+<style>
+  .todo-form-container {
+    max-width: 600px;
+  }
+  
+  /* Basic styling for form elements */
+  input, select, textarea {
+    border: 1px solid #d1d5db;
+  }
+  
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+</style>

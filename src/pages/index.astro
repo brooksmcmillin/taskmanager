@@ -1,0 +1,110 @@
+---
+import Layout from '../layouts/Layout.astro';
+import TodoForm from '../components/TodoForm.astro';
+---
+
+<Layout title="Todo Manager">
+  <main class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-8">Todo Manager</h1>
+    
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <!-- Add Todo Form -->
+      <div>
+        <h2 class="text-xl font-semibold mb-4">Add New Todo</h2>
+        <TodoForm />
+      </div>
+      
+      <!-- Todo Lists -->
+      <div>
+        <h2 class="text-xl font-semibold mb-4">Current Todos</h2>
+        <div id="todo-lists" class="space-y-6">
+          <!-- Todos will be loaded here -->
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  async function loadTodos() {
+    try {
+      const [todosResponse, projectsResponse] = await Promise.all([
+        fetch('/api/todos?status=pending'),
+        fetch('/api/projects')
+      ]);
+      
+      const todos = await todosResponse.json();
+      const projects = await projectsResponse.json();
+      
+      const container = document.getElementById('todo-lists');
+      container.innerHTML = '';
+      
+      // Group todos by project
+      const todosByProject = todos.reduce((acc, todo) => {
+        const projectName = todo.project_name || 'No Project';
+        if (!acc[projectName]) acc[projectName] = [];
+        acc[projectName].push(todo);
+        return acc;
+      }, {});
+      
+      // Render each project's todos
+      Object.entries(todosByProject).forEach(([projectName, projectTodos]) => {
+        const projectDiv = document.createElement('div');
+        projectDiv.className = 'bg-white rounded-lg shadow p-4';
+        
+        projectDiv.innerHTML = `
+          <h3 class="font-semibold text-lg mb-3 text-gray-800">${projectName}</h3>
+          <div class="space-y-2">
+            ${projectTodos.map(todo => `
+              <div class="flex items-center justify-between p-3 border rounded-lg">
+                <div class="flex-1">
+                  <div class="font-medium">${todo.title}</div>
+                  <div class="text-sm text-gray-600">${todo.description || ''}</div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    Priority: ${todo.priority} | Est: ${todo.estimated_hours}h
+                    ${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
+                  </div>
+                </div>
+                <button 
+                  onclick="completeTodo(${todo.id})"
+                  class="ml-4 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                >
+                  Complete
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        
+        container.appendChild(projectDiv);
+      });
+      
+    } catch (error) {
+      console.error('Failed to load todos:', error);
+    }
+  }
+  
+  window.completeTodo = async function(todoId) {
+    const actualHours = prompt('How many hours did this take?');
+    if (!actualHours) return;
+    
+    try {
+      const response = await fetch(`/api/todos/${todoId}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actual_hours: parseFloat(actualHours) })
+      });
+      
+      if (response.ok) {
+        loadTodos(); // Refresh the list
+      } else {
+        alert('Failed to complete todo');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+  
+  // Load todos when page loads
+  loadTodos();
+</script>
