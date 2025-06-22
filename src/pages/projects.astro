@@ -1,9 +1,14 @@
 ---
 // src/pages/projects.astro - Simple project management page
 import Layout from '../layouts/Layout.astro';
+import { checkAuth } from '../lib/serverAuth.js';
+
+const auth = checkAuth(Astro.request);
+if (auth.redirect) return auth.redirect;
+const user = auth.user;
 ---
 
-<Layout title="Manage Projects">
+<Layout title="Manage Projects" user={user}>
   <main class="container py-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-8">Manage Projects</h1>
     
@@ -69,6 +74,15 @@ import Layout from '../layouts/Layout.astro';
   async function loadProjects() {
     try {
       const response = await fetch('/api/projects');
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error('Failed to load projects');
+      }
+      
       const projects = await response.json();
       const container = document.getElementById('projects-list');
       
@@ -121,6 +135,8 @@ import Layout from '../layouts/Layout.astro';
         e.target.reset();
         loadProjects(); // Refresh the projects list
         alert('Project created successfully!');
+      } else if (response.status === 401) {
+        window.location.href = '/login';
       } else {
         const error = await response.json();
         alert('Error creating project: ' + (error.message || 'Unknown error'));

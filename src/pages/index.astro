@@ -1,9 +1,11 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import TodoForm from '../components/TodoForm.astro';
+
+const user = Astro.locals.user;
 ---
 
-<Layout title="Todo Manager">
+<Layout title="Todo Manager" user={user}>
   <main class="container py-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-8">Todo Manager</h1>
     
@@ -32,6 +34,14 @@ import TodoForm from '../components/TodoForm.astro';
         fetch('/api/todos?status=pending'),
         fetch('/api/projects')
       ]);
+      
+      if (!todosResponse.ok || !projectsResponse.ok) {
+        if (todosResponse.status === 401 || projectsResponse.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error('Failed to load data');
+      }
       
       const todos = await todosResponse.json();
       const projects = await projectsResponse.json();
@@ -97,6 +107,8 @@ import TodoForm from '../components/TodoForm.astro';
       
       if (response.ok) {
         loadTodos(); // Refresh the list
+      } else if (response.status === 401) {
+        window.location.href = '/login';
       } else {
         alert('Failed to complete todo');
       }

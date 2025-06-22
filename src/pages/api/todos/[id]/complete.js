@@ -1,7 +1,20 @@
 import { TodoDB } from '../../../../lib/db.js';
+import { Auth } from '../../../../lib/auth.js';
+
+function requireAuth(request) {
+  const sessionId = Auth.getSessionFromRequest(request);
+  const session = Auth.getSessionUser(sessionId);
+  
+  if (!session) {
+    throw new Error('Authentication required');
+  }
+  
+  return session;
+}
 
 export const POST = async ({ params, request }) => {
   try {
+    const session = requireAuth(request);
     const { id } = params;
     const { actual_hours } = await request.json();
     
@@ -12,15 +25,16 @@ export const POST = async ({ params, request }) => {
       });
     }
     
-    TodoDB.completeTodo(parseInt(id), parseFloat(actual_hours));
+    TodoDB.completeTodo(parseInt(id), session.user_id, parseFloat(actual_hours));
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error('Error completing todo:', error);
+    const status = error.message === 'Authentication required' ? 401 : 500;
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+      status,
       headers: { 'Content-Type': 'application/json' }
     });
   }

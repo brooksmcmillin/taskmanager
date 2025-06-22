@@ -1,5 +1,6 @@
 ---
 const currentPath = Astro.url.pathname;
+const { user } = Astro.props;
 ---
 
 <nav class="bg-white shadow border">
@@ -7,21 +8,55 @@ const currentPath = Astro.url.pathname;
     <div class="flex items-center justify-between h-16">
       <div class="flex items-center space-x-8">
         <h1 class="text-xl font-bold text-gray-900">Task Manager</h1>
-        <div class="flex space-x-4">
-          <a 
-            href="/" 
-            class={`nav-link ${currentPath === '/' ? 'active' : ''}`}
-          >
-            Todos
-          </a>
-          <a 
-            href="/projects" 
-            class={`nav-link ${currentPath === '/projects' ? 'active' : ''}`}
-          >
-            Projects
-          </a>
-        </div>
+        {user && (
+          <div class="flex space-x-4">
+            <a 
+              href="/" 
+              class={`nav-link ${currentPath === '/' ? 'active' : ''}`}
+            >
+              Todos
+            </a>
+            <a 
+              href="/projects" 
+              class={`nav-link ${currentPath === '/projects' ? 'active' : ''}`}
+            >
+              Projects
+            </a>
+          </div>
+        )}
       </div>
+      
+      {user && (
+        <div class="flex items-center space-x-4">
+          <span class="text-sm text-gray-600">Welcome, {user.username}</span>
+          <button 
+            id="logout-btn" 
+            class="btn btn-outline text-sm"
+          >
+            Logout
+          </button>
+        </div>
+      )}
     </div>
   </div>
 </nav>
+
+{user && (
+  <script>
+    document.getElementById('logout-btn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/auth/logout', {
+          method: 'POST'
+        });
+        
+        if (response.ok) {
+          window.location.href = '/login';
+        } else {
+          alert('Logout failed');
+        }
+      } catch (error) {
+        alert('Network error: ' + error.message);
+      }
+    });
+  </script>
+)}

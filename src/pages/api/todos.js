@@ -1,19 +1,33 @@
 import { TodoDB } from '../../lib/db.js';
+import { Auth } from '../../lib/auth.js';
 
-export const GET = async ({ url }) => {
+function requireAuth(request) {
+  const sessionId = Auth.getSessionFromRequest(request);
+  const session = Auth.getSessionUser(sessionId);
+  
+  if (!session) {
+    throw new Error('Authentication required');
+  }
+  
+  return session;
+}
+
+export const GET = async ({ url, request }) => {
   try {
+    const session = requireAuth(request);
     const searchParams = new URL(url).searchParams;
     const projectId = searchParams.get('project_id');
     const status = searchParams.get('status');
     
-    const todos = TodoDB.getTodos(projectId, status);
+    const todos = TodoDB.getTodos(session.user_id, projectId, status);
     return new Response(JSON.stringify(todos), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
+    const status = error.message === 'Authentication required' ? 401 : 500;
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+      status,
       headers: { 'Content-Type': 'application/json' }
     });
   }
@@ -21,15 +35,17 @@ export const GET = async ({ url }) => {
 
 export const POST = async ({ request }) => {
   try {
+    const session = requireAuth(request);
     const body = await request.json();
-    const result = TodoDB.createTodo(body);
+    const result = TodoDB.createTodo(session.user_id, body);
     return new Response(JSON.stringify({ id: result.lastInsertRowid }), {
       status: 201,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
+    const status = error.message === 'Authentication required' ? 401 : 500;
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+      status,
       headers: { 'Content-Type': 'application/json' }
     });
   }
@@ -37,16 +53,18 @@ export const POST = async ({ request }) => {
 
 export const PUT = async ({ request }) => {
   try {
+    const session = requireAuth(request);
     const body = await request.json();
     const { id, ...updates } = body;
-    TodoDB.updateTodo(id, updates);
+    TodoDB.updateTodo(id, session.user_id, updates);
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
+    const status = error.message === 'Authentication required' ? 401 : 500;
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+      status,
       headers: { 'Content-Type': 'application/json' }
     });
   }
