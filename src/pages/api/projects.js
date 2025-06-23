@@ -34,7 +34,7 @@ export const POST = async ({ request }) => {
     const session = await requireAuth(request);
     const body = await request.json();
     const result = await TodoDB.createProject(session.user_id, body.name, body.description, body.color);
-    return new Response(JSON.stringify({ id: result.lastInsertRowid }), {
+    return new Response(JSON.stringify({ id: result.id }), {
       status: 201,
       headers: { 'Content-Type': 'application/json' }
     });
