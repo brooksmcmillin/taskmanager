@@ -1,9 +1,9 @@
 import { TodoDB } from '../../../../lib/db.js';
 import { Auth } from '../../../../lib/auth.js';
 
-function requireAuth(request) {
-  const sessionId = Auth.getSessionFromRequest(request);
-  const session = Auth.getSessionUser(sessionId);
+async function requireAuth(request) {
+  const sessionId = await Auth.getSessionFromRequest(request);
+  const session = await Auth.getSessionUser(sessionId);
   
   if (!session) {
     throw new Error('Authentication required');
@@ -14,7 +14,7 @@ function requireAuth(request) {
 
 export const POST = async ({ params, request }) => {
   try {
-    const session = requireAuth(request);
+    const session = await requireAuth(request);
     const { id } = params;
     const { actual_hours } = await request.json();
     
@@ -25,7 +25,7 @@ export const POST = async ({ params, request }) => {
       });
     }
     
-    TodoDB.completeTodo(parseInt(id), session.user_id, parseFloat(actual_hours));
+    await TodoDB.completeTodo(parseInt(id), session.user_id, parseFloat(actual_hours));
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
