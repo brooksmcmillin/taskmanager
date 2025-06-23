@@ -76,10 +76,6 @@ const user = auth.user;
       const response = await fetch('/api/projects');
       
       if (!response.ok) {
-        if (response.status === 401) {
-          window.location.href = '/login';
-          return;
-        }
         throw new Error('Failed to load projects');
       }
       
@@ -87,7 +83,9 @@ const user = auth.user;
       const container = document.getElementById('projects-list');
       
       container.innerHTML = '';
-      
+
+      console.log(projects);
+      console.log(typeof(projects));
       if (projects.length === 0) {
         container.innerHTML = '<p class="text-gray-500">No projects yet. Create your first project!</p>';
         return;
