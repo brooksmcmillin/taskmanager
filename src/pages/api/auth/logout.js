@@ -2,10 +2,11 @@ import { Auth } from '../../../lib/auth.js';
 
 export async function POST({ request }) {
   try {
-    const sessionId = Auth.getSessionFromRequest(request);
+    const sessionId = await Auth.getSessionFromRequest(request);
+    console.log("Logout Session: " + sessionId);
     
     if (sessionId) {
-      Auth.deleteSession(sessionId);
+      await Auth.deleteSession(sessionId);
     }
 
     return new Response(JSON.stringify({ success: true }), {

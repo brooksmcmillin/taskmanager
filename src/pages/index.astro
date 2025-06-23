@@ -36,16 +36,12 @@ const user = Astro.locals.user;
       ]);
       
       if (!todosResponse.ok || !projectsResponse.ok) {
-        if (todosResponse.status === 401 || projectsResponse.status === 401) {
-          window.location.href = '/login';
-          return;
-        }
         throw new Error('Failed to load data');
       }
       
       const todos = await todosResponse.json();
       const projects = await projectsResponse.json();
-      
+
       const container = document.getElementById('todo-lists');
       container.innerHTML = '';
       
