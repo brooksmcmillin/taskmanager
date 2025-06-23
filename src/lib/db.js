@@ -1,189 +1,242 @@
-import Database from 'better-sqlite3';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import pg from 'pg';
+const { Pool } = pg;
+import { config } from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+config();
 
-let db;
-try {
-  db = new Database(join(process.cwd(), 'todos.db'));
-} catch (error) {
-  console.error('Database connection failed:', error);
-  throw error;
-}
-
-// Initialize database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    is_active BOOLEAN DEFAULT 1
-  );
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS projects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    description TEXT,
-    color TEXT DEFAULT '#3b82f6',
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    is_active BOOLEAN DEFAULT 1,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-    UNIQUE(user_id, name)
-  );
-
-  CREATE TABLE IF NOT EXISTS todos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    project_id INTEGER,
-    title TEXT NOT NULL,
-    description TEXT,
-    priority TEXT CHECK(priority IN ('low', 'medium', 'high', 'urgent')) DEFAULT 'medium',
-    estimated_hours REAL DEFAULT 1.0,
-    actual_hours REAL,
-    status TEXT CHECK(status IN ('pending', 'in_progress', 'completed', 'cancelled')) DEFAULT 'pending',
-    due_date TEXT,
-    completed_date TEXT,
-    tags TEXT,
-    context TEXT DEFAULT 'work',
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
-    FOREIGN KEY (project_id) REFERENCES projects (id)
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-  CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
-  CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
-  CREATE INDEX IF NOT EXISTS idx_todos_user ON todos(user_id);
-  CREATE INDEX IF NOT EXISTS idx_todos_project ON todos(project_id);
-  CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
-  CREATE INDEX IF NOT EXISTS idx_todos_priority ON todos(priority);
-`);
+const database_url = "postgresql://" + process.env.POSTGRES_USER + ":" + process.env.POSTGRES_PASSWORD + "@localhost:5432/" + process.env.POSTGRES_DB
+// Database connection
+const pool = new Pool({
+  connectionString: database_url
+});
 
 export class TodoDB {
-  // User methods
-  static createUser(username, email, passwordHash) {
-    return db.prepare('INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)').run(username, email, passwordHash);
-  }
-
-  static getUserByUsername(username) {
-    return db.prepare('SELECT * FROM users WHERE username = ? AND is_active = 1').get(username);
-  }
-
-  static getUserByEmail(email) {
-    return db.prepare('SELECT * FROM users WHERE email = ? AND is_active = 1').get(email);
-  }
-
-  static getUserById(id) {
-    return db.prepare('SELECT * FROM users WHERE id = ? AND is_active = 1').get(id);
-  }
-
-  // Session methods
-  static createSession(id, userId, expiresAt) {
-    return db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(id, userId, expiresAt);
-  }
-
-  static getSession(sessionId) {
-    return db.prepare(`
-      SELECT s.*, u.username, u.email 
-      FROM sessions s 
-      JOIN users u ON s.user_id = u.id 
-      WHERE s.id = ? AND s.expires_at > ? AND u.is_active = 1
-    `).get(sessionId, Date.now());
-  }
-
-  static deleteSession(sessionId) {
-    return db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
-  }
-
-  static cleanupExpiredSessions() {
-    return db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now());
-  }
-
-  // Project methods
-  static getProjects(userId) {
+  static async query(text, params = []) {
+    const client = await pool.connect();
     try {
-      return db.prepare('SELECT * FROM projects WHERE user_id = ? AND is_active = 1 ORDER BY name').all(userId);
-    } catch (error) {
-      console.error('Error getting projects:', error);
-      return [];
+      const result = await client.query(text, params);
+      return result;
+    } finally {
+      client.release();
     }
   }
 
-  static createProject(userId, name, description = '', color = '#3b82f6') {
-    return db.prepare('INSERT INTO projects (user_id, name, description, color) VALUES (?, ?, ?, ?)').run(userId, name, description, color);
+  // User methods
+  static async createUser(username, email, passwordHash) {
+    const result = await this.query(`
+      INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)
+    `, [username, email, passwordHash]);
+    return result.rows;
   }
 
-  static updateProject(id, userId, updates) {
-    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-    const values = [...Object.values(updates), id, userId];
-    return db.prepare(`UPDATE projects SET ${fields} WHERE id = ? AND user_id = ?`).run(...values);
+  static async getUserByUsername(username) {
+    const result = await this.query(`
+      SELECT * FROM users WHERE username = $1 AND is_active = true
+    `, [username]);
+    return result.rows[0];
+  }
+
+  static async getUserByEmail(email) {
+    const result = await this.query(`
+      SELECT * FROM users WHERE email = $1 AND is_active = True
+    `, [email]);
+    return result.rows[0];
+  }
+
+  static async getUserById(id) {
+    const result = await this.query(`
+      SELECT * FROM users WHERE id = $1 AND is_active = True
+    `, [id]);
+    return result.rows[0];
+  }
+
+  // Session methods
+  static async createSession(id, userId) {
+    const result = await this.query(`
+      INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, now() + interval '7' day)
+      RETURNING id, expires_at
+    `, [id, userId]);
+    return result.rows[0];
+  }
+
+  static async getSession(sessionId) {
+    const result = await this.query(`
+      SELECT s.*, u.username, u.email 
+      FROM sessions s 
+      JOIN users u ON s.user_id = u.id 
+      WHERE s.id = $1 AND s.expires_at > now() AND u.is_active = true
+    `, [sessionId]);
+    return result.rows[0];
+  }
+
+  static async deleteSession(sessionId) {
+    const result = await this.query(`
+    DELETE FROM sessions WHERE id = $1
+    `, [sessionId]);
+    return result.rows;
+  }
+
+  static async cleanupExpiredSessions() {
+    const result = await this.query(`
+      DELETE FROM sessions WHERE expires_at <= now()
+    `);
+    return result.rows;
+  }
+
+  // Project methods
+  static async getProjects(user_id) {
+    const result = await this.query(`
+      SELECT * FROM projects 
+      WHERE is_active = true
+      AND user_id = $1
+      ORDER BY name
+    `, [user_id]);
+    return result.rows;
+  }
+
+  static async createProject(user_id, name, description = '', color = '#3b82f6') {
+    const result = await this.query(`
+      INSERT INTO projects (user_id, name, description, color)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id
+    `, [user_id, name, description, color]);
+    return result.rows[0];
+  }
+
+  static async updateProject(id, updates) {
+    const fields = Object.keys(updates);
+    const values = Object.values(updates);
+    const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
+    
+    const result = await this.query(`
+      UPDATE projects 
+      SET ${setClause}, updated_at = NOW()
+      WHERE id = $${fields.length + 1}
+      RETURNING *
+    `, [...values, id]);
+    
+    return result.rows[0];
+  }
+
+  static async deleteProject(id) {
+    // Soft delete - mark as inactive
+    const result = await this.query(`
+      UPDATE projects 
+      SET is_active = false, updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `, [id]);
+    return result.rows[0];
   }
 
   // Todo methods
-  static getTodos(userId, projectId = null, status = null) {
+  static async getTodos(user_id, projectId = null, status = null) {
     let query = `
       SELECT t.*, p.name as project_name, p.color as project_color 
       FROM todos t 
       LEFT JOIN projects p ON t.project_id = p.id 
-      WHERE t.user_id = ?
+      WHERE t.user_id = $1
     `;
-    const params = [userId];
+    const params = [user_id];
+    let paramCount = 1;
 
     if (projectId) {
-      query += ' AND t.project_id = ?';
+      paramCount++;
+      query += ` AND t.project_id = $${paramCount}`;
       params.push(projectId);
     }
     if (status) {
-      query += ' AND t.status = ?';
+      paramCount++;
+      query += ` AND t.status = $${paramCount}`;
       params.push(status);
     }
 
     query += ' ORDER BY t.priority DESC, t.created_at ASC';
-    return db.prepare(query).all(...params);
+    
+    const result = await this.query(query, params);
+    return result.rows;
   }
 
-  static createTodo(userId, todo) {
+  static async createTodo(user_id, todo) {
     const {
       project_id, title, description, priority, estimated_hours,
       due_date, tags, context
     } = todo;
 
-    return db.prepare(`
-      INSERT INTO todos (user_id, project_id, title, description, priority, estimated_hours, due_date, tags, context)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(userId, project_id, title, description, priority, estimated_hours, due_date, JSON.stringify(tags || []), context);
-  }
-
-  static updateTodo(id, userId, updates) {
-    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-    const values = [...Object.values(updates), id, userId];
+    const result = await this.query(`
+      INSERT INTO todos (project_id, user_id, title, description, priority, estimated_hours, due_date, tags, context)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id
+    `, [project_id, user_id, title, description, priority, estimated_hours, due_date, JSON.stringify(tags || []), context]);
     
-    return db.prepare(`UPDATE todos SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`).run(...values);
+    return result.rows[0];
   }
 
-  static completeTodo(id, userId, actualHours) {
-    return db.prepare(`
+  static async updateTodo(id, user_id, updates) {
+    const fields = Object.keys(updates);
+    const values = Object.values(updates);
+    const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
+    
+    const result = await this.query(`
       UPDATE todos 
-      SET status = 'completed', actual_hours = ?, completed_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?
-    `).run(actualHours, id, userId);
+      SET ${setClause}, updated_at = NOW()
+      WHERE id = $${fields.length + 1}
+      RETURNING *
+    `, [...values, id]);
+    
+    return result.rows[0];
   }
 
-  static deleteTodo(id, userId) {
-    return db.prepare('DELETE FROM todos WHERE id = ? AND user_id = ?').run(id, userId);
+  static async completeTodo(id, actualHours) {
+    const result = await this.query(`
+      UPDATE todos 
+      SET status = 'completed', actual_hours = $1, completed_date = NOW(), updated_at = NOW()
+      WHERE id = $2
+      RETURNING *
+    `, [actualHours, id]);
+    
+    return result.rows[0];
+  }
+
+  static async deleteTodo(id) {
+    const result = await this.query(`
+      DELETE FROM todos WHERE id = $1 RETURNING *
+    `, [id]);
+    return result.rows[0];
+  }
+
+  // Analytics methods
+  static async getCapacityStats(daysBack = 30) {
+    const result = await this.query(`
+      SELECT 
+        DATE(completed_date) as date,
+        SUM(actual_hours) as total_hours,
+        COUNT(*) as tasks_completed
+      FROM todos 
+      WHERE status = 'completed' 
+        AND completed_date >= NOW() - INTERVAL '${daysBack} days'
+      GROUP BY DATE(completed_date)
+      ORDER BY date
+    `);
+    return result.rows;
+  }
+
+  static async getEstimationAccuracy(daysBack = 90) {
+    const result = await this.query(`
+      SELECT 
+        title,
+        estimated_hours,
+        actual_hours,
+        priority,
+        (actual_hours / estimated_hours) as accuracy_ratio,
+        ABS(actual_hours - estimated_hours) as absolute_error
+      FROM todos 
+      WHERE status = 'completed' 
+        AND completed_date >= NOW() - INTERVAL '${daysBack} days'
+        AND estimated_hours > 0
+      ORDER BY completed_date DESC
+    `);
+    return result.rows;
   }
 }
+

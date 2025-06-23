@@ -4,7 +4,7 @@ import { Auth } from './lib/auth.js';
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, redirect} = context;
 
-  const unprotectedRoutes = ["/login", "/api/auth/login"];
+  const unprotectedRoutes = ["/login", "/api/auth/login", "/src/styles/global.css"];
   const isUnprotectedRoute = unprotectedRoutes.some(route => url.pathname.startsWith(route));
 
   if (!isUnprotectedRoute) {
@@ -20,10 +20,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   return next();
 })
 
-export function getUser(request) {
-  const sessionId = Auth.getSessionFromRequest(request);
-  const session = Auth.getSessionUser(sessionId);
-
+export async function getUser(request) {
+  const sessionId = await Auth.getSessionFromRequest(request);
+  const session = await Auth.getSessionUser(sessionId);
   
   if (!session) {
     return null;
