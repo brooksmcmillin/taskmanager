@@ -131,7 +131,7 @@ export class TodoDB {
   }
 
   // Todo methods
-  static async getTodos(user_id, projectId = null, status = null) {
+  static async getTodos(user_id, projectId = null, status = null, timeHorizon = null) {
     let query = `
       SELECT t.*, p.name as project_name, p.color as project_color 
       FROM todos t 
@@ -151,6 +151,11 @@ export class TodoDB {
       query += ` AND t.status = $${paramCount}`;
       params.push(status);
     }
+    if (timeHorizon) {
+      paramCount++;
+      query += ` AND t.time_horizon = $${paramCount}`;
+      params.push(timeHorizon);
+    }
 
     query += ' ORDER BY t.priority DESC, t.created_at ASC';
     
@@ -161,14 +166,14 @@ export class TodoDB {
   static async createTodo(user_id, todo) {
     const {
       project_id, title, description, priority, estimated_hours,
-      due_date, tags, context
+      due_date, tags, context, time_horizon
     } = todo;
 
     const result = await this.query(`
-      INSERT INTO todos (project_id, user_id, title, description, priority, estimated_hours, due_date, tags, context)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO todos (project_id, user_id, title, description, priority, estimated_hours, due_date, tags, context, time_horizon)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
-    `, [project_id, user_id, title, description, priority, estimated_hours, due_date, JSON.stringify(tags || []), context]);
+    `, [project_id, user_id, title, description, priority, estimated_hours, due_date, JSON.stringify(tags || []), context, time_horizon]);
     
     return result.rows[0];
   }

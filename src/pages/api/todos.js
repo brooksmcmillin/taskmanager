@@ -18,8 +18,9 @@ export const GET = async ({ url, request }) => {
     const searchParams = new URL(url).searchParams;
     const projectId = searchParams.get('project_id');
     const status = searchParams.get('status');
+    const timeHorizon = searchParams.get('time_horizon');
     
-    const todos = await TodoDB.getTodos(session.user_id, projectId, status);
+    const todos = await TodoDB.getTodos(session.user_id, projectId, status, timeHorizon);
     return new Response(JSON.stringify(todos), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
