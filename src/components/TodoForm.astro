@@ -177,9 +177,9 @@
     document.getElementById('estimated_hours').value = todo.estimated_hours;
     document.getElementById('due_date').value = todo.due_date || '';
     document.getElementById('time_horizon').value = todo.time_horizon || '';
-    document.getElementById('tags').value = todo.tags
-      ? todo.tags.join(', ')
-      : '';
+      //document.getElementById('tags').value = todo.tags &&
+      //? todo.tags.join(', ')
+      //: '';
 
     // Update button text and modal title
     document.getElementById('submit-btn').textContent = 'Update Todo';

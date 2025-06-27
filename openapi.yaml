@@ -1,0 +1,862 @@
+openapi: 3.0.3
+info:
+  title: Task Manager API
+  description: A REST API for managing tasks, projects, and generating reports
+  version: 1.0.0
+  contact:
+    name: Task Manager
+    url: https://github.com/your-repo/taskmanager
+
+servers:
+  - url: http://localhost:4321/api
+    description: Development server
+
+paths:
+  /projects:
+    get:
+      summary: Get all projects
+      description: Retrieve all active projects for the authenticated user
+      tags:
+        - Projects
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      summary: Create a new project
+      description: Create a new project for the authenticated user
+      tags:
+        - Projects
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{id}:
+    put:
+      summary: Update a project
+      description: Update an existing project
+      tags:
+        - Projects
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Project ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /todos:
+    get:
+      summary: Get todos
+      description: Retrieve todos with optional filtering
+      tags:
+        - Todos
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter by project ID
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, in_progress, completed, cancelled]
+          description: Filter by status
+      responses:
+        '200':
+          description: List of todos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TodoWithProject'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      summary: Create a new todo
+      description: Create a new todo for the authenticated user
+      tags:
+        - Todos
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTodoRequest'
+      responses:
+        '201':
+          description: Todo created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    put:
+      summary: Update a todo
+      description: Update an existing todo
+      tags:
+        - Todos
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTodoRequest'
+      responses:
+        '200':
+          description: Todo updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /todos/{id}/complete:
+    post:
+      summary: Complete a todo
+      description: Mark a todo as completed and log actual time spent
+      tags:
+        - Todos
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Todo ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteTodoRequest'
+      responses:
+        '200':
+          description: Todo completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /reports:
+    get:
+      summary: Generate task reports
+      description: Get task reports for date ranges with filtering options
+      tags:
+        - Reports
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Start date in YYYY-MM-DD format
+          example: "2024-01-01"
+        - name: end_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: End date in YYYY-MM-DD format
+          example: "2024-01-07"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, completed, all]
+            default: pending
+          description: Filter by status
+        - name: time_horizon
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [today, tomorrow, this_week, next_week]
+          description: Time horizon filter
+      responses:
+        '200':
+          description: Task report data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      summary: User login
+      description: Authenticate user and create session
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          headers:
+            Set-Cookie:
+              description: Session cookie
+              schema:
+                type: string
+                example: session_id=abc123; Path=/; HttpOnly; Secure; SameSite=Strict
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/register:
+    post:
+      summary: User registration
+      description: Register a new user account
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      summary: User logout
+      description: End user session
+      tags:
+        - Authentication
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/me:
+    get:
+      summary: Get current user
+      description: Get information about the currently authenticated user
+      tags:
+        - Authentication
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: session_id
+      description: Session-based authentication using HTTP-only cookies
+
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique project identifier
+        name:
+          type: string
+          description: Project name
+        description:
+          type: string
+          nullable: true
+          description: Project description
+        color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+          description: Hex color code
+          example: "#3b82f6"
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        is_active:
+          type: integer
+          enum: [0, 1]
+          description: Active status (0 = inactive, 1 = active)
+      required:
+        - id
+        - name
+        - color
+        - created_at
+        - is_active
+
+    CreateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Project name
+        description:
+          type: string
+          nullable: true
+          description: Optional project description
+        color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+          description: Hex color code
+          example: "#3b82f6"
+      required:
+        - name
+        - color
+
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Project name
+        description:
+          type: string
+          nullable: true
+          description: Project description
+        color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+          description: Hex color code
+
+    Todo:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique todo identifier
+        project_id:
+          type: integer
+          nullable: true
+          description: Associated project ID
+        title:
+          type: string
+          description: Todo title
+        description:
+          type: string
+          nullable: true
+          description: Todo description
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          description: Priority level
+        estimated_hours:
+          type: number
+          format: float
+          minimum: 0
+          description: Estimated hours to complete
+        actual_hours:
+          type: number
+          format: float
+          minimum: 0
+          nullable: true
+          description: Actual hours spent
+        status:
+          type: string
+          enum: [pending, in_progress, completed, cancelled]
+          description: Current status
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Due date in YYYY-MM-DD format
+        completed_date:
+          type: string
+          format: date-time
+          nullable: true
+          description: Completion timestamp
+        tags:
+          type: string
+          description: JSON array of tags
+          example: '["frontend", "urgent"]'
+        context:
+          type: string
+          description: Task context
+          example: "work"
+        time_horizon:
+          type: string
+          nullable: true
+          enum: [today, tomorrow, this_week, next_week]
+          description: Time horizon
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        - id
+        - title
+        - priority
+        - estimated_hours
+        - status
+        - context
+        - created_at
+        - updated_at
+
+    TodoWithProject:
+      allOf:
+        - $ref: '#/components/schemas/Todo'
+        - type: object
+          properties:
+            project_name:
+              type: string
+              nullable: true
+              description: Associated project name
+            project_color:
+              type: string
+              nullable: true
+              description: Associated project color
+
+    CreateTodoRequest:
+      type: object
+      properties:
+        project_id:
+          type: integer
+          nullable: true
+          description: Associated project ID
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Todo title
+        description:
+          type: string
+          nullable: true
+          description: Todo description
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          default: medium
+          description: Priority level
+        estimated_hours:
+          type: number
+          format: float
+          minimum: 0
+          default: 1.0
+          description: Estimated hours to complete
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Due date in YYYY-MM-DD format
+        tags:
+          type: array
+          items:
+            type: string
+          description: Array of tag strings
+        context:
+          type: string
+          default: "work"
+          description: Task context
+        time_horizon:
+          type: string
+          nullable: true
+          enum: [today, tomorrow, this_week, next_week]
+          description: Time horizon
+      required:
+        - title
+
+    UpdateTodoRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Todo ID to update
+        project_id:
+          type: integer
+          nullable: true
+          description: Associated project ID
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Todo title
+        description:
+          type: string
+          nullable: true
+          description: Todo description
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          description: Priority level
+        estimated_hours:
+          type: number
+          format: float
+          minimum: 0
+          description: Estimated hours to complete
+        status:
+          type: string
+          enum: [pending, in_progress, completed, cancelled]
+          description: Current status
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Due date in YYYY-MM-DD format
+        tags:
+          type: array
+          items:
+            type: string
+          description: Array of tag strings
+        context:
+          type: string
+          description: Task context
+        time_horizon:
+          type: string
+          nullable: true
+          enum: [today, tomorrow, this_week, next_week]
+          description: Time horizon
+      required:
+        - id
+
+    CompleteTodoRequest:
+      type: object
+      properties:
+        actual_hours:
+          type: number
+          format: float
+          minimum: 0
+          description: Actual hours spent on the task
+      required:
+        - actual_hours
+
+    ReportResponse:
+      type: object
+      properties:
+        todos:
+          type: array
+          items:
+            $ref: '#/components/schemas/TodoWithProject'
+          description: List of todos matching the report criteria
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+          description: List of projects associated with the todos
+        dateRange:
+          type: object
+          properties:
+            startDate:
+              type: string
+              format: date
+              description: Report start date
+            endDate:
+              type: string
+              format: date
+              description: Report end date
+          required:
+            - startDate
+            - endDate
+        status:
+          type: string
+          description: Status filter applied
+      required:
+        - todos
+        - projects
+        - dateRange
+        - status
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique user identifier
+        username:
+          type: string
+          description: Username
+        email:
+          type: string
+          format: email
+          description: Email address
+        created_at:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+        is_active:
+          type: integer
+          enum: [0, 1]
+          description: Account status
+      required:
+        - id
+        - username
+        - email
+        - created_at
+        - is_active
+
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+          description: Username
+        password:
+          type: string
+          minLength: 1
+          description: Password
+      required:
+        - username
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+        - success
+        - user
+
+    RegisterRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_]+$"
+          description: Username (letters, numbers, underscore only)
+        email:
+          type: string
+          format: email
+          description: Email address
+        password:
+          type: string
+          minLength: 6
+          description: Password (minimum 6 characters)
+      required:
+        - username
+        - email
+        - password
+
+    RegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        user_id:
+          type: integer
+          description: Created user ID
+      required:
+        - success
+        - user_id
+
+    CreateResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID of the created resource
+      required:
+        - id
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+      required:
+        - success
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+      required:
+        - error
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Projects
+    description: Project management operations
+  - name: Todos
+    description: Todo/task management operations
+  - name: Reports
+    description: Task reporting and analytics

@@ -111,11 +111,6 @@
           }
           // Trigger a custom event to refresh the project list
           window.dispatchEvent(new CustomEvent('projectAdded'));
-          alert(
-            isEditing
-              ? 'Project updated successfully!'
-              : 'Project created successfully!'
-          );
         } else if (response.status === 401) {
           window.location.href = '/login';
         } else {
