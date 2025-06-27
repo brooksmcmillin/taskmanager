@@ -241,6 +241,49 @@ export class TodoDB {
     return result.rows[0];
   }
 
+  static async getTodosForDateRange(
+    user_id,
+    startDate,
+    endDate,
+    time_horizon,
+    status = null
+  ) {
+    let query = `
+      SELECT 
+        t.*,
+        p.name as project_name,
+        p.color as project_color
+      FROM todos t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.user_id = $1
+    `;
+
+    const params = [user_id];
+    let paramIndex = 2;
+
+    // Add date range filter
+    if (startDate && endDate) {
+      query += ` AND (
+        (t.due_date IS NOT NULL AND t.due_date >= $${paramIndex} AND t.due_date <= $${paramIndex + 1})
+        OR (t.time_horizon IS NOT NULL AND t.time_horizon = $${paramIndex + 2})
+        OR (t.completed_date IS NOT NULL AND t.completed_date >= $${paramIndex} AND t.completed_date <= $${paramIndex + 1}::date + interval '1 day')
+      )`;
+      params.push(startDate, endDate, time_horizon);
+      paramIndex += 3;
+    }
+
+    // Add status filter
+    if (status) {
+      query += ` AND t.status = $${paramIndex}`;
+      params.push(status);
+    }
+
+    query += ' ORDER BY t.priority DESC, t.created_at ASC';
+
+    const result = await this.query(query, params);
+    return result.rows;
+  }
+
   static async createTodo(user_id, todo) {
     const {
       project_id,
