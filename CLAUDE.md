@@ -33,6 +33,7 @@ The application uses SQLite with four main tables:
 - **Layout System**: `src/layouts/Layout.astro` includes global CSS and navigation
 - **Navigation**: `src/components/Navigation.astro` - reusable nav with active states
 - **Forms**: `src/components/TodoForm.astro` - handles todo creation with project selection
+- **Pages**: `src/pages/index.astro` (dashboard), `src/pages/projects.astro`, `src/pages/reports.astro`
 - **Auth Pages**: `src/pages/login.astro`, `src/pages/register.astro` - user authentication
 - **Database Layer**: `src/lib/db.js` - TodoDB class with static methods for all database operations
 - **Auth Layer**: `src/lib/auth.js` - Auth class for user management and session handling
@@ -43,6 +44,7 @@ RESTful API endpoints in `/src/pages/api/`:
 - `/api/todos` - GET (with filters), POST, PUT for todo operations
 - `/api/projects` - GET, POST for project management  
 - `/api/todos/[id]/complete` - POST for completing todos with time tracking
+- `/api/reports` - GET for task reports with date range and status filtering
 - `/api/auth/login` - POST for user authentication
 - `/api/auth/register` - POST for user registration
 - `/api/auth/logout` - POST for session termination

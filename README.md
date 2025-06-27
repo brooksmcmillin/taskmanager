@@ -7,6 +7,7 @@ A modern task management application built with Astro, featuring project organiz
 - **Project Management**: Create and organize projects with custom colors
 - **Task Tracking**: Add todos with priorities, descriptions, and time estimates
 - **Time Tracking**: Log actual time spent when completing tasks
+- **Task Reports**: Generate daily and weekly reports with time tracking summaries
 - **Clean UI**: Custom CSS design system with responsive layout
 - **Real-time Updates**: Dynamic loading and updates without page refreshes
 
@@ -183,6 +184,52 @@ Mark a todo as completed and log actual time spent.
 }
 ```
 
+### Reports
+
+#### GET /api/reports
+Get task reports for date ranges with filtering options.
+
+**Query Parameters:**
+- `start_date` (required): Start date in YYYY-MM-DD format
+- `end_date` (required): End date in YYYY-MM-DD format  
+- `status` (optional): Filter by status (`pending`, `completed`, or `all` - defaults to `pending`)
+- `time_horizon` (optional): Time horizon filter (`today`, `tomorrow`, `this_week`, `next_week`)
+
+**Examples:**
+- `/api/reports?start_date=2024-01-01&end_date=2024-01-07&status=all`
+- `/api/reports?start_date=2024-01-01&end_date=2024-01-01&status=pending&time_horizon=today`
+
+**Response:**
+```json
+{
+  "todos": [
+    {
+      "id": 1,
+      "project_id": 1,
+      "title": "Update homepage",
+      "estimated_hours": 4.0,
+      "actual_hours": 3.5,
+      "status": "completed",
+      "due_date": "2024-01-15",
+      "project_name": "Website Redesign",
+      "project_color": "#3b82f6"
+    }
+  ],
+  "projects": [
+    {
+      "id": 1,
+      "name": "Website Redesign",
+      "color": "#3b82f6"
+    }
+  ],
+  "dateRange": {
+    "startDate": "2024-01-01",
+    "endDate": "2024-01-07"
+  },
+  "status": "all"
+}
+```
+
 ## Database Schema
 
 ### Projects Table
@@ -222,11 +269,13 @@ src/
 ├── pages/
 │   ├── api/               # API endpoints
 │   │   ├── projects.js    # Project CRUD operations
+│   │   ├── reports.js     # Task reports endpoint
 │   │   ├── todos.js       # Todo CRUD operations
 │   │   └── todos/[id]/
 │   │       └── complete.js # Todo completion endpoint
 │   ├── index.astro        # Main todos page
-│   └── projects.astro     # Project management page
+│   ├── projects.astro     # Project management page
+│   └── reports.astro      # Task reports page
 └── styles/
     └── global.css         # Custom design system
 ```

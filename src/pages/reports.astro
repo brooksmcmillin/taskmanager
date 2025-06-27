@@ -1,0 +1,527 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { checkAuth } from '../lib/serverAuth.js';
+
+const auth = checkAuth(Astro.request);
+if (auth.redirect) return auth.redirect;
+const user = auth.user;
+---
+
+<Layout title="Task Reports" user={user}>
+  <main class="container py-8">
+    <div class="max-w-6xl mx-auto">
+      <h1 class="text-3xl font-bold text-gray-900 mb-8">Task Reports</h1>
+
+      <!-- Report Controls -->
+      <div class="bg-white rounded-lg shadow-sm border p-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div>
+            <label
+              for="report-type"
+              class="block text-sm font-medium text-gray-700 mb-2"
+              >Report Type</label
+            >
+            <select id="report-type" class="form-select">
+              <option value="today">Today</option>
+              <option value="tomorrow">Tomorrow</option>
+              <option value="this_week">This Week</option>
+              <option value="next_week">Next Week</option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              for="status-filter"
+              class="block text-sm font-medium text-gray-700 mb-2">Status</label
+            >
+            <select id="status-filter" class="form-select">
+              <option value="pending">Pending Only</option>
+              <option value="completed">Completed Only</option>
+              <option value="all">All Tasks</option>
+            </select>
+          </div>
+
+          <div class="flex gap-2">
+            <button id="generate-report" class="btn btn-primary"
+              >Generate Report</button
+            >
+            <button
+              id="print-report"
+              class="btn btn-secondary"
+              style="display: none;">Print/PDF</button
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- Report Content -->
+      <div id="report-container" class="hidden">
+        <div
+          id="report-content"
+          class="bg-white rounded-lg shadow-sm border print-content"
+        >
+          <!-- Report will be generated here -->
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  // Get today's date in YYYY-MM-DD format
+  function getDateWithOffset(daysToAdd = 0) {
+    const date = new Date();
+    date.setDate(date.getDate() + daysToAdd);
+    return date.toISOString().split('T')[0];
+  }
+
+  // Get the start of the week (Monday) for a given date
+  function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1) - 1; // Adjust for Monday start
+    const weekStart = new Date(d.setDate(diff));
+    return weekStart.toISOString().split('T')[0];
+  }
+
+  // Get the end of the week (Sunday) for a given date
+  function getWeekEnd(date) {
+    const weekStart = new Date(getWeekStart(date));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return weekEnd.toISOString().split('T')[0];
+  }
+
+  // Set dates in options for clarity
+  document.getElementById('report-type').options[0].innerHTML +=
+    ` (${getDateWithOffset()})`;
+  document.getElementById('report-type').options[1].innerHTML +=
+    ` (${getDateWithOffset(1)})`;
+  document.getElementById('report-type').options[2].innerHTML +=
+    ` (${getWeekStart(getDateWithOffset())} - ${getWeekEnd(getDateWithOffset())})`;
+  document.getElementById('report-type').options[3].innerHTML +=
+    ` (${getWeekStart(getDateWithOffset(7))} - ${getWeekEnd(getDateWithOffset(7))})`;
+
+  // Format date for display
+  function formatDate(dateStr) {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
+
+  // Format date range for display
+  function formatDateRange(startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }
+
+  // Generate report
+  async function generateReport() {
+    const reportType = document.getElementById('report-type').value;
+    const statusFilter = document.getElementById('status-filter').value;
+
+    try {
+      let startDate, endDate;
+
+      if (reportType === 'today') {
+        startDate = endDate = getDateWithOffset();
+      } else if (reportType === 'tomorrow') {
+        startDate = endDate = getDateWithOffset(1);
+      } else if (reportType === 'this_week') {
+        startDate = getWeekStart(getDateWithOffset());
+        endDate = getWeekEnd(getDateWithOffset());
+      } else {
+        startDate = getWeekStart(getDateWithOffset(7));
+        endDate = getWeekEnd(getDateWithOffset(7));
+      }
+
+      // Fetch tasks for the date range
+      const response = await fetch(
+        `/api/reports?start_date=${startDate}&end_date=${endDate}&status=${statusFilter}&time_horizon=${reportType}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch report data');
+      }
+
+      const data = await response.json();
+      console.log('Raw data:', data);
+      console.log(
+        'Todos type:',
+        typeof data.todos,
+        'Is array:',
+        Array.isArray(data.todos)
+      );
+      console.log('First todo:', data.todos[0]);
+      displayReport(data, reportType, startDate, endDate);
+    } catch (error) {
+      console.error('Error generating report:', error);
+      alert('Failed to generate report: ' + error.message);
+    }
+  }
+
+  // Display report
+  function displayReport(data, reportType, startDate, endDate) {
+    const container = document.getElementById('report-container');
+    const content = document.getElementById('report-content');
+
+    let reportHtml = '';
+
+    if (reportType === 'daily') {
+      reportHtml = generateDailyReport(data, startDate);
+    } else {
+      reportHtml = generateWeeklyReport(data, startDate, endDate);
+    }
+
+    content.innerHTML = reportHtml;
+    container.classList.remove('hidden');
+    document.getElementById('print-report').style.display = 'inline-block';
+  }
+
+  // Generate daily report HTML
+  function generateDailyReport(data, date) {
+    const { todos = [], projects = [] } = data;
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
+
+    return `
+      <div class="report-header">
+        <h2 class="text-2xl font-bold mb-2">Daily Task Report</h2>
+        <p class="text-gray-600 mb-6">${formatDate(date)}</p>
+      </div>
+      
+      <div class="report-summary mb-8">
+        <div class="grid grid-cols-3 gap-4 text-center">
+          <div class="bg-blue-50 p-4 rounded">
+            <div class="text-2xl font-bold text-blue-600">${Array.isArray(todos) ? todos.filter((t) => t.status === 'pending').length : 0}</div>
+            <div class="text-sm text-gray-600">Pending</div>
+          </div>
+          <div class="bg-green-50 p-4 rounded">
+            <div class="text-2xl font-bold text-green-600">${Array.isArray(todos) ? todos.filter((t) => t.status === 'completed').length : 0}</div>
+            <div class="text-sm text-gray-600">Completed</div>
+          </div>
+          <div class="bg-gray-50 p-4 rounded">
+            <div class="text-2xl font-bold text-gray-600">${Array.isArray(todos) ? todos.reduce((sum, t) => sum + (parseFloat(t.estimated_hours) || 0), 0).toFixed(1) : '0.0'}</div>
+            <div class="text-sm text-gray-600">Est. Hours</div>
+          </div>
+        </div>
+      </div>
+      
+      ${generateTasksByProject(todos, projectMap)}
+    `;
+  }
+
+  // Generate weekly report HTML
+  function generateWeeklyReport(data, startDate, endDate) {
+    const { todos = [], projects = [] } = data;
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
+
+    return `
+      <div class="report-header">
+        <h2 class="text-2xl font-bold mb-2">Weekly Task Report</h2>
+        <p class="text-gray-600 mb-6">${formatDateRange(startDate, endDate)}</p>
+      </div>
+      
+      <div class="report-summary mb-8">
+        <div class="grid grid-cols-4 gap-4 text-center">
+          <div class="bg-blue-50 p-4 rounded">
+            <div class="text-2xl font-bold text-blue-600">${Array.isArray(todos) ? todos.filter((t) => t.status === 'pending').length : 0}</div>
+            <div class="text-sm text-gray-600">Pending</div>
+          </div>
+          <div class="bg-green-50 p-4 rounded">
+            <div class="text-2xl font-bold text-green-600">${Array.isArray(todos) ? todos.filter((t) => t.status === 'completed').length : 0}</div>
+            <div class="text-sm text-gray-600">Completed</div>
+          </div>
+          <div class="bg-gray-50 p-4 rounded">
+            <div class="text-2xl font-bold text-gray-600">${Array.isArray(todos) ? todos.reduce((sum, t) => sum + (parseFloat(t.estimated_hours) || 0), 0).toFixed(1) : '0.0'}</div>
+            <div class="text-sm text-gray-600">Est. Hours</div>
+          </div>
+          <div class="bg-purple-50 p-4 rounded">
+            <div class="text-2xl font-bold text-purple-600">${Array.isArray(todos) ? todos.reduce((sum, t) => sum + (parseFloat(t.actual_hours) || 0), 0).toFixed(1) : '0.0'}</div>
+            <div class="text-sm text-gray-600">Actual Hours</div>
+          </div>
+        </div>
+      </div>
+      
+      ${generateTasksByProject(todos, projectMap)}
+    `;
+  }
+
+  // Generate tasks grouped by project
+  function generateTasksByProject(todos = [], projectMap) {
+    const todosByProject = todos.reduce((acc, todo) => {
+      const projectName = todo.project_id
+        ? projectMap.get(todo.project_id)?.name || 'Unknown Project'
+        : 'No Project';
+      if (!acc[projectName]) acc[projectName] = [];
+      acc[projectName].push(todo);
+      return acc;
+    }, {});
+
+    let html = '<div class="tasks-section">';
+
+    Object.entries(todosByProject).forEach(([projectName, projectTodos]) => {
+      const project = projectTodos[0].project_id
+        ? projectMap.get(projectTodos[0].project_id)
+        : null;
+
+      html += `
+        <div class="project-section mb-6 page-break-inside-avoid">
+          <h3 class="text-lg font-semibold mb-3 pb-2 border-b-2" ${project ? `style="border-color: ${project.color}"` : ''}>
+            ${projectName}
+          </h3>
+          <div class="task-list space-y-2">
+      `;
+
+      projectTodos.forEach((todo) => {
+        const statusIcon = todo.status === 'completed' ? '✓' : '☐';
+        const statusClass =
+          todo.status === 'completed' ? 'text-green-600' : 'text-gray-600';
+
+        html += `
+          <div class="task-item flex items-start gap-3 p-3 border-l-4 bg-gray-50" style="border-left-color: ${project?.color || '#e5e7eb'}">
+            <span class="${statusClass} font-bold text-lg">${statusIcon}</span>
+            <div class="flex-1">
+              <div class="font-medium ${todo.status === 'completed' ? 'line-through text-gray-500' : ''}">${todo.title}</div>
+              ${todo.description ? `<div class="text-sm text-gray-600 mt-1">${todo.description}</div>` : ''}
+              <div class="text-xs text-gray-500 mt-1">
+                Priority: ${todo.priority} | Est: ${todo.estimated_hours}h
+                ${todo.actual_hours ? ` | Actual: ${todo.actual_hours}h` : ''}
+                ${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      html += '</div></div>';
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  // Print report
+  function printReport() {
+    const reportContent = document.getElementById('report-content');
+    const printWindow = window.open('', '_blank');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Task Report</title>
+          <style>
+            ${getPrintStyles()}
+          </style>
+        </head>
+        <body>
+          ${reportContent.innerHTML}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  }
+
+  // Get print-optimized styles (optimized for Remarkable tablet)
+  function getPrintStyles() {
+    return `
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: 'Times New Roman', serif;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #000;
+        background: white;
+        padding: 30px;
+        max-width: 210mm;
+        margin: 0 auto;
+      }
+      
+      .report-header h2 {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 8px;
+      }
+      
+      .report-header p {
+        color: #666;
+        margin-bottom: 24px;
+      }
+      
+      .report-summary {
+        margin-bottom: 32px;
+      }
+      
+      .grid {
+        display: grid;
+      }
+      
+      .grid-cols-3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      
+      .grid-cols-4 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      
+      .gap-4 {
+        gap: 16px;
+      }
+      
+      .text-center {
+        text-align: center;
+      }
+      
+      .bg-blue-50, .bg-green-50, .bg-gray-50, .bg-purple-50 {
+        background-color: #f8f9fa;
+        padding: 16px;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+      }
+      
+      .text-2xl {
+        font-size: 24px;
+        font-weight: bold;
+      }
+      
+      .text-sm {
+        font-size: 11px;
+      }
+      
+      .project-section {
+        margin-bottom: 24px;
+        page-break-inside: avoid;
+      }
+      
+      .project-section h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid;
+      }
+      
+      .task-list {
+        margin: 8px 0;
+      }
+      
+      .task-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px;
+        margin-bottom: 8px;
+        background-color: #f8f9fa;
+        border-left: 4px solid;
+        page-break-inside: avoid;
+      }
+      
+      .font-medium {
+        font-weight: 500;
+      }
+      
+      .font-bold {
+        font-weight: bold;
+      }
+      
+      .line-through {
+        text-decoration: line-through;
+      }
+      
+      .text-xs {
+        font-size: 10px;
+      }
+      
+      .flex-1 {
+        flex: 1;
+      }
+      
+      .mt-1 {
+        margin-top: 4px;
+      }
+      
+      @media print {
+        body {
+          padding: 20px;
+          font-size: 12px;
+        }
+        
+        .page-break-inside-avoid {
+          page-break-inside: avoid;
+        }
+        
+        /* Remarkable tablet optimizations */
+        .report-header h2 {
+          font-size: 20px;
+          border-bottom: 2px solid #000;
+          padding-bottom: 8px;
+        }
+        
+        .task-item {
+          border: 1px solid #000;
+          margin-bottom: 4px;
+        }
+        
+        .project-section h3 {
+          font-size: 14px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+      }
+    `;
+  }
+
+  // Initialize
+  document.addEventListener('DOMContentLoaded', function () {
+    // Event listeners
+    document
+      .getElementById('generate-report')
+      .addEventListener('click', generateReport);
+    document
+      .getElementById('print-report')
+      .addEventListener('click', printReport);
+  });
+</script>
+
+<style>
+  .print-content {
+    padding: 2rem;
+  }
+
+  @media print {
+    .container,
+    .max-w-6xl,
+    nav,
+    .bg-white:not(.print-content) {
+      display: none;
+    }
+
+    .print-content {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 0;
+      box-shadow: none;
+      border: none;
+    }
+
+    .page-break-inside-avoid {
+      page-break-inside: avoid;
+    }
+  }
+</style>
