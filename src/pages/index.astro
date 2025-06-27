@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import TodoForm from '../components/TodoForm.astro';
+import TodoModal from '../components/TodoModal.astro';
 
 const user = Astro.locals.user;
 ---
@@ -8,14 +8,10 @@ const user = Astro.locals.user;
 <Layout title="Todo Manager" user={user}>
   <main class="container py-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-8">Todo Manager</h1>
-    
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <!-- Add Todo Form -->
-      <div>
-        <h2 class="text-xl font-semibold mb-4">Add New Todo</h2>
-        <TodoForm />
-      </div>
-      
+      <TodoModal />
+
       <!-- Todo Lists -->
       <div>
         <div class="flex justify-between items-center mb-4">
@@ -45,24 +41,25 @@ const user = Astro.locals.user;
 <script>
   async function loadTodos() {
     try {
-      const timeHorizonFilter = document.getElementById('time-horizon-filter')?.value || '';
+      const timeHorizonFilter =
+        document.getElementById('time-horizon-filter')?.value || '';
       const apiUrl = `/api/todos?status=pending${timeHorizonFilter ? `&time_horizon=${timeHorizonFilter}` : ''}`;
-      
+
       const [todosResponse, projectsResponse] = await Promise.all([
         fetch(apiUrl),
-        fetch('/api/projects')
+        fetch('/api/projects'),
       ]);
-      
+
       if (!todosResponse.ok || !projectsResponse.ok) {
         throw new Error('Failed to load data');
       }
-      
+
       const todos = await todosResponse.json();
       const projects = await projectsResponse.json();
 
       const container = document.getElementById('todo-lists');
       container.innerHTML = '';
-      
+
       // Group todos by project
       const todosByProject = todos.reduce((acc, todo) => {
         const projectName = todo.project_name || 'No Project';
@@ -70,16 +67,18 @@ const user = Astro.locals.user;
         acc[projectName].push(todo);
         return acc;
       }, {});
-      
+
       // Render each project's todos
       Object.entries(todosByProject).forEach(([projectName, projectTodos]) => {
         const projectDiv = document.createElement('div');
         projectDiv.className = 'card';
-        
+
         projectDiv.innerHTML = `
           <h3 class="font-semibold text-lg mb-3 text-gray-800">${projectName}</h3>
           <div class="space-y-2">
-            ${projectTodos.map(todo => `
+            ${projectTodos
+              .map(
+                (todo) => `
               <div class="flex items-center justify-between p-3 border rounded">
                 <div class="flex-1">
                   <div class="font-medium">${todo.title}</div>
@@ -87,7 +86,7 @@ const user = Astro.locals.user;
                   <div class="text-xs text-gray-500 mt-1">
                     Priority: ${todo.priority} | Est: ${todo.estimated_hours}h
                     ${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
-                    ${todo.time_horizon ? ` | ${todo.time_horizon.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}` : ''}
+                    ${todo.time_horizon ? ` | ${todo.time_horizon.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}` : ''}
                   </div>
                 </div>
                 <button 
@@ -97,29 +96,30 @@ const user = Astro.locals.user;
                   Complete
                 </button>
               </div>
-            `).join('')}
+            `
+              )
+              .join('')}
           </div>
         `;
-        
+
         container.appendChild(projectDiv);
       });
-      
     } catch (error) {
       console.error('Failed to load todos:', error);
     }
   }
-  
-  window.completeTodo = async function(todoId) {
+
+  window.completeTodo = async function (todoId) {
     const actualHours = prompt('How many hours did this take?');
     if (!actualHours) return;
-    
+
     try {
       const response = await fetch(`/api/todos/${todoId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actual_hours: parseFloat(actualHours) })
+        body: JSON.stringify({ actual_hours: parseFloat(actualHours) }),
       });
-      
+
       if (response.ok) {
         loadTodos(); // Refresh the list
       } else if (response.status === 401) {
@@ -131,13 +131,15 @@ const user = Astro.locals.user;
       alert('Error: ' + error.message);
     }
   };
-  
+
   // Load todos when page loads
   loadTodos();
-  
+
   // Add event listener for time horizon filter
-  document.getElementById('time-horizon-filter').addEventListener('change', loadTodos);
-  
+  document
+    .getElementById('time-horizon-filter')
+    .addEventListener('change', loadTodos);
+
   // Listen for new todos to refresh the list
   window.addEventListener('todoAdded', loadTodos);
 </script>

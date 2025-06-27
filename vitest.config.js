@@ -7,6 +7,6 @@ export default defineConfig({
     setupFiles: ['./tests/setup.js'],
   },
   esbuild: {
-    target: 'node18'
-  }
+    target: 'node18',
+  },
 });

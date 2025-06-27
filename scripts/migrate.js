@@ -6,7 +6,13 @@ import pg from 'pg';
 
 config();
 
-const database_url = "postgresql://" + process.env.POSTGRES_USER + ":" + process.env.POSTGRES_PASSWORD + "@localhost:5432/" + process.env.POSTGRES_DB
+const database_url =
+  'postgresql://' +
+  process.env.POSTGRES_USER +
+  ':' +
+  process.env.POSTGRES_PASSWORD +
+  '@localhost:5432/' +
+  process.env.POSTGRES_DB;
 const runner = new MigrationRunner(database_url);
 
 const command = process.argv[2];
@@ -42,18 +48,18 @@ Migration Commands:
 await runner.close();
 
 function errorHandler(err) {
-  if(err) {
-        return console.log(err);
+  if (err) {
+    return console.log(err);
   }
 }
 
 async function createMigration(name) {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
   const version = `${timestamp}_${name}`;
-  
+
   const migrationsDir = path.join(process.cwd(), 'src/migrations');
   // wait fs.mkdir(migrationsDir, { recursive: true });
-  
+
   const upTemplate = `-- Migration: ${name}
 -- Created: ${new Date().toISOString()}
   ALTER TABLE sessions ALTER COLUMN id TYPE VARCHAR (255);
@@ -71,13 +77,13 @@ async function createMigration(name) {
     upTemplate,
     errorHandler
   );
-  
+
   await fs.writeFile(
     path.join(migrationsDir, `${version}.down.sql`),
     downTemplate,
     errorHandler
   );
-  
+
   console.log(`✅ Created migration files:
   - src/migrations/${version}.up.sql
   - src/migrations/${version}.down.sql`);
@@ -86,7 +92,7 @@ async function createMigration(name) {
 async function rollbackMigration(version) {
   const migrationsDir = path.join(process.cwd(), 'src/migrations');
   const downFile = path.join(migrationsDir, `${version}.down.sql`);
-  
+
   try {
     const downSql = await fs.readFile(downFile, 'utf8');
     await runner.rollbackMigration(version, downSql);

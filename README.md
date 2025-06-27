@@ -13,6 +13,7 @@ A modern task management application built with Astro, featuring project organiz
 ## Getting Started
 
 ### Prerequisites
+
 - Node.js (v18 or higher)
 - npm
 
@@ -42,9 +43,11 @@ npm run preview
 ### Projects
 
 #### GET /api/projects
+
 Get all active projects.
 
 **Response:**
+
 ```json
 [
   {
@@ -59,9 +62,11 @@ Get all active projects.
 ```
 
 #### POST /api/projects
+
 Create a new project.
 
 **Request Body:**
+
 ```json
 {
   "name": "Project Name",
@@ -71,6 +76,7 @@ Create a new project.
 ```
 
 **Response:**
+
 ```json
 {
   "id": 1
@@ -80,19 +86,23 @@ Create a new project.
 ### Todos
 
 #### GET /api/todos
+
 Get todos with optional filtering.
 
 **Query Parameters:**
+
 - `project_id` (optional): Filter by project ID
 - `status` (optional): Filter by status (`pending`, `in_progress`, `completed`, `cancelled`)
 
 **Examples:**
+
 - `/api/todos` - Get all todos
 - `/api/todos?status=pending` - Get pending todos
 - `/api/todos?project_id=1` - Get todos for project 1
 - `/api/todos?project_id=1&status=pending` - Get pending todos for project 1
 
 **Response:**
+
 ```json
 [
   {
@@ -117,9 +127,11 @@ Get todos with optional filtering.
 ```
 
 #### POST /api/todos
+
 Create a new todo.
 
 **Request Body:**
+
 ```json
 {
   "project_id": 1,
@@ -134,6 +146,7 @@ Create a new todo.
 ```
 
 **Response:**
+
 ```json
 {
   "id": 1
@@ -141,15 +154,18 @@ Create a new todo.
 ```
 
 **Field Details:**
+
 - `priority`: `low`, `medium`, `high`, or `urgent`
 - `status`: `pending`, `in_progress`, `completed`, or `cancelled` (defaults to `pending`)
 - `tags`: Array of strings (stored as JSON)
 - `due_date`: ISO date string (optional)
 
 #### PUT /api/todos
+
 Update an existing todo.
 
 **Request Body:**
+
 ```json
 {
   "id": 1,
@@ -160,6 +176,7 @@ Update an existing todo.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true
@@ -167,9 +184,11 @@ Update an existing todo.
 ```
 
 #### POST /api/todos/[id]/complete
+
 Mark a todo as completed and log actual time spent.
 
 **Request Body:**
+
 ```json
 {
   "actual_hours": 3.5
@@ -177,6 +196,7 @@ Mark a todo as completed and log actual time spent.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true
@@ -186,6 +206,7 @@ Mark a todo as completed and log actual time spent.
 ## Database Schema
 
 ### Projects Table
+
 - `id`: Primary key
 - `name`: Project name (unique)
 - `description`: Optional description
@@ -194,6 +215,7 @@ Mark a todo as completed and log actual time spent.
 - `is_active`: Boolean flag (default: true)
 
 ### Todos Table
+
 - `id`: Primary key
 - `project_id`: Foreign key to projects table
 - `title`: Task title

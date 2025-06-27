@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { GET as todosGet, POST as todosPost, PUT as todosPut } from '../../src/pages/api/todos.js';
+import {
+  GET as todosGet,
+  POST as todosPost,
+  PUT as todosPut,
+} from '../../src/pages/api/todos.js';
 import { POST as completePost } from '../../src/pages/api/todos/[id]/complete.js';
 import { Auth } from '../../src/lib/auth.js';
 import { TodoDB } from '../../src/lib/db.js';
@@ -8,8 +12,8 @@ import { TodoDB } from '../../src/lib/db.js';
 vi.mock('../../src/lib/auth.js', () => ({
   Auth: {
     getSessionFromRequest: vi.fn(),
-    getSessionUser: vi.fn()
-  }
+    getSessionUser: vi.fn(),
+  },
 }));
 
 vi.mock('../../src/lib/db.js', () => ({
@@ -17,15 +21,15 @@ vi.mock('../../src/lib/db.js', () => ({
     getTodos: vi.fn(),
     createTodo: vi.fn(),
     updateTodo: vi.fn(),
-    completeTodo: vi.fn()
-  }
+    completeTodo: vi.fn(),
+  },
 }));
 
 describe('Todos API Endpoints', () => {
   const mockSession = {
     user_id: 1,
     username: 'testuser',
-    email: 'test@example.com'
+    email: 'test@example.com',
   };
 
   beforeEach(() => {
@@ -36,7 +40,7 @@ describe('Todos API Endpoints', () => {
     it('should get todos for authenticated user', async () => {
       const mockTodos = [
         { id: 1, title: 'Test Todo 1', status: 'pending' },
-        { id: 2, title: 'Test Todo 2', status: 'completed' }
+        { id: 2, title: 'Test Todo 2', status: 'completed' },
       ];
 
       Auth.getSessionFromRequest.mockReturnValue('session-123');
@@ -44,7 +48,7 @@ describe('Todos API Endpoints', () => {
       TodoDB.getTodos.mockResolvedValue(mockTodos);
 
       const request = {
-        headers: { get: vi.fn().mockReturnValue('session=session-123') }
+        headers: { get: vi.fn().mockReturnValue('session=session-123') },
       };
       const url = 'http://localhost/api/todos';
 
@@ -64,7 +68,7 @@ describe('Todos API Endpoints', () => {
       TodoDB.getTodos.mockResolvedValue(mockTodos);
 
       const request = {
-        headers: { get: vi.fn().mockReturnValue('session=session-123') }
+        headers: { get: vi.fn().mockReturnValue('session=session-123') },
       };
       const url = 'http://localhost/api/todos?project_id=5';
 
@@ -84,7 +88,7 @@ describe('Todos API Endpoints', () => {
       TodoDB.getTodos.mockResolvedValue(mockTodos);
 
       const request = {
-        headers: { get: vi.fn().mockReturnValue('session=session-123') }
+        headers: { get: vi.fn().mockReturnValue('session=session-123') },
       };
       const url = 'http://localhost/api/todos?status=pending';
 
@@ -101,7 +105,7 @@ describe('Todos API Endpoints', () => {
       Auth.getSessionUser.mockResolvedValue(null);
 
       const request = {
-        headers: { get: vi.fn().mockReturnValue('session=invalid-session') }
+        headers: { get: vi.fn().mockReturnValue('session=invalid-session') },
       };
       const url = 'http://localhost/api/todos';
 
@@ -119,7 +123,7 @@ describe('Todos API Endpoints', () => {
         title: 'New Todo',
         description: 'Todo description',
         project_id: 1,
-        priority: 3
+        priority: 3,
       };
 
       Auth.getSessionFromRequest.mockReturnValue('session-123');
@@ -128,7 +132,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue(todoData)
+        json: vi.fn().mockResolvedValue(todoData),
       };
 
       const response = await todosPost({ request });
@@ -145,7 +149,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue(null) },
-        json: vi.fn().mockResolvedValue({ title: 'Test Todo' })
+        json: vi.fn().mockResolvedValue({ title: 'Test Todo' }),
       };
 
       const response = await todosPost({ request });
@@ -162,7 +166,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue({ title: 'Test Todo' })
+        json: vi.fn().mockResolvedValue({ title: 'Test Todo' }),
       };
 
       const response = await todosPost({ request });
@@ -178,7 +182,7 @@ describe('Todos API Endpoints', () => {
       const updateData = {
         id: 1,
         title: 'Updated Todo',
-        status: 'in_progress'
+        status: 'in_progress',
       };
 
       Auth.getSessionFromRequest.mockReturnValue('session-123');
@@ -187,7 +191,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue(updateData)
+        json: vi.fn().mockResolvedValue(updateData),
       };
 
       const response = await todosPut({ request });
@@ -197,7 +201,7 @@ describe('Todos API Endpoints', () => {
       expect(responseData.success).toBe(true);
       expect(TodoDB.updateTodo).toHaveBeenCalledWith(1, 1, {
         title: 'Updated Todo',
-        status: 'in_progress'
+        status: 'in_progress',
       });
     });
 
@@ -207,7 +211,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue(null) },
-        json: vi.fn().mockResolvedValue({ id: 1, title: 'Updated Todo' })
+        json: vi.fn().mockResolvedValue({ id: 1, title: 'Updated Todo' }),
       };
 
       const response = await todosPut({ request });
@@ -224,7 +228,7 @@ describe('Todos API Endpoints', () => {
         id: 1,
         title: 'Completed Todo',
         status: 'completed',
-        actual_hours: 2.5
+        actual_hours: 2.5,
       };
 
       Auth.getSessionFromRequest.mockReturnValue('session-123');
@@ -233,7 +237,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue({ actual_hours: 2.5 })
+        json: vi.fn().mockResolvedValue({ actual_hours: 2.5 }),
       };
       const params = { id: '1' };
 
@@ -251,7 +255,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue({ actual_hours: 2.5 })
+        json: vi.fn().mockResolvedValue({ actual_hours: 2.5 }),
       };
       const params = {}; // missing id
 
@@ -267,7 +271,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue({}) // missing actual_hours
+        json: vi.fn().mockResolvedValue({}), // missing actual_hours
       };
       const params = { id: '1' };
 
@@ -283,7 +287,7 @@ describe('Todos API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue(null) },
-        json: vi.fn().mockResolvedValue({ actual_hours: 2.5 })
+        json: vi.fn().mockResolvedValue({ actual_hours: 2.5 }),
       };
       const params = { id: '1' };
 

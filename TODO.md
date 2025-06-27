@@ -1,6 +1,7 @@
 # Todo Manager Project Roadmap
 
 ## Phase 1: Core CRUD Operations ✅ (In Progress)
+
 - [x] Basic project creation and listing
 - [x] Basic todo creation with project assignment
 - [x] Todo completion tracking with actual hours
@@ -19,6 +20,7 @@
   - Confirmation dialogs for destructive actions
 
 ## Phase 2: LLM Integration & Prioritization
+
 - [ ] **LLM API integration**
   - OpenAI/Anthropic API client setup
   - Environment variable configuration for API keys
@@ -34,6 +36,7 @@
   - Display reasoning in UI for transparency
 
 ## Phase 3: Scheduling & Time Management
+
 - [ ] **Daily capacity calculation**
   - Historical analysis of completed tasks
   - Configurable daily/weekly work hour limits
@@ -51,6 +54,7 @@
   - Integration with calendar apps (optional)
 
 ## Phase 4: PDF Generation & Remarkable Sync
+
 - [ ] **PDF template system**
   - Design optimized layouts for Remarkable tablet (10.3" e-ink)
   - Checkbox forms for analog completion tracking
@@ -69,6 +73,7 @@
   - Photo capture of handwritten notes
 
 ## Phase 5: Analytics & Insights
+
 - [ ] **Enhanced completion tracking**
   - Track partial completions and task abandonment
   - Time tracking integration (Toggl, RescueTime)
@@ -87,6 +92,7 @@
   - Project completion summaries
 
 ## Phase 6: Advanced Features
+
 - [ ] **Task dependencies**
   - Define prerequisite tasks
   - Automatic scheduling based on dependencies
@@ -105,6 +111,7 @@
   - Offline capability with sync
 
 ## Phase 7: Integrations & Automation
+
 - [ ] **Calendar integration**
   - Google Calendar, Outlook sync
   - Automatic time blocking
@@ -123,6 +130,7 @@
   - Automatic project archiving
 
 ## Technical Debt & Improvements
+
 - [ ] **Error handling**
   - Comprehensive error boundaries
   - User-friendly error messages
@@ -145,6 +153,7 @@
   - Deployment and configuration guides
 
 ## Immediate Next Steps (Recommended Order)
+
 1. **Edit/Delete functionality** - Complete the basic CRUD operations
 2. **LLM prioritization** - Core value proposition of intelligent task management
 3. **Daily scheduling** - Transform prioritized tasks into actionable daily plans
@@ -152,6 +161,7 @@
 5. **Analytics foundation** - Start collecting data for future insights
 
 ## Configuration Files Needed
+
 - [ ] `.env.example` - Template for environment variables
 - [ ] `docker-compose.yml` - Easy local development setup
 - [ ] GitHub Actions for CI/CD
@@ -159,6 +169,7 @@
 - [ ] Database migration system
 
 ## Documentation to Create
+
 - [ ] `README.md` - Project overview and setup instructions
 - [ ] `CONTRIBUTING.md` - Development guidelines
 - [ ] `API.md` - API endpoint documentation

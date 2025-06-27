@@ -3,118 +3,132 @@
 ---
 
 <div class="todo-form-container">
-  <form id="todo-form" class="space-y-4 card">
-    <div>
-      <label for="project_id" class="block text-sm font-medium text-gray-700">Project</label>
-      <select 
-        id="project_id" 
-        name="project_id" 
-        class="form-select mt-1"
-      >
-        <option value="">Select a project...</option>
-      </select>
-    </div>
+  <form id="todo-form" class="card">
+    <div class="form-grid">
+      <!-- Left Column -->
+      <div class="form-column">
+        <div>
+          <label
+            for="project_id"
+            class="block text-sm font-medium text-gray-700">Project</label
+          >
+          <select id="project_id" name="project_id" class="form-select mt-1">
+            <option value="">Select a project...</option>
+          </select>
+        </div>
 
-    <div>
-      <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
-      <input 
-        type="text" 
-        id="title" 
-        name="title" 
-        required
-        class="form-input mt-1"
-      >
-    </div>
+        <div>
+          <label for="title" class="block text-sm font-medium text-gray-700"
+            >Title</label
+          >
+          <input
+            type="text"
+            id="title"
+            name="title"
+            required
+            class="form-input mt-1"
+          />
+        </div>
 
-    <div>
-      <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-      <textarea 
-        id="description" 
-        name="description" 
-        rows="3"
-        class="form-textarea mt-1"
-      ></textarea>
-    </div>
+        <div>
+          <label
+            for="description"
+            class="block text-sm font-medium text-gray-700">Description</label
+          >
+          <textarea
+            id="description"
+            name="description"
+            rows="3"
+            class="form-textarea mt-1"></textarea>
+        </div>
 
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label for="priority" class="block text-sm font-medium text-gray-700">Priority</label>
-        <select 
-          id="priority" 
-          name="priority"
-          class="form-select mt-1"
-        >
-          <option value="low">Low</option>
-          <option value="medium" selected>Medium</option>
-          <option value="high">High</option>
-          <option value="urgent">Urgent</option>
-        </select>
+        <div>
+          <label for="tags" class="block text-sm font-medium text-gray-700"
+            >Tags (comma-separated)</label
+          >
+          <input
+            type="text"
+            id="tags"
+            name="tags"
+            placeholder="backend, urgent, review"
+            class="form-input mt-1"
+          />
+        </div>
       </div>
 
-      <div>
-        <label for="estimated_hours" class="block text-sm font-medium text-gray-700">Estimated Hours</label>
-        <input 
-          type="number" 
-          id="estimated_hours" 
-          name="estimated_hours" 
-          step="0.5" 
-          min="0.5" 
-          value="1.0"
-          class="form-input mt-1"
-        >
+      <!-- Right Column -->
+      <div class="form-column">
+        <div>
+          <label for="priority" class="block text-sm font-medium text-gray-700"
+            >Priority</label
+          >
+          <select id="priority" name="priority" class="form-select mt-1">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </div>
+
+        <div>
+          <label
+            for="estimated_hours"
+            class="block text-sm font-medium text-gray-700"
+            >Estimated Hours</label
+          >
+          <input
+            type="number"
+            id="estimated_hours"
+            name="estimated_hours"
+            step="0.5"
+            min="0.5"
+            value="1.0"
+            class="form-input mt-1"
+          />
+        </div>
+
+        <div>
+          <label for="due_date" class="block text-sm font-medium text-gray-700"
+            >Due Date (Optional)</label
+          >
+          <input
+            type="date"
+            id="due_date"
+            name="due_date"
+            class="form-input mt-1"
+          />
+        </div>
+
+        <div>
+          <label
+            for="time_horizon"
+            class="block text-sm font-medium text-gray-700">Time Horizon</label
+          >
+          <select
+            id="time_horizon"
+            name="time_horizon"
+            class="form-select mt-1"
+          >
+            <option value="">No specific timeframe</option>
+            <option value="today">Today</option>
+            <option value="this_week">This Week</option>
+            <option value="next_week">Next Week</option>
+            <option value="this_month">This Month</option>
+            <option value="next_month">Next Month</option>
+            <option value="this_quarter">This Quarter</option>
+            <option value="next_quarter">Next Quarter</option>
+            <option value="this_year">This Year</option>
+            <option value="next_year">Next Year</option>
+            <option value="someday">Someday</option>
+          </select>
+        </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label for="due_date" class="block text-sm font-medium text-gray-700">Due Date (Optional)</label>
-        <input 
-          type="date" 
-          id="due_date" 
-          name="due_date"
-          class="form-input mt-1"
-        >
-      </div>
-
-      <div>
-        <label for="time_horizon" class="block text-sm font-medium text-gray-700">Time Horizon</label>
-        <select 
-          id="time_horizon" 
-          name="time_horizon"
-          class="form-select mt-1"
-        >
-          <option value="">No specific timeframe</option>
-          <option value="today">Today</option>
-          <option value="this_week">This Week</option>
-          <option value="next_week">Next Week</option>
-          <option value="this_month">This Month</option>
-          <option value="next_month">Next Month</option>
-          <option value="this_quarter">This Quarter</option>
-          <option value="next_quarter">Next Quarter</option>
-          <option value="this_year">This Year</option>
-          <option value="next_year">Next Year</option>
-          <option value="someday">Someday</option>
-        </select>
-      </div>
+    <!-- Submit Button - Full Width -->
+    <div class="form-submit">
+      <button type="submit" class="btn btn-primary w-full"> Add Todo </button>
     </div>
-
-    <div>
-      <label for="tags" class="block text-sm font-medium text-gray-700">Tags (comma-separated)</label>
-      <input 
-        type="text" 
-        id="tags" 
-        name="tags" 
-        placeholder="backend, urgent, review"
-        class="form-input mt-1"
-      >
-    </div>
-
-    <button 
-      type="submit"
-      class="btn btn-primary w-full"
-    >
-      Add Todo
-    </button>
   </form>
 </div>
 
@@ -123,20 +137,20 @@
   async function loadProjects() {
     try {
       const response = await fetch('/api/projects');
-      
+
       if (!response.ok) {
         throw new Error('Failed to load projects');
       }
-      
+
       const projects = await response.json();
       const select = document.getElementById('project_id');
-      
+
       // Clear existing options except the first one
       while (select.children.length > 1) {
         select.removeChild(select.lastChild);
       }
-      
-      projects.forEach(project => {
+
+      projects.forEach((project) => {
         const option = document.createElement('option');
         option.value = project.id;
         option.textContent = project.name;
@@ -150,7 +164,7 @@
   // Handle form submission
   document.getElementById('todo-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const formData = new FormData(e.target);
     const todoData = {
       project_id: formData.get('project_id') || null,
@@ -160,15 +174,20 @@
       estimated_hours: parseFloat(formData.get('estimated_hours')),
       due_date: formData.get('due_date') || null,
       time_horizon: formData.get('time_horizon') || null,
-      tags: formData.get('tags') ? formData.get('tags').split(',').map(t => t.trim()) : [],
-      context: 'work'
+      tags: formData.get('tags')
+        ? formData
+            .get('tags')
+            .split(',')
+            .map((t) => t.trim())
+        : [],
+      context: 'work',
     };
 
     try {
       const response = await fetch('/api/todos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(todoData)
+        body: JSON.stringify(todoData),
       });
 
       if (response.ok) {
@@ -194,5 +213,31 @@
 <style>
   .todo-form-container {
     max-width: 600px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+
+  .form-column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-submit {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 20px;
+  }
+
+  /* Mobile responsiveness */
+  @media (max-width: 640px) {
+    .form-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
   }
 </style>

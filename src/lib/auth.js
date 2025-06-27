@@ -2,7 +2,6 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { TodoDB } from './db.js';
 
-
 export class Auth {
   static async hashPassword(password) {
     return await bcrypt.hash(password, 12);
@@ -13,8 +12,10 @@ export class Auth {
   }
 
   static async createUser(username, email, password) {
-    const existingUser = await TodoDB.getUserByUsername(username) || await TodoDB.getUserByEmail(email);
-    if (existingUser && existingUser != "") {
+    const existingUser =
+      (await TodoDB.getUserByUsername(username)) ||
+      (await TodoDB.getUserByEmail(email));
+    if (existingUser && existingUser != '') {
       throw new Error('User already exists');
     }
 
@@ -38,11 +39,11 @@ export class Auth {
 
   static async createSession(userId) {
     const sessionId = uuidv4();
-    
+
     const session = await TodoDB.createSession(sessionId, userId);
     return {
       sessionId: session.id,
-      expiresAt: session.expires_at
+      expiresAt: session.expires_at,
     };
   }
 
@@ -53,11 +54,10 @@ export class Auth {
 
     // Clean up expired sessions periodically
     await TodoDB.cleanupExpiredSessions();
-    
+
     const user = await TodoDB.getSession(sessionId);
 
     return user;
-
   }
 
   static async deleteSession(sessionId) {
@@ -73,8 +73,8 @@ export class Auth {
 
     const sessionCookie = cookies
       .split(';')
-      .find(cookie => cookie.trim().startsWith('session='));
-    
+      .find((cookie) => cookie.trim().startsWith('session='));
+
     if (!sessionCookie) return null;
 
     return sessionCookie.split('=')[1];
