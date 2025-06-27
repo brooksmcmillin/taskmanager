@@ -38,7 +38,6 @@ npx vitest
 ## Test Coverage
 
 ### Database Tests (`tests/lib/db.test.js`)
-
 - ✅ User CRUD operations
 - ✅ Session management
 - ✅ Project management
@@ -47,7 +46,6 @@ npx vitest
 - ✅ Data isolation and cleanup
 
 ### Authentication Tests (`tests/lib/auth.test.js`)
-
 - ✅ Password hashing and verification
 - ✅ User registration and login
 - ✅ Session creation and management
@@ -55,7 +53,6 @@ npx vitest
 - ✅ Error handling for invalid credentials
 
 ### API Endpoint Tests
-
 - ✅ **Auth API** (`tests/api/auth.test.js`)
   - POST /api/auth/login
   - POST /api/auth/register
@@ -75,7 +72,6 @@ npx vitest
 ## Test Environment
 
 The tests use a separate test database to avoid conflicts with development data:
-
 - Database: `taskmanager_test` (automatically appended to your main DB name)
 - Environment variables loaded from `.env.test`
 - Clean state before/after each test suite
@@ -89,19 +85,16 @@ The tests use a separate test database to avoid conflicts with development data:
 ## Test Categories
 
 ### Unit Tests
-
 - Database operations (TodoDB class)
 - Authentication logic (Auth class)
 - API endpoint handlers
 
 ### Integration Tests
-
 - Full API request/response cycles
 - Database interactions
 - Authentication flows
 
 ### Security Tests
-
 - Authentication bypass attempts
 - Data isolation verification
 - Input validation
@@ -117,7 +110,6 @@ The tests use a separate test database to avoid conflicts with development data:
 ## Adding New Tests
 
 When adding new features:
-
 1. Add unit tests for new functions/classes
 2. Add API tests for new endpoints
 3. Include both success and error scenarios
@@ -130,8 +122,8 @@ When adding new features:
 // Mocking dependencies
 vi.mock('../../src/lib/db.js', () => ({
   TodoDB: {
-    methodName: vi.fn(),
-  },
+    methodName: vi.fn()
+  }
 }));
 
 // Testing API endpoints
