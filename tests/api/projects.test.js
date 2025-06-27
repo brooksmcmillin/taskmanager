@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { GET as projectsGet, POST as projectsPost } from '../../src/pages/api/projects.js';
+import {
+  GET as projectsGet,
+  POST as projectsPost,
+} from '../../src/pages/api/projects.js';
 import { Auth } from '../../src/lib/auth.js';
 import { TodoDB } from '../../src/lib/db.js';
 
@@ -7,22 +10,22 @@ import { TodoDB } from '../../src/lib/db.js';
 vi.mock('../../src/lib/auth.js', () => ({
   Auth: {
     getSessionFromRequest: vi.fn(),
-    getSessionUser: vi.fn()
-  }
+    getSessionUser: vi.fn(),
+  },
 }));
 
 vi.mock('../../src/lib/db.js', () => ({
   TodoDB: {
     getProjects: vi.fn(),
-    createProject: vi.fn()
-  }
+    createProject: vi.fn(),
+  },
 }));
 
 describe('Projects API Endpoints', () => {
   const mockSession = {
     user_id: 1,
     username: 'testuser',
-    email: 'test@example.com'
+    email: 'test@example.com',
   };
 
   beforeEach(() => {
@@ -32,8 +35,18 @@ describe('Projects API Endpoints', () => {
   describe('GET /api/projects', () => {
     it('should get projects for authenticated user', async () => {
       const mockProjects = [
-        { id: 1, name: 'Project 1', description: 'First project', color: '#ff0000' },
-        { id: 2, name: 'Project 2', description: 'Second project', color: '#00ff00' }
+        {
+          id: 1,
+          name: 'Project 1',
+          description: 'First project',
+          color: '#ff0000',
+        },
+        {
+          id: 2,
+          name: 'Project 2',
+          description: 'Second project',
+          color: '#00ff00',
+        },
       ];
 
       Auth.getSessionFromRequest.mockReturnValue('session-123');
@@ -41,7 +54,7 @@ describe('Projects API Endpoints', () => {
       TodoDB.getProjects.mockResolvedValue(mockProjects);
 
       const request = {
-        headers: { get: vi.fn().mockReturnValue('session=session-123') }
+        headers: { get: vi.fn().mockReturnValue('session=session-123') },
       };
 
       const response = await projectsGet({ request });
@@ -58,7 +71,7 @@ describe('Projects API Endpoints', () => {
       TodoDB.getProjects.mockResolvedValue([]);
 
       const request = {
-        headers: { get: vi.fn().mockReturnValue('session=session-123') }
+        headers: { get: vi.fn().mockReturnValue('session=session-123') },
       };
 
       const response = await projectsGet({ request });
@@ -74,7 +87,7 @@ describe('Projects API Endpoints', () => {
       Auth.getSessionUser.mockResolvedValue(null);
 
       const request = {
-        headers: { get: vi.fn().mockReturnValue('session=invalid-session') }
+        headers: { get: vi.fn().mockReturnValue('session=invalid-session') },
       };
 
       const response = await projectsGet({ request });
@@ -88,10 +101,12 @@ describe('Projects API Endpoints', () => {
     it('should handle database errors', async () => {
       Auth.getSessionFromRequest.mockReturnValue('session-123');
       Auth.getSessionUser.mockResolvedValue(mockSession);
-      TodoDB.getProjects.mockRejectedValue(new Error('Database connection failed'));
+      TodoDB.getProjects.mockRejectedValue(
+        new Error('Database connection failed')
+      );
 
       const request = {
-        headers: { get: vi.fn().mockReturnValue('session=session-123') }
+        headers: { get: vi.fn().mockReturnValue('session=session-123') },
       };
 
       const response = await projectsGet({ request });
@@ -107,7 +122,7 @@ describe('Projects API Endpoints', () => {
       const projectData = {
         name: 'New Project',
         description: 'Project description',
-        color: '#3b82f6'
+        color: '#3b82f6',
       };
 
       const createdProject = { id: 123 };
@@ -118,7 +133,7 @@ describe('Projects API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue(projectData)
+        json: vi.fn().mockResolvedValue(projectData),
       };
 
       const response = await projectsPost({ request });
@@ -136,7 +151,7 @@ describe('Projects API Endpoints', () => {
 
     it('should create project with default values', async () => {
       const projectData = {
-        name: 'Simple Project'
+        name: 'Simple Project',
         // description and color will use defaults
       };
 
@@ -148,7 +163,7 @@ describe('Projects API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue(projectData)
+        json: vi.fn().mockResolvedValue(projectData),
       };
 
       const response = await projectsPost({ request });
@@ -173,7 +188,7 @@ describe('Projects API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue(null) },
-        json: vi.fn().mockResolvedValue({ name: 'Test Project' })
+        json: vi.fn().mockResolvedValue({ name: 'Test Project' }),
       };
 
       const response = await projectsPost({ request });
@@ -187,11 +202,13 @@ describe('Projects API Endpoints', () => {
     it('should handle database errors during creation', async () => {
       Auth.getSessionFromRequest.mockReturnValue('session-123');
       Auth.getSessionUser.mockResolvedValue(mockSession);
-      TodoDB.createProject.mockRejectedValue(new Error('Duplicate project name'));
+      TodoDB.createProject.mockRejectedValue(
+        new Error('Duplicate project name')
+      );
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockResolvedValue({ name: 'Duplicate Project' })
+        json: vi.fn().mockResolvedValue({ name: 'Duplicate Project' }),
       };
 
       const response = await projectsPost({ request });
@@ -207,7 +224,7 @@ describe('Projects API Endpoints', () => {
 
       const request = {
         headers: { get: vi.fn().mockReturnValue('session=session-123') },
-        json: vi.fn().mockRejectedValue(new Error('Invalid JSON'))
+        json: vi.fn().mockRejectedValue(new Error('Invalid JSON')),
       };
 
       const response = await projectsPost({ request });

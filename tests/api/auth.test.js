@@ -1,4 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  afterAll,
+  vi,
+} from 'vitest';
 import { POST as loginPost } from '../../src/pages/api/auth/login.js';
 import { POST as registerPost } from '../../src/pages/api/auth/register.js';
 import { POST as logoutPost } from '../../src/pages/api/auth/logout.js';
@@ -14,8 +23,8 @@ vi.mock('../../src/lib/auth.js', () => ({
     createSessionCookie: vi.fn(),
     deleteSession: vi.fn(),
     clearSessionCookie: vi.fn(),
-    createUser: vi.fn()
-  }
+    createUser: vi.fn(),
+  },
 }));
 
 describe('Auth API Endpoints', () => {
@@ -25,9 +34,13 @@ describe('Auth API Endpoints', () => {
 
   describe('POST /api/auth/login', () => {
     it('should login user with valid credentials', async () => {
-      const mockUser = { id: 1, username: 'testuser', email: 'test@example.com' };
+      const mockUser = {
+        id: 1,
+        username: 'testuser',
+        email: 'test@example.com',
+      };
       const mockSession = { sessionId: 'session-123', expiresAt: new Date() };
-      
+
       Auth.authenticateUser.mockResolvedValue(mockUser);
       Auth.createSession.mockResolvedValue(mockSession);
       Auth.createSessionCookie.mockReturnValue('session=session-123; HttpOnly');
@@ -35,8 +48,8 @@ describe('Auth API Endpoints', () => {
       const request = {
         json: vi.fn().mockResolvedValue({
           username: 'testuser',
-          password: 'password123'
-        })
+          password: 'password123',
+        }),
       };
 
       const response = await loginPost({ request });
@@ -45,14 +58,16 @@ describe('Auth API Endpoints', () => {
       expect(response.status).toBe(200);
       expect(responseData.success).toBe(true);
       expect(responseData.user).toEqual(mockUser);
-      expect(response.headers.get('Set-Cookie')).toBe('session=session-123; HttpOnly');
+      expect(response.headers.get('Set-Cookie')).toBe(
+        'session=session-123; HttpOnly'
+      );
     });
 
     it('should return 400 for missing username', async () => {
       const request = {
         json: vi.fn().mockResolvedValue({
-          password: 'password123'
-        })
+          password: 'password123',
+        }),
       };
 
       const response = await loginPost({ request });
@@ -65,8 +80,8 @@ describe('Auth API Endpoints', () => {
     it('should return 400 for missing password', async () => {
       const request = {
         json: vi.fn().mockResolvedValue({
-          username: 'testuser'
-        })
+          username: 'testuser',
+        }),
       };
 
       const response = await loginPost({ request });
@@ -82,8 +97,8 @@ describe('Auth API Endpoints', () => {
       const request = {
         json: vi.fn().mockResolvedValue({
           username: 'testuser',
-          password: 'wrongpassword'
-        })
+          password: 'wrongpassword',
+        }),
       };
 
       const response = await loginPost({ request });
@@ -103,8 +118,8 @@ describe('Auth API Endpoints', () => {
         json: vi.fn().mockResolvedValue({
           username: 'newuser',
           email: 'new@example.com',
-          password: 'password123'
-        })
+          password: 'password123',
+        }),
       };
 
       const response = await registerPost({ request });
@@ -120,9 +135,9 @@ describe('Auth API Endpoints', () => {
       const request = {
         json: vi.fn().mockResolvedValue({
           username: 'newuser',
-          password: 'password123'
+          password: 'password123',
           // missing email
-        })
+        }),
       };
 
       const response = await registerPost({ request });
@@ -137,8 +152,8 @@ describe('Auth API Endpoints', () => {
         json: vi.fn().mockResolvedValue({
           username: 'newuser',
           email: 'new@example.com',
-          password: '123'
-        })
+          password: '123',
+        }),
       };
 
       const response = await registerPost({ request });
@@ -155,8 +170,8 @@ describe('Auth API Endpoints', () => {
         json: vi.fn().mockResolvedValue({
           username: 'existinguser',
           email: 'existing@example.com',
-          password: 'password123'
-        })
+          password: 'password123',
+        }),
       };
 
       const response = await registerPost({ request });
@@ -171,12 +186,14 @@ describe('Auth API Endpoints', () => {
     it('should logout successfully with valid session', async () => {
       Auth.getSessionFromRequest.mockReturnValue('session-123');
       Auth.deleteSession.mockResolvedValue();
-      Auth.clearSessionCookie.mockReturnValue('session=; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+      Auth.clearSessionCookie.mockReturnValue(
+        'session=; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      );
 
       const request = {
         headers: {
-          get: vi.fn().mockReturnValue('session=session-123')
-        }
+          get: vi.fn().mockReturnValue('session=session-123'),
+        },
       };
 
       const response = await logoutPost({ request });
@@ -190,12 +207,14 @@ describe('Auth API Endpoints', () => {
 
     it('should logout successfully even without session', async () => {
       Auth.getSessionFromRequest.mockReturnValue(null);
-      Auth.clearSessionCookie.mockReturnValue('session=; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+      Auth.clearSessionCookie.mockReturnValue(
+        'session=; HttpOnly; Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      );
 
       const request = {
         headers: {
-          get: vi.fn().mockReturnValue(null)
-        }
+          get: vi.fn().mockReturnValue(null),
+        },
       };
 
       const response = await logoutPost({ request });

@@ -13,7 +13,9 @@
     "migrate:rollback": "node scripts/migrate.js rollback",
     "test": "vitest --silent=false",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@astrojs/node": "^9.2.2",
@@ -29,6 +31,8 @@
     "@types/pg": "^8.15.4",
     "@vitest/ui": "^3.2.4",
     "drizzle-kit": "^0.31.1",
+    "prettier": "^3.6.1",
+    "prettier-plugin-astro": "^0.14.1",
     "supertest": "^7.1.1",
     "vitest": "^3.2.4"
   }
