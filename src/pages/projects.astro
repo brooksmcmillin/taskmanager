@@ -1,6 +1,7 @@
 ---
 // src/pages/projects.astro - Simple project management page
 import Layout from '../layouts/Layout.astro';
+import ProjectModal from '../components/ProjectModal.astro';
 import { checkAuth } from '../lib/serverAuth.js';
 
 const auth = checkAuth(Astro.request);
@@ -12,61 +13,16 @@ const user = auth.user;
   <main class="container py-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-8">Manage Projects</h1>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <!-- Create Project Form -->
-      <div>
-        <h2 class="text-xl font-semibold mb-4">Create New Project</h2>
-        <form id="project-form" class="space-y-4 card">
-          <div>
-            <label for="name" class="block text-sm font-medium text-gray-700"
-              >Project Name</label
-            >
-            <input
-              type="text"
-              id="name"
-              name="name"
-              required
-              class="form-input mt-1"
-            />
-          </div>
+    <ProjectModal />
 
-          <div>
-            <label
-              for="description"
-              class="block text-sm font-medium text-gray-700">Description</label
-            >
-            <textarea
-              id="description"
-              name="description"
-              rows="3"
-              class="form-textarea mt-1"></textarea>
-          </div>
-
-          <div>
-            <label for="color" class="block text-sm font-medium text-gray-700"
-              >Color</label
-            >
-            <input
-              type="color"
-              id="color"
-              name="color"
-              value="#3b82f6"
-              class="form-input mt-1 h-10"
-            />
-          </div>
-
-          <button type="submit" class="btn btn-primary w-full">
-            Create Project
-          </button>
-        </form>
-      </div>
-
-      <!-- Existing Projects -->
-      <div>
-        <h2 class="text-xl font-semibold mb-4">Existing Projects</h2>
-        <div id="projects-list" class="space-y-4">
-          <!-- Projects will be loaded here -->
-        </div>
+    <!-- Existing Projects -->
+    <div class="max-w-4xl mx-auto">
+      <h2 class="text-xl font-semibold mb-4">Your Projects</h2>
+      <div
+        id="projects-list"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+      >
+        <!-- Projects will be loaded here -->
       </div>
     </div>
   </main>
@@ -96,11 +52,19 @@ const user = auth.user;
 
       projects.forEach((project) => {
         const projectDiv = document.createElement('div');
-        projectDiv.className = 'card border-l-4';
+        projectDiv.className = 'card border-l-4 relative';
         projectDiv.style.borderLeftColor = project.color;
 
         projectDiv.innerHTML = `
-          <h3 class="font-semibold text-lg text-gray-800">${project.name}</h3>
+          <div class="flex justify-between items-start mb-2">
+            <h3 class="font-semibold text-lg text-gray-800">${project.name}</h3>
+            <button 
+              onclick="editProject(${project.id})"
+              class="btn btn-secondary btn-sm"
+            >
+              Edit
+            </button>
+          </div>
           <p class="text-gray-600 text-sm mt-1">${project.description || 'No description'}</p>
           <p class="text-xs text-gray-500 mt-2">Created: ${new Date(project.created_at).toLocaleDateString()}</p>
         `;
@@ -114,43 +78,25 @@ const user = auth.user;
     }
   }
 
-  // Handle project form submission
-  document
-    .getElementById('project-form')
-    .addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const formData = new FormData(e.target);
-      const projectData = {
-        name: formData.get('name'),
-        description: formData.get('description'),
-        color: formData.get('color'),
-      };
-
-      try {
-        const response = await fetch('/api/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(projectData),
-        });
-
-        if (response.ok) {
-          e.target.reset();
-          loadProjects(); // Refresh the projects list
-          alert('Project created successfully!');
-        } else if (response.status === 401) {
-          window.location.href = '/login';
-        } else {
-          const error = await response.json();
-          alert(
-            'Error creating project: ' + (error.message || 'Unknown error')
-          );
-        }
-      } catch (error) {
-        alert('Network error: ' + error.message);
+  window.editProject = async function (projectId) {
+    try {
+      const response = await fetch(`/api/projects/${projectId}`);
+      if (response.ok) {
+        const project = await response.json();
+        window.openEditProjectModal(project);
+      } else if (response.status === 401) {
+        window.location.href = '/login';
+      } else {
+        alert('Failed to load project for editing');
       }
-    });
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
 
   // Load projects when page loads
   loadProjects();
+
+  // Listen for new projects to refresh the list
+  window.addEventListener('projectAdded', loadProjects);
 </script>
