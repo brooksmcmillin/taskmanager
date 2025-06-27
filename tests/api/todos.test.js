@@ -53,7 +53,7 @@ describe('Todos API Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(responseData).toEqual(mockTodos);
-      expect(TodoDB.getTodos).toHaveBeenCalledWith(1, null, null);
+      expect(TodoDB.getTodos).toHaveBeenCalledWith(1, null, null, null);
     });
 
     it('should filter todos by project_id', async () => {
@@ -73,7 +73,7 @@ describe('Todos API Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(responseData).toEqual(mockTodos);
-      expect(TodoDB.getTodos).toHaveBeenCalledWith(1, '5', null);
+      expect(TodoDB.getTodos).toHaveBeenCalledWith(1, '5', null, null);
     });
 
     it('should filter todos by status', async () => {
@@ -93,7 +93,7 @@ describe('Todos API Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(responseData).toEqual(mockTodos);
-      expect(TodoDB.getTodos).toHaveBeenCalledWith(1, null, 'pending');
+      expect(TodoDB.getTodos).toHaveBeenCalledWith(1, null, 'pending', null);
     });
 
     it('should return 401 for unauthenticated user', async () => {
