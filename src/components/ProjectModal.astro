@@ -1,31 +1,31 @@
 ---
-import TodoForm from '../components/TodoForm.astro';
+import ProjectForm from '../components/ProjectForm.astro';
 ---
 
-<div id="todoModal" class="modal">
+<div id="projectModal" class="modal">
   <div class="modal-content">
     <div class="modal-header">
-      <h2>Add New Todo</h2>
+      <h2>Add New Project</h2>
       <span class="close">&times;</span>
     </div>
     <div class="modal-body">
-      <TodoForm />
+      <ProjectForm />
     </div>
   </div>
 </div>
-<!-- Add Todo Button -->
-<button id="addTodoBtn" class="add-todo-btn">
+<!-- Add Project Button -->
+<button id="addProjectBtn" class="add-project-btn">
   <span class="plus-icon">+</span>
 </button>
 
 <style>
-  .add-todo-btn {
+  .add-project-btn {
     position: fixed;
     bottom: 24px;
     right: 24px;
     width: 56px;
     height: 56px;
-    background: #2563eb;
+    background: #059669;
     color: white;
     border: none;
     border-radius: 50%;
@@ -34,17 +34,17 @@ import TodoForm from '../components/TodoForm.astro';
     align-items: center;
     justify-content: center;
     z-index: 999;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
     transition: all 0.2s ease-in-out;
   }
 
-  .add-todo-btn:hover {
-    background: #1d4ed8;
+  .add-project-btn:hover {
+    background: #047857;
     transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.5);
+    box-shadow: 0 6px 16px rgba(5, 150, 105, 0.5);
   }
 
-  .add-todo-btn:active {
+  .add-project-btn:active {
     transform: scale(0.95);
   }
 
@@ -71,7 +71,7 @@ import TodoForm from '../components/TodoForm.astro';
     margin: 5% auto;
     border-radius: 12px;
     width: 90%;
-    max-width: 600px;
+    max-width: 500px;
     max-height: 90vh;
     overflow-y: auto;
     box-shadow:
@@ -115,80 +115,6 @@ import TodoForm from '../components/TodoForm.astro';
     padding: 0 24px 24px 24px;
   }
 
-  .form-group {
-    margin-bottom: 20px;
-  }
-
-  .form-group label {
-    display: block;
-    margin-bottom: 6px;
-    font-weight: 500;
-    color: #374151;
-  }
-
-  .form-group input,
-  .form-group select,
-  .form-group textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 14px;
-    transition:
-      border-color 0.2s,
-      box-shadow 0.2s;
-  }
-
-  .form-group input:focus,
-  .form-group select:focus,
-  .form-group textarea:focus {
-    outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-  }
-
-  .form-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    margin-top: 32px;
-    padding-top: 24px;
-    border-top: 1px solid #e5e7eb;
-  }
-
-  .btn-cancel {
-    background: white;
-    color: #6b7280;
-    border: 1px solid #d1d5db;
-    padding: 10px 20px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    transition:
-      background-color 0.2s,
-      border-color 0.2s;
-  }
-
-  .btn-cancel:hover {
-    background: #f9fafb;
-    border-color: #9ca3af;
-  }
-
-  .btn-primary {
-    background: #2563eb;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background-color 0.2s;
-  }
-
-  .btn-primary:hover {
-    background: #1d4ed8;
-  }
-
   /* Animation */
   .modal.show {
     display: block;
@@ -222,32 +148,31 @@ import TodoForm from '../components/TodoForm.astro';
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const modal = document.getElementById('todoModal');
-    const addBtn = document.getElementById('addTodoBtn');
+    const modal = document.getElementById('projectModal');
+    const addBtn = document.getElementById('addProjectBtn');
     const closeBtn = document.querySelector('.close');
-    const form = document.getElementById('todo-form');
+    const form = document.getElementById('project-form');
 
-    // Open modal for adding new todo
+    // Open modal for adding new project
     addBtn.addEventListener('click', function () {
-      window.resetFormToAddMode();
+      window.resetProjectFormToAddMode();
       modal.classList.add('show');
       document.body.style.overflow = 'hidden'; // Prevent background scrolling
     });
 
     // Global function to open modal for editing
-    window.openEditModal = function (todo) {
-      window.populateFormForEdit(todo);
+    window.openEditProjectModal = function (project) {
+      window.populateProjectFormForEdit(project);
       modal.classList.add('show');
       document.body.style.overflow = 'hidden';
     };
 
     // Close modal function
     function closeModal() {
-      console.log('Closing Modal');
       modal.classList.remove('show');
       document.body.style.overflow = ''; // Restore scrolling
       form.reset(); // Clear form
-      window.resetFormToAddMode(); // Reset to add mode
+      window.resetProjectFormToAddMode(); // Reset to add mode
     }
 
     // Close modal events
@@ -265,18 +190,6 @@ import TodoForm from '../components/TodoForm.astro';
       if (e.key === 'Escape' && modal.classList.contains('show')) {
         closeModal();
       }
-    });
-
-    // Handle form submission
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-
-      // Get form data
-      const formData = new FormData(form);
-      const todoData = Object.fromEntries(formData.entries());
-
-      // The form submission is now handled in TodoForm.astro
-      // This listener is kept for compatibility but most logic moved to TodoForm
     });
   });
 </script>

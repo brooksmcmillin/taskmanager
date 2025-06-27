@@ -89,12 +89,20 @@ const user = Astro.locals.user;
                     ${todo.time_horizon ? ` | ${todo.time_horizon.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}` : ''}
                   </div>
                 </div>
-                <button 
-                  onclick="completeTodo(${todo.id})"
-                  class="btn btn-success btn-sm ml-4"
-                >
-                  Complete
-                </button>
+                <div class="flex gap-2 ml-4">
+                  <button 
+                    onclick="editTodo(${todo.id})"
+                    class="btn btn-secondary btn-sm"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    onclick="completeTodo(${todo.id})"
+                    class="btn btn-success btn-sm"
+                  >
+                    Complete
+                  </button>
+                </div>
               </div>
             `
               )
@@ -108,6 +116,22 @@ const user = Astro.locals.user;
       console.error('Failed to load todos:', error);
     }
   }
+
+  window.editTodo = async function (todoId) {
+    try {
+      const response = await fetch(`/api/todos/${todoId}`);
+      if (response.ok) {
+        const todo = await response.json();
+        window.openEditModal(todo);
+      } else if (response.status === 401) {
+        window.location.href = '/login';
+      } else {
+        alert('Failed to load todo for editing');
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
 
   window.completeTodo = async function (todoId) {
     const actualHours = prompt('How many hours did this take?');

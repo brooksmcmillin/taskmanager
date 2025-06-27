@@ -127,7 +127,9 @@
 
     <!-- Submit Button - Full Width -->
     <div class="form-submit">
-      <button type="submit" class="btn btn-primary w-full"> Add Todo </button>
+      <button type="submit" class="btn btn-primary w-full" id="submit-btn">
+        Add Todo
+      </button>
     </div>
   </form>
 </div>
@@ -161,6 +163,36 @@
     }
   }
 
+  // Global variable to track edit mode
+  window.editingTodoId = null;
+
+  // Function to populate form for editing
+  window.populateFormForEdit = function (todo) {
+    window.editingTodoId = todo.id;
+
+    document.getElementById('project_id').value = todo.project_id || '';
+    document.getElementById('title').value = todo.title;
+    document.getElementById('description').value = todo.description || '';
+    document.getElementById('priority').value = todo.priority;
+    document.getElementById('estimated_hours').value = todo.estimated_hours;
+    document.getElementById('due_date').value = todo.due_date || '';
+    document.getElementById('time_horizon').value = todo.time_horizon || '';
+    document.getElementById('tags').value = todo.tags
+      ? todo.tags.join(', ')
+      : '';
+
+    // Update button text and modal title
+    document.getElementById('submit-btn').textContent = 'Update Todo';
+    document.querySelector('.modal-header h2').textContent = 'Edit Todo';
+  };
+
+  // Function to reset form to add mode
+  window.resetFormToAddMode = function () {
+    window.editingTodoId = null;
+    document.getElementById('submit-btn').textContent = 'Add Todo';
+    document.querySelector('.modal-header h2').textContent = 'Add New Todo';
+  };
+
   // Handle form submission
   document.getElementById('todo-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -183,23 +215,36 @@
       context: 'work',
     };
 
+    const isEditing = window.editingTodoId !== null;
+    const url = isEditing ? `/api/todos/${window.editingTodoId}` : '/api/todos';
+    const method = isEditing ? 'PUT' : 'POST';
+
     try {
-      const response = await fetch('/api/todos', {
-        method: 'POST',
+      const response = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(todoData),
       });
 
       if (response.ok) {
         e.target.reset();
+        window.resetFormToAddMode();
+        // Close the modal
+        const modal = document.getElementById('todoModal');
+        if (modal) {
+          modal.classList.remove('show');
+          document.body.style.overflow = '';
+        }
         // Trigger a custom event to refresh the todo list
         window.dispatchEvent(new CustomEvent('todoAdded'));
-        alert('Todo added successfully!');
       } else if (response.status === 401) {
         window.location.href = '/login';
       } else {
         const error = await response.json();
-        alert('Error creating todo: ' + (error.message || 'Unknown error'));
+        alert(
+          `Error ${isEditing ? 'updating' : 'creating'} todo: ` +
+            (error.message || 'Unknown error')
+        );
       }
     } catch (error) {
       alert('Network error: ' + error.message);

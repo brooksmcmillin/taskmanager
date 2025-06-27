@@ -142,7 +142,18 @@ export class TodoDB {
     return result.rows[0];
   }
 
-  static async updateProject(id, updates) {
+  static async getProjectById(id, user_id) {
+    const result = await this.query(
+      `
+      SELECT * FROM projects 
+      WHERE id = $1 AND user_id = $2 AND is_active = true
+    `,
+      [id, user_id]
+    );
+    return result.rows[0];
+  }
+
+  static async updateProject(id, user_id, updates) {
     const fields = Object.keys(updates);
     const values = Object.values(updates);
     const setClause = fields
@@ -153,10 +164,10 @@ export class TodoDB {
       `
       UPDATE projects 
       SET ${setClause}, updated_at = NOW()
-      WHERE id = $${fields.length + 1}
+      WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}
       RETURNING *
     `,
-      [...values, id]
+      [...values, id, user_id]
     );
 
     return result.rows[0];
@@ -212,6 +223,22 @@ export class TodoDB {
 
     const result = await this.query(query, params);
     return result.rows;
+  }
+
+  static async getTodoById(id, user_id) {
+    const result = await this.query(
+      `
+      SELECT 
+        t.*,
+        p.name as project_name,
+        p.color as project_color
+      FROM todos t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.id = $1 AND t.user_id = $2
+    `,
+      [id, user_id]
+    );
+    return result.rows[0];
   }
 
   static async createTodo(user_id, todo) {

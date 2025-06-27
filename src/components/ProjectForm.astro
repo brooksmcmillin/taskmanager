@@ -1,0 +1,173 @@
+---
+// src/components/ProjectForm.astro
+---
+
+<div class="project-form-container">
+  <form id="project-form" class="card">
+    <div class="form-group">
+      <label for="name" class="block text-sm font-medium text-gray-700"
+        >Project Name</label
+      >
+      <input
+        type="text"
+        id="name"
+        name="name"
+        required
+        class="form-input mt-1"
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="description" class="block text-sm font-medium text-gray-700"
+        >Description</label
+      >
+      <textarea
+        id="description"
+        name="description"
+        rows="3"
+        class="form-textarea mt-1"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="color" class="block text-sm font-medium text-gray-700"
+        >Color</label
+      >
+      <input
+        type="color"
+        id="color"
+        name="color"
+        value="#3b82f6"
+        class="form-input mt-1 h-10"
+      />
+    </div>
+
+    <!-- Submit Button -->
+    <div class="form-submit">
+      <button type="submit" class="btn btn-primary w-full" id="submit-btn"
+        >Create Project</button
+      >
+    </div>
+  </form>
+</div>
+
+<script>
+  // Global variable to track edit mode
+  window.editingProjectId = null;
+
+  // Function to populate form for editing
+  window.populateProjectFormForEdit = function (project) {
+    window.editingProjectId = project.id;
+
+    document.getElementById('name').value = project.name;
+    document.getElementById('description').value = project.description || '';
+    document.getElementById('color').value = project.color || '#3b82f6';
+
+    // Update button text and modal title
+    document.getElementById('submit-btn').textContent = 'Update Project';
+    document.querySelector('.modal-header h2').textContent = 'Edit Project';
+  };
+
+  // Function to reset form to add mode
+  window.resetProjectFormToAddMode = function () {
+    window.editingProjectId = null;
+    document.getElementById('submit-btn').textContent = 'Create Project';
+    document.querySelector('.modal-header h2').textContent = 'Add New Project';
+  };
+
+  // Handle form submission
+  document
+    .getElementById('project-form')
+    .addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(e.target);
+      const projectData = {
+        name: formData.get('name'),
+        description: formData.get('description'),
+        color: formData.get('color'),
+      };
+
+      const isEditing = window.editingProjectId !== null;
+      const url = isEditing
+        ? `/api/projects/${window.editingProjectId}`
+        : '/api/projects';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      try {
+        const response = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(projectData),
+        });
+
+        if (response.ok) {
+          e.target.reset();
+          window.resetProjectFormToAddMode();
+          // Close the modal
+          const modal = document.getElementById('projectModal');
+          if (modal) {
+            modal.classList.remove('show');
+            document.body.style.overflow = '';
+          }
+          // Trigger a custom event to refresh the project list
+          window.dispatchEvent(new CustomEvent('projectAdded'));
+          alert(
+            isEditing
+              ? 'Project updated successfully!'
+              : 'Project created successfully!'
+          );
+        } else if (response.status === 401) {
+          window.location.href = '/login';
+        } else {
+          const error = await response.json();
+          alert(
+            `Error ${isEditing ? 'updating' : 'creating'} project: ` +
+              (error.message || 'Unknown error')
+          );
+        }
+      } catch (error) {
+        alert('Network error: ' + error.message);
+      }
+    });
+</script>
+
+<style>
+  .project-form-container {
+    max-width: 500px;
+  }
+
+  .form-group {
+    margin-bottom: 20px;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #374151;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    transition:
+      border-color 0.2s,
+      box-shadow 0.2s;
+  }
+
+  .form-group input:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: #059669;
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+  }
+
+  .form-submit {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 20px;
+  }
+</style>
