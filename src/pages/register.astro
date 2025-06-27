@@ -6,30 +6,49 @@ import Layout from '../layouts/Layout.astro';
   <main class="container" style="max-width: 400px; margin: 2rem auto;">
     <div class="card">
       <h1>Register</h1>
-      
+
       <form id="registerForm">
         <div class="form-group">
           <label for="username">Username:</label>
-          <input type="text" id="username" name="username" class="form-input" required>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            class="form-input"
+            required
+          />
         </div>
-        
+
         <div class="form-group">
           <label for="email">Email:</label>
-          <input type="email" id="email" name="email" class="form-input" required>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            class="form-input"
+            required
+          />
         </div>
-        
+
         <div class="form-group">
           <label for="password">Password:</label>
-          <input type="password" id="password" name="password" class="form-input" required minlength="6">
+          <input
+            type="password"
+            id="password"
+            name="password"
+            class="form-input"
+            required
+            minlength="6"
+          />
           <small>Password must be at least 6 characters long</small>
         </div>
-        
+
         <button type="submit" class="btn btn-primary">Register</button>
       </form>
-      
+
       <div id="error" class="error-message" style="display: none;"></div>
       <div id="success" class="success-message" style="display: none;"></div>
-      
+
       <p style="text-align: center; margin-top: 1rem;">
         Already have an account? <a href="/login">Login here</a>
       </p>
@@ -38,63 +57,66 @@ import Layout from '../layouts/Layout.astro';
 </Layout>
 
 <script>
-  document.getElementById('registerForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const username = document.getElementById('username').value;
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    const errorDiv = document.getElementById('error');
-    const successDiv = document.getElementById('success');
-    
-    // Hide previous messages
-    errorDiv.style.display = 'none';
-    successDiv.style.display = 'none';
-    
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, email, password }),
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        successDiv.textContent = 'Registration successful! Redirecting to login...';
-        successDiv.style.display = 'block';
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 2000);
-      } else {
-        errorDiv.textContent = data.error || 'Registration failed';
+  document
+    .getElementById('registerForm')
+    .addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const errorDiv = document.getElementById('error');
+      const successDiv = document.getElementById('success');
+
+      // Hide previous messages
+      errorDiv.style.display = 'none';
+      successDiv.style.display = 'none';
+
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ username, email, password }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          successDiv.textContent =
+            'Registration successful! Redirecting to login...';
+          successDiv.style.display = 'block';
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+        } else {
+          errorDiv.textContent = data.error || 'Registration failed';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Network error. Please try again.';
         errorDiv.style.display = 'block';
       }
-    } catch (error) {
-      errorDiv.textContent = 'Network error. Please try again.';
-      errorDiv.style.display = 'block';
-    }
-  });
+    });
 </script>
 
 <style>
   .form-group {
     margin-bottom: 1rem;
   }
-  
+
   .form-group label {
     display: block;
     margin-bottom: 0.25rem;
     font-weight: 500;
   }
-  
+
   .form-group small {
     color: #666;
     font-size: 0.875rem;
   }
-  
+
   .error-message {
     background-color: #fee;
     color: #c33;
@@ -103,7 +125,7 @@ import Layout from '../layouts/Layout.astro';
     margin-top: 1rem;
     border: 1px solid #fcc;
   }
-  
+
   .success-message {
     background-color: #efe;
     color: #363;
@@ -112,7 +134,7 @@ import Layout from '../layouts/Layout.astro';
     margin-top: 1rem;
     border: 1px solid #cfc;
   }
-  
+
   .btn-primary {
     width: 100%;
     margin-top: 0.5rem;

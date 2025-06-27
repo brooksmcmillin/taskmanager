@@ -1,5 +1,6 @@
 import pg from 'pg';
-import fs from 'fs/promises'; import path from 'path';
+import fs from 'fs/promises';
+import path from 'path';
 import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
@@ -25,23 +26,23 @@ export class MigrationRunner {
     const result = await this.pool.query(
       'SELECT version FROM schema_migrations ORDER BY version'
     );
-    return result.rows.map(row => row.version);
+    return result.rows.map((row) => row.version);
   }
 
   async applyMigration(version, sql, checksum) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      
+
       // Apply the migration
       await client.query(sql);
-      
+
       // Record that it was applied
       await client.query(
         'INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)',
         [version, checksum]
       );
-      
+
       await client.query('COMMIT');
       console.log(`✅ Applied migration ${version}`);
     } catch (error) {
@@ -56,16 +57,15 @@ export class MigrationRunner {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      
+
       // Apply the down migration
       await client.query(downSql);
-      
+
       // Remove from migrations table
-      await client.query(
-        'DELETE FROM schema_migrations WHERE version = $1',
-        [version]
-      );
-      
+      await client.query('DELETE FROM schema_migrations WHERE version = $1', [
+        version,
+      ]);
+
       await client.query('COMMIT');
       console.log(`↩️ Rolled back migration ${version}`);
     } catch (error) {
@@ -78,10 +78,10 @@ export class MigrationRunner {
 
   async runMigrations() {
     await this.ensureMigrationsTable();
-    
+
     const migrationsDir = path.join(__dirname, '../migrations');
     const appliedMigrations = await this.getAppliedMigrations();
-    
+
     let migrationFiles;
     try {
       migrationFiles = await fs.readdir(migrationsDir);
@@ -90,26 +90,26 @@ export class MigrationRunner {
       await fs.mkdir(migrationsDir, { recursive: true });
       migrationFiles = [];
     }
-    
+
     const sqlFiles = migrationFiles
-      .filter(file => file.endsWith('.up.sql'))
+      .filter((file) => file.endsWith('.up.sql'))
       .sort();
-    
+
     for (const file of sqlFiles) {
       const version = file.replace('.up.sql', '');
-      
+
       if (appliedMigrations.includes(version)) {
         console.log(`⏭️ Skipping already applied migration ${version}`);
         continue;
       }
-      
+
       const migrationPath = path.join(migrationsDir, file);
       const sql = await fs.readFile(migrationPath, 'utf8');
       const checksum = this.generateChecksum(sql);
-      
+
       await this.applyMigration(version, sql, checksum);
     }
-    
+
     console.log('✅ All migrations completed');
   }
 
@@ -122,4 +122,3 @@ export class MigrationRunner {
     await this.pool.end();
   }
 }
-

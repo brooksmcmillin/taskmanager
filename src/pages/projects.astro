@@ -11,53 +11,56 @@ const user = auth.user;
 <Layout title="Manage Projects" user={user}>
   <main class="container py-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-8">Manage Projects</h1>
-    
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       <!-- Create Project Form -->
       <div>
         <h2 class="text-xl font-semibold mb-4">Create New Project</h2>
         <form id="project-form" class="space-y-4 card">
           <div>
-            <label for="name" class="block text-sm font-medium text-gray-700">Project Name</label>
-            <input 
-              type="text" 
-              id="name" 
-              name="name" 
+            <label for="name" class="block text-sm font-medium text-gray-700"
+              >Project Name</label
+            >
+            <input
+              type="text"
+              id="name"
+              name="name"
               required
               class="form-input mt-1"
+            />
+          </div>
+
+          <div>
+            <label
+              for="description"
+              class="block text-sm font-medium text-gray-700">Description</label
             >
-          </div>
-
-          <div>
-            <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-            <textarea 
-              id="description" 
-              name="description" 
+            <textarea
+              id="description"
+              name="description"
               rows="3"
-              class="form-textarea mt-1"
-            ></textarea>
+              class="form-textarea mt-1"></textarea>
           </div>
 
           <div>
-            <label for="color" class="block text-sm font-medium text-gray-700">Color</label>
-            <input 
-              type="color" 
-              id="color" 
-              name="color" 
+            <label for="color" class="block text-sm font-medium text-gray-700"
+              >Color</label
+            >
+            <input
+              type="color"
+              id="color"
+              name="color"
               value="#3b82f6"
               class="form-input mt-1 h-10"
-            >
+            />
           </div>
 
-          <button 
-            type="submit"
-            class="btn btn-primary w-full"
-          >
+          <button type="submit" class="btn btn-primary w-full">
             Create Project
           </button>
         </form>
       </div>
-      
+
       <!-- Existing Projects -->
       <div>
         <h2 class="text-xl font-semibold mb-4">Existing Projects</h2>
@@ -66,7 +69,6 @@ const user = auth.user;
         </div>
       </div>
     </div>
-    
   </main>
 </Layout>
 
@@ -74,76 +76,81 @@ const user = auth.user;
   async function loadProjects() {
     try {
       const response = await fetch('/api/projects');
-      
+
       if (!response.ok) {
         throw new Error('Failed to load projects');
       }
-      
+
       const projects = await response.json();
       const container = document.getElementById('projects-list');
-      
+
       container.innerHTML = '';
 
       console.log(projects);
-      console.log(typeof(projects));
+      console.log(typeof projects);
       if (projects.length === 0) {
-        container.innerHTML = '<p class="text-gray-500">No projects yet. Create your first project!</p>';
+        container.innerHTML =
+          '<p class="text-gray-500">No projects yet. Create your first project!</p>';
         return;
       }
-      
-      projects.forEach(project => {
+
+      projects.forEach((project) => {
         const projectDiv = document.createElement('div');
         projectDiv.className = 'card border-l-4';
         projectDiv.style.borderLeftColor = project.color;
-        
+
         projectDiv.innerHTML = `
           <h3 class="font-semibold text-lg text-gray-800">${project.name}</h3>
           <p class="text-gray-600 text-sm mt-1">${project.description || 'No description'}</p>
           <p class="text-xs text-gray-500 mt-2">Created: ${new Date(project.created_at).toLocaleDateString()}</p>
         `;
-        
+
         container.appendChild(projectDiv);
       });
-      
     } catch (error) {
       console.error('Failed to load projects:', error);
-      document.getElementById('projects-list').innerHTML = '<p class="text-red-500">Failed to load projects</p>';
+      document.getElementById('projects-list').innerHTML =
+        '<p class="text-red-500">Failed to load projects</p>';
     }
   }
-  
+
   // Handle project form submission
-  document.getElementById('project-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const projectData = {
-      name: formData.get('name'),
-      description: formData.get('description'),
-      color: formData.get('color')
-    };
+  document
+    .getElementById('project-form')
+    .addEventListener('submit', async (e) => {
+      e.preventDefault();
 
-    try {
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(projectData)
-      });
+      const formData = new FormData(e.target);
+      const projectData = {
+        name: formData.get('name'),
+        description: formData.get('description'),
+        color: formData.get('color'),
+      };
 
-      if (response.ok) {
-        e.target.reset();
-        loadProjects(); // Refresh the projects list
-        alert('Project created successfully!');
-      } else if (response.status === 401) {
-        window.location.href = '/login';
-      } else {
-        const error = await response.json();
-        alert('Error creating project: ' + (error.message || 'Unknown error'));
+      try {
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(projectData),
+        });
+
+        if (response.ok) {
+          e.target.reset();
+          loadProjects(); // Refresh the projects list
+          alert('Project created successfully!');
+        } else if (response.status === 401) {
+          window.location.href = '/login';
+        } else {
+          const error = await response.json();
+          alert(
+            'Error creating project: ' + (error.message || 'Unknown error')
+          );
+        }
+      } catch (error) {
+        alert('Network error: ' + error.message);
       }
-    } catch (error) {
-      alert('Network error: ' + error.message);
-    }
-  });
-  
+    });
+
   // Load projects when page loads
   loadProjects();
 </script>
