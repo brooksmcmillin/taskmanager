@@ -1,0 +1,240 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { TodoDB } from '../../lib/db.js';
+import { Auth } from '../../lib/auth.js';
+
+const url = new URL(Astro.request.url);
+const clientId = url.searchParams.get('client_id');
+const redirectUri = url.searchParams.get('redirect_uri');
+const responseType = url.searchParams.get('response_type');
+const scope = url.searchParams.get('scope') || 'read';
+const state = url.searchParams.get('state');
+const codeChallenge = url.searchParams.get('code_challenge');
+const codeChallengeMethod = url.searchParams.get('code_challenge_method');
+
+// Validate required parameters
+if (!clientId || !redirectUri || responseType !== 'code') {
+  return Astro.redirect('/login');
+}
+
+// Check if user is authenticated
+const sessionId = Auth.getSessionFromRequest(Astro.request);
+const session = await Auth.getSessionUser(sessionId);
+
+if (!session) {
+  const loginUrl = new URL('/login', url.origin);
+  loginUrl.searchParams.set('return_to', url.pathname + url.search);
+  return Astro.redirect(loginUrl.toString());
+}
+
+const user = {
+  id: session.user_id,
+  username: session.username,
+  email: session.email,
+};
+
+// Get OAuth client information
+let client;
+try {
+  client = await TodoDB.getOAuthClient(clientId);
+  if (!client) {
+    throw new Error('Client not found');
+  }
+} catch (error) {
+  return Astro.redirect('/login?error=invalid_client');
+}
+
+// Validate redirect URI
+const allowedUris = JSON.parse(client.redirect_uris);
+if (!allowedUris.includes(redirectUri)) {
+  return Astro.redirect('/login?error=invalid_redirect_uri');
+}
+
+const scopes = scope.split(' ');
+---
+
+<Layout title="Authorize Application">
+  <div class="container">
+    <div class="auth-container">
+      <div class="card">
+        <h1>Authorize Application</h1>
+
+        <div class="client-info">
+          <h2>{client.name}</h2>
+          <p>
+            This application is requesting access to your TaskManager account.
+          </p>
+        </div>
+
+        <div class="permissions">
+          <h3>Requested Permissions:</h3>
+          <ul class="scope-list">
+            {
+              scopes.map((scopeItem) => (
+                <li class="scope-item">
+                  {scopeItem === 'read' && '📖 Read your todos and projects'}
+                  {scopeItem === 'write' &&
+                    '✏️ Create and modify your todos and projects'}
+                  {scopeItem === 'delete' &&
+                    '🗑️ Delete your todos and projects'}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+
+        <div class="user-info">
+          <p>Signed in as: <strong>{user.username}</strong></p>
+        </div>
+
+        <form method="POST" action="/api/oauth/authorize" class="auth-form">
+          <input type="hidden" name="client_id" value={clientId} />
+          <input type="hidden" name="redirect_uri" value={redirectUri} />
+          <input type="hidden" name="scope" value={scope} />
+          {state && <input type="hidden" name="state" value={state} />}
+          {
+            codeChallenge && (
+              <input
+                type="hidden"
+                name="code_challenge"
+                value={codeChallenge}
+              />
+            )
+          }
+          {
+            codeChallengeMethod && (
+              <input
+                type="hidden"
+                name="code_challenge_method"
+                value={codeChallengeMethod}
+              />
+            )
+          }
+
+          <div class="button-group">
+            <button
+              type="submit"
+              name="action"
+              value="allow"
+              class="btn btn-primary"
+            >
+              Authorize
+            </button>
+            <button
+              type="submit"
+              name="action"
+              value="deny"
+              class="btn btn-secondary"
+            >
+              Deny
+            </button>
+          </div>
+        </form>
+
+        <div class="security-note">
+          <p>
+            <small
+              >⚠️ Only authorize applications you trust. You can revoke access
+              at any time in your account settings.</small>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .auth-container {
+      max-width: 500px;
+      margin: 2rem auto;
+      padding: 1rem;
+    }
+
+    .client-info {
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+    }
+
+    .client-info h2 {
+      margin: 0 0 0.5rem 0;
+      color: var(--text-primary);
+    }
+
+    .permissions {
+      margin-bottom: 2rem;
+    }
+
+    .permissions h3 {
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+    }
+
+    .scope-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .scope-item {
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      border-left: 4px solid var(--accent-primary);
+    }
+
+    .user-info {
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: var(--bg-tertiary);
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .auth-form {
+      margin-bottom: 2rem;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 0.75rem 2rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent-primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-primary-dark);
+    }
+
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .security-note {
+      text-align: center;
+      color: var(--text-secondary);
+    }
+  </style>
+</Layout>
+
