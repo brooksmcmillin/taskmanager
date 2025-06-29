@@ -136,11 +136,12 @@ async function handleAuthorizationCodeGrant(formData, client) {
     3600 // 1 hour expiry
   );
 
-  // Create JWT access token for MCP authentication
-  const jwtToken = await createJWTToken(authCode.user_id, client.client_id, scopes);
+  // Create JWT access token for MCP authentication  
+  // TODO: Fix JWT implementation - using basic token for now
+  // const jwtToken = await createJWTToken(authCode.user_id, client.client_id, scopes);
 
   return new Response(JSON.stringify({
-    access_token: jwtToken, // Use JWT instead of random token
+    access_token: tokenData.token, // Use basic token for now instead of JWT
     token_type: 'Bearer',
     expires_in: 3600,
     refresh_token: tokenData.refresh_token,
@@ -177,10 +178,11 @@ async function handleRefreshTokenGrant(formData, client) {
   }
 
   // Create JWT access token for MCP authentication
-  const jwtToken = await createJWTToken(tokenData.user_id, client.client_id, tokenData.scopes);
+  // TODO: Fix JWT implementation - using basic token for now
+  // const jwtToken = await createJWTToken(tokenData.user_id, client.client_id, tokenData.scopes);
 
   return new Response(JSON.stringify({
-    access_token: jwtToken, // Use JWT instead of random token
+    access_token: tokenData.token, // Use basic token for now instead of JWT
     token_type: 'Bearer',
     expires_in: 3600,
     refresh_token: tokenData.refresh_token
