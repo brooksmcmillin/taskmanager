@@ -1,6 +1,7 @@
 import pg from 'pg';
 const { Pool } = pg;
 import { config } from 'dotenv';
+import crypto from 'crypto';
 
 config();
 
@@ -396,5 +397,270 @@ export class TodoDB {
       ORDER BY completed_date DESC
     `);
     return result.rows;
+  }
+
+  // API Key methods
+  static async createApiKey(userId, apiKey) {
+    const hashedKey = crypto.createHash('sha256').update(apiKey).digest('hex');
+    const result = await this.query(
+      `
+      INSERT INTO api_keys (user_id, key_hash, created_at)
+      VALUES ($1, $2, NOW())
+      RETURNING id
+    `,
+      [userId, hashedKey]
+    );
+    return result.rows[0];
+  }
+
+  static async getUserByApiKey(apiKey) {
+    const hashedKey = crypto.createHash('sha256').update(apiKey).digest('hex');
+    const result = await this.query(
+      `
+      SELECT u.*, ak.id as api_key_id 
+      FROM users u 
+      JOIN api_keys ak ON u.id = ak.user_id 
+      WHERE ak.key_hash = $1 AND ak.is_active = true AND u.is_active = true
+    `,
+      [hashedKey]
+    );
+
+    return result.rows[0];
+  }
+
+  static async revokeApiKey(userId, apiKey) {
+    const hashedKey = crypto.createHash('sha256').update(apiKey).digest('hex');
+    const result = await this.query(
+      `
+      UPDATE api_keys 
+      SET is_active = false
+      WHERE user_id = $1 AND key_hash = $2
+      RETURNING id
+    `,
+      [userId, hashedKey]
+    );
+    return result.rows[0];
+  }
+
+  static async getUserApiKeys(userId) {
+    const result = await this.query(
+      `
+      SELECT id, name, created_at, is_active
+      FROM api_keys 
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+    `,
+      [userId]
+    );
+    return result.rows;
+  }
+
+  // OAuth methods
+  static async createOAuthClient(
+    clientId,
+    clientSecret,
+    name,
+    redirectUris,
+    grantTypes = ['authorization_code'],
+    scopes = ['read']
+  ) {
+    const hashedSecret = crypto
+      .createHash('sha256')
+      .update(clientSecret)
+      .digest('hex');
+    const result = await this.query(
+      `
+      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, grant_types, scopes, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      RETURNING id, client_id, name
+    `,
+      [
+        clientId,
+        hashedSecret,
+        name,
+        JSON.stringify(redirectUris),
+        JSON.stringify(grantTypes),
+        JSON.stringify(scopes),
+      ]
+    );
+    return result.rows[0];
+  }
+
+  static async getOAuthClient(clientId) {
+    const result = await this.query(
+      `
+      SELECT id, client_id, name, redirect_uris, grant_types, scopes, is_active
+      FROM oauth_clients 
+      WHERE client_id = $1 AND is_active = true
+    `,
+      [clientId]
+    );
+    return result.rows[0];
+  }
+
+  static async validateOAuthClient(clientId, clientSecret) {
+    const hashedSecret = crypto
+      .createHash('sha256')
+      .update(clientSecret)
+      .digest('hex');
+    const result = await this.query(
+      `
+      SELECT id, client_id, name, redirect_uris, grant_types, scopes
+      FROM oauth_clients 
+      WHERE client_id = $1 AND client_secret_hash = $2 AND is_active = true
+    `,
+      [clientId, hashedSecret]
+    );
+    return result.rows[0];
+  }
+
+  static async createAuthorizationCode(
+    clientId,
+    userId,
+    redirectUri,
+    scopes,
+    codeChallenge = null,
+    codeChallengeMethod = null
+  ) {
+    const code = crypto.randomBytes(32).toString('hex');
+    const result = await this.query(
+      `
+      INSERT INTO authorization_codes (code, client_id, user_id, redirect_uri, scopes, code_challenge, code_challenge_method, expires_at, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() + INTERVAL '10 minutes', NOW())
+      RETURNING code
+    `,
+      [
+        code,
+        clientId,
+        userId,
+        redirectUri,
+        JSON.stringify(scopes),
+        codeChallenge,
+        codeChallengeMethod,
+      ]
+    );
+    return result.rows[0];
+  }
+
+  static async consumeAuthorizationCode(code, clientId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const result = await client.query(
+        `
+        SELECT ac.*, u.id as user_id, u.username
+        FROM authorization_codes ac
+        JOIN users u ON ac.user_id = u.id
+        WHERE ac.code = $1 AND ac.client_id = $2 AND ac.expires_at > NOW() AND ac.used = false
+      `,
+        [code, clientId]
+      );
+
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      await client.query(
+        'UPDATE authorization_codes SET used = true WHERE code = $1',
+        [code]
+      );
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  static async createAccessToken(userId, clientId, scopes, expiresIn = 3600) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const refreshToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    const result = await this.query(
+      `
+      INSERT INTO access_tokens (token, refresh_token, user_id, client_id, scopes, expires_at, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      RETURNING token, refresh_token
+    `,
+      [token, refreshToken, userId, clientId, JSON.stringify(scopes), expiresAt]
+    );
+    return result.rows[0];
+  }
+
+  static async getAccessToken(token) {
+    const result = await this.query(
+      `
+      SELECT at.*, u.id as user_id, u.username, oc.client_id
+      FROM access_tokens at
+      JOIN users u ON at.user_id = u.id
+      JOIN oauth_clients oc ON at.client_id = oc.client_id
+      WHERE at.token = $1 AND at.expires_at > NOW() AND at.revoked = false
+    `,
+      [token]
+    );
+    return result.rows[0];
+  }
+
+  static async refreshAccessToken(refreshToken, clientId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const result = await client.query(
+        `
+        SELECT at.*, u.id as user_id
+        FROM access_tokens at
+        JOIN users u ON at.user_id = u.id
+        WHERE at.refresh_token = $1 AND at.client_id = $2 AND at.revoked = false
+      `,
+        [refreshToken, clientId]
+      );
+
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const oldToken = result.rows[0];
+
+      await client.query(
+        'UPDATE access_tokens SET revoked = true WHERE refresh_token = $1',
+        [refreshToken]
+      );
+
+      const newToken = crypto.randomBytes(32).toString('hex');
+      const newRefreshToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 3600 * 1000);
+
+      const newTokenResult = await client.query(
+        `
+        INSERT INTO access_tokens (token, refresh_token, user_id, client_id, scopes, expires_at, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        RETURNING token, refresh_token
+      `,
+        [
+          newToken,
+          newRefreshToken,
+          oldToken.user_id,
+          clientId,
+          oldToken.scopes,
+          expiresAt,
+        ]
+      );
+
+      await client.query('COMMIT');
+      return newTokenResult.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
