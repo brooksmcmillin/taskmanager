@@ -3,6 +3,17 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    }
+  });
+}
+
 export async function POST({ request }) {
   try {
     const formData = await request.formData();
@@ -148,7 +159,12 @@ async function handleAuthorizationCodeGrant(formData, client) {
     scope: scopes.join(' ')
   }), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    }
   });
 }
 
