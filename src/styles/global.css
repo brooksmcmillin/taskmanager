@@ -527,6 +527,24 @@ body {
   color: var(--success-600);
 }
 
+/* Project toggle functionality */
+.project-toggle {
+  min-width: 2rem;
+  height: 2rem;
+  font-size: 0.875rem;
+  line-height: 1;
+  transition: all 0.2s ease-in-out;
+}
+
+.project-toggle:hover {
+  background-color: var(--gray-200);
+  transform: scale(1.05);
+}
+
+.hidden {
+  display: none;
+}
+
 /* Utilities */
 .rounded {
   border-radius: var(--radius);
