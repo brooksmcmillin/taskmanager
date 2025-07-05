@@ -82,10 +82,10 @@ export class Auth {
 
   static createSessionCookie(sessionId, expiresAt) {
     const expires = new Date(expiresAt).toUTCString();
-    return `session=${sessionId}; HttpOnly; Secure; SameSite=Strict; Path=/; Expires=${expires}`;
+    return `session=${sessionId}; HttpOnly; Secure; SameSite=Lax; Path=/; Domain=.ROOT_DOMAIN; Expires=${expires}`;
   }
 
   static clearSessionCookie() {
-    return 'session=; HttpOnly; Secure; SameSite=Strict; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    return 'session=; HttpOnly; Secure; SameSite=Lax; Path=/; Domain=.ROOT_DOMAIN; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
   }
 }

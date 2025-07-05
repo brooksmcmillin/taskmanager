@@ -13,4 +13,7 @@ export default defineConfig({
       exclude: ['better-sqlite3'],
     },
   },
+  security: {
+    checkOrigin: false,
+  },
 });
