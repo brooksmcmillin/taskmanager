@@ -68,14 +68,35 @@ const user = Astro.locals.user;
         return acc;
       }, {});
 
-      // Render each project's todos
-      Object.entries(todosByProject).forEach(([projectName, projectTodos]) => {
-        const projectDiv = document.createElement('div');
-        projectDiv.className = 'card';
+      const sortedTodosByProject = Object.keys(todosByProject)
+        .sort()
+        .reduce((acc, projectName) => {
+          acc[projectName] = todosByProject[projectName];
+          return acc;
+        }, {});
 
-        projectDiv.innerHTML = `
-          <h3 class="font-semibold text-lg mb-3 text-gray-800">${projectName}</h3>
-          <div class="space-y-2">
+      // Render each project's todos
+      Object.entries(sortedTodosByProject).forEach(
+        ([projectName, projectTodos]) => {
+          const projectDiv = document.createElement('div');
+          projectDiv.className = 'card';
+          const projectId = `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
+
+          // Check if project was previously minimized
+          const isMinimized = localStorage.getItem(`${projectId}-minimized`) === 'true';
+
+          projectDiv.innerHTML = `
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-lg text-gray-800">${projectName}</h3>
+            <button 
+              onclick="toggleProject('${projectId}')"
+              class="btn btn-sm btn-secondary project-toggle"
+              title="${isMinimized ? 'Expand' : 'Minimize'} project"
+            >
+              ${isMinimized ? '▲' : '▼'}
+            </button>
+          </div>
+          <div id="${projectId}-content" class="space-y-2 ${isMinimized ? 'hidden' : ''}">
             ${projectTodos
               .map(
                 (todo) => `
@@ -110,8 +131,9 @@ const user = Astro.locals.user;
           </div>
         `;
 
-        container.appendChild(projectDiv);
-      });
+          container.appendChild(projectDiv);
+        }
+      );
     } catch (error) {
       console.error('Failed to load todos:', error);
     }
@@ -153,6 +175,27 @@ const user = Astro.locals.user;
       }
     } catch (error) {
       alert('Error: ' + error.message);
+    }
+  };
+
+  window.toggleProject = function (projectId) {
+    const content = document.getElementById(`${projectId}-content`);
+    const button = document.querySelector(`button[onclick="toggleProject('${projectId}')"]`);
+    
+    if (content && button) {
+      const isHidden = content.classList.contains('hidden');
+      
+      if (isHidden) {
+        content.classList.remove('hidden');
+        button.innerHTML = '▼';
+        button.title = 'Minimize project';
+        localStorage.setItem(`${projectId}-minimized`, 'false');
+      } else {
+        content.classList.add('hidden');
+        button.innerHTML = '▲';
+        button.title = 'Expand project';
+        localStorage.setItem(`${projectId}-minimized`, 'true');
+      }
     }
   };
 
