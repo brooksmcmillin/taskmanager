@@ -73,3 +73,39 @@ export const PUT = async ({ params, request }) => {
     });
   }
 };
+
+export const DELETE = async ({ params, request }) => {
+  try {
+    const session = await requireAuth(request);
+    const todoId = parseInt(params.id);
+
+    if (!todoId) {
+      return new Response(JSON.stringify({ error: 'Invalid todo ID' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check if todo exists and belongs to user
+    const todo = await TodoDB.getTodoById(todoId, session.user_id);
+    if (!todo) {
+      return new Response(JSON.stringify({ error: 'Todo not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    await TodoDB.deleteTodo(todoId);
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    const status = error.message === 'Authentication required' ? 401 : 500;
+    return new Response(JSON.stringify({ error: error.message }), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+};

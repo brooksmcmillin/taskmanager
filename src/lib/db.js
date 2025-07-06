@@ -247,7 +247,8 @@ export class TodoDB {
     startDate,
     endDate,
     time_horizon,
-    status = null
+    status = null,
+    strict
   ) {
     let query = `
       SELECT 
@@ -265,7 +266,13 @@ export class TodoDB {
     // Add date range filter
     if (startDate && endDate) {
       query += ` AND (
-        (t.due_date IS NOT NULL AND t.due_date >= $${paramIndex} AND t.due_date <= $${paramIndex + 1})
+        (t.due_date IS NOT NULL`;
+
+      if (time_horizon != 'today' && time_horizon != 'this_week') {
+        query += ` AND t.due_date >= $${paramIndex}`;
+      }
+
+      query += ` AND t.due_date <= $${paramIndex + 1})
         OR (t.time_horizon IS NOT NULL AND t.time_horizon = $${paramIndex + 2})
         OR (t.completed_date IS NOT NULL AND t.completed_date >= $${paramIndex} AND t.completed_date <= $${paramIndex + 1}::date + interval '1 day')
       )`;
