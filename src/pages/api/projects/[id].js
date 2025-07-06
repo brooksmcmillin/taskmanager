@@ -73,3 +73,39 @@ export const PUT = async ({ params, request }) => {
     });
   }
 };
+
+export const DELETE = async ({ params, request }) => {
+  try {
+    const session = await requireAuth(request);
+    const projectId = parseInt(params.id);
+
+    if (!projectId) {
+      return new Response(JSON.stringify({ error: 'Invalid project ID' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check if project exists and belongs to user
+    const project = await TodoDB.getProjectById(projectId, session.user_id);
+    if (!project) {
+      return new Response(JSON.stringify({ error: 'Project not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    await TodoDB.deleteProject(projectId);
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    const status = error.message === 'Authentication required' ? 401 : 500;
+    return new Response(JSON.stringify({ error: error.message }), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+};
