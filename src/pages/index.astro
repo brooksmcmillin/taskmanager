@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import TodoModal from '../components/TodoModal.astro';
+import DragDropCalendar from '../components/DragDropCalendar.astro';
 
 const user = Astro.locals.user;
 ---
@@ -9,7 +10,16 @@ const user = Astro.locals.user;
   <main class="container py-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-8">Todo Manager</h1>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- View Toggle -->
+    <div class="flex justify-center mb-6">
+      <div class="bg-gray-100 rounded-lg p-1">
+        <button id="list-view-btn" class="px-4 py-2 rounded-md bg-white shadow-sm font-medium">List View</button>
+        <button id="calendar-view-btn" class="px-4 py-2 rounded-md font-medium text-gray-600">Calendar View</button>
+      </div>
+    </div>
+
+    <!-- List View -->
+    <div id="list-view" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       <TodoModal />
 
       <!-- Todo Lists -->
@@ -33,6 +43,14 @@ const user = Astro.locals.user;
         <div id="todo-lists" class="space-y-6">
           <!-- Todos will be loaded here -->
         </div>
+      </div>
+    </div>
+
+    <!-- Calendar View -->
+    <div id="calendar-view" class="hidden">
+      <DragDropCalendar />
+      <div class="mt-6">
+        <TodoModal />
       </div>
     </div>
   </main>
@@ -209,4 +227,33 @@ const user = Astro.locals.user;
 
   // Listen for new todos to refresh the list
   window.addEventListener('todoAdded', loadTodos);
+
+  // View toggle functionality
+  function setupViewToggle() {
+    const listViewBtn = document.getElementById('list-view-btn');
+    const calendarViewBtn = document.getElementById('calendar-view-btn');
+    const listView = document.getElementById('list-view');
+    const calendarView = document.getElementById('calendar-view');
+
+    listViewBtn.addEventListener('click', () => {
+      listView.classList.remove('hidden');
+      calendarView.classList.add('hidden');
+      listViewBtn.classList.add('bg-white', 'shadow-sm');
+      listViewBtn.classList.remove('text-gray-600');
+      calendarViewBtn.classList.remove('bg-white', 'shadow-sm');
+      calendarViewBtn.classList.add('text-gray-600');
+    });
+
+    calendarViewBtn.addEventListener('click', () => {
+      calendarView.classList.remove('hidden');
+      listView.classList.add('hidden');
+      calendarViewBtn.classList.add('bg-white', 'shadow-sm');
+      calendarViewBtn.classList.remove('text-gray-600');
+      listViewBtn.classList.remove('bg-white', 'shadow-sm');
+      listViewBtn.classList.add('text-gray-600');
+    });
+  }
+
+  // Initialize view toggle
+  setupViewToggle();
 </script>

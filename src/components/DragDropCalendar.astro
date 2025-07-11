@@ -1,0 +1,304 @@
+---
+
+---
+
+<div id="drag-drop-calendar" class="bg-white rounded-lg shadow-lg p-6">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-xl font-semibold text-gray-800">Task Calendar</h2>
+    <div class="flex gap-2">
+      <button id="prev-week" class="btn btn-secondary btn-sm">← Previous</button>
+      <button id="next-week" class="btn btn-secondary btn-sm">Next →</button>
+    </div>
+  </div>
+  
+  <div id="calendar-grid" class="grid grid-cols-7 gap-2">
+    <!-- Calendar will be populated by JavaScript -->
+  </div>
+</div>
+
+<style>
+  .calendar-day {
+    min-height: 120px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 8px;
+    background-color: #f9fafb;
+  }
+  
+  .calendar-day.today {
+    background-color: #dbeafe;
+    border-color: #3b82f6;
+  }
+  
+  .calendar-day.drop-zone {
+    background-color: #ecfdf5;
+    border-color: #10b981;
+    border-style: dashed;
+  }
+  
+  .calendar-date {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+    color: #374151;
+  }
+  
+  .calendar-task {
+    background-color: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 4px 6px;
+    margin-bottom: 2px;
+    font-size: 12px;
+    cursor: grab;
+    user-select: none;
+    transition: all 0.2s;
+  }
+  
+  .calendar-task:hover {
+    border-color: #6b7280;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .calendar-task.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+  }
+  
+  .calendar-task.high-priority {
+    border-left: 3px solid #ef4444;
+  }
+  
+  .calendar-task.medium-priority {
+    border-left: 3px solid #f59e0b;
+  }
+  
+  .calendar-task.low-priority {
+    border-left: 3px solid #10b981;
+  }
+  
+  .task-title {
+    font-weight: 500;
+    line-height: 1.2;
+    margin-bottom: 2px;
+  }
+  
+  .task-meta {
+    font-size: 10px;
+    color: #6b7280;
+  }
+</style>
+
+<script>
+  class DragDropCalendar {
+    constructor() {
+      this.currentWeekStart = this.getStartOfWeek(new Date());
+      this.todos = [];
+      this.init();
+    }
+
+    init() {
+      this.renderCalendar();
+      this.loadTodos();
+      this.setupEventListeners();
+    }
+
+    getStartOfWeek(date) {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day;
+      return new Date(d.setDate(diff));
+    }
+
+    renderCalendar() {
+      const grid = document.getElementById('calendar-grid');
+      grid.innerHTML = '';
+
+      // Day headers
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      dayNames.forEach(day => {
+        const header = document.createElement('div');
+        header.className = 'text-center font-semibold py-2 bg-gray-100 border-b';
+        header.textContent = day;
+        grid.appendChild(header);
+      });
+
+      // Render 14 days (2 weeks)
+      for (let i = 0; i < 14; i++) {
+        const date = new Date(this.currentWeekStart);
+        date.setDate(date.getDate() + i);
+        
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'calendar-day';
+        dayDiv.dataset.date = date.toISOString().split('T')[0];
+        
+        // Check if today
+        const today = new Date();
+        if (date.toDateString() === today.toDateString()) {
+          dayDiv.classList.add('today');
+        }
+        
+        const dateHeader = document.createElement('div');
+        dateHeader.className = 'calendar-date';
+        dateHeader.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
+        dayDiv.appendChild(dateHeader);
+        
+        const tasksContainer = document.createElement('div');
+        tasksContainer.className = 'tasks-container';
+        dayDiv.appendChild(tasksContainer);
+        
+        // Add drop zone functionality
+        this.setupDropZone(dayDiv);
+        
+        grid.appendChild(dayDiv);
+      }
+    }
+
+    setupDropZone(dayDiv) {
+      dayDiv.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dayDiv.classList.add('drop-zone');
+      });
+      
+      dayDiv.addEventListener('dragleave', (e) => {
+        if (!dayDiv.contains(e.relatedTarget)) {
+          dayDiv.classList.remove('drop-zone');
+        }
+      });
+      
+      dayDiv.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dayDiv.classList.remove('drop-zone');
+        
+        const taskId = e.dataTransfer.getData('text/plain');
+        const newDate = dayDiv.dataset.date;
+        this.updateTaskDate(taskId, newDate);
+      });
+    }
+
+    async loadTodos() {
+      try {
+        const response = await fetch('/api/todos?status=pending');
+        if (response.ok) {
+          this.todos = await response.json();
+          this.renderTodos();
+        }
+      } catch (error) {
+        console.error('Failed to load todos:', error);
+      }
+    }
+
+    renderTodos() {
+      // Clear existing tasks
+      document.querySelectorAll('.tasks-container').forEach(container => {
+        container.innerHTML = '';
+      });
+
+      this.todos.forEach(todo => {
+        let targetDate = null;
+        
+        if (todo.due_date) {
+          targetDate = todo.due_date.split('T')[0];
+        } else if (todo.time_horizon === 'today') {
+          targetDate = new Date().toISOString().split('T')[0];
+        } else if (todo.time_horizon === 'this_week') {
+          // Place in current week if no specific date
+          const today = new Date();
+          targetDate = today.toISOString().split('T')[0];
+        }
+        
+        if (targetDate) {
+          const dayDiv = document.querySelector(`[data-date="${targetDate}"]`);
+          if (dayDiv) {
+            const tasksContainer = dayDiv.querySelector('.tasks-container');
+            const taskElement = this.createTaskElement(todo);
+            tasksContainer.appendChild(taskElement);
+          }
+        }
+      });
+    }
+
+    createTaskElement(todo) {
+      const taskDiv = document.createElement('div');
+      taskDiv.className = `calendar-task ${todo.priority}-priority`;
+      taskDiv.draggable = true;
+      taskDiv.dataset.todoId = todo.id;
+      
+      taskDiv.innerHTML = `
+        <div class="task-title">${todo.title}</div>
+        <div class="task-meta">${todo.estimated_hours}h • ${todo.project_name || 'No Project'}</div>
+      `;
+      
+      taskDiv.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', todo.id);
+        taskDiv.classList.add('dragging');
+      });
+      
+      taskDiv.addEventListener('dragend', () => {
+        taskDiv.classList.remove('dragging');
+      });
+      
+      return taskDiv;
+    }
+
+    async updateTaskDate(taskId, newDate) {
+      try {
+        const response = await fetch(`/api/todos/${taskId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            due_date: newDate
+          })
+        });
+        
+        if (response.ok) {
+          // Update the todo in our local array
+          const todo = this.todos.find(t => t.id == taskId);
+          if (todo) {
+            todo.due_date = newDate;
+          }
+          this.renderTodos();
+          
+          // Trigger update event for other components
+          window.dispatchEvent(new CustomEvent('todoUpdated'));
+        } else {
+          console.error('Failed to update task date');
+        }
+      } catch (error) {
+        console.error('Error updating task date:', error);
+      }
+    }
+
+    setupEventListeners() {
+      document.getElementById('prev-week').addEventListener('click', () => {
+        this.currentWeekStart.setDate(this.currentWeekStart.getDate() - 7);
+        this.renderCalendar();
+        this.renderTodos();
+      });
+      
+      document.getElementById('next-week').addEventListener('click', () => {
+        this.currentWeekStart.setDate(this.currentWeekStart.getDate() + 7);
+        this.renderCalendar();
+        this.renderTodos();
+      });
+      
+      // Listen for todo updates from other components
+      window.addEventListener('todoAdded', () => {
+        this.loadTodos();
+      });
+      
+      window.addEventListener('todoUpdated', () => {
+        this.loadTodos();
+      });
+    }
+  }
+
+  // Initialize calendar when DOM is loaded
+  document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('drag-drop-calendar')) {
+      new DragDropCalendar();
+    }
+  });
+</script>
