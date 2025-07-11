@@ -7,10 +7,10 @@ if (auth.redirect) return auth.redirect;
 const user = auth.user;
 ---
 
-<Layout title="Task Reports" user={user}>
+<Layout title="Daily Planner" user={user}>
   <main class="container py-8">
-    <div class="max-w-6xl mx-auto">
-      <h1 class="text-3xl font-bold text-gray-900 mb-8">Task Reports</h1>
+    <div class="max-w-4xl mx-auto">
+      <h1 class="text-3xl font-bold text-gray-900 mb-8">Daily Planner</h1>
 
       <!-- Report Controls -->
       <div class="bg-white rounded-lg shadow-sm border p-6 mb-8">
@@ -19,7 +19,7 @@ const user = auth.user;
             <label
               for="report-type"
               class="block text-sm font-medium text-gray-700 mb-2"
-              >Report Type</label
+              >View Type</label
             >
             <select id="report-type" class="form-select">
               <option value="today">Today</option>
@@ -35,20 +35,20 @@ const user = auth.user;
               class="block text-sm font-medium text-gray-700 mb-2">Status</label
             >
             <select id="status-filter" class="form-select">
+              <option value="all">All Tasks</option>
               <option value="pending">Pending Only</option>
               <option value="completed">Completed Only</option>
-              <option value="all">All Tasks</option>
             </select>
           </div>
 
           <div class="flex gap-2">
             <button id="generate-report" class="btn btn-primary"
-              >Generate Report</button
+              >Generate Planner</button
             >
             <button
               id="print-report"
               class="btn btn-secondary"
-              style="display: none;">Print/PDF</button
+              style="display: none;">Export PDF</button
             >
           </div>
         </div>
@@ -171,7 +171,7 @@ const user = auth.user;
 
     let reportHtml = '';
 
-    if (reportType === 'daily') {
+    if (reportType === 'today' || reportType === 'tomorrow') {
       reportHtml = generateDailyReport(data, startDate);
     } else {
       reportHtml = generateWeeklyReport(data, startDate, endDate);
@@ -188,29 +188,41 @@ const user = auth.user;
     const projectMap = new Map(projects.map((p) => [p.id, p]));
 
     return `
-      <div class="report-header">
-        <h2 class="text-2xl font-bold mb-2">Daily Task Report</h2>
-        <p class="text-gray-600 mb-6">${formatDate(date)}</p>
-      </div>
-      
-      <div class="report-summary mb-8">
-        <div class="grid grid-cols-3 gap-4 text-center">
-          <div class="bg-blue-50 p-4 rounded">
-            <div class="text-2xl font-bold text-blue-600">${Array.isArray(todos) ? todos.filter((t) => t.status === 'pending').length : 0}</div>
-            <div class="text-sm text-gray-600">Pending</div>
+      <div class="planner-container">
+        <div class="planner-header">
+          <div class="date-header">
+            <h2 class="text-2xl font-bold mb-2">${formatDate(date)}</h2>
           </div>
-          <div class="bg-green-50 p-4 rounded">
-            <div class="text-2xl font-bold text-green-600">${Array.isArray(todos) ? todos.filter((t) => t.status === 'completed').length : 0}</div>
-            <div class="text-sm text-gray-600">Completed</div>
+        </div>
+        
+        <div class="planner-layout">
+          <div class="time-schedule">
+            ${generateTimeSlots(todos)}
           </div>
-          <div class="bg-gray-50 p-4 rounded">
-            <div class="text-2xl font-bold text-gray-600">${Array.isArray(todos) ? todos.reduce((sum, t) => sum + (parseFloat(t.estimated_hours) || 0), 0).toFixed(1) : '0.0'}</div>
-            <div class="text-sm text-gray-600">Est. Hours</div>
+          
+          <div class="planner-sidebar">
+            <div class="sidebar-section quarter-height">
+              <h3 class="sidebar-title large-title">Personal Tasks</h3>
+              <div class="priority-content">
+                ${generateTasks(todos)}
+              </div>
+            </div>
+            
+            <div class="sidebar-section quarter-height">
+              <h3 class="sidebar-title large-title">Dropbox Tasks</h3>
+              <div class="reminders-content">
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="notes-section">
+          <h3 class="notes-title large-title">Notes</h3>
+          <div class="notes-content-full">
+            <!-- Space for notes -->
           </div>
         </div>
       </div>
-      
-      ${generateTasksByProject(todos, projectMap)}
     `;
   }
 
@@ -248,6 +260,56 @@ const user = auth.user;
       
       ${generateTasksByProject(todos, projectMap)}
     `;
+  }
+
+  // Generate time slots for daily planner
+  function generateTimeSlots(todos = []) {
+    const timeSlots = [];
+    for (let hour = 6; hour <= 21; hour++) {
+      const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+      timeSlots.push(timeStr);
+    }
+
+    let html = '<div class="time-slots">';
+    timeSlots.forEach((time) => {
+      const tasksForTime = todos.filter((todo) => {
+        if (todo.due_date) {
+          const dueTime = new Date(todo.due_date).getHours();
+          const slotHour = time === '00:00' ? 0 : parseInt(time.split(':')[0]);
+          return dueTime === slotHour;
+        }
+        return false;
+      });
+
+      html += `
+        <div class="time-slot">
+          <div class="time-label">${time}</div>
+          <div class="time-underline"></div>
+        </div>
+      `;
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // Generate priority tasks
+  function generateTasks(todos = []) {
+    const highPriorityTasks = todos;
+    if (highPriorityTasks.length === 0)
+      return '<div class="empty-content">No high priority tasks</div>';
+
+    let html = '<div class="priority-tasks">';
+    highPriorityTasks.forEach((todo) => {
+      const statusIcon = todo.status === 'completed' ? '✓' : '☐';
+      html += `
+        <div class="priority-task">
+          <span class="task-checkbox">${statusIcon}</span>
+          <span class="task-title">${todo.title}</span>
+        </div>
+      `;
+    });
+    html += '</div>';
+    return html;
   }
 
   // Generate tasks grouped by project
@@ -304,7 +366,7 @@ const user = auth.user;
     return html;
   }
 
-  // Print report
+  // Print/Export PDF report
   function printReport() {
     const reportContent = document.getElementById('report-content');
     const printWindow = window.open('', '_blank');
@@ -313,7 +375,7 @@ const user = auth.user;
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Task Report</title>
+          <title>Daily Planner</title>
           <style>
             ${getPrintStyles()}
           </style>
@@ -331,7 +393,42 @@ const user = auth.user;
     }, 250);
   }
 
-  // Get print-optimized styles (optimized for Remarkable tablet)
+  // Enhanced PDF export with better filename
+  function exportToPDF() {
+    const reportType = document.getElementById('report-type').value;
+    const date =
+      reportType === 'today'
+        ? new Date().toISOString().split('T')[0]
+        : reportType === 'tomorrow'
+          ? new Date(Date.now() + 86400000).toISOString().split('T')[0]
+          : 'weekly';
+
+    const reportContent = document.getElementById('report-content');
+    const printWindow = window.open('', '_blank');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Daily Planner - ${date}</title>
+          <style>
+            ${getPrintStyles()}
+          </style>
+        </head>
+        <body>
+          ${reportContent.innerHTML}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  }
+
+  // Get print-optimized styles for planner layout
   function getPrintStyles() {
     return `
       * {
@@ -341,145 +438,281 @@ const user = auth.user;
       }
       
       body {
-        font-family: 'Times New Roman', serif;
-        font-size: 14px;
-        line-height: 1.5;
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+        line-height: 1.4;
         color: #000;
         background: white;
-        padding: 30px;
-        max-width: 210mm;
+        padding: 15px;
+        max-width: 100%;
         margin: 0 auto;
       }
       
-      .report-header h2 {
-        font-size: 24px;
-        font-weight: bold;
-        margin-bottom: 8px;
+      .planner-container {
+        max-width: 100%;
+        padding: 0;
+        font-family: Arial, sans-serif;
+        background: white;
       }
-      
-      .report-header p {
-        color: #666;
-        margin-bottom: 24px;
+
+      .planner-header {
+        border-bottom: 2px solid #000;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
       }
-      
-      .report-summary {
-        margin-bottom: 32px;
-      }
-      
-      .grid {
-        display: grid;
-      }
-      
-      .grid-cols-3 {
-        grid-template-columns: repeat(3, 1fr);
-      }
-      
-      .grid-cols-4 {
-        grid-template-columns: repeat(4, 1fr);
-      }
-      
-      .gap-4 {
-        gap: 16px;
-      }
-      
-      .text-center {
-        text-align: center;
-      }
-      
-      .bg-blue-50, .bg-green-50, .bg-gray-50, .bg-purple-50 {
-        background-color: #f8f9fa;
-        padding: 16px;
-        border-radius: 8px;
-        border: 1px solid #e9ecef;
-      }
-      
-      .text-2xl {
-        font-size: 24px;
+
+      .date-header h2 {
+        margin: 0;
+        font-size: 20px;
         font-weight: bold;
       }
-      
-      .text-sm {
-        font-size: 11px;
-      }
-      
-      .project-section {
-        margin-bottom: 24px;
-        page-break-inside: avoid;
-      }
-      
-      .project-section h3 {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 12px;
-        padding-bottom: 8px;
-        border-bottom: 2px solid;
-      }
-      
-      .task-list {
-        margin: 8px 0;
-      }
-      
-      .task-item {
+
+      .day-indicators {
         display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        padding: 12px;
-        margin-bottom: 8px;
-        background-color: #f8f9fa;
-        border-left: 4px solid;
-        page-break-inside: avoid;
+        gap: 10px;
+        margin-top: 8px;
       }
-      
-      .font-medium {
-        font-weight: 500;
-      }
-      
-      .font-bold {
+
+      .day-letter {
+        width: 25px;
+        height: 25px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #000;
+        background: #f9f9f9;
         font-weight: bold;
-      }
-      
-      .line-through {
-        text-decoration: line-through;
-      }
-      
-      .text-xs {
         font-size: 10px;
       }
-      
-      .flex-1 {
-        flex: 1;
+
+      .day-letter.active {
+        background: #000;
+        color: white;
       }
-      
-      .mt-1 {
-        margin-top: 4px;
+
+      .planner-layout {
+        display: grid;
+        grid-template-columns: 1fr 200px;
+        gap: 15px;
+        min-height: 400px;
       }
-      
+
+      .time-schedule {
+        border-right: 1px solid #000;
+        padding-right: 15px;
+      }
+
+      .time-slots {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .time-slot {
+        display: grid;
+        grid-template-columns: 50px 1fr;
+        min-height: 25px;
+        align-items: start;
+        margin-bottom: 6px;
+      }
+
+      .time-underline {
+        border-bottom: 1px solid #ccc;
+        margin-top: 8px;
+        margin-left: 8px;
+        height: 1px;
+      }
+
+      .quarter-height {
+        height: 150px;
+      }
+
+      .large-title {
+        font-size: 20px !important;
+        padding: 8px 10px;
+      }
+
+      .notes-section {
+        margin-top: 20px;
+        border: 1px solid #000;
+        background: #f9f9f9;
+        min-height: 300px;
+      }
+
+      .notes-title {
+        background: #e0e0e0;
+        padding: 8px 10px;
+        margin: 0;
+        font-size: 20px;
+        font-weight: bold;
+        border-bottom: 1px solid #000;
+      }
+
+      .notes-content-full {
+        padding: 12px;
+        min-height: 250px;
+        background: white;
+        margin: 4px;
+        border: 1px solid #ccc;
+      }
+
+      .time-label {
+        font-weight: bold;
+        padding: 6px 0;
+        font-size: 10px;
+      }
+
+      .time-content {
+        padding: 6px 0;
+        border-left: 1px solid #ccc;
+        padding-left: 8px;
+        min-height: 24px;
+      }
+
+      .time-task {
+        font-size: 10px;
+        padding: 1px 0;
+        color: #333;
+      }
+
+      .planner-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      .sidebar-section {
+        border: 1px solid #000;
+        background: #f9f9f9;
+      }
+
+      .sidebar-title {
+        background: #e0e0e0;
+        padding: 6px 8px;
+        margin: 0;
+        font-size: 12px;
+        font-weight: bold;
+        border-bottom: 1px solid #000;
+      }
+
+      .priority-content,
+      .reminders-content,
+      .notes-content,
+      .tomorrow-content {
+        padding: 8px;
+        min-height: 50px;
+        background: white;
+      }
+
+      .priority-task {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+        font-size: 10px;
+      }
+
+      .task-checkbox {
+        width: 12px;
+        height: 12px;
+        border: 1px solid #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+      }
+
+      .reminder-item {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 6px;
+        font-size: 10px;
+      }
+
+      .reminder-time {
+        font-weight: bold;
+        min-width: 40px;
+      }
+
+      .empty-content {
+        color: #999;
+        font-size: 10px;
+        font-style: italic;
+      }
+
+      .notes-content {
+        min-height: 80px;
+        background: white;
+        border: 1px solid #ccc;
+        margin: 4px;
+      }
+
+      .tomorrow-content {
+        min-height: 60px;
+        background: white;
+        border: 1px solid #ccc;
+        margin: 4px;
+      }
+
       @media print {
+        @page {
+          size: A4;
+          margin: 0.5in;
+        }
+        
         body {
-          padding: 20px;
-          font-size: 12px;
+          padding: 0;
+          font-size: 11px;
         }
         
-        .page-break-inside-avoid {
-          page-break-inside: avoid;
+        .planner-container {
+          padding: 0;
         }
         
-        /* Remarkable tablet optimizations */
-        .report-header h2 {
-          font-size: 20px;
-          border-bottom: 2px solid #000;
-          padding-bottom: 8px;
+        .planner-layout {
+          grid-template-columns: 1fr 180px;
+          gap: 12px;
         }
         
-        .task-item {
-          border: 1px solid #000;
-          margin-bottom: 4px;
+        .time-slot {
+          min-height: 25px;
         }
         
-        .project-section h3 {
-          font-size: 14px;
-          text-transform: uppercase;
-          letter-spacing: 1px;
+        .time-label {
+          font-size: 9px;
+        }
+        
+        .time-content {
+          min-height: 20px;
+        }
+        
+        .time-task {
+          font-size: 9px;
+        }
+        
+        .sidebar-title {
+          font-size: 11px;
+          padding: 5px 6px;
+        }
+        
+        .priority-content,
+        .reminders-content,
+        .notes-content,
+        .tomorrow-content {
+          padding: 6px;
+          min-height: 40px;
+        }
+        
+        .priority-task,
+        .reminder-item {
+          font-size: 9px;
+        }
+        
+        .notes-content {
+          min-height: 70px;
+        }
+        
+        .tomorrow-content {
+          min-height: 50px;
         }
       }
     `;
@@ -493,7 +726,7 @@ const user = auth.user;
       .addEventListener('click', generateReport);
     document
       .getElementById('print-report')
-      .addEventListener('click', printReport);
+      .addEventListener('click', exportToPDF);
   });
 </script>
 
@@ -502,9 +735,207 @@ const user = auth.user;
     padding: 2rem;
   }
 
+  /* Planner Layout Styles */
+  .planner-container {
+    max-width: 8.5in;
+    margin: 0 auto;
+    background: white;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+  }
+
+  .planner-header {
+    border-bottom: 2px solid #000;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+
+  .date-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: bold;
+  }
+
+  .day-indicators {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+  }
+
+  .day-letter {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+    font-weight: bold;
+  }
+
+  .day-letter.active {
+    background: #000;
+    color: white;
+  }
+
+  .planner-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+    min-height: 50vh;
+  }
+
+  .time-schedule {
+    border-right: 2px solid #000;
+    padding-right: 20px;
+  }
+
+  .time-slots {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .time-slot {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    min-height: 40px;
+    align-items: start;
+    margin-bottom: 8px;
+  }
+
+  .time-label {
+    font-weight: bold;
+    padding: 8px 0;
+    font-size: 12px;
+  }
+
+  .time-underline {
+    border-bottom: 1px solid #ccc;
+    margin-top: 12px;
+    margin-left: 10px;
+    height: 1px;
+  }
+
+  .time-task {
+    font-size: 12px;
+    padding: 2px 0;
+    color: #333;
+  }
+
+  .planner-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .sidebar-section {
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+  }
+
+  .quarter-height {
+    height: 22vh;
+  }
+
+  .sidebar-title {
+    background: #e0e0e0;
+    padding: 8px 12px;
+    margin: 0;
+    font-size: 14px;
+    font-weight: bold;
+    border-bottom: 1px solid #ccc;
+  }
+
+  .large-title {
+    font-size: 28px !important;
+    padding: 12px 16px;
+  }
+
+  .priority-content,
+  .reminders-content,
+  .notes-content,
+  .tomorrow-content {
+    padding: 12px;
+    min-height: 80px;
+  }
+
+  .priority-task {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+
+  .task-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+  }
+
+  .reminder-item {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+
+  .reminder-time {
+    font-weight: bold;
+    min-width: 50px;
+  }
+
+  .empty-content {
+    color: #999;
+    font-size: 12px;
+    font-style: italic;
+  }
+
+  .notes-content {
+    min-height: 120px;
+    background: white;
+    border: 1px solid #ddd;
+    margin: 8px;
+  }
+
+  .tomorrow-content {
+    min-height: 100px;
+    background: white;
+    border: 1px solid #ddd;
+    margin: 8px;
+  }
+
+  .notes-section {
+    margin-top: 30px;
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+    min-height: 40vh;
+  }
+
+  .notes-title {
+    background: #e0e0e0;
+    padding: 12px 16px;
+    margin: 0;
+    font-size: 28px;
+    font-weight: bold;
+    border-bottom: 1px solid #ccc;
+  }
+
+  .notes-content-full {
+    padding: 20px;
+    min-height: 35vh;
+    background: white;
+    margin: 8px;
+    border: 1px solid #ddd;
+  }
+
   @media print {
     .container,
-    .max-w-6xl,
+    .max-w-4xl,
     nav,
     .bg-white:not(.print-content) {
       display: none;
@@ -518,6 +949,84 @@ const user = auth.user;
       padding: 0;
       box-shadow: none;
       border: none;
+    }
+
+    .planner-container {
+      max-width: 100%;
+      padding: 15px;
+      font-size: 12px;
+    }
+
+    .planner-layout {
+      grid-template-columns: 1fr 250px;
+      gap: 15px;
+      min-height: 40vh;
+    }
+
+    .quarter-height {
+      height: 18vh;
+    }
+
+    .time-slot {
+      min-height: 30px;
+      margin-bottom: 6px;
+    }
+
+    .time-underline {
+      margin-top: 10px;
+    }
+
+    .large-title {
+      font-size: 24px !important;
+      padding: 10px 12px;
+    }
+
+    .notes-section {
+      min-height: 35vh;
+      margin-top: 20px;
+    }
+
+    .notes-content-full {
+      min-height: 30vh;
+      padding: 15px;
+    }
+
+    .time-label {
+      font-size: 11px;
+    }
+
+    .time-content {
+      min-height: 27px;
+    }
+
+    .time-task {
+      font-size: 11px;
+    }
+
+    .sidebar-title {
+      font-size: 12px;
+      padding: 6px 10px;
+    }
+
+    .priority-content,
+    .reminders-content,
+    .notes-content,
+    .tomorrow-content {
+      padding: 10px;
+      min-height: 60px;
+    }
+
+    .priority-task,
+    .reminder-item {
+      font-size: 11px;
+    }
+
+    .notes-content {
+      min-height: 100px;
+    }
+
+    .tomorrow-content {
+      min-height: 80px;
     }
 
     .page-break-inside-avoid {
