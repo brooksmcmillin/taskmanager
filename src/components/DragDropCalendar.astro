@@ -5,91 +5,54 @@
 <div id="drag-drop-calendar" class="bg-white rounded-lg shadow-lg p-6">
   <div class="flex justify-between items-center mb-6">
     <h2 class="text-xl font-semibold text-gray-800">Task Calendar</h2>
-    <div class="flex gap-2">
-      <button id="prev-week" class="btn btn-secondary btn-sm">← Previous</button>
+    <div class="flex gap-4">
+      <button id="prev-week" class="btn btn-secondary btn-sm">← Previous</button
+      >
       <button id="next-week" class="btn btn-secondary btn-sm">Next →</button>
     </div>
   </div>
-  
-  <div id="calendar-grid" class="grid grid-cols-7 gap-2">
-    <!-- Calendar will be populated by JavaScript -->
+
+  <div id="calendar-container">
+    <!-- Day headers -->
+    <div class="calendar-headers">
+      <div class="calendar-header-day">Sunday</div>
+      <div class="calendar-header-day">Monday</div>
+      <div class="calendar-header-day">Tuesday</div>
+      <div class="calendar-header-day">Wednesday</div>
+      <div class="calendar-header-day">Thursday</div>
+      <div class="calendar-header-day">Friday</div>
+      <div class="calendar-header-day">Saturday</div>
+    </div>
+
+    <!-- Calendar grid -->
+    <div id="calendar-grid">
+      <!-- Calendar days will be populated by JavaScript -->
+    </div>
   </div>
 </div>
 
-<style>
-  .calendar-day {
-    min-height: 120px;
-    border: 1px solid #e5e7eb;
-    border-radius: 4px;
-    padding: 8px;
-    background-color: #f9fafb;
-  }
-  
-  .calendar-day.today {
-    background-color: #dbeafe;
-    border-color: #3b82f6;
-  }
-  
-  .calendar-day.drop-zone {
-    background-color: #ecfdf5;
-    border-color: #10b981;
-    border-style: dashed;
-  }
-  
-  .calendar-date {
-    font-weight: 600;
-    font-size: 14px;
-    margin-bottom: 4px;
-    color: #374151;
-  }
-  
-  .calendar-task {
-    background-color: #fff;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
-    padding: 4px 6px;
-    margin-bottom: 2px;
-    font-size: 12px;
-    cursor: grab;
-    user-select: none;
-    transition: all 0.2s;
-  }
-  
-  .calendar-task:hover {
-    border-color: #6b7280;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-  
-  .calendar-task.dragging {
-    opacity: 0.5;
-    cursor: grabbing;
-  }
-  
-  .calendar-task.high-priority {
-    border-left: 3px solid #ef4444;
-  }
-  
-  .calendar-task.medium-priority {
-    border-left: 3px solid #f59e0b;
-  }
-  
-  .calendar-task.low-priority {
-    border-left: 3px solid #10b981;
-  }
-  
-  .task-title {
-    font-weight: 500;
-    line-height: 1.2;
-    margin-bottom: 2px;
-  }
-  
-  .task-meta {
-    font-size: 10px;
-    color: #6b7280;
-  }
-</style>
-
 <script>
+  // Lighten the shade of the color
+  function hexTo50Shade(hexColor) {
+    // Remove # if present
+    const hex = hexColor.replace('#', '');
+
+    // Parse RGB values
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    // Mix with white (roughly 8% original color, 92% white)
+    const mixRatio = 0.08;
+    const newR = Math.round(r * mixRatio + 255 * (1 - mixRatio));
+    const newG = Math.round(g * mixRatio + 255 * (1 - mixRatio));
+    const newB = Math.round(b * mixRatio + 255 * (1 - mixRatio));
+
+    // Convert back to hex
+    const toHex = (val) => val.toString(16).padStart(2, '0');
+    return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+  }
+
   class DragDropCalendar {
     constructor() {
       this.currentWeekStart = this.getStartOfWeek(new Date());
@@ -114,42 +77,38 @@
       const grid = document.getElementById('calendar-grid');
       grid.innerHTML = '';
 
-      // Day headers
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      dayNames.forEach(day => {
-        const header = document.createElement('div');
-        header.className = 'text-center font-semibold py-2 bg-gray-100 border-b';
-        header.textContent = day;
-        grid.appendChild(header);
-      });
-
-      // Render 14 days (2 weeks)
-      for (let i = 0; i < 14; i++) {
+      // Render 21 days (3 weeks)
+      for (let i = 0; i < 21; i++) {
         const date = new Date(this.currentWeekStart);
         date.setDate(date.getDate() + i);
-        
+
         const dayDiv = document.createElement('div');
         dayDiv.className = 'calendar-day';
         dayDiv.dataset.date = date.toISOString().split('T')[0];
-        
+
         // Check if today
         const today = new Date();
         if (date.toDateString() === today.toDateString()) {
           dayDiv.classList.add('today');
         }
-        
+
         const dateHeader = document.createElement('div');
         dateHeader.className = 'calendar-date';
         dateHeader.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
         dayDiv.appendChild(dateHeader);
-        
+
+        const hoursTotal = document.createElement('div');
+        hoursTotal.className = 'hours-total';
+        hoursTotal.textContent = '0h';
+        dayDiv.appendChild(hoursTotal);
+
         const tasksContainer = document.createElement('div');
         tasksContainer.className = 'tasks-container';
         dayDiv.appendChild(tasksContainer);
-        
+
         // Add drop zone functionality
         this.setupDropZone(dayDiv);
-        
+
         grid.appendChild(dayDiv);
       }
     }
@@ -159,17 +118,17 @@
         e.preventDefault();
         dayDiv.classList.add('drop-zone');
       });
-      
+
       dayDiv.addEventListener('dragleave', (e) => {
         if (!dayDiv.contains(e.relatedTarget)) {
           dayDiv.classList.remove('drop-zone');
         }
       });
-      
+
       dayDiv.addEventListener('drop', (e) => {
         e.preventDefault();
         dayDiv.classList.remove('drop-zone');
-        
+
         const taskId = e.dataTransfer.getData('text/plain');
         const newDate = dayDiv.dataset.date;
         this.updateTaskDate(taskId, newDate);
@@ -189,14 +148,21 @@
     }
 
     renderTodos() {
-      // Clear existing tasks
-      document.querySelectorAll('.tasks-container').forEach(container => {
+      // Clear existing tasks and reset hours totals
+      document.querySelectorAll('.tasks-container').forEach((container) => {
         container.innerHTML = '';
       });
+      document.querySelectorAll('.hours-total').forEach((total) => {
+        total.textContent = '0h';
+        total.dataset.hours = '0';
+      });
 
-      this.todos.forEach(todo => {
+      // Group todos by date for hour calculation
+      const todosByDate = {};
+
+      this.todos.forEach((todo) => {
         let targetDate = null;
-        
+
         if (todo.due_date) {
           targetDate = todo.due_date.split('T')[0];
         } else if (todo.time_horizon === 'today') {
@@ -206,13 +172,40 @@
           const today = new Date();
           targetDate = today.toISOString().split('T')[0];
         }
-        
+
         if (targetDate) {
-          const dayDiv = document.querySelector(`[data-date="${targetDate}"]`);
-          if (dayDiv) {
-            const tasksContainer = dayDiv.querySelector('.tasks-container');
+          if (!todosByDate[targetDate]) {
+            todosByDate[targetDate] = [];
+          }
+          todosByDate[targetDate].push(todo);
+        }
+      });
+
+      // Render todos and calculate totals
+      Object.entries(todosByDate).forEach(([date, todos]) => {
+        const dayDiv = document.querySelector(`[data-date="${date}"]`);
+        if (dayDiv) {
+          const tasksContainer = dayDiv.querySelector('.tasks-container');
+          const hoursTotal = dayDiv.querySelector('.hours-total');
+          let totalHours = 0;
+
+          todos.forEach((todo) => {
             const taskElement = this.createTaskElement(todo);
             tasksContainer.appendChild(taskElement);
+            totalHours += parseFloat(todo.estimated_hours) || 0;
+          });
+
+          // Update hours total display
+          hoursTotal.textContent = `${totalHours}h`;
+          hoursTotal.dataset.hours = totalHours.toString();
+          
+          // Add visual indicator for heavy days
+          if (totalHours > 8) {
+            hoursTotal.classList.add('high-hours');
+          } else if (totalHours > 4) {
+            hoursTotal.classList.add('medium-hours');
+          } else {
+            hoursTotal.classList.remove('high-hours', 'medium-hours');
           }
         }
       });
@@ -223,22 +216,56 @@
       taskDiv.className = `calendar-task ${todo.priority}-priority`;
       taskDiv.draggable = true;
       taskDiv.dataset.todoId = todo.id;
-      
+
+      const projectColor = todo.project_color || '#6b7280';
+      taskDiv.style['background-color'] = hexTo50Shade(projectColor);
+      taskDiv.style['border-left'] = '4px solid ' + projectColor;
+
       taskDiv.innerHTML = `
         <div class="task-title">${todo.title}</div>
-        <div class="task-meta">${todo.estimated_hours}h • ${todo.project_name || 'No Project'}</div>
+        <div class="task-meta">
+          ${todo.estimated_hours}h
+        </div>
       `;
-      
+
       taskDiv.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData('text/plain', todo.id);
         taskDiv.classList.add('dragging');
       });
-      
+
       taskDiv.addEventListener('dragend', () => {
         taskDiv.classList.remove('dragging');
       });
-      
+
+      // Add double-click to edit functionality
+      taskDiv.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.editTodo(todo.id);
+      });
+
       return taskDiv;
+    }
+
+    async editTodo(todoId) {
+      try {
+        const response = await fetch(`/api/todos/${todoId}`);
+        if (response.ok) {
+          const todo = await response.json();
+          // Use the global editModal function from TodoModal
+          if (window.openEditModal) {
+            window.openEditModal(todo);
+          } else {
+            console.error('Edit modal function not available');
+          }
+        } else if (response.status === 401) {
+          window.location.href = '/login';
+        } else {
+          alert('Failed to load todo for editing');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
     }
 
     async updateTaskDate(taskId, newDate) {
@@ -249,18 +276,19 @@
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            due_date: newDate
-          })
+            due_date: newDate,
+          }),
         });
-        
+
         if (response.ok) {
           // Update the todo in our local array
-          const todo = this.todos.find(t => t.id == taskId);
+          const todo = this.todos.find((t) => t.id == taskId);
           if (todo) {
             todo.due_date = newDate;
           }
+          // Re-render to update hours totals
           this.renderTodos();
-          
+
           // Trigger update event for other components
           window.dispatchEvent(new CustomEvent('todoUpdated'));
         } else {
@@ -277,18 +305,18 @@
         this.renderCalendar();
         this.renderTodos();
       });
-      
+
       document.getElementById('next-week').addEventListener('click', () => {
         this.currentWeekStart.setDate(this.currentWeekStart.getDate() + 7);
         this.renderCalendar();
         this.renderTodos();
       });
-      
+
       // Listen for todo updates from other components
       window.addEventListener('todoAdded', () => {
         this.loadTodos();
       });
-      
+
       window.addEventListener('todoUpdated', () => {
         this.loadTodos();
       });

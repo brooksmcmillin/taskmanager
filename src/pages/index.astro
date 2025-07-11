@@ -12,46 +12,43 @@ const user = Astro.locals.user;
 
     <!-- View Toggle -->
     <div class="flex justify-center mb-6">
-      <div class="bg-gray-100 rounded-lg p-1">
-        <button id="list-view-btn" class="px-4 py-2 rounded-md bg-white shadow-sm font-medium">List View</button>
-        <button id="calendar-view-btn" class="px-4 py-2 rounded-md font-medium text-gray-600">Calendar View</button>
+      <div class="flex gap-4">
+        <button id="list-view-btn" class="btn btn-primary btn-med"
+          >List View</button
+        >
+        <button id="calendar-view-btn" class="btn btn-secondary btn-med"
+          >Calendar View</button
+        >
       </div>
     </div>
 
     <!-- List View -->
-    <div id="list-view" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <TodoModal />
-
-      <!-- Todo Lists -->
-      <div>
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-xl font-semibold">Current Todos</h2>
-          <select id="time-horizon-filter" class="form-select text-sm">
-            <option value="">All Time Horizons</option>
-            <option value="today">Today</option>
-            <option value="this_week">This Week</option>
-            <option value="next_week">Next Week</option>
-            <option value="this_month">This Month</option>
-            <option value="next_month">Next Month</option>
-            <option value="this_quarter">This Quarter</option>
-            <option value="next_quarter">Next Quarter</option>
-            <option value="this_year">This Year</option>
-            <option value="next_year">Next Year</option>
-            <option value="someday">Someday</option>
-          </select>
-        </div>
-        <div id="todo-lists" class="space-y-6">
-          <!-- Todos will be loaded here -->
-        </div>
+    <TodoModal />
+    <div id="list-view">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-semibold">Current Todos</h2>
+        <select id="time-horizon-filter" class="form-select text-sm">
+          <option value="">All Time Horizons</option>
+          <option value="today">Today</option>
+          <option value="this_week">This Week</option>
+          <option value="next_week">Next Week</option>
+          <option value="this_month">This Month</option>
+          <option value="next_month">Next Month</option>
+          <option value="this_quarter">This Quarter</option>
+          <option value="next_quarter">Next Quarter</option>
+          <option value="this_year">This Year</option>
+          <option value="next_year">Next Year</option>
+          <option value="someday">Someday</option>
+        </select>
+      </div>
+      <div id="todo-lists" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Todos will be loaded here -->
       </div>
     </div>
 
     <!-- Calendar View -->
     <div id="calendar-view" class="hidden">
       <DragDropCalendar />
-      <div class="mt-6">
-        <TodoModal />
-      </div>
     </div>
   </main>
 </Layout>
@@ -101,7 +98,8 @@ const user = Astro.locals.user;
           const projectId = `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
 
           // Check if project was previously minimized
-          const isMinimized = localStorage.getItem(`${projectId}-minimized`) === 'true';
+          const isMinimized =
+            localStorage.getItem(`${projectId}-minimized`) === 'true';
 
           projectDiv.innerHTML = `
           <div class="flex items-center justify-between mb-3">
@@ -128,18 +126,20 @@ const user = Astro.locals.user;
                     ${todo.time_horizon ? ` | ${todo.time_horizon.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}` : ''}
                   </div>
                 </div>
-                <div class="flex gap-2 ml-4">
+                <div class="flex gap-3 ml-4">
                   <button 
                     onclick="editTodo(${todo.id})"
                     class="btn btn-secondary btn-sm"
+                    title="Edit todo"
                   >
-                    Edit
+                    ✏️
                   </button>
                   <button 
                     onclick="completeTodo(${todo.id})"
                     class="btn btn-success btn-sm"
+                    title="Mark as complete"
                   >
-                    Complete
+                    ✓
                   </button>
                 </div>
               </div>
@@ -158,13 +158,12 @@ const user = Astro.locals.user;
   }
 
   window.editTodo = async function (todoId) {
+    console.log('Editing Todo...');
     try {
       const response = await fetch(`/api/todos/${todoId}`);
       if (response.ok) {
         const todo = await response.json();
         window.openEditModal(todo);
-      } else if (response.status === 401) {
-        window.location.href = '/login';
       } else {
         alert('Failed to load todo for editing');
       }
@@ -198,11 +197,13 @@ const user = Astro.locals.user;
 
   window.toggleProject = function (projectId) {
     const content = document.getElementById(`${projectId}-content`);
-    const button = document.querySelector(`button[onclick="toggleProject('${projectId}')"]`);
-    
+    const button = document.querySelector(
+      `button[onclick="toggleProject('${projectId}')"]`
+    );
+
     if (content && button) {
       const isHidden = content.classList.contains('hidden');
-      
+
       if (isHidden) {
         content.classList.remove('hidden');
         button.innerHTML = '▼';
@@ -238,19 +239,19 @@ const user = Astro.locals.user;
     listViewBtn.addEventListener('click', () => {
       listView.classList.remove('hidden');
       calendarView.classList.add('hidden');
-      listViewBtn.classList.add('bg-white', 'shadow-sm');
-      listViewBtn.classList.remove('text-gray-600');
-      calendarViewBtn.classList.remove('bg-white', 'shadow-sm');
-      calendarViewBtn.classList.add('text-gray-600');
+      listViewBtn.classList.remove('btn-secondary');
+      listViewBtn.classList.add('btn-primary');
+      calendarViewBtn.classList.remove('btn-primary');
+      calendarViewBtn.classList.add('btn-secondary');
     });
 
     calendarViewBtn.addEventListener('click', () => {
       calendarView.classList.remove('hidden');
       listView.classList.add('hidden');
-      calendarViewBtn.classList.add('bg-white', 'shadow-sm');
-      calendarViewBtn.classList.remove('text-gray-600');
-      listViewBtn.classList.remove('bg-white', 'shadow-sm');
-      listViewBtn.classList.add('text-gray-600');
+      calendarViewBtn.classList.remove('btn-secondary');
+      calendarViewBtn.classList.add('btn-primary');
+      listViewBtn.classList.remove('btn-primary');
+      listViewBtn.classList.add('btn-secondary');
     });
   }
 
