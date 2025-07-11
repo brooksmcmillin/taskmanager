@@ -125,19 +125,25 @@
       </div>
     </div>
 
-    <!-- Submit Button - Full Width -->
     <div class="form-submit">
       <div class="form-actions">
         <button type="submit" class="btn btn-primary flex-1" id="submit-btn">
           Add Todo
         </button>
-        <button 
-          type="button" 
-          class="btn btn-danger btn-delete hidden" 
+        <button
+          type="button"
+          class="btn btn-danger btn-delete hidden"
           id="delete-btn"
           title="Delete todo"
         >
           🗑️
+        </button>
+        <button
+          class="btn btn-edit-complete hidden"
+          id="edit-complete-btn"
+          title="Mark as complete"
+        >
+          ✓
         </button>
       </div>
     </div>
@@ -187,16 +193,17 @@
     document.getElementById('estimated_hours').value = todo.estimated_hours;
     document.getElementById('due_date').value = todo.due_date || '';
     document.getElementById('time_horizon').value = todo.time_horizon || '';
-      //document.getElementById('tags').value = todo.tags &&
-      //? todo.tags.join(', ')
-      //: '';
+    //document.getElementById('tags').value = todo.tags &&
+    //? todo.tags.join(', ')
+    //: '';
 
     // Update button text and modal title
     document.getElementById('submit-btn').textContent = 'Update Todo';
     document.querySelector('.modal-header h2').textContent = 'Edit Todo';
-    
+
     // Show delete button in edit mode
     document.getElementById('delete-btn').classList.remove('hidden');
+    document.getElementById('edit-complete-btn').classList.remove('hidden');
   };
 
   // Function to reset form to add mode
@@ -204,9 +211,10 @@
     window.editingTodoId = null;
     document.getElementById('submit-btn').textContent = 'Add Todo';
     document.querySelector('.modal-header h2').textContent = 'Add New Todo';
-    
+
     // Hide delete button in add mode
     document.getElementById('delete-btn').classList.add('hidden');
+    document.getElementById('edit-complete-btn').classList.add('hidden');
   };
 
   // Handle form submission
@@ -273,8 +281,10 @@
       return;
     }
 
-    const confirmDelete = confirm('Are you sure you want to delete this todo? This action cannot be undone.');
-    
+    const confirmDelete = confirm(
+      'Are you sure you want to delete this todo? This action cannot be undone.'
+    );
+
     if (!confirmDelete) {
       return;
     }
@@ -289,18 +299,16 @@
         // Reset form and close modal
         document.getElementById('todo-form').reset();
         window.resetFormToAddMode();
-        
+
         // Close the modal
         const modal = document.getElementById('todoModal');
         if (modal) {
           modal.classList.remove('show');
           document.body.style.overflow = '';
         }
-        
+
         // Trigger a custom event to refresh the todo list
         window.dispatchEvent(new CustomEvent('todoAdded'));
-      } else if (response.status === 401) {
-        window.location.href = '/login';
       } else {
         const error = await response.json();
         alert('Error deleting todo: ' + (error.message || 'Unknown error'));
@@ -310,73 +318,34 @@
     }
   });
 
+  document
+    .getElementById('edit-complete-btn')
+    .addEventListener('click', async () => {
+      if (window.editingTodoId === null) {
+        return;
+      }
+
+      const actualHours = prompt('How many hours did this take?');
+      if (!actualHours) return;
+
+      try {
+        const response = await fetch(
+          `/api/todos/${window.editingTodoId}/complete`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ actual_hours: parseFloat(actualHours) }),
+          }
+        );
+
+        if (!response.ok) {
+          alert('Failed to complete todo');
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    });
+
   // Load projects when page loads
   loadProjects();
 </script>
-
-<style>
-  .todo-form-container {
-    max-width: 600px;
-  }
-
-  .form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    margin-bottom: 24px;
-  }
-
-  .form-column {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .form-submit {
-    border-top: 1px solid #e5e7eb;
-    padding-top: 20px;
-  }
-
-  .form-actions {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-  }
-
-  .btn-delete {
-    background-color: #dc2626;
-    color: white;
-    border: 1px solid #dc2626;
-    min-width: 44px;
-    height: 44px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    transition: all 0.2s ease-in-out;
-  }
-
-  .btn-delete:hover:not(:disabled) {
-    background-color: #b91c1c;
-    border-color: #b91c1c;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  }
-
-  .btn-delete:active {
-    transform: translateY(0);
-  }
-
-  .btn-delete.hidden {
-    display: none !important;
-  }
-
-  /* Mobile responsiveness */
-  @media (max-width: 640px) {
-    .form-grid {
-      grid-template-columns: 1fr;
-      gap: 16px;
-    }
-  }
-</style>
