@@ -16,12 +16,7 @@ export async function POST({ request }) {
     }
 
     const user = await Auth.authenticateUser(username, password);
-    console.log('Got User?: ' + user);
     const session = await Auth.createSession(user.id);
-
-    console.log(
-      'LoginSession: ' + session.sessionId + ':' + typeof session.sessionId
-    );
 
     return new Response(
       JSON.stringify({
@@ -44,7 +39,6 @@ export async function POST({ request }) {
       }
     );
   } catch (error) {
-    console.log('Error: ' + error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
