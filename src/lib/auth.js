@@ -1,6 +1,9 @@
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { TodoDB } from './db.js';
+import { config } from 'dotenv';
+
+config();
 
 export class Auth {
   static async hashPassword(password) {
@@ -86,30 +89,33 @@ export class Auth {
   static createSessionCookie(sessionId, expiresAt) {
     const expires = new Date(expiresAt).toUTCString();
     const isProduction = process.env.NODE_ENV === 'production';
-    const isLocalhost = process.env.NODE_ENV === 'development' || 
-                       (typeof window !== 'undefined' && window.location.hostname === 'localhost');
-    
+    const isLocalhost =
+      process.env.NODE_ENV === 'development' ||
+      (typeof window !== 'undefined' &&
+        window.location.hostname === 'localhost');
+
     let cookieString = `session=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Expires=${expires}`;
-    
+
     if (isProduction) {
-      cookieString += '; Secure; Domain=.brooksmcmillin.com';
+      cookieString += '; Secure; Domain=.' + process.env.ROOT_DOMAIN;
     } else {
       // For localhost, don't set Domain and don't require Secure
       cookieString += '';
     }
-    
+
     return cookieString;
   }
 
   static clearSessionCookie() {
     const isProduction = process.env.NODE_ENV === 'production';
-    
-    let cookieString = 'session=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    
+
+    let cookieString =
+      'session=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
     if (isProduction) {
-      cookieString += '; Secure; Domain=.brooksmcmillin.com';
+      cookieString += '; Secure; Domain=.' + process.env.ROOT_DOMAIN;
     }
-    
+
     return cookieString;
   }
 }
