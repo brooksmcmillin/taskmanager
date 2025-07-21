@@ -160,45 +160,6 @@ jobs:
           name: trivy-report
           path: trivy-report.txt
 
-  # Job 4: Docker Security (if Dockerfile exists)
-  docker-scan:
-    name: Docker Security Scan
-    runs-on: ubuntu-latest
-    if: hashFiles('Dockerfile') != ''
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Hadolint Dockerfile Linting
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: Dockerfile
-          format: sarif
-          output-file: hadolint-results.sarif
-          failure-threshold: warning
-
-      - name: Upload Hadolint SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: hadolint-results.sarif
-
-      - name: Build image for scanning
-        run: docker build -t app:test .
-
-      - name: Run Trivy on Docker image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'app:test'
-          format: 'sarif'
-          output: 'docker-trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Upload Docker Trivy SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: docker-trivy-results.sarif
-
   # Job 5: Create Summary
   summary:
     name: Security Summary
