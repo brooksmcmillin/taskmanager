@@ -1,4 +1,8 @@
-name: Security Scan (Simplified)
+name: Security Scan
+
+permissions:
+  contents: read
+  security-events: write  # Critical for SARIF upload
 
 on:
   push:

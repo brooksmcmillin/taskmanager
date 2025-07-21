@@ -23,20 +23,16 @@
     "astro": "^5.10.0",
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.5.0",
-    "jsonwebtoken": "^9.0.2",
-    "pg": "^8.16.2",
-    "uuid": "^11.1.0"
+    "pg": "^8.16.2"
   },
   "devDependencies": {
     "@microsoft/eslint-plugin-sdl": "^1.1.0",
-    "@playwright/test": "^1.54.1",
     "@vitest/ui": "^3.2.4",
     "eslint": "^9.31.0",
     "eslint-plugin-security": "^3.0.1",
     "husky": "^9.1.7",
     "license-checker": "^25.0.1",
     "prettier": "^3.6.1",
-    "supertest": "^7.1.3",
     "vitest": "^3.2.4"
   }
 }

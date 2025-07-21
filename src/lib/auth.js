@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { TodoDB } from './db.js';
 import { config } from 'dotenv';
 
@@ -44,7 +44,7 @@ export class Auth {
   }
 
   static async createSession(userId) {
-    const sessionId = uuidv4();
+    const sessionId = randomUUID();
 
     const session = await TodoDB.createSession(sessionId, userId);
     return {
