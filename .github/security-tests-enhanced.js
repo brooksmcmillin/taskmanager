@@ -247,7 +247,7 @@ class SecurityTester {
         port: url.port,
         path: url.pathname + url.search,
         headers: options.headers || {},
-        rejectUnauthorized: false // Allow self-signed certs for testing
+        rejectUnauthorized: options.allowSelfSigned === true ? false : true // Only allow if explicitly requested
       };
 
       const req = https.request(reqOptions, (res) => {
