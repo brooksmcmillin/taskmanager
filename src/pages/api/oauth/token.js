@@ -1,7 +1,5 @@
 import { TodoDB } from '../../../lib/db.js';
 import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
-import fs from 'fs';
 
 export async function OPTIONS() {
   return new Response(null, {
@@ -178,9 +176,7 @@ async function handleAuthorizationCodeGrant(formData, client) {
     3600 // 1 hour expiry
   );
 
-  // Create JWT access token for MCP authentication
-  // TODO: Fix JWT implementation - using basic token for now
-  // const jwtToken = await createJWTToken(authCode.user_id, client.client_id, scopes);
+  // TODO: Implement JWT with Web Crypto API when needed
 
   return new Response(
     JSON.stringify({
@@ -236,9 +232,7 @@ async function handleRefreshTokenGrant(formData, client) {
     );
   }
 
-  // Create JWT access token for MCP authentication
-  // TODO: Fix JWT implementation - using basic token for now
-  // const jwtToken = await createJWTToken(tokenData.user_id, client.client_id, tokenData.scopes);
+  // TODO: Implement JWT with Web Crypto API when needed
 
   return new Response(
     JSON.stringify({
@@ -254,32 +248,4 @@ async function handleRefreshTokenGrant(formData, client) {
   );
 }
 
-// JWT token creation function
-async function createJWTToken(userId, clientId, scopes) {
-  try {
-    // TODO: Replace with path to your private key
-    // Generate with: openssl genrsa -out private.pem 2048
-    const privateKey =
-      process.env.JWT_PRIVATE_KEY || 'REPLACE_WITH_PRIVATE_KEY_PEM';
-
-    const payload = {
-      sub: userId.toString(),
-      client_id: clientId,
-      scopes: Array.isArray(scopes) ? scopes : JSON.parse(scopes || '["read"]'),
-      iss: process.env.JWT_ISSUER || 'http://localhost:4321',
-      aud: 'taskmanager-mcp',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour
-    };
-
-    return jwt.sign(payload, privateKey, {
-      algorithm: 'RS256',
-      keyid: 'taskmanager-mcp-key-1',
-    });
-  } catch (error) {
-    console.error('JWT creation error:', error);
-    // Fallback to basic token if JWT fails
-    return crypto.randomBytes(32).toString('hex');
-  }
-}
 
