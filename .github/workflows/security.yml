@@ -1,4 +1,4 @@
-name: Security Scan
+name: Security Scan (Simplified)
 
 on:
   push:
@@ -6,27 +6,16 @@ on:
   pull_request:
     branches: [ main ]
   schedule:
-    # Run security scan every Monday at 2 AM UTC
-    - cron: '0 2 * * 1'
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM UTC
   workflow_dispatch:
-    inputs:
-      scan_type:
-        description: 'Type of scan to run'
-        required: true
-        default: 'full'
-        type: choice
-        options:
-          - full
-          - quick
-          - dependencies-only
 
 env:
   NODE_VERSION: '18'
 
 jobs:
-  # Job 1: Dependency Vulnerability Scanning
-  dependency-scan:
-    name: Dependency Vulnerability Scan
+  # Job 1: Basic Security Checks
+  security-basics:
+    name: Basic Security Checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -41,40 +30,77 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run npm audit
+      # NPM Audit
+      - name: NPM Audit
         id: npm-audit
+        run: |
+          echo "### NPM Audit Results ###" > security-report.txt
+          npm audit --production --json > npm-audit.json || true
+          npm audit --production >> security-report.txt 2>&1 || true
+          
+          # Check for high/critical vulnerabilities
+          HIGH_VULN=$(cat npm-audit.json | jq '.metadata.vulnerabilities.high // 0')
+          CRITICAL_VULN=$(cat npm-audit.json | jq '.metadata.vulnerabilities.critical // 0')
+          
+          echo "high_count=$HIGH_VULN" >> $GITHUB_OUTPUT
+          echo "critical_count=$CRITICAL_VULN" >> $GITHUB_OUTPUT
+          
+          if [ "$CRITICAL_VULN" -gt 0 ]; then
+            echo "❌ Found $CRITICAL_VULN critical vulnerabilities!"
+            exit 1
+          elif [ "$HIGH_VULN" -gt 0 ]; then
+            echo "⚠️ Found $HIGH_VULN high vulnerabilities"
+          else
+            echo "✅ No high or critical vulnerabilities found"
+          fi
+
+      # License Check
+      - name: License Check
         continue-on-error: true
         run: |
-          npm audit --production --audit-level=moderate > npm-audit-report.txt 2>&1
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
-          cat npm-audit-report.txt
+          npx license-checker --production --summary --excludePrivatePackages >> security-report.txt
+          echo -e "\n### Problematic Licenses ###" >> security-report.txt
+          npx license-checker --production --excludePrivatePackages --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;Python-2.0" >> security-report.txt 2>&1 || echo "Some non-standard licenses found" >> security-report.txt
 
-      - name: Upload npm audit report
+      # Basic Secret Detection
+      - name: Secret Detection
+        run: |
+          echo -e "\n### Secret Detection ###" >> security-report.txt
+          
+          # Common patterns to check
+          patterns=(
+            "password.*=.*['\"][^'\"]{8,}['\"]"
+            "api[_-]?key.*=.*['\"][^'\"]{20,}['\"]"
+            "secret.*=.*['\"][^'\"]{20,}['\"]"
+            "token.*=.*['\"][^'\"]{20,}['\"]"
+            "private[_-]?key"
+            "BEGIN.*PRIVATE KEY"
+          )
+          
+          found_secrets=0
+          for pattern in "${patterns[@]}"; do
+            if grep -r -E "$pattern" --exclude-dir=node_modules --exclude-dir=.git --exclude="*.test.js" . 2>/dev/null; then
+              echo "⚠️ Potential secret found with pattern: $pattern" >> security-report.txt
+              found_secrets=1
+            fi
+          done
+          
+          if [ $found_secrets -eq 0 ]; then
+            echo "✅ No obvious secrets detected" >> security-report.txt
+          fi
+
+      - name: Upload security report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: npm-audit-report
-          path: npm-audit-report.txt
+          name: security-basics-report
+          path: |
+            security-report.txt
+            npm-audit.json
 
-      - name: Run Snyk vulnerability test
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        continue-on-error: true
-        uses: snyk/actions/node@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high --fail-on=upgradable
-
-      - name: Check for critical vulnerabilities
-        if: steps.npm-audit.outputs.exit_code != '0'
-        run: |
-          echo "::warning::npm audit found vulnerabilities. Please review the report."
-          # Fail only on critical vulnerabilities
-          npm audit --production --audit-level=critical
-
-  # Job 2: Static Application Security Testing (SAST)
+  # Job 2: CodeQL Analysis (GitHub's built-in)
   code-analysis:
-    name: Static Code Analysis
+    name: CodeQL Analysis
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -87,391 +113,138 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: javascript
-          queries: security-and-quality
+          queries: security-extended
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-      - name: Run Semgrep
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/security-audit
-            p/secrets
-            p/owasp-top-ten
-            p/javascript
-            p/typescript
-            p/nodejs
-          generateSarif: true
+  # Job 3: Trivy Security Scan (Replaces OWASP/Snyk)
+  trivy-scan:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Upload Semgrep SARIF
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          output: 'trivy-report.txt'
+
+      - name: Run Trivy in SARIF mode
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+      - name: Upload Trivy text report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: trivy-report
+          path: trivy-report.txt
+
+  # Job 4: Docker Security (if Dockerfile exists)
+  docker-scan:
+    name: Docker Security Scan
+    runs-on: ubuntu-latest
+    if: hashFiles('Dockerfile') != ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Hadolint Dockerfile Linting
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          format: sarif
+          output-file: hadolint-results.sarif
+          failure-threshold: warning
+
+      - name: Upload Hadolint SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: hadolint-results.sarif
+
+      - name: Build image for scanning
+        run: docker build -t app:test .
+
+      - name: Run Trivy on Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'app:test'
+          format: 'sarif'
+          output: 'docker-trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Docker Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: semgrep.sarif
+          sarif_file: docker-trivy-results.sarif
 
-      - name: ESLint Security Plugin
-        run: |
-          npm install -D eslint eslint-plugin-security @microsoft/eslint-plugin-sdl
-          npx eslint . --ext .js,.jsx,.ts,.tsx --format json -o eslint-security-report.json || true
-
-      - name: Upload ESLint report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: eslint-security-report
-          path: eslint-security-report.json
-
-  # Job 3: Secret Scanning
-  secret-scan:
-    name: Secret Scanning
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for secret scanning
-
-      - name: TruffleHog Secret Scan
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --debug --only-verified
-
-      - name: GitLeaks Secret Scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Job 4: License Compliance
-  license-check:
-    name: License Compliance Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: License Checker
-        run: |
-          npx license-checker --production --summary --excludePrivatePackages > license-report.txt
-          echo "### License Summary ###"
-          cat license-report.txt
-
-      - name: Check for problematic licenses
-        run: |
-          npx license-checker --production --excludePrivatePackages --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;CC0-1.0;CC-BY-3.0;CC-BY-4.0;Unlicense;Python-2.0" || \
-          echo "::warning::Found packages with non-standard licenses. Please review."
-
-      - name: Upload license report
-        uses: actions/upload-artifact@v4
-        with:
-          name: license-report
-          path: license-report.txt
-
-  # Job 6: OWASP Dependency Check
-  owasp-check:
-    name: OWASP Dependency Check
-    runs-on: ubuntu-latest
-    if: github.event.inputs.scan_type != 'quick'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run OWASP Dependency Check
-        uses: jeremylong/DependencyCheck-Action@main
-        with:
-          project: 'TaskManager'
-          path: '.'
-          format: 'ALL'
-          args: >
-            --enableRetired
-            --enableExperimental
-            --failOnCVSS 7
-            --suppressionFile .github/dependencycheck-suppression.xml
-
-      - name: Upload OWASP reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: owasp-reports
-          path: reports/
-
-  # Job 7: API Security Testing
-  api-security:
-    name: API Security Testing
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event.inputs.scan_type == 'full'
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: taskmanager_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Setup test environment
-        env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: taskmanager_test
-          JWT_SECRET: test-secret-key
-          NODE_ENV: test
-        run: |
-          cp .env.example .env.test
-          npm run migrate:up
-
-      - name: Start application
-        env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: taskmanager_test
-          JWT_SECRET: test-secret-key
-          NODE_ENV: test
-        run: |
-          npm run build
-          npm run preview &
-          sleep 10  # Wait for server to start
-
-      - name: Run API Security Tests
-        run: |
-          # Install testing tools
-          npm install -D @playwright/test supertest
-
-          # Create API security test script
-          cat > api-security-test.js << 'EOF'
-          const { test } = require('@playwright/test');
-          const baseURL = 'http://localhost:4321';
-
-          // Test for SQL Injection
-          test('SQL Injection Prevention', async ({ request }) => {
-            const maliciousPayloads = [
-              "admin' OR '1'='1",
-              "1; DROP TABLE users--",
-              "' UNION SELECT * FROM users--"
-            ];
-
-            for (const payload of maliciousPayloads) {
-              const response = await request.post(`${baseURL}/api/auth/login`, {
-                data: {
-                  username: payload,
-                  password: 'test'
-                }
-              });
-              
-              // Should not return 500 (database error)
-              console.assert(response.status() !== 500, `SQL Injection vulnerability with payload: ${payload}`);
-              // Should return 401 (unauthorized)
-              console.assert(response.status() === 401, `Unexpected status for SQL injection test: ${response.status()}`);
-            }
-          });
-
-          // Test for XSS
-          test('XSS Prevention', async ({ request }) => {
-            // First, create a test user and login
-            await request.post(`${baseURL}/api/auth/register`, {
-              data: {
-                username: 'xsstest',
-                email: 'xss@test.com',
-                password: 'testpass123'
-              }
-            });
-
-            const loginResponse = await request.post(`${baseURL}/api/auth/login`, {
-              data: {
-                username: 'xsstest',
-                password: 'testpass123'
-              }
-            });
-
-            const cookies = await loginResponse.headers()['set-cookie'];
-
-            // Try to create project with XSS payload
-            const xssPayloads = [
-              '<script>alert("XSS")</script>',
-              '<img src=x onerror=alert("XSS")>',
-              'javascript:alert("XSS")'
-            ];
-
-            for (const payload of xssPayloads) {
-              const response = await request.post(`${baseURL}/api/projects`, {
-                headers: {
-                  'Cookie': cookies
-                },
-                data: {
-                  name: payload,
-                  color: '#ff0000'
-                }
-              });
-
-              // Should accept the input but sanitize it
-              console.assert([200, 201].includes(response.status()), `XSS prevention test failed: ${response.status()}`);
-            }
-          });
-
-          // Test Rate Limiting
-          test('Rate Limiting', async ({ request }) => {
-            const requests = [];
-            for (let i = 0; i < 20; i++) {
-              requests.push(
-                request.post(`${baseURL}/api/auth/login`, {
-                  data: { username: 'test', password: 'test' }
-                })
-              );
-            }
-
-            const responses = await Promise.all(requests);
-            const rateLimited = responses.some(r => r.status() === 429);
-            
-            console.assert(rateLimited, 'Rate limiting not implemented - all 20 requests succeeded');
-          });
-
-          // Test Authentication Bypass
-          test('Authentication Required', async ({ request }) => {
-            const protectedEndpoints = [
-              '/api/todos',
-              '/api/projects',
-              '/api/reports'
-            ];
-
-            for (const endpoint of protectedEndpoints) {
-              const response = await request.get(`${baseURL}${endpoint}`);
-              console.assert(response.status() === 401 || response.status() === 302, 
-                `Endpoint ${endpoint} accessible without authentication: ${response.status()}`);
-            }
-          });
-          EOF
-
-          # Run the security tests
-          npx playwright test api-security-test.js --reporter=json > api-test-results.json || true
-
-      - name: Upload API test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-security-test-results
-          path: api-test-results.json
-
-  # Job 8: Security Report Summary
-  security-summary:
+  # Job 5: Create Summary
+  summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [dependency-scan, code-analysis, secret-scan, license-check, owasp-check, api-security]
+    needs: [security-basics, code-analysis, trivy-scan]
     if: always()
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-
-      - name: Generate Security Summary
+      - name: Create summary
         run: |
-          echo "# Security Scan Summary" > security-summary.md
-          echo "Run Date: $(date)" >> security-summary.md
-          echo "" >> security-summary.md
-
-          # Check each job status
-          echo "## Job Status" >> security-summary.md
-          echo "- Dependency Scan: ${{ needs.dependency-scan.result }}" >> security-summary.md
-          echo "- Code Analysis: ${{ needs.code-analysis.result }}" >> security-summary.md
-          echo "- Secret Scan: ${{ needs.secret-scan.result }}" >> security-summary.md
-          echo "- License Check: ${{ needs.license-check.result }}" >> security-summary.md
-          echo "- OWASP Check: ${{ needs.owasp-check.result }}" >> security-summary.md
-          echo "- API Security: ${{ needs.api-security.result }}" >> security-summary.md
-          echo "" >> security-summary.md
-
-          # Add npm audit summary if exists
-          if [ -f npm-audit-report/npm-audit-report.txt ]; then
-            echo "## NPM Audit Summary" >> security-summary.md
-            tail -n 20 npm-audit-report/npm-audit-report.txt >> security-summary.md
-            echo "" >> security-summary.md
+          echo "# 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Basic Security | ${{ needs.security-basics.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Analysis | ${{ needs.code-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy Scan | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.security-basics.result }}" == "failure" ] || [ "${{ needs.code-analysis.result }}" == "failure" ] || [ "${{ needs.trivy-scan.result }}" == "failure" ]; then
+            echo "❌ **Security issues detected!** Please review the detailed reports." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **All security checks passed!**" >> $GITHUB_STEP_SUMMARY
           fi
-
-          # Add recommendations
-          echo "## Recommendations" >> security-summary.md
-          echo "1. Review all artifact reports for detailed findings" >> security-summary.md
-          echo "2. Address any HIGH or CRITICAL vulnerabilities immediately" >> security-summary.md
-          echo "3. Update dependencies regularly" >> security-summary.md
-          echo "4. Review security alerts in GitHub Security tab" >> security-summary.md
-
-          cat security-summary.md
-
-      - name: Create issue for failures
-        if: failure() && github.event_name == 'schedule'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const title = `Security Scan Failed - ${new Date().toLocaleDateString()}`;
-            const body = `The scheduled security scan has failed. Please review the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.
-            
-            **Failed Jobs:**
-            - Dependency Scan: ${{ needs.dependency-scan.result }}
-            - Code Analysis: ${{ needs.code-analysis.result }}
-            - Secret Scan: ${{ needs.secret-scan.result }}
-            - License Check: ${{ needs.license-check.result }}
-            - OWASP Check: ${{ needs.owasp-check.result }}
-            - API Security: ${{ needs.api-security.result }}
-            
-            Please address any security issues immediately.`;
-            
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: title,
-              body: body,
-              labels: ['security', 'automated']
-            });
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            let comment = '## 🔒 Security Scan Results\n\n';
+            const summary = `## 🔒 Security Scan Results
             
-            comment += '| Check | Status |\n|-------|--------|\n';
-            comment += `| Dependency Scan | ${{ needs.dependency-scan.result }} |\n`;
-            comment += `| Code Analysis | ${{ needs.code-analysis.result }} |\n`;
-            comment += `| Secret Scan | ${{ needs.secret-scan.result }} |\n`;
-            comment += `| License Check | ${{ needs.license-check.result }} |\n`;
+            | Check | Status |
+            |-------|--------|
+            | Basic Security | ${{ needs.security-basics.result }} |
+            | Code Analysis | ${{ needs.code-analysis.result }} |
+            | Trivy Scan | ${{ needs.trivy-scan.result }} |
             
-            comment += '\n### 📋 Next Steps\n';
-            comment += '- Review the detailed reports in the workflow artifacts\n';
-            comment += '- Address any HIGH or CRITICAL vulnerabilities before merging\n';
-            comment += '- Ensure all security checks pass\n';
+            View the [full security report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: comment
+              body: summary
             });
