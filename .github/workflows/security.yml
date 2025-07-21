@@ -386,7 +386,7 @@ jobs:
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [dependency-scan, code-analysis, secret-scan, license-check, container-scan, owasp-check, api-security]
+    needs: [dependency-scan, code-analysis, secret-scan, license-check, owasp-check, api-security]
     if: always()
     steps:
       - name: Download all artifacts
@@ -404,7 +404,6 @@ jobs:
           echo "- Code Analysis: ${{ needs.code-analysis.result }}" >> security-summary.md
           echo "- Secret Scan: ${{ needs.secret-scan.result }}" >> security-summary.md
           echo "- License Check: ${{ needs.license-check.result }}" >> security-summary.md
-          echo "- Container Scan: ${{ needs.container-scan.result }}" >> security-summary.md
           echo "- OWASP Check: ${{ needs.owasp-check.result }}" >> security-summary.md
           echo "- API Security: ${{ needs.api-security.result }}" >> security-summary.md
           echo "" >> security-summary.md
@@ -438,7 +437,6 @@ jobs:
             - Code Analysis: ${{ needs.code-analysis.result }}
             - Secret Scan: ${{ needs.secret-scan.result }}
             - License Check: ${{ needs.license-check.result }}
-            - Container Scan: ${{ needs.container-scan.result }}
             - OWASP Check: ${{ needs.owasp-check.result }}
             - API Security: ${{ needs.api-security.result }}
             
@@ -465,10 +463,6 @@ jobs:
             comment += `| Code Analysis | ${{ needs.code-analysis.result }} |\n`;
             comment += `| Secret Scan | ${{ needs.secret-scan.result }} |\n`;
             comment += `| License Check | ${{ needs.license-check.result }} |\n`;
-            
-            if ('${{ needs.container-scan.result }}' !== 'skipped') {
-              comment += `| Container Scan | ${{ needs.container-scan.result }} |\n`;
-            }
             
             comment += '\n### 📋 Next Steps\n';
             comment += '- Review the detailed reports in the workflow artifacts\n';
