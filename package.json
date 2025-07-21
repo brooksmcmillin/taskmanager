@@ -15,7 +15,8 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepare": "husky"
   },
   "dependencies": {
     "@astrojs/node": "^9.2.2",
