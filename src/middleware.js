@@ -5,6 +5,25 @@ import { TodoDB } from './lib/db.js';
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, redirect } = context;
 
+  // Security headers
+  context.response.headers.set('X-Content-Type-Options', 'nosniff');
+  context.response.headers.set('X-Frame-Options', 'DENY');
+  context.response.headers.set('X-XSS-Protection', '1; mode=block');
+  context.response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  context.response.headers.set('Permissions-Policy', 
+    'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
+  );
+  
+  // Remove potentially dangerous headers
+  context.response.headers.delete('X-Powered-By');
+  
+  // HSTS (only in production)
+  if (process.env.NODE_ENV === 'production') {
+    context.response.headers.set('Strict-Transport-Security', 
+      'max-age=31536000; includeSubDomains; preload'
+    );
+  }
+ 
   // OAuth endpoints should allow cross-origin requests
   const oauthRoutes = ['/api/oauth/token', '/api/oauth/authorize'];
   const isOAuthRoute = oauthRoutes.some(route => url.pathname === route);

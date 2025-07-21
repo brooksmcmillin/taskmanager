@@ -26,3 +26,14 @@ pnpm-debug.log*
 
 # Generated database
 todos.db
+
+# Security
+.env*
+!.env.example
+*.key
+*.pem
+*.cert
+security-report*.txt
+*-audit-report.txt
+vulnerability-report/
+.scannerwork/
