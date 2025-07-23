@@ -9,8 +9,6 @@ updates:
     labels:
       - "dependencies"
       - "security"
-    reviewers:
-      - "brooksmcmillin"
     groups:
       development-dependencies:
         dependency-type: "development"
