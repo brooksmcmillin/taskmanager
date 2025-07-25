@@ -20,9 +20,9 @@
   },
   "dependencies": {
     "@astrojs/node": "^9.2.2",
-    "astro": "^5.12.2",
+    "astro": "^5.12.3",
     "bcryptjs": "^3.0.2",
-    "dotenv": "^17.2.0",
+    "dotenv": "^17.2.1",
     "pg": "^8.16.2"
   },
   "devDependencies": {
