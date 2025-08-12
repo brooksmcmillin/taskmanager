@@ -4,7 +4,6 @@ permissions:
   contents: read
   security-events: write  # Critical for SARIF upload
   pull-requests: write  # Needed for leaving PR comments
-  contents: read
 
 on:
   push:
