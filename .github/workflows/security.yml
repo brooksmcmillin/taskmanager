@@ -3,6 +3,8 @@ name: Security Scan
 permissions:
   contents: read
   security-events: write  # Critical for SARIF upload
+  pull-requests: write  # Needed for leaving PR comments
+  contents: read
 
 on:
   push:
@@ -17,7 +19,6 @@ env:
   NODE_VERSION: '18'
 
 jobs:
-  # Job 1: Basic Security Checks
   security-basics:
     name: Basic Security Checks
     runs-on: ubuntu-latest
@@ -102,7 +103,6 @@ jobs:
             security-report.txt
             npm-audit.json
 
-  # Job 2: CodeQL Analysis (GitHub's built-in)
   code-analysis:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
@@ -122,7 +122,6 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-  # Job 3: Trivy Security Scan (Replaces OWASP/Snyk)
   trivy-scan:
     name: Trivy Security Scan
     runs-on: ubuntu-latest
@@ -164,7 +163,6 @@ jobs:
           name: trivy-report
           path: trivy-report.txt
 
-  # Job 5: Create Summary
   summary:
     name: Security Summary
     runs-on: ubuntu-latest
@@ -213,3 +211,18 @@ jobs:
               repo: context.repo.repo,
               body: summary
             });
+
+  claude-code:
+    name: Claude Security Reviewer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+      
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+
