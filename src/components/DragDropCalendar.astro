@@ -165,12 +165,6 @@
 
         if (todo.due_date) {
           targetDate = todo.due_date.split('T')[0];
-        } else if (todo.time_horizon === 'today') {
-          targetDate = new Date().toISOString().split('T')[0];
-        } else if (todo.time_horizon === 'this_week') {
-          // Place in current week if no specific date
-          const today = new Date();
-          targetDate = today.toISOString().split('T')[0];
         }
 
         if (targetDate) {
@@ -198,7 +192,7 @@
           // Update hours total display
           hoursTotal.textContent = `${totalHours}h`;
           hoursTotal.dataset.hours = totalHours.toString();
-          
+
           // Add visual indicator for heavy days
           if (totalHours > 8) {
             hoursTotal.classList.add('high-hours');

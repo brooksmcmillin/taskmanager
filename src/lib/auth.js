@@ -5,6 +5,17 @@ import { config } from 'dotenv';
 
 config();
 
+async function requireAuth(request) {
+  const sessionId = await Auth.getSessionFromRequest(request);
+  const session = await Auth.getSessionUser(sessionId);
+
+  if (!session) {
+    throw new Error('Authentication required');
+  }
+
+  return session;
+}
+
 export class Auth {
   static async hashPassword(password) {
     return await bcrypt.hash(password, 12);
@@ -27,16 +38,13 @@ export class Auth {
   }
 
   static async authenticateUser(username, password) {
-    console.log('Authenticating..');
     const user = await TodoDB.getUserByUsername(username);
     if (!user) {
-      console.log('Invalid User');
       throw new Error('Invalid credentials');
     }
 
     const isValid = await this.verifyPassword(password, user.password_hash);
     if (!isValid) {
-      console.log('Invalid Password');
       throw new Error('Invalid credentials');
     }
 

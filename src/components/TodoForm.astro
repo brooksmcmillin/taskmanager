@@ -98,30 +98,6 @@
             class="form-input mt-1"
           />
         </div>
-
-        <div>
-          <label
-            for="time_horizon"
-            class="block text-sm font-medium text-gray-700">Time Horizon</label
-          >
-          <select
-            id="time_horizon"
-            name="time_horizon"
-            class="form-select mt-1"
-          >
-            <option value="">No specific timeframe</option>
-            <option value="today">Today</option>
-            <option value="this_week">This Week</option>
-            <option value="next_week">Next Week</option>
-            <option value="this_month">This Month</option>
-            <option value="next_month">Next Month</option>
-            <option value="this_quarter">This Quarter</option>
-            <option value="next_quarter">Next Quarter</option>
-            <option value="this_year">This Year</option>
-            <option value="next_year">Next Year</option>
-            <option value="someday">Someday</option>
-          </select>
-        </div>
       </div>
     </div>
 
@@ -192,7 +168,6 @@
     document.getElementById('priority').value = todo.priority;
     document.getElementById('estimated_hours').value = todo.estimated_hours;
     document.getElementById('due_date').value = todo.due_date || '';
-    document.getElementById('time_horizon').value = todo.time_horizon || '';
     //document.getElementById('tags').value = todo.tags &&
     //? todo.tags.join(', ')
     //: '';
@@ -229,7 +204,6 @@
       priority: formData.get('priority'),
       estimated_hours: parseFloat(formData.get('estimated_hours')),
       due_date: formData.get('due_date') || null,
-      time_horizon: formData.get('time_horizon') || null,
       tags: formData.get('tags')
         ? formData
             .get('tags')
