@@ -1,111 +1,76 @@
 import { TodoDB } from '../../../lib/db.js';
-import { Auth } from '../../../lib/auth.js';
-
-async function requireAuth(request) {
-  const sessionId = await Auth.getSessionFromRequest(request);
-  const session = await Auth.getSessionUser(sessionId);
-
-  if (!session) {
-    throw new Error('Authentication required');
-  }
-
-  return session;
-}
+import { requireAuth } from '../../../lib/auth.js';
 
 export const GET = async ({ params, request }) => {
-  try {
-    const session = await requireAuth(request);
-    const projectId = parseInt(params.id);
+  const session = await requireAuth(request);
+  const projectId = parseInt(params.id);
 
-    if (!projectId) {
-      return new Response(JSON.stringify({ error: 'Invalid project ID' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const project = await TodoDB.getProjectById(projectId, session.user_id);
-
-    if (!project) {
-      return new Response(JSON.stringify({ error: 'Project not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify(project), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    const status = error.message === 'Authentication required' ? 401 : 500;
-    return new Response(JSON.stringify({ error: error.message }), {
-      status,
+  if (!projectId) {
+    return new Response(JSON.stringify({ error: 'Invalid project ID' }), {
+      status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  const project = await TodoDB.getProjectById(projectId, session.user_id);
+
+  if (!project) {
+    return new Response(JSON.stringify({ error: 'Project not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  return new Response(JSON.stringify(project), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 };
 
 export const PUT = async ({ params, request }) => {
-  try {
-    const session = await requireAuth(request);
-    const projectId = parseInt(params.id);
-    const updates = await request.json();
+  const session = await requireAuth(request);
+  const projectId = parseInt(params.id);
+  const updates = await request.json();
 
-    if (!projectId) {
-      return new Response(JSON.stringify({ error: 'Invalid project ID' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    await TodoDB.updateProject(projectId, session.user_id, updates);
-
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    const status = error.message === 'Authentication required' ? 401 : 500;
-    return new Response(JSON.stringify({ error: error.message }), {
-      status,
+  if (!projectId) {
+    return new Response(JSON.stringify({ error: 'Invalid project ID' }), {
+      status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  await TodoDB.updateProject(projectId, session.user_id, updates);
+
+  return new Response(JSON.stringify({ success: true }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 };
 
 export const DELETE = async ({ params, request }) => {
-  try {
-    const session = await requireAuth(request);
-    const projectId = parseInt(params.id);
+  const session = await requireAuth(request);
+  const projectId = parseInt(params.id);
 
-    if (!projectId) {
-      return new Response(JSON.stringify({ error: 'Invalid project ID' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Check if project exists and belongs to user
-    const project = await TodoDB.getProjectById(projectId, session.user_id);
-    if (!project) {
-      return new Response(JSON.stringify({ error: 'Project not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    await TodoDB.deleteProject(projectId);
-
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    const status = error.message === 'Authentication required' ? 401 : 500;
-    return new Response(JSON.stringify({ error: error.message }), {
-      status,
+  if (!projectId) {
+    return new Response(JSON.stringify({ error: 'Invalid project ID' }), {
+      status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  // Check if project exists and belongs to user
+  const project = await TodoDB.getProjectById(projectId, session.user_id);
+  if (!project) {
+    return new Response(JSON.stringify({ error: 'Project not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  await TodoDB.deleteProject(projectId);
+
+  return new Response(JSON.stringify({ success: true }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 };

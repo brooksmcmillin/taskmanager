@@ -1,16 +1,5 @@
 import { TodoDB } from '../../lib/db.js';
-import { Auth } from '../../lib/auth.js';
-
-async function requireAuth(request) {
-  const sessionId = await Auth.getSessionFromRequest(request);
-  const session = await Auth.getSessionUser(sessionId);
-
-  if (!session) {
-    throw new Error('Authentication required');
-  }
-
-  return session;
-}
+import { requireAuth } from '../../lib/auth.js';
 
 export const GET = async ({ url, request }) => {
   const session = await requireAuth(request);

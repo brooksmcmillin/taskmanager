@@ -1,16 +1,67 @@
-import { config } from 'dotenv';
+import { vi } from 'vitest';
 
-// Load test environment variables
-config({ path: '.env.test' });
+global.fetch = vi.fn();
 
-// Set test environment
-process.env.NODE_ENV = 'test';
+vi.mock('astro:middleware', () => ({
+  defineMiddleware: (fn) => fn,
+}));
 
-// Use a test database
-if (!process.env.POSTGRES_DB?.includes('test')) {
-  process.env.POSTGRES_DB = process.env.POSTGRES_DB
-    ? `${process.env.POSTGRES_DB}_test`
-    : 'taskmanager_test';
-}
+vi.mock('../src/lib/auth.js', () => ({
+  Auth: {
+    getSessionFromRequest: vi.fn(),
+    getSessionUser: vi.fn(),
+  },
+}));
 
-console.log('Test setup complete. Using database:', process.env.POSTGRES_DB);
+vi.mock('../src/lib/db.js', () => ({
+  TodoDB: {
+    getAccessToken: vi.fn(),
+  },
+}));
+
+export const createMockContext = (pathname = '/', headers = {}) => {
+  const request = new Request(`http://localhost:3000${pathname}`, {
+    headers: new Headers(headers),
+  });
+
+  return {
+    request,
+    url: new URL(request.url),
+    redirect: vi.fn((path) => ({
+      type: 'redirect',
+      status: 302,
+      url: path,
+    })),
+    locals: {},
+  };
+};
+
+export const createMockNext = () => {
+  return vi.fn(() => {
+    const headers = new Map([
+      ['Content-Type', 'text/html'],
+    ]);
+    
+    return Promise.resolve({
+      headers: {
+        set: vi.fn((key, value) => headers.set(key, value)),
+        get: vi.fn((key) => headers.get(key)),
+        delete: vi.fn((key) => headers.delete(key)),
+      },
+    });
+  });
+};
+
+export const mockAuthenticatedUser = {
+  id: 'user123',
+  username: 'testuser',
+  email: 'test@example.com',
+};
+
+export const mockOAuthUser = {
+  id: 'oauth123',
+  username: 'oauthuser',
+  email: 'oauth@example.com',
+  scopes: ['read', 'write'],
+  clientId: 'client123',
+};
