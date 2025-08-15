@@ -5,7 +5,7 @@ import { config } from 'dotenv';
 
 config();
 
-async function requireAuth(request) {
+export async function requireAuth(request) {
   const sessionId = await Auth.getSessionFromRequest(request);
   const session = await Auth.getSessionUser(sessionId);
 
