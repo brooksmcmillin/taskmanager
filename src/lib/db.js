@@ -193,7 +193,7 @@ export class TodoDB {
     user_id,
     projectId = null,
     status = null,
-    timeHorizon = null
+    dueDate = null
   ) {
     let query = `
       SELECT t.*, p.name as project_name, p.color as project_color 
@@ -214,10 +214,10 @@ export class TodoDB {
       query += ` AND t.status = $${paramCount}`;
       params.push(status);
     }
-    if (timeHorizon) {
+    if (dueDate) {
       paramCount++;
-      query += ` AND t.time_horizon = $${paramCount}`;
-      params.push(timeHorizon);
+      query += ` AND t.due_date <= $${paramCount}`;
+      params.push(dueDate);
     }
 
     query += ' ORDER BY t.priority DESC, t.created_at ASC';
@@ -246,7 +246,6 @@ export class TodoDB {
     user_id,
     startDate,
     endDate,
-    time_horizon,
     status = null,
     strict
   ) {
@@ -268,16 +267,11 @@ export class TodoDB {
       query += ` AND (
         (t.due_date IS NOT NULL`;
 
-      if (time_horizon != 'today' && time_horizon != 'this_week') {
-        query += ` AND t.due_date >= $${paramIndex}`;
-      }
-
       query += ` AND t.due_date <= $${paramIndex + 1})
-        OR (t.time_horizon IS NOT NULL AND t.time_horizon = $${paramIndex + 2})
         OR (t.completed_date IS NOT NULL AND t.completed_date >= $${paramIndex} AND t.completed_date <= $${paramIndex + 1}::date + interval '1 day')
       )`;
-      params.push(startDate, endDate, time_horizon);
-      paramIndex += 3;
+      params.push(startDate, endDate);
+      paramIndex += 2;
     }
 
     // Add status filter
@@ -302,13 +296,12 @@ export class TodoDB {
       due_date,
       tags,
       context,
-      time_horizon,
     } = todo;
 
     const result = await this.query(
       `
-      INSERT INTO todos (project_id, user_id, title, description, priority, estimated_hours, due_date, tags, context, time_horizon)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO todos (project_id, user_id, title, description, priority, estimated_hours, due_date, tags, context)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id
     `,
       [
@@ -321,7 +314,6 @@ export class TodoDB {
         due_date,
         JSON.stringify(tags || []),
         context,
-        time_horizon,
       ]
     );
 

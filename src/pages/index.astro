@@ -25,22 +25,6 @@ const user = Astro.locals.user;
     <!-- List View -->
     <TodoModal />
     <div id="list-view">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-semibold">Current Todos</h2>
-        <select id="time-horizon-filter" class="form-select text-sm">
-          <option value="">All Time Horizons</option>
-          <option value="today">Today</option>
-          <option value="this_week">This Week</option>
-          <option value="next_week">Next Week</option>
-          <option value="this_month">This Month</option>
-          <option value="next_month">Next Month</option>
-          <option value="this_quarter">This Quarter</option>
-          <option value="next_quarter">Next Quarter</option>
-          <option value="this_year">This Year</option>
-          <option value="next_year">Next Year</option>
-          <option value="someday">Someday</option>
-        </select>
-      </div>
       <div id="todo-lists" class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Todos will be loaded here -->
       </div>
@@ -56,9 +40,7 @@ const user = Astro.locals.user;
 <script>
   async function loadTodos() {
     try {
-      const timeHorizonFilter =
-        document.getElementById('time-horizon-filter')?.value || '';
-      const apiUrl = `/api/todos?status=pending${timeHorizonFilter ? `&time_horizon=${timeHorizonFilter}` : ''}`;
+      const apiUrl = `/api/todos?status=pending`;
 
       const [todosResponse, projectsResponse] = await Promise.all([
         fetch(apiUrl),
@@ -123,7 +105,6 @@ const user = Astro.locals.user;
                   <div class="text-xs text-gray-500 mt-1">
                     Priority: ${todo.priority} | Est: ${todo.estimated_hours}h
                     ${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
-                    ${todo.time_horizon ? ` | ${todo.time_horizon.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}` : ''}
                   </div>
                 </div>
                 <div class="flex gap-3 ml-4">
@@ -220,11 +201,6 @@ const user = Astro.locals.user;
 
   // Load todos when page loads
   loadTodos();
-
-  // Add event listener for time horizon filter
-  document
-    .getElementById('time-horizon-filter')
-    .addEventListener('change', loadTodos);
 
   // Listen for new todos to refresh the list
   window.addEventListener('todoAdded', loadTodos);
