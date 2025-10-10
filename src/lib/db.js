@@ -471,7 +471,7 @@ export class TodoDB {
       `
       INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, grant_types, scopes, created_at)
       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      RETURNING id, client_id, name
+      RETURNING id, client_id, name, redirect_uris
     `,
       [
         clientId,

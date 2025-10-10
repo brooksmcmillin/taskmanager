@@ -19,16 +19,16 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@astrojs/node": "^9.4.1",
-    "astro": "^5.13.0",
+    "@astrojs/node": "^9.4.3",
+    "astro": "^5.13.5",
     "bcryptjs": "^3.0.2",
-    "dotenv": "^17.2.1",
+    "dotenv": "^17.2.2",
     "pg": "^8.16.2"
   },
   "devDependencies": {
     "@microsoft/eslint-plugin-sdl": "^1.1.0",
     "@vitest/ui": "^3.2.4",
-    "eslint": "^9.33.0",
+    "eslint": "^9.34.0",
     "eslint-plugin-security": "^3.0.1",
     "husky": "^9.1.7",
     "license-checker": "^25.0.1",
