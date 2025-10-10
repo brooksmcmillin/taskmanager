@@ -19,10 +19,10 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@astrojs/node": "^9.4.3",
-    "astro": "^5.13.5",
+    "@astrojs/node": "^9.4.5",
+    "astro": "^5.14.3",
     "bcryptjs": "^3.0.2",
-    "dotenv": "^17.2.2",
+    "dotenv": "^17.2.3",
     "pg": "^8.16.2"
   },
   "devDependencies": {
