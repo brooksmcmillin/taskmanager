@@ -21,6 +21,7 @@
   "dependencies": {
     "@astrojs/node": "^9.4.5",
     "astro": "^5.14.3",
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "dotenv": "^17.2.3",
     "pg": "^8.16.2"
@@ -33,6 +34,7 @@
     "husky": "^9.1.7",
     "license-checker": "^25.0.1",
     "prettier": "^3.6.1",
+    "sass-embedded": "^1.93.2",
     "vitest": "^4.0.1"
   }
 }

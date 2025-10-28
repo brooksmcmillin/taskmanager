@@ -14,14 +14,22 @@ export async function OPTIONS() {
 
 export async function POST({ request }) {
   try {
+    console.log('[OAuth/Token] POST request received');
     const formData = await request.formData();
     const grantType = formData.get('grant_type');
     const clientId = formData.get('client_id');
     const clientSecret = formData.get('client_secret');
 
+    console.log('[OAuth/Token] Request params:', {
+      grant_type: grantType,
+      client_id: clientId,
+      has_client_secret: !!clientSecret
+    });
+
     // Validate client credentials
     const client = await TodoDB.validateOAuthClient(clientId, clientSecret);
     if (!client) {
+      console.log('[OAuth/Token] Client validation failed for client_id:', clientId);
       return new Response(
         JSON.stringify({
           error: 'invalid_client',
@@ -34,11 +42,16 @@ export async function POST({ request }) {
       );
     }
 
+    console.log('[OAuth/Token] Client validated:', client.name);
+
     if (grantType === 'authorization_code') {
+      console.log('[OAuth/Token] Processing authorization_code grant');
       return await handleAuthorizationCodeGrant(formData, client);
     } else if (grantType === 'refresh_token') {
+      console.log('[OAuth/Token] Processing refresh_token grant');
       return await handleRefreshTokenGrant(formData, client);
     } else {
+      console.log('[OAuth/Token] Unsupported grant type:', grantType);
       return new Response(
         JSON.stringify({
           error: 'unsupported_grant_type',
@@ -51,7 +64,7 @@ export async function POST({ request }) {
       );
     }
   } catch (error) {
-    console.error('OAuth token error:', error);
+    console.error('[OAuth/Token] POST error:', error);
     return new Response(
       JSON.stringify({
         error: 'server_error',
@@ -70,7 +83,14 @@ async function handleAuthorizationCodeGrant(formData, client) {
   const redirectUri = formData.get('redirect_uri');
   const codeVerifier = formData.get('code_verifier');
 
+  console.log('[OAuth/Token] Authorization code grant params:', {
+    has_code: !!code,
+    redirect_uri: redirectUri,
+    has_code_verifier: !!codeVerifier
+  });
+
   if (!code || !redirectUri) {
+    console.log('[OAuth/Token] Missing required parameters for auth code grant');
     return new Response(
       JSON.stringify({
         error: 'invalid_request',
@@ -84,11 +104,13 @@ async function handleAuthorizationCodeGrant(formData, client) {
   }
 
   // Consume authorization code
+  console.log('[OAuth/Token] Consuming authorization code:', code);
   const authCode = await TodoDB.consumeAuthorizationCode(
     code,
     client.client_id
   );
   if (!authCode) {
+    console.log('[OAuth/Token] Invalid or expired authorization code:', code);
     return new Response(
       JSON.stringify({
         error: 'invalid_grant',
@@ -101,8 +123,14 @@ async function handleAuthorizationCodeGrant(formData, client) {
     );
   }
 
+  console.log('[OAuth/Token] Authorization code consumed successfully');
+
   // Validate redirect URI matches
   if (authCode.redirect_uri !== redirectUri) {
+    console.log('[OAuth/Token] Redirect URI mismatch:', {
+      expected: authCode.redirect_uri,
+      received: redirectUri
+    });
     return new Response(
       JSON.stringify({
         error: 'invalid_grant',
@@ -115,9 +143,13 @@ async function handleAuthorizationCodeGrant(formData, client) {
     );
   }
 
+  console.log('[OAuth/Token] Redirect URI validated');
+
   // Validate PKCE if used
   if (authCode.code_challenge) {
+    console.log('[OAuth/Token] PKCE validation required');
     if (!codeVerifier) {
+      console.log('[OAuth/Token] Code verifier missing for PKCE');
       return new Response(
         JSON.stringify({
           error: 'invalid_request',
@@ -131,6 +163,7 @@ async function handleAuthorizationCodeGrant(formData, client) {
     }
 
     const challengeMethod = authCode.code_challenge_method || 'plain';
+    console.log('[OAuth/Token] PKCE challenge method:', challengeMethod);
     let derivedChallenge;
 
     if (challengeMethod === 'S256') {
@@ -141,6 +174,7 @@ async function handleAuthorizationCodeGrant(formData, client) {
     } else if (challengeMethod === 'plain') {
       derivedChallenge = codeVerifier;
     } else {
+      console.log('[OAuth/Token] Unsupported challenge method:', challengeMethod);
       return new Response(
         JSON.stringify({
           error: 'invalid_request',
@@ -154,6 +188,7 @@ async function handleAuthorizationCodeGrant(formData, client) {
     }
 
     if (derivedChallenge !== authCode.code_challenge) {
+      console.log('[OAuth/Token] PKCE validation failed');
       return new Response(
         JSON.stringify({
           error: 'invalid_grant',
@@ -165,16 +200,21 @@ async function handleAuthorizationCodeGrant(formData, client) {
         }
       );
     }
+
+    console.log('[OAuth/Token] PKCE validation successful');
   }
 
   // Create access token
   const scopes = JSON.parse(authCode.scopes);
+  console.log('[OAuth/Token] Creating access token for user:', authCode.user_id);
   const tokenData = await TodoDB.createAccessToken(
     authCode.user_id,
     client.client_id,
     scopes,
     3600 // 1 hour expiry
   );
+
+  console.log('[OAuth/Token] Access token created successfully');
 
   // TODO: Implement JWT with Web Crypto API when needed
 
@@ -201,7 +241,12 @@ async function handleAuthorizationCodeGrant(formData, client) {
 async function handleRefreshTokenGrant(formData, client) {
   const refreshToken = formData.get('refresh_token');
 
+  console.log('[OAuth/Token] Refresh token grant params:', {
+    has_refresh_token: !!refreshToken
+  });
+
   if (!refreshToken) {
+    console.log('[OAuth/Token] Missing refresh token');
     return new Response(
       JSON.stringify({
         error: 'invalid_request',
@@ -214,12 +259,14 @@ async function handleRefreshTokenGrant(formData, client) {
     );
   }
 
+  console.log('[OAuth/Token] Refreshing access token');
   // Refresh the access token
   const tokenData = await TodoDB.refreshAccessToken(
     refreshToken,
     client.client_id
   );
   if (!tokenData) {
+    console.log('[OAuth/Token] Invalid refresh token');
     return new Response(
       JSON.stringify({
         error: 'invalid_grant',
@@ -231,6 +278,8 @@ async function handleRefreshTokenGrant(formData, client) {
       }
     );
   }
+
+  console.log('[OAuth/Token] Access token refreshed successfully');
 
   // TODO: Implement JWT with Web Crypto API when needed
 

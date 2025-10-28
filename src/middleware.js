@@ -5,33 +5,44 @@ import { TodoDB } from './lib/db.js';
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, redirect } = context;
 
-  // OAuth endpoints should allow cross-origin requests
-  const oauthRoutes = ['/api/oauth/token', '/api/oauth/authorize'];
-  const isOAuthRoute = oauthRoutes.some((route) => url.pathname === route);
+  // OAuth endpoints that require Bearer token authentication
+  const oauthProtectedRoutes = ['/api/oauth/userinfo'];
+  const isOAuthProtectedRoute = oauthProtectedRoutes.some((route) => url.pathname.startsWith(route));
 
+  // Routes that don't require authentication
   const unprotectedRoutes = [
     '/login',
+    '/register',
     '/api/auth/login',
+    '/api/auth/register',
     '/api/oauth/token',
+    '/api/oauth/authorize',  // Users authorize BEFORE they have tokens
+    '/oauth/authorize',      // Consent page
     '/src/styles/global.css',
   ];
   const isUnprotectedRoute = unprotectedRoutes.some((route) =>
     url.pathname.startsWith(route)
   );
 
-  // Handle OAuth-protected API routes
-  if (isOAuthRoute) {
+  console.log('[Middleware] Request to:', url.pathname, '- Protected:', isOAuthProtectedRoute, '- Unprotected:', isUnprotectedRoute);
+
+  // Handle OAuth-protected API routes (require Bearer token)
+  if (isOAuthProtectedRoute) {
     const oauthUser = await getOAuthUser(request);
-    if (!isUnprotectedRoute && !oauthUser) {
-      return redirect('/login');
+    if (!oauthUser) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
-    if (oauthUser) {
-      context.locals.user = oauthUser;
-    }
+    context.locals.user = oauthUser;
   } else if (!isUnprotectedRoute) {
     const user = await getUser(request);
     if (!user) {
-      return redirect('/login');
+      console.log('[Middleware] User not authenticated, redirecting to login with return_to:', url.pathname + url.search);
+      const loginUrl = new URL('/login', url.origin);
+      loginUrl.searchParams.set('return_to', url.pathname + url.search);
+      return redirect(loginUrl.toString());
     }
 
     context.locals.user = user;
