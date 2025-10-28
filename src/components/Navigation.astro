@@ -10,17 +10,23 @@ const { user } = Astro.props;
         <h1 class="text-xl font-bold text-gray-900">Task Manager</h1>
         {user && (
           <div class="flex space-x-4">
-            <a 
-              href="/" 
+            <a
+              href="/"
               class={`nav-link ${currentPath === '/' ? 'active' : ''}`}
             >
               Todos
             </a>
-            <a 
-              href="/projects" 
+            <a
+              href="/projects"
               class={`nav-link ${currentPath === '/projects' ? 'active' : ''}`}
             >
               Projects
+            </a>
+            <a
+              href="/oauth-clients"
+              class={`nav-link ${currentPath === '/oauth-clients' ? 'active' : ''}`}
+            >
+              OAuth Clients
             </a>
           </div>
         )}

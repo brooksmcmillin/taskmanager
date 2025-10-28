@@ -1,0 +1,540 @@
+---
+// src/pages/oauth-clients.astro - OAuth Client Management Page
+import Layout from '../layouts/Layout.astro';
+import { checkAuth } from '../lib/serverAuth.js';
+
+const auth = checkAuth(Astro.request);
+if (auth.redirect) return auth.redirect;
+const user = auth.user;
+---
+
+<Layout title="OAuth Clients" user={user}>
+  <main class="container py-8">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">OAuth Clients</h1>
+        <button
+          id="add-client-btn"
+          class="btn btn-primary"
+        >
+          + Add Client
+        </button>
+      </div>
+
+      <!-- Clients List -->
+      <div id="clients-list" class="space-y-4">
+        <!-- Clients will be loaded here -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Add/Edit Modal -->
+  <div id="client-modal" class="modal hidden">
+    <div class="modal-content max-w-2xl">
+      <div class="flex justify-between items-center mb-6">
+        <h2 id="modal-title" class="text-2xl font-bold">Add OAuth Client</h2>
+        <button id="close-modal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+      </div>
+
+      <form id="client-form" class="space-y-4">
+        <input type="hidden" id="client-id" />
+
+        <div>
+          <label for="client-name" class="block text-sm font-medium text-gray-700 mb-1">
+            Client Name *
+          </label>
+          <input
+            type="text"
+            id="client-name"
+            required
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="My Application"
+          />
+        </div>
+
+        <div>
+          <label for="redirect-uris" class="block text-sm font-medium text-gray-700 mb-1">
+            Redirect URIs * (one per line)
+          </label>
+          <textarea
+            id="redirect-uris"
+            required
+            rows="3"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="https://example.com/callback&#10;http://localhost:3000/callback"
+          ></textarea>
+          <p class="text-xs text-gray-500 mt-1">Enter one URI per line</p>
+        </div>
+
+        <div>
+          <label for="scopes" class="block text-sm font-medium text-gray-700 mb-1">
+            Scopes (comma-separated)
+          </label>
+          <input
+            type="text"
+            id="scopes"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="read, write"
+            value="read"
+          />
+        </div>
+
+        <div>
+          <label for="grant-types" class="block text-sm font-medium text-gray-700 mb-1">
+            Grant Types (comma-separated)
+          </label>
+          <input
+            type="text"
+            id="grant-types"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="authorization_code, refresh_token"
+            value="authorization_code"
+          />
+        </div>
+
+        <div class="border-t border-gray-200 pt-4">
+          <div class="flex items-center mb-3">
+            <input
+              type="checkbox"
+              id="use-custom-credential"
+              class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label for="use-custom-credential" class="text-sm font-medium text-gray-700">
+              Provide custom client secret (optional)
+            </label>
+          </div>
+
+          <div id="custom-credential-container" class="hidden">
+            <label for="client-credential" class="block text-sm font-medium text-gray-700 mb-1">
+              Client Secret
+            </label>
+            <input
+              type="password"
+              id="client-credential"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Minimum 16 characters"
+              minlength="11"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Leave empty to generate a random secret. Must be at least 16 characters if provided.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-3 pt-4">
+          <button type="button" id="cancel-btn" class="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary">
+            Save Client
+          </button>
+        </div>
+      </form>
+
+      <!-- New Client Credentials Display -->
+      <div id="credentials-display" class="hidden mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+        <h3 class="font-bold text-lg mb-2 text-yellow-800">Client Credentials Created!</h3>
+        <p class="text-sm text-yellow-700 mb-3">
+          Save these credentials now. The client secret will not be shown again.
+        </p>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Client ID</label>
+            <div class="flex items-center space-x-2">
+              <input
+                type="text"
+                id="display-client-id"
+                readonly
+                class="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm font-mono"
+              />
+              <button
+                type="button"
+                onclick="copyToClipboard('display-client-id')"
+                class="btn btn-sm btn-secondary"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Client Secret</label>
+            <div class="flex items-center space-x-2">
+              <input
+                type="text"
+                id="display-client-secret"
+                readonly
+                class="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-md text-sm font-mono"
+              />
+              <button
+                type="button"
+                onclick="copyToClipboard('display-client-secret')"
+                class="btn btn-sm btn-secondary"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          id="close-credentials-btn"
+          class="mt-4 btn btn-primary w-full"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .modal.hidden {
+    display: none;
+  }
+
+  .modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .client-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+  }
+
+  .client-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  }
+</style>
+
+<script>
+  let editingClientId = null;
+
+  async function loadClients() {
+    try {
+      const response = await fetch('/api/oauth/clients');
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        throw new Error('Failed to load OAuth clients');
+      }
+
+      const clients = await response.json();
+      const container = document.getElementById('clients-list');
+
+      container.innerHTML = '';
+
+      if (clients.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12">
+            <p class="text-gray-500 mb-4">No OAuth clients yet.</p>
+            <p class="text-sm text-gray-400">Create your first client to get started with OAuth authentication.</p>
+          </div>
+        `;
+        return;
+      }
+
+      clients.forEach((client) => {
+        const redirectUris = JSON.parse(client.redirect_uris);
+        const scopes = JSON.parse(client.scopes);
+        const grantTypes = JSON.parse(client.grant_types);
+
+        const clientDiv = document.createElement('div');
+        clientDiv.className = 'client-card';
+
+        clientDiv.innerHTML = `
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h3 class="font-semibold text-lg text-gray-800">${client.name}</h3>
+              <p class="text-xs text-gray-500 font-mono mt-1">Client ID: ${client.client_id}</p>
+            </div>
+            <div class="flex space-x-2">
+              <button
+                onclick="editClient('${client.client_id}')"
+                class="btn btn-secondary btn-sm"
+              >
+                Edit
+              </button>
+              <button
+                onclick="deleteClient('${client.client_id}', '${client.name}')"
+                class="btn btn-sm bg-red-600 hover:bg-red-700 text-white"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <p class="text-gray-600 font-medium mb-1">Redirect URIs:</p>
+              <ul class="list-disc list-inside text-gray-700 space-y-1">
+                ${redirectUris.map(uri => `<li class="truncate" title="${uri}">${uri}</li>`).join('')}
+              </ul>
+            </div>
+
+            <div>
+              <p class="text-gray-600 font-medium mb-1">Scopes:</p>
+              <p class="text-gray-700">${scopes.join(', ')}</p>
+
+              <p class="text-gray-600 font-medium mb-1 mt-2">Grant Types:</p>
+              <p class="text-gray-700">${grantTypes.join(', ')}</p>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-4 border-t border-gray-200">
+            <div class="flex justify-between items-center text-xs text-gray-500">
+              <span>Created: ${new Date(client.created_at).toLocaleDateString()}</span>
+              <span class="px-2 py-1 rounded ${client.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                ${client.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          </div>
+        `;
+
+        container.appendChild(clientDiv);
+      });
+    } catch (error) {
+      console.error('Failed to load OAuth clients:', error);
+      document.getElementById('clients-list').innerHTML = `
+        <div class="text-center py-12">
+          <p class="text-red-500">Failed to load OAuth clients</p>
+        </div>
+      `;
+    }
+  }
+
+  function openModal(client = null) {
+    const modal = document.getElementById('client-modal');
+    const title = document.getElementById('modal-title');
+    const form = document.getElementById('client-form');
+    const credentialsDisplay = document.getElementById('credentials-display');
+    const customCredentialCheckbox = document.getElementById('use-custom-credential');
+    const customCredentialContainer = document.getElementById('custom-credential-container');
+
+    // Reset form
+    form.reset();
+    credentialsDisplay.classList.add('hidden');
+    customCredentialCheckbox.checked = false;
+    customCredentialContainer.classList.add('hidden');
+
+    if (client) {
+      // Edit mode
+      editingClientId = client.client_id;
+      title.textContent = 'Edit OAuth Client';
+
+      document.getElementById('client-name').value = client.name;
+      document.getElementById('redirect-uris').value = JSON.parse(client.redirect_uris).join('\n');
+      document.getElementById('scopes').value = JSON.parse(client.scopes).join(', ');
+      document.getElementById('grant-types').value = JSON.parse(client.grant_types).join(', ');
+
+      // Hide custom secret option in edit mode
+      document.getElementById('use-custom-credential').parentElement.parentElement.style.display = 'none';
+    } else {
+      // Add mode
+      editingClientId = null;
+      title.textContent = 'Add OAuth Client';
+
+      // Show custom secret option in add mode
+      document.getElementById('use-custom-credential').parentElement.parentElement.style.display = 'block';
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeModal() {
+    document.getElementById('client-modal').classList.add('hidden');
+    document.getElementById('client-form').style.display = 'block';
+    document.getElementById('credentials-display').classList.add('hidden');
+    editingClientId = null;
+  }
+
+  window.editClient = async function(clientId) {
+    try {
+      const response = await fetch('/api/oauth/clients');
+      if (!response.ok) throw new Error('Failed to load client');
+
+      const clients = await response.json();
+      const client = clients.find(c => c.client_id === clientId);
+
+      if (client) {
+        openModal(client);
+      }
+    } catch (error) {
+      alert('Failed to load client: ' + error.message);
+    }
+  };
+
+  window.deleteClient = async function(clientId, name) {
+    if (!confirm(`Are you sure you want to delete "${name}"?\n\nThis will revoke all active tokens for this client and cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/oauth/clients/${clientId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        loadClients();
+      } else if (response.status === 401) {
+        window.location.href = '/login';
+      } else {
+        const error = await response.json();
+        alert('Failed to delete client: ' + (error.message || 'Unknown error'));
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  };
+
+  window.copyToClipboard = function(elementId) {
+    const input = document.getElementById(elementId);
+    input.select();
+    document.execCommand('copy');
+
+    // Visual feedback
+    const button = event.target;
+    const originalText = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => {
+      button.textContent = originalText;
+    }, 2000);
+  };
+
+  // Event Listeners
+  document.getElementById('add-client-btn').addEventListener('click', () => openModal());
+  document.getElementById('close-modal').addEventListener('click', closeModal);
+  document.getElementById('cancel-btn').addEventListener('click', closeModal);
+
+  document.getElementById('close-credentials-btn').addEventListener('click', () => {
+    closeModal();
+    loadClients();
+  });
+
+  // Toggle custom credential field
+  document.getElementById('use-custom-credential').addEventListener('change', (e) => {
+    const container = document.getElementById('custom-credential-container');
+    if (e.target.checked) {
+      container.classList.remove('hidden');
+    } else {
+      container.classList.add('hidden');
+      document.getElementById('client-credential').value = '';
+    }
+  });
+
+  document.getElementById('client-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById('client-name').value.trim();
+    const redirectUrisText = document.getElementById('redirect-uris').value.trim();
+    const scopesText = document.getElementById('scopes').value.trim();
+    const grantTypesText = document.getElementById('grant-types').value.trim();
+    const useCustomCredential = document.getElementById('use-custom-credential').checked;
+    const customCredential = useCustomCredential ? document.getElementById('client-credential').value.trim() : null;
+
+    // Parse inputs
+    const redirectUris = redirectUrisText.split('\n').map(uri => uri.trim()).filter(uri => uri);
+    const scopes = scopesText.split(',').map(s => s.trim()).filter(s => s);
+    const grantTypes = grantTypesText.split(',').map(g => g.trim()).filter(g => g);
+
+    if (redirectUris.length === 0) {
+      alert('Please provide at least one redirect URI');
+      return;
+    }
+
+    // Validate custom credential if provided
+    if (useCustomCredential && customCredential && customCredential.length < 11) {
+      alert('Custom client secret must be at least 16 characters');
+      return;
+    }
+
+    try {
+      let response;
+
+      if (editingClientId) {
+        // Update existing client
+        response = await fetch(`/api/oauth/clients/${editingClientId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            redirectUris,
+            scopes,
+            grantTypes,
+          }),
+        });
+      } else {
+        // Create new client
+        const requestBody = {
+          name,
+          redirectUris,
+          scopes,
+          grantTypes,
+        };
+
+        // Only include clientSecret if custom credential is provided
+        if (useCustomCredential && customCredential) {
+          requestBody.clientSecret = customCredential;
+        }
+
+        response = await fetch('/api/oauth/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+      }
+
+      if (response.ok) {
+        const result = await response.json();
+
+        if (!editingClientId && result.client_secret) {
+          // Show credentials for new client
+          document.getElementById('display-client-id').value = result.client_id;
+          document.getElementById('display-client-secret').value = result.client_secret;
+          document.getElementById('credentials-display').classList.remove('hidden');
+          document.getElementById('client-form').style.display = 'none';
+        } else {
+          // Just close and reload for edits
+          closeModal();
+          loadClients();
+        }
+      } else if (response.status === 401) {
+        window.location.href = '/login';
+      } else {
+        const error = await response.json();
+        alert('Failed to save client: ' + (error.message || 'Unknown error'));
+      }
+    } catch (error) {
+      alert('Error: ' + error.message);
+    }
+  });
+
+  // Load clients on page load
+  loadClients();
+</script>
+</Layout>

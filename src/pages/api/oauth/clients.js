@@ -56,6 +56,7 @@ export async function POST({ request }) {
       redirectUris,
       grantTypes = ['authorization_code'],
       scopes = ['read'],
+      clientSecret: customSecret,
     } = body;
 
     if (
@@ -76,9 +77,25 @@ export async function POST({ request }) {
       );
     }
 
+    // Validate custom secret if provided
+    if (customSecret !== undefined && customSecret !== null && customSecret !== '') {
+      if (typeof customSecret !== 'string' || customSecret.length < 11) {
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid request',
+            message: 'Custom client secret must be at least 16 characters',
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    }
+
     // Generate client credentials
     const clientId = crypto.randomBytes(16).toString('hex');
-    const clientSecret = crypto.randomBytes(32).toString('hex');
+    const clientSecret = customSecret || crypto.randomBytes(32).toString('hex');
 
     const client = await TodoDB.createOAuthClient(
       clientId,
