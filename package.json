@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@microsoft/eslint-plugin-sdl": "^1.1.0",
-    "@vitest/ui": "^4.0.1",
+    "@vitest/ui": "^4.0.3",
     "eslint": "^9.38.0",
     "eslint-plugin-security": "^3.0.1",
     "husky": "^9.1.7",
