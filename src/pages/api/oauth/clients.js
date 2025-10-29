@@ -117,7 +117,6 @@ export async function POST({ request }) {
     // Generate client credentials
     const clientId = crypto.randomBytes(16).toString('hex');
     const clientSecret = customSecret || crypto.randomBytes(32).toString('hex');
-
     console.log('[OAuth/Clients] Generated client_id:', clientId);
 
     const client = await TodoDB.createOAuthClient(

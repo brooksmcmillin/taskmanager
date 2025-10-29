@@ -77,7 +77,6 @@ export async function PUT({ request, params }) {
         }
       );
     }
-
     console.log('[OAuth/Clients] Client updated successfully by user:', session.user_id, '- client_id:', params.clientId);
 
     return new Response(JSON.stringify(result.rows[0]), {
@@ -125,13 +124,6 @@ export async function DELETE({ request, params }) {
 
     console.log('[OAuth/Clients] Client deleted successfully by user:', session.user_id, '- client_id:', params.clientId);
 
-    return new Response(
-      JSON.stringify({ message: 'Client deleted successfully' }),
-      {
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-  } catch (error) {
     console.error('[OAuth/Clients] DELETE error:', error);
     return new Response('Server error', { status: 500 });
   }
