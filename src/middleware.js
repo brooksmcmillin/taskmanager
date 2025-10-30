@@ -6,7 +6,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, redirect } = context;
 
   // OAuth endpoints that require Bearer token authentication
-  const oauthProtectedRoutes = ['/api/oauth/userinfo'];
+  const oauthProtectedRoutes = ['/api/oauth/userinfo', '/api/oauth/authorize'];
   const isOAuthProtectedRoute = oauthProtectedRoutes.some((route) => url.pathname.startsWith(route));
 
   // Routes that don't require authentication
@@ -28,6 +28,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // Handle OAuth-protected API routes (require Bearer token)
   if (isOAuthProtectedRoute) {
+    console.log('[Middleware] Is Oauth Route');
     const oauthUser = await getOAuthUser(request);
     if (!oauthUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -45,6 +46,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       return redirect(loginUrl.toString());
     }
 
+    console.log('[Middleware] Setting user to ' + user);
     context.locals.user = user;
   }
 
