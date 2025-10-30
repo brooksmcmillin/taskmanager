@@ -2,6 +2,7 @@ import pg from 'pg';
 const { Pool } = pg;
 import { config } from 'dotenv';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 config();
 
@@ -400,7 +401,8 @@ export class TodoDB {
 
   // API Key methods
   static async createApiKey(userId, apiKey) {
-    const hashedKey = crypto.createHash('sha256').update(apiKey).digest('hex');
+    // Use bcrypt with 12 rounds (secure and performant)
+    const hashedKey = await bcrypt.hash(apiKey, 12);
     const result = await this.query(
       `
       INSERT INTO api_keys (user_id, key_hash, created_at)
@@ -413,32 +415,58 @@ export class TodoDB {
   }
 
   static async getUserByApiKey(apiKey) {
-    const hashedKey = crypto.createHash('sha256').update(apiKey).digest('hex');
+    // Get all active API keys for comparison with bcrypt
     const result = await this.query(
       `
-      SELECT u.*, ak.id as api_key_id 
-      FROM users u 
-      JOIN api_keys ak ON u.id = ak.user_id 
-      WHERE ak.key_hash = $1 AND ak.is_active = true AND u.is_active = true
-    `,
-      [hashedKey]
+      SELECT u.*, ak.id as api_key_id, ak.key_hash
+      FROM users u
+      JOIN api_keys ak ON u.id = ak.user_id
+      WHERE ak.is_active = true AND u.is_active = true
+    `
     );
 
-    return result.rows[0];
+    // Use bcrypt.compare to check each hash
+    for (const row of result.rows) {
+      const match = await bcrypt.compare(apiKey, row.key_hash);
+      if (match) {
+        // Remove key_hash from returned object for security
+        delete row.key_hash;
+        return row;
+      }
+    }
+
+    return null;
   }
 
   static async revokeApiKey(userId, apiKey) {
-    const hashedKey = crypto.createHash('sha256').update(apiKey).digest('hex');
-    const result = await this.query(
+    // Get all active keys for this user
+    const keys = await this.query(
       `
-      UPDATE api_keys 
-      SET is_active = false
-      WHERE user_id = $1 AND key_hash = $2
-      RETURNING id
+      SELECT id, key_hash
+      FROM api_keys
+      WHERE user_id = $1 AND is_active = true
     `,
-      [userId, hashedKey]
+      [userId]
     );
-    return result.rows[0];
+
+    // Find the matching key using bcrypt
+    for (const key of keys.rows) {
+      const match = await bcrypt.compare(apiKey, key.key_hash);
+      if (match) {
+        const result = await this.query(
+          `
+          UPDATE api_keys
+          SET is_active = false
+          WHERE id = $1
+          RETURNING id
+        `,
+          [key.id]
+        );
+        return result.rows[0];
+      }
+    }
+
+    return null;
   }
 
   static async getUserApiKeys(userId) {
@@ -461,17 +489,16 @@ export class TodoDB {
     name,
     redirectUris,
     grantTypes = ['authorization_code'],
-    scopes = ['read']
+    scopes = ['read'],
+    userId = null
   ) {
-    const hashedSecret = crypto
-      .createHash('sha256')
-      .update(clientSecret)
-      .digest('hex');
+    // Use bcrypt with 12 rounds for secure password hashing
+    const hashedSecret = await bcrypt.hash(clientSecret, 12);
     const result = await this.query(
       `
-      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, grant_types, scopes, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      RETURNING id, client_id, name, redirect_uris
+      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, grant_types, scopes, user_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      RETURNING id, client_id, name, redirect_uris, user_id
     `,
       [
         clientId,
@@ -480,6 +507,7 @@ export class TodoDB {
         JSON.stringify(redirectUris),
         JSON.stringify(grantTypes),
         JSON.stringify(scopes),
+        userId,
       ]
     );
     return result.rows[0];
@@ -498,19 +526,32 @@ export class TodoDB {
   }
 
   static async validateOAuthClient(clientId, clientSecret) {
-    const hashedSecret = crypto
-      .createHash('sha256')
-      .update(clientSecret)
-      .digest('hex');
+    // First get the client by ID
     const result = await this.query(
       `
-      SELECT id, client_id, name, redirect_uris, grant_types, scopes
-      FROM oauth_clients 
-      WHERE client_id = $1 AND client_secret_hash = $2 AND is_active = true
+      SELECT id, client_id, name, redirect_uris, grant_types, scopes, client_secret_hash
+      FROM oauth_clients
+      WHERE client_id = $1 AND is_active = true
     `,
-      [clientId, hashedSecret]
+      [clientId]
     );
-    return result.rows[0];
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const client = result.rows[0];
+
+    // Use bcrypt to compare the provided secret with the stored hash
+    const match = await bcrypt.compare(clientSecret, client.client_secret_hash);
+
+    if (!match) {
+      return null;
+    }
+
+    // Remove the hash from the returned object for security
+    delete client.client_secret_hash;
+    return client;
   }
 
   static async createAuthorizationCode(

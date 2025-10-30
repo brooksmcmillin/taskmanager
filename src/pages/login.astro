@@ -20,10 +20,10 @@ import Layout from '../layouts/Layout.astro';
         </div>
 
         <div class="form-group">
-          <label for="password">Password:</label>
+          <label for="user-credential">Password:</label>
           <input
             type="password"
-            id="password"
+            id="user-credential"
             name="password"
             class="form-input"
             required
@@ -39,12 +39,20 @@ import Layout from '../layouts/Layout.astro';
 </Layout>
 
 <script>
+  // Get the return_to parameter from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const returnTo = urlParams.get('return_to');
+
+  console.log('[Login] Page loaded, return_to:', returnTo || 'none');
+
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
+    const userCredential = document.getElementById('user-credential').value;
     const errorDiv = document.getElementById('error');
+
+    console.log('[Login] Form submitted for user:', username);
 
     try {
       const response = await fetch('/api/auth/login', {
@@ -52,18 +60,24 @@ import Layout from '../layouts/Layout.astro';
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password: userCredential }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        window.location.href = '/';
+        console.log('[Login] Login successful');
+        // Redirect to return_to if present, otherwise go to homepage
+        const redirectUrl = returnTo || '/';
+        console.log('[Login] Redirecting to:', redirectUrl);
+        window.location.href = redirectUrl;
       } else {
+        console.log('[Login] Login failed:', data.error);
         errorDiv.textContent = data.error || 'Login failed';
         errorDiv.style.display = 'block';
       }
     } catch (error) {
+      console.error('[Login] Network error:', error);
       errorDiv.textContent = 'Network error. Please try again.';
       errorDiv.style.display = 'block';
     }

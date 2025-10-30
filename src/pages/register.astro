@@ -31,10 +31,10 @@ import Layout from '../layouts/Layout.astro';
         </div>
 
         <div class="form-group">
-          <label for="password">Password:</label>
+          <label for="user-credential">Password:</label>
           <input
             type="password"
-            id="password"
+            id="user-credential"
             name="password"
             class="form-input"
             required
@@ -64,7 +64,7 @@ import Layout from '../layouts/Layout.astro';
 
       const username = document.getElementById('username').value;
       const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
+      const userCredential = document.getElementById('user-credential').value;
       const errorDiv = document.getElementById('error');
       const successDiv = document.getElementById('success');
 
@@ -78,7 +78,7 @@ import Layout from '../layouts/Layout.astro';
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ username, email, password }),
+          body: JSON.stringify({ username, email, password: userCredential }),
         });
 
         const data = await response.json();
