@@ -124,6 +124,10 @@ export async function DELETE({ request, params }) {
 
     console.log('[OAuth/Clients] Client deleted successfully by user:', session.user_id, '- client_id:', params.clientId);
 
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
     console.error('[OAuth/Clients] DELETE error:', error);
     return new Response('Server error', { status: 500 });
   }
