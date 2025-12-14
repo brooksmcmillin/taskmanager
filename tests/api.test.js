@@ -198,7 +198,9 @@ describe('API Route Authentication', () => {
 
   describe('Mixed Authentication Scenarios', () => {
     it('should prefer OAuth token over session for OAuth routes', async () => {
-      const context = createMockContext('/api/oauth/authorize', {
+      // Use /api/oauth/userinfo which is the correct OAuth-protected endpoint
+      // (not /api/oauth/authorize which uses session auth to grant tokens)
+      const context = createMockContext('/api/oauth/userinfo', {
         Authorization: 'Bearer oauth-token',
       });
       const next = createMockNext();
