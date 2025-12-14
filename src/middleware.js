@@ -6,7 +6,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, redirect } = context;
 
   // OAuth endpoints that require Bearer token authentication
-  const oauthProtectedRoutes = ['/api/oauth/userinfo', '/api/oauth/authorize'];
+  const oauthProtectedRoutes = ['/api/oauth/userinfo'];
   const isOAuthProtectedRoute = oauthProtectedRoutes.some((route) => url.pathname.startsWith(route));
 
   // Routes that don't require authentication
