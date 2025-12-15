@@ -550,39 +550,59 @@ paths:
     get:
       tags:
         - Todos
-      summary: List todos
+      summary: List todos (get_tasks)
+      description: Retrieve tasks with filtering options
       operationId: listTodos
       parameters:
         - in: query
           name: project_id
           schema:
             type: integer
+          description: Filter by project ID
         - in: query
           name: status
           schema:
             type: string
-            enum: [pending, in_progress, completed, cancelled]
+            enum: [pending, in_progress, completed, cancelled, overdue, all]
+          description: Filter by status. Use "overdue" for pending tasks past due date, "all" for no status filter.
         - in: query
-          name: due_date
+          name: start_date
           schema:
             type: string
             format: date
+          description: Filter tasks with due_date on or after this date (ISO format)
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date
+          description: Filter tasks with due_date on or before this date (ISO format)
+        - in: query
+          name: category
+          schema:
+            type: string
+          description: Filter by category name (project name)
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+          description: Maximum number of tasks to return
       responses:
         '200':
           description: List of todos
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Todo'
+                $ref: '#/components/schemas/TaskListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
     post:
       tags:
         - Todos
-      summary: Create todo
+      summary: Create todo (create_task)
+      description: Create a new task
       operationId: createTodo
       requestBody:
         required: true
@@ -595,32 +615,38 @@ paths:
               properties:
                 title:
                   type: string
+                  description: Task title
                 description:
                   type: string
+                  description: Task details
                 project_id:
                   type: integer
+                  description: Project ID (alternative to category)
+                category:
+                  type: string
+                  description: Task category name (maps to project)
                 priority:
                   type: string
                   enum: [low, medium, high, urgent]
+                  description: Task priority
                 due_date:
                   type: string
-                  format: date-time
+                  format: date
+                  description: Due date in ISO format
                 estimated_hours:
                   type: number
                 tags:
                   type: array
                   items:
                     type: string
+                  description: Task tags
       responses:
         '201':
           description: Todo created
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: integer
+                $ref: '#/components/schemas/TaskCreateResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -700,7 +726,8 @@ paths:
     put:
       tags:
         - Todos
-      summary: Update todo
+      summary: Update todo (update_task)
+      description: Update an existing task
       operationId: updateTodo
       parameters:
         - $ref: '#/components/parameters/TodoId'
@@ -713,17 +740,25 @@ paths:
               properties:
                 title:
                   type: string
+                  description: New title
                 description:
                   type: string
+                  description: New description
                 status:
                   type: string
                   enum: [pending, in_progress, completed, cancelled]
+                  description: New status
+                category:
+                  type: string
+                  description: New category name (maps to project)
                 priority:
                   type: string
                   enum: [low, medium, high, urgent]
+                  description: New priority
                 due_date:
                   type: string
-                  format: date-time
+                  format: date
+                  description: New due date (for rescheduling)
                 estimated_hours:
                   type: number
                 actual_hours:
@@ -732,20 +767,20 @@ paths:
                   type: array
                   items:
                     type: string
+                  description: New tags
       responses:
         '200':
           description: Todo updated
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
+                $ref: '#/components/schemas/TaskUpdateResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     delete:
       tags:
@@ -801,6 +836,54 @@ paths:
                 properties:
                   success:
                     type: boolean
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /categories:
+    get:
+      tags:
+        - Categories
+      summary: List categories (get_categories)
+      description: List all available task categories with task counts
+      operationId: listCategories
+      responses:
+        '200':
+          description: List of categories with task counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /tasks/search:
+    get:
+      tags:
+        - Todos
+      summary: Search tasks (search_tasks)
+      description: Search tasks by keyword using full-text search
+      operationId: searchTasks
+      parameters:
+        - in: query
+          name: query
+          required: true
+          schema:
+            type: string
+          description: Search query string
+        - in: query
+          name: category
+          schema:
+            type: string
+          description: Filter results by category name
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskSearchResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -905,6 +988,117 @@ components:
           type: string
           format: date-time
 
+    Task:
+      type: object
+      description: Task object returned by API endpoints
+      properties:
+        id:
+          type: string
+          description: Task ID in format "task_{id}"
+          example: "task_123"
+        title:
+          type: string
+          description: Task title
+        description:
+          type: string
+          description: Task details
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Due date in ISO format
+        status:
+          type: string
+          enum: [pending, in_progress, completed, cancelled]
+        category:
+          type: string
+          nullable: true
+          description: Category name (project name)
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date
+          nullable: true
+        updated_at:
+          type: string
+          format: date
+          nullable: true
+
+    TaskListResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+
+    TaskCreateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Task ID in format "task_{id}"
+          example: "task_456"
+        title:
+          type: string
+          description: Task title
+        status:
+          type: string
+          enum: [created]
+          description: Creation status
+
+    TaskUpdateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Task ID in format "task_{id}"
+          example: "task_123"
+        updated_fields:
+          type: array
+          items:
+            type: string
+          description: List of field names that were updated
+        status:
+          type: string
+          enum: [updated]
+          description: Update status
+
+    TaskSearchResponse:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        count:
+          type: integer
+          description: Number of matching tasks
+
+    Category:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Category name
+        task_count:
+          type: integer
+          description: Number of tasks in this category
+
+    CategoryListResponse:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+
     OAuthClient:
       type: object
       properties:
@@ -990,3 +1184,5 @@ tags:
     description: Project management endpoints
   - name: Todos
     description: Todo task management endpoints
+  - name: Categories
+    description: Task category management endpoints
