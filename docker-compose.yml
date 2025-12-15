@@ -13,34 +13,10 @@ services:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - PORT=4321
-      - POSTGRES_HOST=postgres
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - POSTGRES_HOST=postgres_db
     networks:
-      - app_network
-
-  postgres:
-    image: postgres:15
-    container_name: taskmanager_postgres
-    restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - '5432:5432'
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app_network
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-taskmanager} -d ${POSTGRES_DB:-taskmanager}']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  postgres_data:
+      - shared_network
 
 networks:
-  app_network:
-    driver: bridge
+  shared_network:
+    external: true
