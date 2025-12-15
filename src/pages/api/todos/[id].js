@@ -39,12 +39,44 @@ export const PUT = async ({ params, request }) => {
     });
   }
 
-  await TodoDB.updateTodo(todoId, session.user_id, updates);
+  // Check if todo exists and belongs to user
+  const todo = await TodoDB.getTodoById(todoId, session.user_id);
+  if (!todo) {
+    return new Response(JSON.stringify({ error: 'Todo not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  // Map category to project_id if provided
+  let updateData = { ...updates };
+  if (updates.category && !updates.project_id) {
+    const projects = await TodoDB.getProjects(session.user_id);
+    const project = projects.find(
+      (p) => p.name.toLowerCase() === updates.category.toLowerCase()
+    );
+    if (project) {
+      updateData.project_id = project.id;
+    }
+    delete updateData.category;
+  }
+
+  // Track which fields are being updated
+  const updatedFields = Object.keys(updates);
+
+  await TodoDB.updateTodo(todoId, session.user_id, updateData);
+
+  return new Response(
+    JSON.stringify({
+      id: `task_${todoId}`,
+      updated_fields: updatedFields,
+      status: 'updated',
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
 };
 
 export const DELETE = async ({ params, request }) => {

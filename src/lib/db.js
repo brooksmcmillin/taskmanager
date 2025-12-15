@@ -181,7 +181,7 @@ export class TodoDB {
     // Soft delete - mark as inactive
     const result = await this.query(
       `
-      UPDATE projects 
+      UPDATE projects
       SET is_active = false, updated_at = NOW()
       WHERE id = $1
       RETURNING *
@@ -189,6 +189,23 @@ export class TodoDB {
       [id]
     );
     return result.rows[0];
+  }
+
+  static async getCategoriesWithCounts(user_id) {
+    const result = await this.query(
+      `
+      SELECT
+        p.name,
+        COUNT(t.id) as task_count
+      FROM projects p
+      LEFT JOIN todos t ON p.id = t.project_id AND t.user_id = $1
+      WHERE p.is_active = true AND p.user_id = $1
+      GROUP BY p.id, p.name
+      ORDER BY p.name
+    `,
+      [user_id]
+    );
+    return result.rows;
   }
 
   // Todo methods
@@ -199,9 +216,9 @@ export class TodoDB {
     dueDate = null
   ) {
     let query = `
-      SELECT t.*, p.name as project_name, p.color as project_color 
-      FROM todos t 
-      LEFT JOIN projects p ON t.project_id = p.id 
+      SELECT t.*, p.name as project_name, p.color as project_color
+      FROM todos t
+      LEFT JOIN projects p ON t.project_id = p.id
       WHERE t.user_id = $1
     `;
     const params = [user_id];
@@ -224,6 +241,65 @@ export class TodoDB {
     }
 
     query += ' ORDER BY t.priority DESC, t.created_at ASC';
+
+    const result = await this.query(query, params);
+    return result.rows;
+  }
+
+  static async getTodosFiltered(user_id, options = {}) {
+    const { projectId, category, status, startDate, endDate, limit } = options;
+
+    let query = `
+      SELECT t.*, p.name as project_name, p.color as project_color
+      FROM todos t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.user_id = $1
+    `;
+    const params = [user_id];
+    let paramCount = 1;
+
+    // Filter by project/category (category maps to project name)
+    if (projectId) {
+      paramCount++;
+      query += ` AND t.project_id = $${paramCount}`;
+      params.push(projectId);
+    } else if (category) {
+      paramCount++;
+      query += ` AND p.name = $${paramCount}`;
+      params.push(category);
+    }
+
+    // Filter by status (handle 'overdue' as special case)
+    if (status && status !== 'all') {
+      if (status === 'overdue') {
+        query += ` AND t.status = 'pending' AND t.due_date < CURRENT_DATE`;
+      } else {
+        paramCount++;
+        query += ` AND t.status = $${paramCount}`;
+        params.push(status);
+      }
+    }
+
+    // Filter by date range
+    if (startDate) {
+      paramCount++;
+      query += ` AND t.due_date >= $${paramCount}`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      paramCount++;
+      query += ` AND t.due_date <= $${paramCount}`;
+      params.push(endDate);
+    }
+
+    query += ' ORDER BY t.priority DESC, t.created_at ASC';
+
+    // Apply limit
+    if (limit && Number.isInteger(limit) && limit > 0) {
+      paramCount++;
+      query += ` LIMIT $${paramCount}`;
+      params.push(limit);
+    }
 
     const result = await this.query(query, params);
     return result.rows;
@@ -365,6 +441,29 @@ export class TodoDB {
       [id]
     );
     return result.rows[0];
+  }
+
+  static async searchTodos(user_id, query, category = null) {
+    let sql = `
+      SELECT t.*, p.name as project_name, p.color as project_color
+      FROM todos t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.user_id = $1
+        AND to_tsvector('english', t.title || ' ' || COALESCE(t.description, '')) @@ plainto_tsquery('english', $2)
+    `;
+    const params = [user_id, query];
+    let paramCount = 2;
+
+    if (category) {
+      paramCount++;
+      sql += ` AND p.name = $${paramCount}`;
+      params.push(category);
+    }
+
+    sql += ' ORDER BY t.priority DESC, t.created_at ASC';
+
+    const result = await this.query(sql, params);
+    return result.rows;
   }
 
   // Analytics methods

@@ -18,6 +18,8 @@ describe('API Route Authentication', () => {
       { path: '/api/todos', name: 'Todos API' },
       { path: '/api/todos/456', name: 'Single todo API' },
       { path: '/api/todos/456/complete', name: 'Complete todo API' },
+      { path: '/api/categories', name: 'Categories API' },
+      { path: '/api/tasks/search', name: 'Tasks search API' },
       { path: '/api/auth/logout', name: 'Logout API' },
       // { path: '/api/auth/register', name: 'Register API' },
       { path: '/api/oauth/clients', name: 'OAuth clients API' },
