@@ -11,7 +11,9 @@ const database_url =
   process.env.POSTGRES_USER +
   ':' +
   process.env.POSTGRES_PASSWORD +
-  '@localhost:5432/' +
+  '@' +
+  (process.env.POSTGRES_HOST || 'localhost') +
+  ':5432/' +
   process.env.POSTGRES_DB;
 // Database connection
 const pool = new Pool({

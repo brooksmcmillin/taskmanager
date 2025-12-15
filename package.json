@@ -19,22 +19,22 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@astrojs/node": "^9.5.0",
+    "@astrojs/node": "^9.5.1",
     "astro": "^5.15.2",
     "bcrypt": "^6.0.0",
-    "bcryptjs": "^3.0.2",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
     "pg": "^8.16.2"
   },
   "devDependencies": {
     "@microsoft/eslint-plugin-sdl": "^1.1.0",
-    "@vitest/ui": "^4.0.4",
-    "eslint": "^9.38.0",
+    "@vitest/ui": "^4.0.14",
+    "eslint": "^9.39.1",
     "eslint-plugin-security": "^3.0.1",
     "husky": "^9.1.7",
     "license-checker": "^25.0.1",
-    "prettier": "^3.6.1",
-    "sass-embedded": "^1.93.2",
+    "prettier": "^3.7.0",
+    "sass-embedded": "^1.93.3",
     "vitest": "^4.0.1"
   }
 }

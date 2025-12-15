@@ -10,11 +10,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - app_network
+      - shared_network
 
 volumes:
   postgres_data:
 
 networks:
-  app_network:
+  shared_network:
+    name: shared_network
     driver: bridge
