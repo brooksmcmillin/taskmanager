@@ -34,7 +34,7 @@
     "husky": "^9.1.7",
     "license-checker": "^25.0.1",
     "prettier": "^3.7.0",
-    "sass-embedded": "^1.93.3",
+    "sass-embedded": "^1.97.0",
     "vitest": "^4.0.1"
   }
 }
