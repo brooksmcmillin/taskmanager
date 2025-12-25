@@ -419,15 +419,15 @@ export class TodoDB {
     return result.rows[0];
   }
 
-  static async completeTodo(id, user_id, actualHours) {
+  static async completeTodo(id, user_id) {
     const result = await this.query(
       `
       UPDATE todos 
-      SET status = 'completed', actual_hours = $1, completed_date = NOW(), updated_at = NOW()
+      SET status = 'completed', completed_date = NOW(), updated_at = NOW()
       WHERE id = $2
       RETURNING *
     `,
-      [actualHours, id]
+      [id]
     );
 
     return result.rows[0];

@@ -45,6 +45,7 @@ describe('GET /api/todos', () => {
         due_date: new Date('2025-12-20'),
         status: 'pending',
         project_name: 'work',
+        project_color: '#3b82f6',
         priority: 'high',
         tags: ['urgent'],
         created_at: new Date('2025-12-01'),
@@ -63,17 +64,90 @@ describe('GET /api/todos', () => {
     expect(data).toHaveProperty('tasks');
     expect(data.tasks).toHaveLength(1);
     expect(data.tasks[0]).toEqual({
-      id: 'task_1',
+      id: 1,
       title: 'Test Task',
       description: 'Test description',
       due_date: '2025-12-20',
       status: 'pending',
       category: 'work',
+      project_name: 'work',
+      project_color: '#3b82f6',
       priority: 'high',
       tags: ['urgent'],
       created_at: '2025-12-01',
       updated_at: '2025-12-10',
     });
+  });
+
+  it('should return raw numeric id for frontend compatibility', async () => {
+    const mockTodos = [{ id: 42, title: 'Test', created_at: new Date(), updated_at: new Date() }];
+    TodoDB.getTodosFiltered.mockResolvedValue(mockTodos);
+
+    const request = createMockRequest('http://localhost:3000/api/todos');
+    const response = await getTodos({ url: request.url, request });
+    const data = await response.json();
+
+    expect(data.tasks[0].id).toBe(42);
+    expect(typeof data.tasks[0].id).toBe('number');
+  });
+
+  it('should include project_name and project_color for frontend display', async () => {
+    const mockTodos = [
+      {
+        id: 1,
+        title: 'Task with project',
+        project_name: 'Home Improvement',
+        project_color: '#10b981',
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    ];
+    TodoDB.getTodosFiltered.mockResolvedValue(mockTodos);
+
+    const request = createMockRequest('http://localhost:3000/api/todos');
+    const response = await getTodos({ url: request.url, request });
+    const data = await response.json();
+
+    expect(data.tasks[0]).toHaveProperty('project_name', 'Home Improvement');
+    expect(data.tasks[0]).toHaveProperty('project_color', '#10b981');
+  });
+
+  it('should handle null project_name and project_color', async () => {
+    const mockTodos = [
+      {
+        id: 1,
+        title: 'Task without project',
+        project_name: null,
+        project_color: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    ];
+    TodoDB.getTodosFiltered.mockResolvedValue(mockTodos);
+
+    const request = createMockRequest('http://localhost:3000/api/todos');
+    const response = await getTodos({ url: request.url, request });
+    const data = await response.json();
+
+    expect(data.tasks[0].project_name).toBeNull();
+    expect(data.tasks[0].project_color).toBeNull();
+  });
+
+  it('should wrap response in tasks object for frontend compatibility', async () => {
+    const mockTodos = [
+      { id: 1, title: 'Task 1', created_at: new Date(), updated_at: new Date() },
+      { id: 2, title: 'Task 2', created_at: new Date(), updated_at: new Date() },
+    ];
+    TodoDB.getTodosFiltered.mockResolvedValue(mockTodos);
+
+    const request = createMockRequest('http://localhost:3000/api/todos');
+    const response = await getTodos({ url: request.url, request });
+    const data = await response.json();
+
+    // Response must be { tasks: [...] } not a raw array
+    expect(data).toHaveProperty('tasks');
+    expect(Array.isArray(data.tasks)).toBe(true);
+    expect(Array.isArray(data)).toBe(false);
   });
 
   it('should pass filter parameters to database', async () => {
@@ -151,7 +225,7 @@ describe('POST /api/todos', () => {
     const data = await response.json();
 
     expect(data).toEqual({
-      id: 'task_123',
+      id: 123,
       title: 'New Task',
       status: 'created',
     });
@@ -210,7 +284,7 @@ describe('PUT /api/todos/[id]', () => {
     const data = await response.json();
 
     expect(data).toEqual({
-      id: 'task_123',
+      id: 123,
       updated_fields: ['title', 'priority'],
       status: 'updated',
     });

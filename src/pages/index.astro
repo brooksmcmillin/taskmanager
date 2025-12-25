@@ -51,7 +51,8 @@ const user = Astro.locals.user;
         throw new Error('Failed to load data');
       }
 
-      const todos = await todosResponse.json();
+      const todosData = await todosResponse.json();
+      const todos = todosData.tasks || [];
       const projects = await projectsResponse.json();
 
       const container = document.getElementById('todo-lists');
@@ -103,8 +104,7 @@ const user = Astro.locals.user;
                   <div class="font-medium">${todo.title}</div>
                   <div class="text-sm text-gray-600">${todo.description || ''}</div>
                   <div class="text-xs text-gray-500 mt-1">
-                    Priority: ${todo.priority} | Est: ${todo.estimated_hours}h
-                    ${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
+                    Priority: ${todo.priority}${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
                   </div>
                 </div>
                 <div class="flex gap-3 ml-4">
@@ -154,14 +154,10 @@ const user = Astro.locals.user;
   };
 
   window.completeTodo = async function (todoId) {
-    const actualHours = prompt('How many hours did this take?');
-    if (!actualHours) return;
-
     try {
       const response = await fetch(`/api/todos/${todoId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actual_hours: parseFloat(actualHours) }),
       });
 
       if (response.ok) {

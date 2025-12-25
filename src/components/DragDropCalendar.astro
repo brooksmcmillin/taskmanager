@@ -97,11 +97,6 @@
         dateHeader.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
         dayDiv.appendChild(dateHeader);
 
-        const hoursTotal = document.createElement('div');
-        hoursTotal.className = 'hours-total';
-        hoursTotal.textContent = '0h';
-        dayDiv.appendChild(hoursTotal);
-
         const tasksContainer = document.createElement('div');
         tasksContainer.className = 'tasks-container';
         dayDiv.appendChild(tasksContainer);
@@ -139,7 +134,8 @@
       try {
         const response = await fetch('/api/todos?status=pending');
         if (response.ok) {
-          this.todos = await response.json();
+          const data = await response.json();
+          this.todos = data.tasks || [];
           this.renderTodos();
         }
       } catch (error) {
@@ -148,16 +144,12 @@
     }
 
     renderTodos() {
-      // Clear existing tasks and reset hours totals
+      // Clear existing tasks
       document.querySelectorAll('.tasks-container').forEach((container) => {
         container.innerHTML = '';
       });
-      document.querySelectorAll('.hours-total').forEach((total) => {
-        total.textContent = '0h';
-        total.dataset.hours = '0';
-      });
 
-      // Group todos by date for hour calculation
+      // Group todos by date
       const todosByDate = {};
 
       this.todos.forEach((todo) => {
@@ -180,27 +172,11 @@
         const dayDiv = document.querySelector(`[data-date="${date}"]`);
         if (dayDiv) {
           const tasksContainer = dayDiv.querySelector('.tasks-container');
-          const hoursTotal = dayDiv.querySelector('.hours-total');
-          let totalHours = 0;
 
           todos.forEach((todo) => {
             const taskElement = this.createTaskElement(todo);
             tasksContainer.appendChild(taskElement);
-            totalHours += parseFloat(todo.estimated_hours) || 0;
           });
-
-          // Update hours total display
-          hoursTotal.textContent = `${totalHours}h`;
-          hoursTotal.dataset.hours = totalHours.toString();
-
-          // Add visual indicator for heavy days
-          if (totalHours > 8) {
-            hoursTotal.classList.add('high-hours');
-          } else if (totalHours > 4) {
-            hoursTotal.classList.add('medium-hours');
-          } else {
-            hoursTotal.classList.remove('high-hours', 'medium-hours');
-          }
         }
       });
     }
@@ -217,9 +193,6 @@
 
       taskDiv.innerHTML = `
         <div class="task-title">${todo.title}</div>
-        <div class="task-meta">
-          ${todo.estimated_hours}h
-        </div>
       `;
 
       taskDiv.addEventListener('dragstart', (e) => {
@@ -280,8 +253,6 @@
           if (todo) {
             todo.due_date = newDate;
           }
-          // Re-render to update hours totals
-          this.renderTodos();
 
           // Trigger update event for other components
           window.dispatchEvent(new CustomEvent('todoUpdated'));
