@@ -7,13 +7,21 @@ const user = Astro.locals.user;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="description" content="Todo Manager with Projects" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title}</title>
+    <script is:inline>
+      // Apply saved theme or default to dark mode
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const theme = savedTheme || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
   </head>
   <body class="bg-gray-50">
     <Navigation user={user} />
