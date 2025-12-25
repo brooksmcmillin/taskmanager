@@ -67,7 +67,7 @@ export const DELETE = async ({ params, request }) => {
     });
   }
 
-  await TodoDB.deleteProject(projectId);
+  await TodoDB.deleteProject(projectId, session.user_id);
 
   return new Response(JSON.stringify({ success: true }), {
     status: 200,

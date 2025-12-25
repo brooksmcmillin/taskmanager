@@ -177,16 +177,16 @@ export class TodoDB {
     return result.rows[0];
   }
 
-  static async deleteProject(id) {
+  static async deleteProject(id, user_id) {
     // Soft delete - mark as inactive
     const result = await this.query(
       `
       UPDATE projects
       SET is_active = false, updated_at = NOW()
-      WHERE id = $1
+      WHERE id = $1 AND user_id = $2
       RETURNING *
     `,
-      [id]
+      [id, user_id]
     );
     return result.rows[0];
   }
@@ -408,12 +408,12 @@ export class TodoDB {
 
     const result = await this.query(
       `
-      UPDATE todos 
+      UPDATE todos
       SET ${setClause}, updated_at = NOW()
-      WHERE id = $${fields.length + 1}
+      WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}
       RETURNING *
     `,
-      [...values, id]
+      [...values, id, user_id]
     );
 
     return result.rows[0];
@@ -422,23 +422,23 @@ export class TodoDB {
   static async completeTodo(id, user_id) {
     const result = await this.query(
       `
-      UPDATE todos 
+      UPDATE todos
       SET status = 'completed', completed_date = NOW(), updated_at = NOW()
-      WHERE id = $2
+      WHERE id = $1 AND user_id = $2
       RETURNING *
     `,
-      [id]
+      [id, user_id]
     );
 
     return result.rows[0];
   }
 
-  static async deleteTodo(id) {
+  static async deleteTodo(id, user_id) {
     const result = await this.query(
       `
-      DELETE FROM todos WHERE id = $1 RETURNING *
+      DELETE FROM todos WHERE id = $1 AND user_id = $2 RETURNING *
     `,
-      [id]
+      [id, user_id]
     );
     return result.rows[0];
   }

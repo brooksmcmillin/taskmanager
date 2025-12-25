@@ -99,7 +99,7 @@ export const DELETE = async ({ params, request }) => {
     });
   }
 
-  await TodoDB.deleteTodo(todoId);
+  await TodoDB.deleteTodo(todoId, session.user_id);
 
   return new Response(JSON.stringify({ success: true }), {
     status: 200,
