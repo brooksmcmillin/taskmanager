@@ -28,13 +28,13 @@
   },
   "devDependencies": {
     "@microsoft/eslint-plugin-sdl": "^1.1.0",
-    "@vitest/ui": "^4.0.14",
+    "@vitest/ui": "^4.0.16",
     "eslint": "^9.39.1",
     "eslint-plugin-security": "^3.0.1",
     "husky": "^9.1.7",
     "license-checker": "^25.0.1",
     "prettier": "^3.7.0",
-    "sass-embedded": "^1.93.3",
+    "sass-embedded": "^1.97.1",
     "vitest": "^4.0.1"
   }
 }
