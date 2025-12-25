@@ -68,7 +68,7 @@ export const PUT = async ({ params, request }) => {
 
   return new Response(
     JSON.stringify({
-      id: `task_${todoId}`,
+      id: todoId,
       updated_fields: updatedFields,
       status: 'updated',
     }),

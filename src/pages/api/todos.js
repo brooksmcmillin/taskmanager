@@ -23,7 +23,7 @@ export const GET = async ({ url, request }) => {
 
   // Format response to match expected API structure
   const formattedTasks = todos.map((todo) => ({
-    id: `task_${todo.id}`,
+    id: todo.id,
     title: todo.title,
     description: todo.description || '',
     due_date: todo.due_date
@@ -31,6 +31,8 @@ export const GET = async ({ url, request }) => {
       : null,
     status: todo.status,
     category: todo.project_name || null,
+    project_name: todo.project_name || null,
+    project_color: todo.project_color || null,
     priority: todo.priority,
     tags: typeof todo.tags === 'string' ? JSON.parse(todo.tags) : todo.tags || [],
     created_at: todo.created_at
@@ -67,7 +69,7 @@ export const POST = async ({ request }) => {
   const result = await TodoDB.createTodo(session.user_id, todoData);
   return new Response(
     JSON.stringify({
-      id: `task_${result.id}`,
+      id: result.id,
       title: body.title,
       status: 'created',
     }),

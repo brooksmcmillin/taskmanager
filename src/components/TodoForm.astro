@@ -71,23 +71,6 @@
         </div>
 
         <div>
-          <label
-            for="estimated_hours"
-            class="block text-sm font-medium text-gray-700"
-            >Estimated Hours</label
-          >
-          <input
-            type="number"
-            id="estimated_hours"
-            name="estimated_hours"
-            step="0.5"
-            min="0.5"
-            value="1.0"
-            class="form-input mt-1"
-          />
-        </div>
-
-        <div>
           <label for="due_date" class="block text-sm font-medium text-gray-700"
             >Due Date (Optional)</label
           >
@@ -166,7 +149,6 @@
     document.getElementById('title').value = todo.title;
     document.getElementById('description').value = todo.description || '';
     document.getElementById('priority').value = todo.priority;
-    document.getElementById('estimated_hours').value = todo.estimated_hours;
     document.getElementById('due_date').value = todo.due_date || '';
     //document.getElementById('tags').value = todo.tags &&
     //? todo.tags.join(', ')
@@ -202,7 +184,6 @@
       title: formData.get('title'),
       description: formData.get('description'),
       priority: formData.get('priority'),
-      estimated_hours: parseFloat(formData.get('estimated_hours')),
       due_date: formData.get('due_date') || null,
       tags: formData.get('tags')
         ? formData
@@ -299,16 +280,12 @@
         return;
       }
 
-      const actualHours = prompt('How many hours did this take?');
-      if (!actualHours) return;
-
       try {
         const response = await fetch(
           `/api/todos/${window.editingTodoId}/complete`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ actual_hours: parseFloat(actualHours) }),
           }
         );
 
