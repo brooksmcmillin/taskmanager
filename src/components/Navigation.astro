@@ -1,9 +1,11 @@
 ---
+import ThemeToggle from './ThemeToggle.astro';
+
 const currentPath = Astro.url.pathname;
 const { user } = Astro.props;
 ---
 
-<nav class="bg-white shadow border">
+<nav class="nav-bar">
   <div class="container">
     <div class="flex items-center justify-between h-16">
       <div class="flex items-center space-x-8">
@@ -32,17 +34,20 @@ const { user } = Astro.props;
         )}
       </div>
       
-      {user && (
-        <div class="flex items-center space-x-4">
-          <span class="text-sm text-gray-600">Welcome, {user.username}</span>
-          <button 
-            id="logout-btn" 
-            class="btn btn-outline text-sm"
-          >
-            Logout
-          </button>
-        </div>
-      )}
+      <div class="flex items-center space-x-4">
+        {user && (
+          <>
+            <span class="text-sm text-gray-600">Welcome, {user.username}</span>
+            <button
+              id="logout-btn"
+              class="btn btn-outline text-sm"
+            >
+              Logout
+            </button>
+          </>
+        )}
+        <ThemeToggle />
+      </div>
     </div>
   </div>
 </nav>
