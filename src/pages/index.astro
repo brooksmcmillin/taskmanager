@@ -13,10 +13,10 @@ const user = Astro.locals.user;
     <!-- View Toggle -->
     <div class="flex justify-center mb-6">
       <div class="flex gap-4">
-        <button id="list-view-btn" class="btn btn-primary btn-med"
+        <button id="list-view-btn" class="btn btn-secondary btn-med"
           >List View</button
         >
-        <button id="calendar-view-btn" class="btn btn-secondary btn-med"
+        <button id="calendar-view-btn" class="btn btn-primary btn-med"
           >Calendar View</button
         >
       </div>
@@ -24,14 +24,14 @@ const user = Astro.locals.user;
 
     <!-- List View -->
     <TodoModal />
-    <div id="list-view">
+    <div id="list-view" class="hidden">
       <div id="todo-lists" class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Todos will be loaded here -->
       </div>
     </div>
 
     <!-- Calendar View -->
-    <div id="calendar-view" class="hidden">
+    <div id="calendar-view">
       <DragDropCalendar />
     </div>
   </main>
