@@ -26,28 +26,28 @@ for file in $STAGED_FILES; do
         
         # Check for various secret patterns and show which pattern matched
         if grep -n -E "password.*=.*['\"][^'\"]{8,}['\"]" "$file" 2>/dev/null; then
-            echo "${RED}  ✗ Potential password found in: $file${NC}"
+            printf '%b\n' "${RED}  ✗ Potential password found in: $file${NC}"
             SECRET_FOUND=1
         fi
         
         if grep -n -E "api[_-]?key.*=.*['\"][^'\"]{20,}['\"]" "$file" 2>/dev/null; then
-            echo "${RED}  ✗ Potential API key found in: $file${NC}"
+            printf '%b\n' "${RED}  ✗ Potential API key found in: $file${NC}"
             SECRET_FOUND=1
         fi
         
         if grep -n -E "(secret|token).*=.*['\"][^'\"]{20,}['\"]" "$file" 2>/dev/null; then
-            echo "${RED}  ✗ Potential secret/token found in: $file${NC}"
+            printf '%b\n' "${RED}  ✗ Potential secret/token found in: $file${NC}"
             SECRET_FOUND=1
         fi
         
         if grep -n -E "-----BEGIN.*PRIVATE KEY-----" "$file" 2>/dev/null; then
-            echo "${RED}  ✗ Private key found in: $file${NC}"
+            printf '%b\n' "${RED}  ✗ Private key found in: $file${NC}"
             SECRET_FOUND=1
         fi
         
         # AWS specific patterns
         if grep -n -E "AKIA[0-9A-Z]{16}" "$file" 2>/dev/null; then
-            echo "${RED}  ✗ Potential AWS access key found in: $file${NC}"
+            printf '%b\n' "${RED}  ✗ Potential AWS access key found in: $file${NC}"
             SECRET_FOUND=1
         fi
     fi
@@ -55,9 +55,9 @@ done
 
 if [ $SECRET_FOUND -eq 1 ]; then
     FAILED=1
-    echo "${RED}  ❌ Secrets detected! See above for details.${NC}"
+    printf '%b\n' "${RED}  ❌ Secrets detected! See above for details.${NC}"
 else
-    echo "${GREEN}  ✅ No secrets detected${NC}"
+    printf '%b\n' "${GREEN}  ✅ No secrets detected${NC}"
 fi
 
 # 2. Check for console.log with file list
@@ -75,7 +75,7 @@ for file in $STAGED_FILES; do
             
             if [ -f "$file" ]; then
                 count=$(grep -c "console\." "$file" 2>/dev/null || echo 0)
-                if [ $count -gt 0 ]; then
+                if [ "$count" -gt 0 ]; then
                     CONSOLE_FILES="${CONSOLE_FILES}    - $file ($count occurrences)\n"
                     CONSOLE_COUNT=$((CONSOLE_COUNT + count))
                 fi
@@ -85,10 +85,10 @@ for file in $STAGED_FILES; do
 done
 
 if [ $CONSOLE_COUNT -gt 0 ]; then
-    echo "${YELLOW}  ⚠️  Found $CONSOLE_COUNT console statements in:${NC}"
+    printf '%b\n' "${YELLOW}  ⚠️  Found $CONSOLE_COUNT console statements in:${NC}"
     printf "$CONSOLE_FILES"
 else
-    echo "${GREEN}  ✅ No console statements${NC}"
+    printf '%b\n' "${GREEN}  ✅ No console statements${NC}"
 fi
 
 # 3. Check for dangerous patterns with file details
@@ -101,17 +101,17 @@ for file in $STAGED_FILES; do
             if [ -f "$file" ]; then
                 # Check and report each dangerous pattern
                 if grep -n "eval(" "$file" 2>/dev/null; then
-                    echo "${YELLOW}  ⚠️  Found eval() in: $file${NC}"
+                    printf '%b\n' "${YELLOW}  ⚠️  Found eval() in: $file${NC}"
                     DANGEROUS_COUNT=$((DANGEROUS_COUNT + 1))
                 fi
                 
                 if grep -n "innerHTML\s*=" "$file" 2>/dev/null; then
-                    echo "${YELLOW}  ⚠️  Found innerHTML in: $file${NC}"
+                    printf '%b\n' "${YELLOW}  ⚠️  Found innerHTML in: $file${NC}"
                     DANGEROUS_COUNT=$((DANGEROUS_COUNT + 1))
                 fi
                 
                 if grep -n "document\.write(" "$file" 2>/dev/null; then
-                    echo "${YELLOW}  ⚠️  Found document.write() in: $file${NC}"
+                    printf '%b\n' "${YELLOW}  ⚠️  Found document.write() in: $file${NC}"
                     DANGEROUS_COUNT=$((DANGEROUS_COUNT + 1))
                 fi
             fi
@@ -120,7 +120,7 @@ for file in $STAGED_FILES; do
 done
 
 if [ $DANGEROUS_COUNT -eq 0 ]; then
-    echo "${GREEN}  ✅ No dangerous patterns detected${NC}"
+    printf '%b\n' "${GREEN}  ✅ No dangerous patterns detected${NC}"
 fi
 
 # 4. SQL injection check with details
@@ -131,7 +131,7 @@ for file in $STAGED_FILES; do
     case "$file" in
         *.js|*.jsx|*.ts|*.tsx)
             if [ -f "$file" ] && grep -n -E "(query|execute)\([^)]*\+" "$file" 2>/dev/null; then
-                echo "${YELLOW}  ⚠️  Potential SQL injection in: $file${NC}"
+                printf '%b\n' "${YELLOW}  ⚠️  Potential SQL injection in: $file${NC}"
                 echo "     (String concatenation in query)"
                 SQL_FOUND=1
             fi
@@ -140,30 +140,30 @@ for file in $STAGED_FILES; do
 done
 
 if [ $SQL_FOUND -eq 0 ]; then
-    echo "${GREEN}  ✅ No SQL injection patterns detected${NC}"
+    printf '%b\n' "${GREEN}  ✅ No SQL injection patterns detected${NC}"
 fi
 
 # 5. Quick dependency check if package.json changed
 if echo "$STAGED_FILES" | grep -q "package.*json"; then
     echo "5. Checking dependencies..."
     if ! npm audit --production --audit-level=critical 2>&1 | grep -q "found 0 vulnerabilities"; then
-        echo "${RED}  ❌ Critical vulnerabilities in dependencies!${NC}"
+        printf '%b\n' "${RED}  ❌ Critical vulnerabilities in dependencies!${NC}"
         echo "     Run 'npm audit' for details"
         FAILED=1
     else
-        echo "${GREEN}  ✅ No critical vulnerabilities${NC}"
+        printf '%b\n' "${GREEN}  ✅ No critical vulnerabilities${NC}"
     fi
 fi
 
 # Summary
 echo ""
 if [ $FAILED -eq 1 ]; then
-    echo "${RED}❌ Security checks failed!${NC}"
+    printf '%b\n' "${RED}❌ Security checks failed!${NC}"
     echo ""
     echo "Options:"
     echo "  1. Fix the issues above"
     echo "  2. Use 'git commit --no-verify' to bypass (NOT RECOMMENDED)"
     exit 1
 else
-    echo "${GREEN}✅ All security checks passed!${NC}"
+    printf '%b\n' "${GREEN}✅ All security checks passed!${NC}"
 fi

@@ -1,18 +1,15 @@
-name: Test
+name: CI
+
 on:
-  pull_request:
-    branches: [main]
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22.15'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run test
+  ci:
+    uses: brooksmcmillin/workflows/.github/workflows/node-ci.yml@main
+    with:
+      node-version: '22'
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
