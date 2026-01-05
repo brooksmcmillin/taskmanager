@@ -1,0 +1,16 @@
+name: Pre-commit
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  precommit:
+    uses: brooksmcmillin/workflows/.github/workflows/python-precommit.yml@main
+    with:
+      package-name: taskmanager
+      # Optional: customize checks
+      # python-version: '3.12'
+      # run-security: false  # Disable bandit if using python-security.yml separately
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
