@@ -1,12 +1,14 @@
 import { Auth } from '../../../lib/auth.js';
 
 export async function POST({ request }) {
-
   // Disable Registration for now
-  return new Response(JSON.stringify({ error: "Registration is currently disabled" }), {
+  return new Response(
+    JSON.stringify({ error: 'Registration is currently disabled' }),
+    {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
-    });
+    }
+  );
 
   try {
     const { username, email, password } = await request.json();

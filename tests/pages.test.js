@@ -4,7 +4,7 @@ import { Auth } from '../src/lib/auth.js';
 import { TodoDB } from '../src/lib/db.js';
 import { createMockContext, createMockNext } from './setup.js';
 
-const url_origin = "http://localhost:3000"
+const url_origin = 'http://localhost:3000';
 
 describe('Page Route Authentication', () => {
   beforeEach(() => {
@@ -28,7 +28,9 @@ describe('Page Route Authentication', () => {
 
         const result = await onRequest(context, next);
 
-        expect(context.redirect).toHaveBeenCalledWith(url_origin + '/login?return_to=' + encodeURIComponent(path));
+        expect(context.redirect).toHaveBeenCalledWith(
+          url_origin + '/login?return_to=' + encodeURIComponent(path)
+        );
         expect(result).toEqual({
           type: 'redirect',
           status: 302,
@@ -123,9 +125,15 @@ describe('Page Route Authentication', () => {
     it.each([
       ['should handle nested protected routes', '/projects/123/details'],
       // ['should handle hash fragments in protected routes', '/projects#section1'], // TODO: Fix this and uncomment the test
-      ['should handle query parameters in proteced routes', '/projects?fiter=active'],
+      [
+        'should handle query parameters in proteced routes',
+        '/projects?fiter=active',
+      ],
       ['should handle trailing slashes in protected routes', '/projects/'],
-      ['should redirect unauthenticated access to other CSS files', '/src/styles/components/button.css']
+      [
+        'should redirect unauthenticated access to other CSS files',
+        '/src/styles/components/button.css',
+      ],
     ])('%s', async (description, route) => {
       const context = createMockContext(route);
       const next = createMockNext();
@@ -135,8 +143,9 @@ describe('Page Route Authentication', () => {
 
       const result = await onRequest(context, next);
 
-      expect(context.redirect).toHaveBeenCalledWith(url_origin + '/login?return_to=' + encodeURIComponent(route));
+      expect(context.redirect).toHaveBeenCalledWith(
+        url_origin + '/login?return_to=' + encodeURIComponent(route)
+      );
     });
   });
 });
-

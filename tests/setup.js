@@ -38,10 +38,8 @@ export const createMockContext = (pathname = '/', headers = {}) => {
 
 export const createMockNext = () => {
   return vi.fn(() => {
-    const headers = new Map([
-      ['Content-Type', 'text/html'],
-    ]);
-    
+    const headers = new Map([['Content-Type', 'text/html']]);
+
     return Promise.resolve({
       headers: {
         set: vi.fn((key, value) => headers.set(key, value)),

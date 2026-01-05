@@ -2,12 +2,9 @@ module.exports = {
   extends: [
     'eslint:recommended',
     'plugin:security/recommended',
-    'plugin:@microsoft/sdl/required'
+    'plugin:@microsoft/sdl/required',
   ],
-  plugins: [
-    'security',
-    '@microsoft/sdl'
-  ],
+  plugins: ['security', '@microsoft/sdl'],
   rules: {
     // Security rules
     'security/detect-object-injection': 'warn',
@@ -23,7 +20,7 @@ module.exports = {
     'security/detect-possible-timing-attacks': 'warn',
     'security/detect-pseudoRandomBytes': 'error',
     'security/detect-sql-injection': 'error',
-    
+
     // Microsoft SDL rules
     '@microsoft/sdl/no-cookies': 'warn',
     '@microsoft/sdl/no-document-domain': 'error',
@@ -36,20 +33,20 @@ module.exports = {
     '@microsoft/sdl/no-unsafe-alloc': 'error',
     '@microsoft/sdl/no-winjs-html-unsafe': 'error',
     '@microsoft/sdl/react-iframe-missing-sandbox': 'error',
-    
+
     // Additional security patterns
     'no-eval': 'error',
     'no-implied-eval': 'error',
     'no-new-func': 'error',
-    'no-return-await': 'error'
+    'no-return-await': 'error',
   },
   overrides: [
     {
       files: ['tests/**/*.js'],
       rules: {
         'security/detect-non-literal-fs-filename': 'off',
-        'security/detect-object-injection': 'off'
-      }
-    }
-  ]
+        'security/detect-object-injection': 'off',
+      },
+    },
+  ],
 };

@@ -1,24 +1,24 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "daily"
-      time: "08:00"
+      interval: 'daily'
+      time: '08:00'
     open-pull-requests-limit: 10
     labels:
-      - "dependencies"
-      - "security"
+      - 'dependencies'
+      - 'security'
     groups:
       development-dependencies:
-        dependency-type: "development"
+        dependency-type: 'development'
       production-dependencies:
-        dependency-type: "production"
-        
-  - package-ecosystem: "github-actions"
-    directory: "/"
+        dependency-type: 'production'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     labels:
-      - "github-actions"
-      - "dependencies"
+      - 'github-actions'
+      - 'dependencies'

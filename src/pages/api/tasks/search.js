@@ -29,7 +29,8 @@ export const GET = async ({ url, request }) => {
     status: todo.status,
     category: todo.project_name || null,
     priority: todo.priority,
-    tags: typeof todo.tags === 'string' ? JSON.parse(todo.tags) : todo.tags || [],
+    tags:
+      typeof todo.tags === 'string' ? JSON.parse(todo.tags) : todo.tags || [],
     created_at: todo.created_at
       ? new Date(todo.created_at).toISOString().split('T')[0]
       : null,
