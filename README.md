@@ -11,9 +11,9 @@ A modern task management application built with Astro, featuring project organiz
 - **Task Tracking**: Add todos with priorities, descriptions, time estimates, and due dates
 - **Time Tracking**: Log actual time spent when completing tasks
 - **Calendar View**: Drag-and-drop calendar interface for task scheduling
-- **OAuth 2.0 API**: Full OAuth 2.0 authorization server with PKCE support for secure third-party integrations
+- **OAuth 2.0 API**: Full OAuth 2.0 authorization server with PKCE, Client Credentials, and Device Authorization Grant (RFC 8628) support
 - **RESTful API**: Complete REST API with OpenAPI 3.0 specification
-- **Clean UI**: Custom SCSS design system with responsive layout
+- **Clean UI**: Custom SCSS design system with responsive layout and dark mode support
 - **Database Migrations**: Structured database schema with migration system
 
 ## Getting Started
@@ -124,11 +124,13 @@ The application includes a full OAuth 2.0 authorization server for third-party i
 - **Authorization**: `/api/oauth/authorize` - OAuth 2.0 authorization endpoint
 - **Token**: `/api/oauth/token` - Token exchange endpoint with PKCE support
 - **Client Management**: `/api/oauth/clients` - OAuth client registration and management
+- **Device Flow**: `/api/oauth/device/code` - Device Authorization Grant (RFC 8628) for CLI/IoT devices
 - **JWKS**: `/api/oauth/jwks` - JSON Web Key Set for token verification
 
 #### Supported OAuth 2.0 Features:
-- Authorization Code flow
-- PKCE (Proof Key for Code Exchange) for enhanced security
+- Authorization Code flow with PKCE support
+- Client Credentials grant for machine-to-machine authentication
+- Device Authorization Grant (RFC 8628) for CLI and limited-input devices
 - Refresh tokens
 - Scoped access control
 
@@ -140,7 +142,7 @@ The application includes a full OAuth 2.0 authorization server for third-party i
 - **Styling**: SCSS with custom design system
 - **Runtime**: Node.js with @astrojs/node adapter
 - **Testing**: Vitest for unit and integration testing
-- **OAuth 2.0**: Full authorization server implementation with PKCE support
+- **OAuth 2.0**: Full authorization server with PKCE, Client Credentials, and Device Authorization Grant
 - **Security**: ESLint security plugins, Husky pre-commit hooks
 
 ## Available Scripts
@@ -157,4 +159,5 @@ The application includes a full OAuth 2.0 authorization server for third-party i
 - `npm run test:run` - Run tests once (CI mode)
 - `npm run format` - Format code with Prettier
 - `npm run format:check` - Check code formatting
+- `npm run check:openapi` - Verify OpenAPI spec covers all API routes
 - `npm run prepare` - Setup Husky git hooks
