@@ -1,0 +1,113 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { Auth } from '../../../lib/auth.js';
+
+// Check if user is authenticated
+const sessionId = Auth.getSessionFromRequest(Astro.request);
+const session = await Auth.getSessionUser(sessionId);
+
+if (!session) {
+  return Astro.redirect('/login');
+}
+---
+
+<Layout title="Device Authorized">
+  <div class="container">
+    <div class="auth-container">
+      <div class="card success-card">
+        <div class="success-icon">✓</div>
+        <h1>Device Authorized</h1>
+        <p>
+          You have successfully authorized the device. You can now close this
+          window and return to your device.
+        </p>
+        <p class="note">
+          The device will automatically receive access to your account.
+        </p>
+        <div class="actions">
+          <a href="/" class="btn btn-primary">Go to Dashboard</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 60vh;
+    padding: 2rem;
+  }
+
+  .card {
+    max-width: 480px;
+    width: 100%;
+    padding: 2rem;
+    background: var(--card-bg, white);
+    border-radius: 1rem;
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    text-align: center;
+  }
+
+  .success-card {
+    border-top: 4px solid #22c55e;
+  }
+
+  .success-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1.5rem;
+    background-color: #22c55e;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: bold;
+  }
+
+  .card h1 {
+    margin-bottom: 1rem;
+    color: #22c55e;
+  }
+
+  .card p {
+    margin-bottom: 1rem;
+    color: var(--text-color, #374151);
+  }
+
+  .note {
+    color: var(--text-muted, #64748b);
+    font-size: 0.875rem;
+  }
+
+  .actions {
+    margin-top: 1.5rem;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.2s;
+  }
+
+  .btn-primary {
+    background-color: var(--primary-color, #3b82f6);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background-color: var(--primary-hover, #2563eb);
+  }
+</style>

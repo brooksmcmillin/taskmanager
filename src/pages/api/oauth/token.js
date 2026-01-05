@@ -56,6 +56,9 @@ export async function POST({ request }) {
     } else if (grantType === 'client_credentials') {
       console.log('[OAuth/Token] Processing client_credentials grant');
       return await handleClientCredentialsGrant(formData, client);
+    } else if (grantType === 'urn:ietf:params:oauth:grant-type:device_code') {
+      console.log('[OAuth/Token] Processing device_code grant');
+      return await handleDeviceCodeGrant(formData, client);
     } else {
       console.log('[OAuth/Token] Unsupported grant type:', grantType);
       return new Response(
@@ -420,6 +423,206 @@ async function handleClientCredentialsGrant(formData, client) {
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
       },
+    }
+  );
+}
+
+/**
+ * Handle OAuth 2.0 Device Authorization Grant (RFC 8628)
+ *
+ * The CLI polls this endpoint with the device_code to check if the user
+ * has authorized the device. This endpoint returns different responses
+ * based on the authorization status:
+ *
+ * - authorization_pending: User hasn't authorized yet, keep polling
+ * - slow_down: Client is polling too fast, increase interval
+ * - access_denied: User denied authorization
+ * - expired_token: Device code has expired
+ * - Success: Returns access token when authorized
+ */
+async function handleDeviceCodeGrant(formData, client) {
+  const deviceCode = formData.get('device_code');
+
+  console.log('[OAuth/Token] Device code grant params:', {
+    has_device_code: !!deviceCode,
+    client_id: client.client_id,
+  });
+
+  if (!deviceCode) {
+    console.log('[OAuth/Token] Missing device_code');
+    return new Response(
+      JSON.stringify({
+        error: 'invalid_request',
+        error_description: 'device_code is required',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Validate that this client is allowed to use device_code grant
+  const allowedGrantTypes = JSON.parse(client.grant_types || '[]');
+  if (!allowedGrantTypes.includes('device_code')) {
+    console.log('[OAuth/Token] Client not authorized for device_code grant');
+    return new Response(
+      JSON.stringify({
+        error: 'unauthorized_client',
+        error_description: 'Client is not authorized to use device flow',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Get device authorization status
+  const deviceAuth = await TodoDB.getDeviceAuthorizationByDeviceCode(
+    deviceCode,
+    client.client_id
+  );
+
+  if (!deviceAuth) {
+    console.log('[OAuth/Token] Invalid device_code');
+    return new Response(
+      JSON.stringify({
+        error: 'invalid_grant',
+        error_description: 'Invalid device code',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Check for rate limiting (slow_down)
+  if (deviceAuth.slow_down) {
+    console.log('[OAuth/Token] Client polling too fast, slow_down');
+    return new Response(
+      JSON.stringify({
+        error: 'slow_down',
+        error_description: 'Polling too frequently. Please wait longer.',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Check if expired
+  if (new Date(deviceAuth.expires_at) <= new Date()) {
+    console.log('[OAuth/Token] Device code expired');
+    return new Response(
+      JSON.stringify({
+        error: 'expired_token',
+        error_description: 'Device code has expired',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Check authorization status
+  if (deviceAuth.status === 'denied') {
+    console.log('[OAuth/Token] User denied authorization');
+    return new Response(
+      JSON.stringify({
+        error: 'access_denied',
+        error_description: 'User denied authorization',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  if (deviceAuth.status === 'pending') {
+    console.log('[OAuth/Token] Authorization pending');
+    return new Response(
+      JSON.stringify({
+        error: 'authorization_pending',
+        error_description: 'User has not yet authorized the device',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  if (deviceAuth.status === 'authorized') {
+    console.log('[OAuth/Token] Device authorized, issuing token');
+
+    // Consume the device code (mark as used)
+    const consumedAuth =
+      await TodoDB.consumeDeviceAuthorizationCode(deviceCode);
+
+    if (!consumedAuth) {
+      console.log('[OAuth/Token] Failed to consume device code');
+      return new Response(
+        JSON.stringify({
+          error: 'invalid_grant',
+          error_description: 'Device code already used or expired',
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Create access token
+    const scopes = JSON.parse(consumedAuth.scopes);
+    const tokenData = await TodoDB.createAccessToken(
+      consumedAuth.user_id,
+      client.client_id,
+      scopes,
+      3600 // 1 hour expiry
+    );
+
+    console.log('[OAuth/Token] Device code token created successfully');
+
+    return new Response(
+      JSON.stringify({
+        access_token: tokenData.token,
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: tokenData.refresh_token,
+        scope: scopes.join(' '),
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      }
+    );
+  }
+
+  // Unexpected status
+  console.log(
+    '[OAuth/Token] Unexpected device code status:',
+    deviceAuth.status
+  );
+  return new Response(
+    JSON.stringify({
+      error: 'server_error',
+      error_description: 'Unexpected authorization status',
+    }),
+    {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
     }
   );
 }

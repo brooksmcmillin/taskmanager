@@ -257,7 +257,13 @@ paths:
               properties:
                 grant_type:
                   type: string
-                  enum: [authorization_code, refresh_token]
+                  enum:
+                    [
+                      authorization_code,
+                      refresh_token,
+                      client_credentials,
+                      urn:ietf:params:oauth:grant-type:device_code,
+                    ]
                 client_id:
                   type: string
                 client_secret:
@@ -274,6 +280,12 @@ paths:
                 refresh_token:
                   type: string
                   description: Required for refresh_token grant
+                device_code:
+                  type: string
+                  description: Required for device_code grant
+                scope:
+                  type: string
+                  description: Optional scope for client_credentials grant
       responses:
         '200':
           description: Token response
@@ -492,6 +504,109 @@ paths:
                           type: string
                         e:
                           type: string
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oauth/device/code:
+    options:
+      tags:
+        - OAuth
+      summary: CORS preflight for device code endpoint
+      operationId: deviceCodeOptions
+      security: []
+      responses:
+        '200':
+          description: CORS headers returned
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+
+    post:
+      tags:
+        - OAuth
+      summary: Request device authorization code (RFC 8628)
+      description: |
+        Initiates the OAuth 2.0 Device Authorization Grant flow.
+        The CLI calls this endpoint to get a device code and user code.
+        The user then visits the verification URL and enters the user code to authorize the device.
+      operationId: requestDeviceCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - client_id
+              properties:
+                client_id:
+                  type: string
+                  description: The OAuth client ID
+                scope:
+                  type: string
+                  description: Space-separated list of requested scopes (optional, defaults to client's scopes)
+      responses:
+        '200':
+          description: Device authorization response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceAuthorizationResponse'
+        '400':
+          description: Invalid request or scope
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+        '401':
+          description: Invalid or unauthorized client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /oauth/device/authorize:
+    post:
+      tags:
+        - OAuth
+      summary: Authorize or deny device (user consent)
+      description: |
+        Handles the user's authorization decision for the device flow.
+        Called when the user approves or denies access on the device verification page.
+        Requires user authentication via session cookie.
+      operationId: authorizeDevice
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - user_code
+                - action
+              properties:
+                user_code:
+                  type: string
+                  description: The user code entered by the user (e.g., WDJB-MJHT)
+                action:
+                  type: string
+                  enum: [allow, deny]
+                  description: User's authorization decision
+      responses:
+        '302':
+          description: Redirect to success or denied page
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1214,6 +1329,36 @@ components:
           type: string
           format: date-time
 
+    DeviceAuthorizationResponse:
+      type: object
+      description: Response from the device authorization endpoint (RFC 8628)
+      properties:
+        device_code:
+          type: string
+          description: The device verification code (secret, used for polling)
+        user_code:
+          type: string
+          description: The user code to display (e.g., WDJB-MJHT)
+          example: WDJB-MJHT
+        verification_uri:
+          type: string
+          format: uri
+          description: The URL the user should visit to authorize
+          example: https://example.com/oauth/device
+        verification_uri_complete:
+          type: string
+          format: uri
+          description: The URL with user_code pre-filled
+          example: https://example.com/oauth/device?user_code=WDJB-MJHT
+        expires_in:
+          type: integer
+          description: Lifetime in seconds of the device code
+          example: 1800
+        interval:
+          type: integer
+          description: Minimum polling interval in seconds
+          example: 5
+
     OAuthError:
       type: object
       properties:
@@ -1228,6 +1373,14 @@ components:
             - invalid_scope
             - server_error
             - access_denied
+            - authorization_pending
+            - slow_down
+            - expired_token
+          description: |
+            OAuth error codes. Device flow specific codes:
+            - authorization_pending: User hasn't authorized yet, keep polling
+            - slow_down: Client is polling too frequently
+            - expired_token: Device code has expired
         error_description:
           type: string
 
