@@ -1,30 +1,26 @@
 import { TodoDB } from '../../../lib/db.js';
 import { requireAuth } from '../../../lib/auth.js';
+import {
+  successResponse,
+  errorResponse,
+  notFoundResponse,
+} from '../../../lib/apiResponse.js';
 
 export const GET = async ({ params, request }) => {
   const session = await requireAuth(request);
   const todoId = parseInt(params.id);
 
   if (!todoId) {
-    return new Response(JSON.stringify({ error: 'Invalid todo ID' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return errorResponse('Invalid todo ID');
   }
 
   const todo = await TodoDB.getTodoById(todoId, session.user_id);
 
   if (!todo) {
-    return new Response(JSON.stringify({ error: 'Todo not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return notFoundResponse('Todo not found');
   }
 
-  return new Response(JSON.stringify(todo), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return successResponse(todo);
 };
 
 export const PUT = async ({ params, request }) => {
@@ -33,19 +29,13 @@ export const PUT = async ({ params, request }) => {
   const updates = await request.json();
 
   if (!todoId) {
-    return new Response(JSON.stringify({ error: 'Invalid todo ID' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return errorResponse('Invalid todo ID');
   }
 
   // Check if todo exists and belongs to user
   const todo = await TodoDB.getTodoById(todoId, session.user_id);
   if (!todo) {
-    return new Response(JSON.stringify({ error: 'Todo not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return notFoundResponse('Todo not found');
   }
 
   // Map category to project_id if provided
@@ -66,17 +56,11 @@ export const PUT = async ({ params, request }) => {
 
   await TodoDB.updateTodo(todoId, session.user_id, updateData);
 
-  return new Response(
-    JSON.stringify({
-      id: todoId,
-      updated_fields: updatedFields,
-      status: 'updated',
-    }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
+  return successResponse({
+    id: todoId,
+    updated_fields: updatedFields,
+    status: 'updated',
+  });
 };
 
 export const DELETE = async ({ params, request }) => {
@@ -84,25 +68,16 @@ export const DELETE = async ({ params, request }) => {
   const todoId = parseInt(params.id);
 
   if (!todoId) {
-    return new Response(JSON.stringify({ error: 'Invalid todo ID' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return errorResponse('Invalid todo ID');
   }
 
   // Check if todo exists and belongs to user
   const todo = await TodoDB.getTodoById(todoId, session.user_id);
   if (!todo) {
-    return new Response(JSON.stringify({ error: 'Todo not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return notFoundResponse('Todo not found');
   }
 
   await TodoDB.deleteTodo(todoId, session.user_id);
 
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return successResponse({ success: true });
 };

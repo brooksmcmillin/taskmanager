@@ -158,15 +158,24 @@ export class TodoDB {
   }
 
   static async updateProject(id, user_id, updates) {
-    const fields = Object.keys(updates);
-    const values = Object.values(updates);
+    // Whitelist allowed fields to prevent SQL injection via field names
+    const allowedFields = ['name', 'description', 'color'];
+    const fields = Object.keys(updates).filter((f) =>
+      allowedFields.includes(f)
+    );
+
+    if (fields.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    const values = fields.map((f) => updates[f]);
     const setClause = fields
       .map((field, index) => `${field} = $${index + 1}`)
       .join(', ');
 
     const result = await this.query(
       `
-      UPDATE projects 
+      UPDATE projects
       SET ${setClause}, updated_at = NOW()
       WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}
       RETURNING *
@@ -400,8 +409,29 @@ export class TodoDB {
   }
 
   static async updateTodo(id, user_id, updates) {
-    const fields = Object.keys(updates);
-    const values = Object.values(updates);
+    // Whitelist allowed fields to prevent SQL injection via field names
+    const allowedFields = [
+      'project_id',
+      'title',
+      'description',
+      'priority',
+      'status',
+      'estimated_hours',
+      'actual_hours',
+      'due_date',
+      'completed_date',
+      'tags',
+      'context',
+    ];
+    const fields = Object.keys(updates).filter((f) =>
+      allowedFields.includes(f)
+    );
+
+    if (fields.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    const values = fields.map((f) => updates[f]);
     const setClause = fields
       .map((field, index) => `${field} = $${index + 1}`)
       .join(', ');
@@ -468,35 +498,53 @@ export class TodoDB {
 
   // Analytics methods
   static async getCapacityStats(daysBack = 30) {
-    const result = await this.query(`
-      SELECT 
+    // Validate and sanitize daysBack to prevent SQL injection
+    const days = parseInt(daysBack, 10);
+    if (isNaN(days) || days < 1 || days > 365) {
+      throw new Error('Invalid daysBack parameter: must be between 1 and 365');
+    }
+
+    const result = await this.query(
+      `
+      SELECT
         DATE(completed_date) as date,
         SUM(actual_hours) as total_hours,
         COUNT(*) as tasks_completed
-      FROM todos 
-      WHERE status = 'completed' 
-        AND completed_date >= NOW() - INTERVAL '${daysBack} days'
+      FROM todos
+      WHERE status = 'completed'
+        AND completed_date >= NOW() - INTERVAL '1 day' * $1
       GROUP BY DATE(completed_date)
       ORDER BY date
-    `);
+    `,
+      [days]
+    );
     return result.rows;
   }
 
   static async getEstimationAccuracy(daysBack = 90) {
-    const result = await this.query(`
-      SELECT 
+    // Validate and sanitize daysBack to prevent SQL injection
+    const days = parseInt(daysBack, 10);
+    if (isNaN(days) || days < 1 || days > 365) {
+      throw new Error('Invalid daysBack parameter: must be between 1 and 365');
+    }
+
+    const result = await this.query(
+      `
+      SELECT
         title,
         estimated_hours,
         actual_hours,
         priority,
         (actual_hours / estimated_hours) as accuracy_ratio,
         ABS(actual_hours - estimated_hours) as absolute_error
-      FROM todos 
-      WHERE status = 'completed' 
-        AND completed_date >= NOW() - INTERVAL '${daysBack} days'
+      FROM todos
+      WHERE status = 'completed'
+        AND completed_date >= NOW() - INTERVAL '1 day' * $1
         AND estimated_hours > 0
       ORDER BY completed_date DESC
-    `);
+    `,
+      [days]
+    );
     return result.rows;
   }
 

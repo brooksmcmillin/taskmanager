@@ -56,12 +56,14 @@ export class Auth {
 
   static async authenticateUser(username, password) {
     const user = await TodoDB.getUserByUsername(username);
-    if (!user) {
-      throw new Error('Invalid credentials');
-    }
 
-    const isValid = await this.verifyPassword(password, user.password_hash);
-    if (!isValid) {
+    // Use constant-time comparison to prevent timing attacks
+    // Always perform password verification even if user doesn't exist
+    const dummyHash = '$2a$12$dummy.hash.to.prevent.timing.attacks.placeholder';
+    const passwordHash = user ? user.password_hash : dummyHash;
+    const isValid = await this.verifyPassword(password, passwordHash);
+
+    if (!user || !isValid) {
       throw new Error('Invalid credentials');
     }
 
@@ -102,45 +104,47 @@ export class Auth {
 
     if (!cookies) return null;
 
+    // Check for __Host-session first (production), then fall back to session (development)
     const sessionCookie = cookies
       .split(';')
-      .find((cookie) => cookie.trim().startsWith('session='));
+      .find(
+        (cookie) =>
+          cookie.trim().startsWith('__Host-session=') ||
+          cookie.trim().startsWith('session=')
+      );
 
     if (!sessionCookie) return null;
 
-    return sessionCookie.split('=')[1];
+    // Handle both cookie names
+    const trimmed = sessionCookie.trim();
+    if (trimmed.startsWith('__Host-session=')) {
+      return trimmed.substring('__Host-session='.length);
+    }
+    return trimmed.split('=')[1];
   }
 
   static createSessionCookie(sessionId, expiresAt) {
     const expires = new Date(expiresAt).toUTCString();
     const isProduction = process.env.NODE_ENV === 'production';
-    const isLocalhost =
-      process.env.NODE_ENV === 'development' ||
-      (typeof window !== 'undefined' &&
-        window.location.hostname === 'localhost');
 
-    let cookieString = `session=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Expires=${expires}`;
-
+    // In production, use __Host- prefix for maximum security
+    // __Host- requires: Secure, Path=/, and NO Domain attribute
     if (isProduction) {
-      cookieString += '; Secure; Domain=.' + process.env.ROOT_DOMAIN;
-    } else {
-      // For localhost, don't set Domain and don't require Secure
-      cookieString += '';
+      return `__Host-session=${sessionId}; HttpOnly; SameSite=Strict; Path=/; Expires=${expires}; Secure`;
     }
 
-    return cookieString;
+    // For development, use regular cookie without __Host- prefix (requires Secure)
+    return `session=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Expires=${expires}`;
   }
 
   static clearSessionCookie() {
     const isProduction = process.env.NODE_ENV === 'production';
 
-    let cookieString =
-      'session=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
-
+    // Match the cookie name used in createSessionCookie
     if (isProduction) {
-      cookieString += '; Secure; Domain=.' + process.env.ROOT_DOMAIN;
+      return '__Host-session=; HttpOnly; SameSite=Strict; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure';
     }
 
-    return cookieString;
+    return 'session=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';
   }
 }

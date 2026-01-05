@@ -1,4 +1,5 @@
 import { TodoDB } from '../../../../lib/db.js';
+import { corsPreflightResponse } from '../../../../lib/apiResponse.js';
 
 /**
  * OAuth 2.0 Device Authorization Endpoint (RFC 8628)
@@ -24,33 +25,18 @@ import { TodoDB } from '../../../../lib/db.js';
  * }
  */
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+export async function OPTIONS({ request }) {
+  return corsPreflightResponse(request);
 }
 
 export async function POST({ request, url }) {
   try {
-    console.log('[OAuth/Device/Code] POST request received');
-
     const formData = await request.formData();
     const clientId = formData.get('client_id');
     const requestedScope = formData.get('scope');
 
-    console.log('[OAuth/Device/Code] Request params:', {
-      client_id: clientId,
-      scope: requestedScope,
-    });
-
     // Validate client_id is provided
     if (!clientId) {
-      console.log('[OAuth/Device/Code] Missing client_id');
       return new Response(
         JSON.stringify({
           error: 'invalid_request',
@@ -66,7 +52,6 @@ export async function POST({ request, url }) {
     // Get client (no secret validation for device flow initial request)
     const client = await TodoDB.getOAuthClient(clientId);
     if (!client) {
-      console.log('[OAuth/Device/Code] Invalid client_id:', clientId);
       return new Response(
         JSON.stringify({
           error: 'invalid_client',
@@ -79,14 +64,9 @@ export async function POST({ request, url }) {
       );
     }
 
-    console.log('[OAuth/Device/Code] Client found:', client.name);
-
     // Validate that this client supports device_code grant
     const allowedGrantTypes = JSON.parse(client.grant_types || '[]');
     if (!allowedGrantTypes.includes('device_code')) {
-      console.log(
-        '[OAuth/Device/Code] Client not authorized for device_code grant'
-      );
       return new Response(
         JSON.stringify({
           error: 'unauthorized_client',
@@ -111,7 +91,6 @@ export async function POST({ request, url }) {
         (s) => !clientScopes.includes(s)
       );
       if (invalidScopes.length > 0) {
-        console.log('[OAuth/Device/Code] Invalid scopes:', invalidScopes);
         return new Response(
           JSON.stringify({
             error: 'invalid_scope',
@@ -128,8 +107,6 @@ export async function POST({ request, url }) {
       scopes = clientScopes;
     }
 
-    console.log('[OAuth/Device/Code] Creating device authorization code');
-
     // Create device authorization code
     // Default expiry: 30 minutes (1800 seconds)
     // Default polling interval: 5 seconds
@@ -144,11 +121,6 @@ export async function POST({ request, url }) {
     const baseUrl = `${url.protocol}//${url.host}`;
     const verificationUri = `${baseUrl}/oauth/device`;
     const verificationUriComplete = `${verificationUri}?user_code=${encodeURIComponent(deviceAuth.user_code)}`;
-
-    console.log('[OAuth/Device/Code] Device code created:', {
-      user_code: deviceAuth.user_code,
-      verification_uri: verificationUri,
-    });
 
     // Return RFC 8628 compliant response
     return new Response(
@@ -165,14 +137,11 @@ export async function POST({ request, url }) {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
         },
       }
     );
   } catch (error) {
-    console.error('[OAuth/Device/Code] POST error:', error);
+    console.error('[OAuth/Device/Code] Error:', error.message);
     return new Response(
       JSON.stringify({
         error: 'server_error',

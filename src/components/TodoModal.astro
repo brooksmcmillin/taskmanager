@@ -1,82 +1,26 @@
 ---
-import TodoForm from '../components/TodoForm.astro';
+import Modal from './Modal.astro';
+import TodoForm from './TodoForm.astro';
 ---
 
-<div id="todoModal" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>Add New Todo</h2>
-      <span class="close">&times;</span>
-    </div>
-    <div class="modal-body">
-      <TodoForm />
-    </div>
-  </div>
-</div>
-<!-- Add Todo Button -->
-<button id="addTodoBtn" class="add-todo-btn">
-  <span class="plus-icon">+</span>
-</button>
+<Modal
+  id="todoModal"
+  title="Add New Todo"
+  buttonId="addTodoBtn"
+  buttonClass="add-todo-btn"
+  resetFn="resetFormToAddMode"
+>
+  <TodoForm />
+</Modal>
 
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
+  // Expose openEditModal for TodoForm to call
+  window.openEditModal = function (todo: any) {
+    window.populateFormForEdit(todo);
     const modal = document.getElementById('todoModal');
-    const addBtn = document.getElementById('addTodoBtn');
-    const closeBtn = document.querySelector('.close');
-    const form = document.getElementById('todo-form');
-
-    // Open modal for adding new todo
-    addBtn.addEventListener('click', function () {
-      window.resetFormToAddMode();
-      modal.classList.add('show');
-      document.body.style.overflow = 'hidden'; // Prevent background scrolling
-    });
-
-    // Global function to open modal for editing
-    window.openEditModal = function (todo) {
-      console.log('Opening Edit Modal...');
-      console.log(modal);
-      window.populateFormForEdit(todo);
+    if (modal) {
       modal.classList.add('show');
       document.body.style.overflow = 'hidden';
-    };
-
-    // Close modal function
-    function closeModal() {
-      console.log('Closing Modal');
-      modal.classList.remove('show');
-      document.body.style.overflow = ''; // Restore scrolling
-      form.reset(); // Clear form
-      window.resetFormToAddMode(); // Reset to add mode
     }
-
-    // Close modal events
-    closeBtn.addEventListener('click', closeModal);
-
-    // Close modal when clicking outside
-    modal.addEventListener('click', function (e) {
-      if (e.target === modal) {
-        closeModal();
-      }
-    });
-
-    // Close modal with Escape key
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && modal.classList.contains('show')) {
-        closeModal();
-      }
-    });
-
-    // Handle form submission
-    form.addEventListener('submit', function (e) {
-      e.preventDefault();
-
-      // Get form data
-      const formData = new FormData(form);
-      const todoData = Object.fromEntries(formData.entries());
-
-      // The form submission is now handled in TodoForm.astro
-      // This listener is kept for compatibility but most logic moved to TodoForm
-    });
-  });
+  };
 </script>

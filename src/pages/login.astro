@@ -43,7 +43,29 @@ import Layout from '../layouts/Layout.astro';
   const urlParams = new URLSearchParams(window.location.search);
   const returnTo = urlParams.get('return_to');
 
-  console.log('[Login] Page loaded, return_to:', returnTo || 'none');
+  /**
+   * Validates that a URL is safe for redirection (local URLs only).
+   * Prevents open redirect vulnerabilities.
+   */
+  function isLocalUrl(url) {
+    if (!url) return false;
+
+    // Must start with / but NOT // (which would be protocol-relative)
+    if (url.startsWith('/') && !url.startsWith('//')) {
+      // Additional check: no backslashes (IE quirk), no control chars
+      if (!/[\\<>]/.test(url)) {
+        return true;
+      }
+    }
+
+    // Alternatively, validate against current origin
+    try {
+      const parsed = new URL(url, window.location.origin);
+      return parsed.origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  }
 
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -51,8 +73,6 @@ import Layout from '../layouts/Layout.astro';
     const username = document.getElementById('username').value;
     const userCredential = document.getElementById('user-credential').value;
     const errorDiv = document.getElementById('error');
-
-    console.log('[Login] Form submitted for user:', username);
 
     try {
       const response = await fetch('/api/auth/login', {
@@ -66,18 +86,15 @@ import Layout from '../layouts/Layout.astro';
       const data = await response.json();
 
       if (response.ok) {
-        console.log('[Login] Login successful');
-        // Redirect to return_to if present, otherwise go to homepage
-        const redirectUrl = returnTo || '/';
-        console.log('[Login] Redirecting to:', redirectUrl);
+        // Redirect to return_to if present AND safe, otherwise go to homepage
+        // Prevents open redirect attacks by validating the URL is local
+        const redirectUrl = returnTo && isLocalUrl(returnTo) ? returnTo : '/';
         window.location.href = redirectUrl;
       } else {
-        console.log('[Login] Login failed:', data.error);
         errorDiv.textContent = data.error || 'Login failed';
         errorDiv.style.display = 'block';
       }
     } catch (error) {
-      console.error('[Login] Network error:', error);
       errorDiv.textContent = 'Network error. Please try again.';
       errorDiv.style.display = 'block';
     }

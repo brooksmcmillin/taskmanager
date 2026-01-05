@@ -38,6 +38,17 @@ const user = Astro.locals.user;
 </Layout>
 
 <script>
+  // Escape HTML to prevent XSS attacks
+  function escapeHtml(unsafe) {
+    if (unsafe == null) return '';
+    return String(unsafe)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   async function loadTodos() {
     try {
       const apiUrl = `/api/todos?status=pending`;
@@ -86,37 +97,37 @@ const user = Astro.locals.user;
 
           projectDiv.innerHTML = `
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-semibold text-lg text-gray-800">${projectName}</h3>
-            <button 
-              onclick="toggleProject('${projectId}')"
+            <h3 class="font-semibold text-lg text-gray-800">${escapeHtml(projectName)}</h3>
+            <button
+              onclick="toggleProject('${escapeHtml(projectId)}')"
               class="btn btn-sm btn-secondary project-toggle"
               title="${isMinimized ? 'Expand' : 'Minimize'} project"
             >
               ${isMinimized ? '▲' : '▼'}
             </button>
           </div>
-          <div id="${projectId}-content" class="space-y-2 ${isMinimized ? 'hidden' : ''}">
+          <div id="${escapeHtml(projectId)}-content" class="space-y-2 ${isMinimized ? 'hidden' : ''}">
             ${projectTodos
               .map(
                 (todo) => `
               <div class="flex items-center justify-between p-3 border rounded">
                 <div class="flex-1">
-                  <div class="font-medium">${todo.title}</div>
-                  <div class="text-sm text-gray-600">${todo.description || ''}</div>
+                  <div class="font-medium">${escapeHtml(todo.title)}</div>
+                  <div class="text-sm text-gray-600">${escapeHtml(todo.description)}</div>
                   <div class="text-xs text-gray-500 mt-1">
-                    Priority: ${todo.priority}${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
+                    Priority: ${escapeHtml(todo.priority)}${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
                   </div>
                 </div>
                 <div class="flex gap-3 ml-4">
-                  <button 
-                    onclick="editTodo(${todo.id})"
+                  <button
+                    onclick="editTodo(${parseInt(todo.id, 10)})"
                     class="btn btn-secondary btn-sm"
                     title="Edit todo"
                   >
                     ✏️
                   </button>
-                  <button 
-                    onclick="completeTodo(${todo.id})"
+                  <button
+                    onclick="completeTodo(${parseInt(todo.id, 10)})"
                     class="btn btn-success btn-sm"
                     title="Mark as complete"
                   >
@@ -139,7 +150,6 @@ const user = Astro.locals.user;
   }
 
   window.editTodo = async function (todoId) {
-    console.log('Editing Todo...');
     try {
       const response = await fetch(`/api/todos/${todoId}`);
       if (response.ok) {

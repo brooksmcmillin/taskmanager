@@ -1,5 +1,10 @@
 import { TodoDB } from '../../lib/db.js';
 import { requireAuth } from '../../lib/auth.js';
+import {
+  successResponse,
+  createdResponse,
+  formatDateString,
+} from '../../lib/apiResponse.js';
 
 export const GET = async ({ url, request }) => {
   const session = await requireAuth(request);
@@ -26,9 +31,7 @@ export const GET = async ({ url, request }) => {
     id: todo.id,
     title: todo.title,
     description: todo.description || '',
-    due_date: todo.due_date
-      ? new Date(todo.due_date).toISOString().split('T')[0]
-      : null,
+    due_date: formatDateString(todo.due_date),
     status: todo.status,
     category: todo.project_name || null,
     project_name: todo.project_name || null,
@@ -36,18 +39,11 @@ export const GET = async ({ url, request }) => {
     priority: todo.priority,
     tags:
       typeof todo.tags === 'string' ? JSON.parse(todo.tags) : todo.tags || [],
-    created_at: todo.created_at
-      ? new Date(todo.created_at).toISOString().split('T')[0]
-      : null,
-    updated_at: todo.updated_at
-      ? new Date(todo.updated_at).toISOString().split('T')[0]
-      : null,
+    created_at: formatDateString(todo.created_at),
+    updated_at: formatDateString(todo.updated_at),
   }));
 
-  return new Response(JSON.stringify({ tasks: formattedTasks }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return successResponse({ tasks: formattedTasks });
 };
 
 export const POST = async ({ request }) => {
@@ -68,17 +64,11 @@ export const POST = async ({ request }) => {
   }
 
   const result = await TodoDB.createTodo(session.user_id, todoData);
-  return new Response(
-    JSON.stringify({
-      id: result.id,
-      title: body.title,
-      status: 'created',
-    }),
-    {
-      status: 201,
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
+  return createdResponse({
+    id: result.id,
+    title: body.title,
+    status: 'created',
+  });
 };
 
 export const PUT = async ({ request }) => {
@@ -86,8 +76,5 @@ export const PUT = async ({ request }) => {
   const body = await request.json();
   const { id, ...updates } = body;
   await TodoDB.updateTodo(id, session.user_id, updates);
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return successResponse({ success: true });
 };

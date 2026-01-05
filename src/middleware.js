@@ -28,18 +28,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     url.pathname.startsWith(route)
   );
 
-  console.log(
-    '[Middleware] Request to:',
-    url.pathname,
-    '- Protected:',
-    isOAuthProtectedRoute,
-    '- Unprotected:',
-    isUnprotectedRoute
-  );
-
   // Handle OAuth-protected API routes (require Bearer token)
   if (isOAuthProtectedRoute) {
-    console.log('[Middleware] Is Oauth Route');
     const oauthUser = await getOAuthUser(request);
     if (!oauthUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -51,16 +41,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   } else if (!isUnprotectedRoute) {
     const user = await getUser(request);
     if (!user) {
-      console.log(
-        '[Middleware] User not authenticated, redirecting to login with return_to:',
-        url.pathname + url.search
-      );
       const loginUrl = new URL('/login', url.origin);
       loginUrl.searchParams.set('return_to', url.pathname + url.search);
       return redirect(loginUrl.toString());
     }
 
-    console.log('[Middleware] Setting user to ' + user);
     context.locals.user = user;
   }
 
@@ -78,6 +63,27 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // Remove potentially dangerous headers
   response.headers.delete('X-Powered-By');
+
+  // Content Security Policy
+  // NOTE: 'unsafe-inline' is required for Astro's inline scripts.
+  // To remove it, implement CSP nonces:
+  // 1. Generate nonce in middleware: crypto.randomBytes(16).toString('base64')
+  // 2. Pass nonce via context.locals.cspNonce
+  // 3. Add nonce={Astro.locals.cspNonce} to all <script> and <style> tags
+  // 4. Update CSP: script-src 'self' 'nonce-{nonce}'
+  response.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: https:; " +
+      "font-src 'self'; " +
+      "connect-src 'self'; " +
+      "frame-ancestors 'none'; " +
+      "base-uri 'self'; " +
+      "form-action 'self'; " +
+      'upgrade-insecure-requests'
+  );
 
   // HSTS (only in production)
   if (process.env.NODE_ENV === 'production') {

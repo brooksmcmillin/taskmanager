@@ -4,16 +4,11 @@ import crypto from 'crypto';
 
 export async function GET({ request }) {
   try {
-    console.log('[OAuth/Clients] GET request received');
-
     // Support both session and Bearer token authentication
     let session;
     try {
       session = await requireAuth(request);
     } catch (e) {
-      console.log(
-        '[OAuth/Clients] GET unauthorized - no valid session or token'
-      );
       return new Response('Unauthorized', { status: 401 });
     }
 
@@ -21,13 +16,6 @@ export async function GET({ request }) {
       id: session.user_id,
       username: session.username,
     };
-
-    console.log(
-      '[OAuth/Clients] GET authorized for user:',
-      user.username,
-      '(auth_type:',
-      session.auth_type + ')'
-    );
 
     // Only return clients owned by this user
     const clients = await TodoDB.query(
@@ -40,34 +28,22 @@ export async function GET({ request }) {
       [user.id]
     );
 
-    console.log(
-      '[OAuth/Clients] Returning',
-      clients.rows.length,
-      'clients for user:',
-      user.id
-    );
-
     return new Response(JSON.stringify(clients.rows), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('[OAuth/Clients] GET error:', error);
+    console.error('[OAuth/Clients] Error:', error.message);
     return new Response('Server error', { status: 500 });
   }
 }
 
 export async function POST({ request }) {
   try {
-    console.log('[OAuth/Clients] POST request received');
-
     // Support both session and Bearer token authentication
     let session;
     try {
       session = await requireAuth(request);
     } catch (e) {
-      console.log(
-        '[OAuth/Clients] POST unauthorized - no valid session or token'
-      );
       return new Response('Unauthorized', { status: 401 });
     }
 
@@ -75,13 +51,6 @@ export async function POST({ request }) {
       id: session.user_id,
       username: session.username,
     };
-
-    console.log(
-      '[OAuth/Clients] POST authorized for user:',
-      user.username,
-      '(auth_type:',
-      session.auth_type + ')'
-    );
 
     const body = await request.json();
     const {
@@ -92,23 +61,12 @@ export async function POST({ request }) {
       clientSecret: customSecret,
     } = body;
 
-    console.log('[OAuth/Clients] Creating client:', {
-      name,
-      redirectUris,
-      grantTypes,
-      scopes,
-      hasCustomSecret: !!customSecret,
-    });
-
     if (
       !name ||
       !redirectUris ||
       !Array.isArray(redirectUris) ||
       redirectUris.length === 0
     ) {
-      console.log(
-        '[OAuth/Clients] POST validation failed - missing required fields'
-      );
       return new Response(
         JSON.stringify({
           error: 'Invalid request',
@@ -121,20 +79,54 @@ export async function POST({ request }) {
       );
     }
 
-    // Validate custom secret if provided
+    // Validate custom secret if provided - enforce strong entropy requirements
     if (
       customSecret !== undefined &&
       customSecret !== null &&
       customSecret !== ''
     ) {
-      if (typeof customSecret !== 'string' || customSecret.length < 11) {
-        console.log(
-          '[OAuth/Clients] POST validation failed - custom secret too short'
-        );
+      if (typeof customSecret !== 'string') {
         return new Response(
           JSON.stringify({
             error: 'Invalid request',
-            message: 'Custom client secret must be at least 16 characters',
+            message: 'Client secret must be a string',
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      // Require minimum 32 characters for security
+      if (customSecret.length < 32) {
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid request',
+            message: 'Custom client secret must be at least 32 characters',
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      // Require character diversity for entropy
+      const hasLower = /[a-z]/.test(customSecret);
+      const hasUpper = /[A-Z]/.test(customSecret);
+      const hasNumber = /[0-9]/.test(customSecret);
+      const hasSpecial = /[^a-zA-Z0-9]/.test(customSecret);
+      const diversityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(
+        Boolean
+      ).length;
+
+      if (diversityCount < 2) {
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid request',
+            message:
+              'Client secret must contain at least 2 of: lowercase, uppercase, numbers, special characters',
           }),
           {
             status: 400,
@@ -147,7 +139,6 @@ export async function POST({ request }) {
     // Generate client credentials
     const clientId = crypto.randomBytes(16).toString('hex');
     const clientSecret = customSecret || crypto.randomBytes(32).toString('hex');
-    console.log('[OAuth/Clients] Generated client_id:', clientId);
 
     const client = await TodoDB.createOAuthClient(
       clientId,
@@ -157,13 +148,6 @@ export async function POST({ request }) {
       grantTypes,
       scopes,
       user.id // Add user ownership
-    );
-
-    console.log(
-      '[OAuth/Clients] Client created successfully for user:',
-      user.id,
-      '- client_id:',
-      client.client_id
     );
 
     return new Response(
@@ -177,7 +161,7 @@ export async function POST({ request }) {
       }
     );
   } catch (error) {
-    console.error('[OAuth/Clients] POST error:', error);
+    console.error('[OAuth/Clients] Error:', error.message);
     return new Response('Server error', { status: 500 });
   }
 }

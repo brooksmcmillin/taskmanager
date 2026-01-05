@@ -10,14 +10,22 @@ export default defineConfig({
   }),
   vite: {
     optimizeDeps: {
-      exclude: ['better-sqlite3'],
+      exclude: ['better-sqlite3', 'bcrypt'],
+    },
+    build: {
+      rollupOptions: {
+        external: ['bcrypt'],
+      },
+    },
+    ssr: {
+      external: ['bcrypt'],
     },
     server: {
       allowedHosts: ['todo.brooksmcmillin.com'],
     },
   },
   security: {
-    checkOrigin: false,
+    checkOrigin: true,
   },
   server: {
     allowedHosts: ['todo.brooksmcmillin.com'],

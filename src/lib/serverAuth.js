@@ -5,8 +5,6 @@ export function checkAuth(request) {
   const sessionId = Auth.getSessionFromRequest(request);
   const session = Auth.getSessionUser(sessionId);
 
-  console.log('Session: ' + session);
-
   if (!session) {
     return {
       user: null,
@@ -26,7 +24,6 @@ export function checkAuth(request) {
 
 export function requireAuth(request) {
   const auth = checkAuth(request);
-  console.log('Auth: ' + auth);
   if (auth.redirect) {
     return auth.redirect;
   }

@@ -3,28 +3,13 @@ import { requireAuth } from '../../../../lib/auth.js';
 
 export async function PUT({ request, params }) {
   try {
-    console.log(
-      '[OAuth/Clients] PUT request received for client_id:',
-      params.clientId
-    );
-
     // Support both session and Bearer token authentication
     let session;
     try {
       session = await requireAuth(request);
     } catch (e) {
-      console.log(
-        '[OAuth/Clients] PUT unauthorized - no valid session or token'
-      );
       return new Response('Unauthorized', { status: 401 });
     }
-
-    console.log(
-      '[OAuth/Clients] PUT authorized for user:',
-      session.username,
-      '(auth_type:',
-      session.auth_type + ')'
-    );
 
     const body = await request.json();
     const {
@@ -34,23 +19,12 @@ export async function PUT({ request, params }) {
       scopes = ['read'],
     } = body;
 
-    console.log('[OAuth/Clients] Updating client:', {
-      client_id: params.clientId,
-      name,
-      redirectUris,
-      grantTypes,
-      scopes,
-    });
-
     if (
       !name ||
       !redirectUris ||
       !Array.isArray(redirectUris) ||
       redirectUris.length === 0
     ) {
-      console.log(
-        '[OAuth/Clients] PUT validation failed - missing required fields'
-      );
       return new Response(
         JSON.stringify({
           error: 'Invalid request',
@@ -82,10 +56,6 @@ export async function PUT({ request, params }) {
     );
 
     if (result.rows.length === 0) {
-      console.log(
-        '[OAuth/Clients] PUT failed - client not found or unauthorized:',
-        params.clientId
-      );
       return new Response(
         JSON.stringify({
           error: 'Client not found or you do not have permission to modify it',
@@ -96,46 +66,25 @@ export async function PUT({ request, params }) {
         }
       );
     }
-    console.log(
-      '[OAuth/Clients] Client updated successfully by user:',
-      session.user_id,
-      '- client_id:',
-      params.clientId
-    );
 
     return new Response(JSON.stringify(result.rows[0]), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('[OAuth/Clients] PUT error:', error);
+    console.error('[OAuth/Clients] Error:', error.message);
     return new Response('Server error', { status: 500 });
   }
 }
 
 export async function DELETE({ request, params }) {
   try {
-    console.log(
-      '[OAuth/Clients] DELETE request received for client_id:',
-      params.clientId
-    );
-
     // Support both session and Bearer token authentication
     let session;
     try {
       session = await requireAuth(request);
     } catch (e) {
-      console.log(
-        '[OAuth/Clients] DELETE unauthorized - no valid session or token'
-      );
       return new Response('Unauthorized', { status: 401 });
     }
-
-    console.log(
-      '[OAuth/Clients] DELETE authorized for user:',
-      session.username,
-      '(auth_type:',
-      session.auth_type + ')'
-    );
 
     // Verify ownership before deleting
     const result = await TodoDB.query(
@@ -148,10 +97,6 @@ export async function DELETE({ request, params }) {
     );
 
     if (result.rows.length === 0) {
-      console.log(
-        '[OAuth/Clients] DELETE failed - client not found or unauthorized:',
-        params.clientId
-      );
       return new Response(
         JSON.stringify({
           error: 'Client not found or you do not have permission to delete it',
@@ -163,18 +108,11 @@ export async function DELETE({ request, params }) {
       );
     }
 
-    console.log(
-      '[OAuth/Clients] Client deleted successfully by user:',
-      session.user_id,
-      '- client_id:',
-      params.clientId
-    );
-
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('[OAuth/Clients] DELETE error:', error);
+    console.error('[OAuth/Clients] Error:', error.message);
     return new Response('Server error', { status: 500 });
   }
 }

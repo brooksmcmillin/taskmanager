@@ -191,9 +191,11 @@
       taskDiv.style['background-color'] = hexTo50Shade(projectColor);
       taskDiv.style['border-left'] = '4px solid ' + projectColor;
 
-      taskDiv.innerHTML = `
-        <div class="task-title">${todo.title}</div>
-      `;
+      // Use textContent to prevent XSS - never use innerHTML with user data
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'task-title';
+      titleDiv.textContent = todo.title;
+      taskDiv.appendChild(titleDiv);
 
       taskDiv.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData('text/plain', todo.id);
