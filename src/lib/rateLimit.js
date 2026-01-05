@@ -23,7 +23,7 @@ class RateLimiter {
     const attempts = this.attempts.get(identifier) || [];
 
     // Filter to only recent attempts within the window
-    const recentAttempts = attempts.filter(t => now - t < windowMs);
+    const recentAttempts = attempts.filter((t) => now - t < windowMs);
 
     if (recentAttempts.length >= maxAttempts) {
       // Calculate when the oldest attempt will expire
@@ -62,7 +62,7 @@ class RateLimiter {
     const maxAge = 60 * 60 * 1000; // 1 hour
 
     for (const [identifier, attempts] of this.attempts.entries()) {
-      const recentAttempts = attempts.filter(t => now - t < maxAge);
+      const recentAttempts = attempts.filter((t) => now - t < maxAge);
       if (recentAttempts.length === 0) {
         this.attempts.delete(identifier);
       } else {

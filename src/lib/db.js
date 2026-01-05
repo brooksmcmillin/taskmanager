@@ -160,13 +160,15 @@ export class TodoDB {
   static async updateProject(id, user_id, updates) {
     // Whitelist allowed fields to prevent SQL injection via field names
     const allowedFields = ['name', 'description', 'color'];
-    const fields = Object.keys(updates).filter(f => allowedFields.includes(f));
+    const fields = Object.keys(updates).filter((f) =>
+      allowedFields.includes(f)
+    );
 
     if (fields.length === 0) {
       throw new Error('No valid fields to update');
     }
 
-    const values = fields.map(f => updates[f]);
+    const values = fields.map((f) => updates[f]);
     const setClause = fields
       .map((field, index) => `${field} = $${index + 1}`)
       .join(', ');
@@ -408,14 +410,28 @@ export class TodoDB {
 
   static async updateTodo(id, user_id, updates) {
     // Whitelist allowed fields to prevent SQL injection via field names
-    const allowedFields = ['project_id', 'title', 'description', 'priority', 'status', 'estimated_hours', 'actual_hours', 'due_date', 'completed_date', 'tags', 'context'];
-    const fields = Object.keys(updates).filter(f => allowedFields.includes(f));
+    const allowedFields = [
+      'project_id',
+      'title',
+      'description',
+      'priority',
+      'status',
+      'estimated_hours',
+      'actual_hours',
+      'due_date',
+      'completed_date',
+      'tags',
+      'context',
+    ];
+    const fields = Object.keys(updates).filter((f) =>
+      allowedFields.includes(f)
+    );
 
     if (fields.length === 0) {
       throw new Error('No valid fields to update');
     }
 
-    const values = fields.map(f => updates[f]);
+    const values = fields.map((f) => updates[f]);
     const setClause = fields
       .map((field, index) => `${field} = $${index + 1}`)
       .join(', ');
@@ -488,7 +504,8 @@ export class TodoDB {
       throw new Error('Invalid daysBack parameter: must be between 1 and 365');
     }
 
-    const result = await this.query(`
+    const result = await this.query(
+      `
       SELECT
         DATE(completed_date) as date,
         SUM(actual_hours) as total_hours,
@@ -498,7 +515,9 @@ export class TodoDB {
         AND completed_date >= NOW() - INTERVAL '1 day' * $1
       GROUP BY DATE(completed_date)
       ORDER BY date
-    `, [days]);
+    `,
+      [days]
+    );
     return result.rows;
   }
 
@@ -509,7 +528,8 @@ export class TodoDB {
       throw new Error('Invalid daysBack parameter: must be between 1 and 365');
     }
 
-    const result = await this.query(`
+    const result = await this.query(
+      `
       SELECT
         title,
         estimated_hours,
@@ -522,7 +542,9 @@ export class TodoDB {
         AND completed_date >= NOW() - INTERVAL '1 day' * $1
         AND estimated_hours > 0
       ORDER BY completed_date DESC
-    `, [days]);
+    `,
+      [days]
+    );
     return result.rows;
   }
 

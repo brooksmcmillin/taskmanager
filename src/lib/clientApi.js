@@ -183,7 +183,9 @@ export function createFormManager(config) {
   async function handleSubmit(e) {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const data = getFormData ? getFormData(formData) : Object.fromEntries(formData);
+    const data = getFormData
+      ? getFormData(formData)
+      : Object.fromEntries(formData);
 
     const isEditing = editingId !== null;
     const url = isEditing ? `${apiEndpoint}/${editingId}` : apiEndpoint;
@@ -199,14 +201,18 @@ export function createFormManager(config) {
       resetToAddMode();
       if (onSuccess) onSuccess();
     } else {
-      alert(`Error ${isEditing ? 'updating' : 'creating'} ${entityName.toLowerCase()}: ${result.error}`);
+      alert(
+        `Error ${isEditing ? 'updating' : 'creating'} ${entityName.toLowerCase()}: ${result.error}`
+      );
     }
   }
 
   async function handleDelete() {
     if (editingId === null) return;
 
-    const message = deleteConfirmMessage || `Are you sure you want to delete this ${entityName.toLowerCase()}?`;
+    const message =
+      deleteConfirmMessage ||
+      `Are you sure you want to delete this ${entityName.toLowerCase()}?`;
     if (!confirm(message)) return;
 
     const result = await apiDelete(`${apiEndpoint}/${editingId}`);
@@ -235,6 +241,8 @@ export function createFormManager(config) {
     handleDelete,
     setup,
     getEditingId: () => editingId,
-    setEditingId: (id) => { editingId = id; },
+    setEditingId: (id) => {
+      editingId = id;
+    },
   };
 }

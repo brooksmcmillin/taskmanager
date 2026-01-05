@@ -117,13 +117,16 @@ export async function POST({ request }) {
       const hasUpper = /[A-Z]/.test(customSecret);
       const hasNumber = /[0-9]/.test(customSecret);
       const hasSpecial = /[^a-zA-Z0-9]/.test(customSecret);
-      const diversityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+      const diversityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(
+        Boolean
+      ).length;
 
       if (diversityCount < 2) {
         return new Response(
           JSON.stringify({
             error: 'Invalid request',
-            message: 'Client secret must contain at least 2 of: lowercase, uppercase, numbers, special characters',
+            message:
+              'Client secret must contain at least 2 of: lowercase, uppercase, numbers, special characters',
           }),
           {
             status: 400,

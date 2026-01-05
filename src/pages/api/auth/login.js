@@ -4,9 +4,10 @@ import { loginRateLimiter } from '../../../lib/rateLimit.js';
 export async function POST({ request }) {
   try {
     // Get client IP for rate limiting
-    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || request.headers.get('x-real-ip')
-      || 'unknown';
+    const clientIp =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      'unknown';
 
     // Check rate limit before processing
     const rateLimitCheck = loginRateLimiter.check(clientIp, 5, 15 * 60 * 1000);
@@ -14,13 +15,13 @@ export async function POST({ request }) {
       return new Response(
         JSON.stringify({
           error: 'Too many login attempts. Please try again later.',
-          retryAfter: rateLimitCheck.retryAfter
+          retryAfter: rateLimitCheck.retryAfter,
         }),
         {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
-            'Retry-After': String(rateLimitCheck.retryAfter)
+            'Retry-After': String(rateLimitCheck.retryAfter),
           },
         }
       );

@@ -12,12 +12,14 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 const ALLOWED_ORIGINS = [
   'https://todo.brooksmcmillin.com',
   // Add localhost for development
-  ...(process.env.NODE_ENV !== 'production' ? [
-    'http://localhost:4321',
-    'http://localhost:3000',
-    'http://127.0.0.1:4321',
-    'http://127.0.0.1:3000',
-  ] : []),
+  ...(process.env.NODE_ENV !== 'production'
+    ? [
+        'http://localhost:4321',
+        'http://localhost:3000',
+        'http://127.0.0.1:4321',
+        'http://127.0.0.1:3000',
+      ]
+    : []),
 ];
 
 /**
@@ -43,7 +45,7 @@ export function getCorsHeaders(request) {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
-      'Vary': 'Origin',
+      Vary: 'Origin',
     };
   }
 

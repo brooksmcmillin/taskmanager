@@ -107,9 +107,10 @@ export class Auth {
     // Check for __Host-session first (production), then fall back to session (development)
     const sessionCookie = cookies
       .split(';')
-      .find((cookie) =>
-        cookie.trim().startsWith('__Host-session=') ||
-        cookie.trim().startsWith('session=')
+      .find(
+        (cookie) =>
+          cookie.trim().startsWith('__Host-session=') ||
+          cookie.trim().startsWith('session=')
       );
 
     if (!sessionCookie) return null;

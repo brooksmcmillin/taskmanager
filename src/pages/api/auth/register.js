@@ -45,13 +45,10 @@ export async function POST({ request }) {
     // Validate password strength
     const passwordError = validatePassword(password);
     if (passwordError) {
-      return new Response(
-        JSON.stringify({ error: passwordError }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return new Response(JSON.stringify({ error: passwordError }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     const result = await Auth.createUser(username, email, password);

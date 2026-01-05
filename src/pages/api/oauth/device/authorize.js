@@ -36,7 +36,9 @@ export async function POST({ request, redirect }) {
     }
 
     if (!action || (action !== 'allow' && action !== 'deny')) {
-      return redirect(`/oauth/device?user_code=${encodeURIComponent(userCode)}&error=invalid_action`);
+      return redirect(
+        `/oauth/device?user_code=${encodeURIComponent(userCode)}&error=invalid_action`
+      );
     }
 
     if (action === 'allow') {

@@ -88,7 +88,7 @@ import Layout from '../layouts/Layout.astro';
       if (response.ok) {
         // Redirect to return_to if present AND safe, otherwise go to homepage
         // Prevents open redirect attacks by validating the URL is local
-        const redirectUrl = (returnTo && isLocalUrl(returnTo)) ? returnTo : '/';
+        const redirectUrl = returnTo && isLocalUrl(returnTo) ? returnTo : '/';
         window.location.href = redirectUrl;
       } else {
         errorDiv.textContent = data.error || 'Login failed';

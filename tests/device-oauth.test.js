@@ -89,15 +89,11 @@ describe('OAuth 2.0 Device Authorization Grant (RFC 8628)', () => {
 
     it('should generate user codes in expected format (XXXX-XXXX)', () => {
       // User codes should be 8 consonants with a hyphen in the middle
-      const userCodePattern = /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
+      const userCodePattern =
+        /^[BCDFGHJKLMNPQRSTVWXZ]{4}-[BCDFGHJKLMNPQRSTVWXZ]{4}$/;
 
       // Test multiple generations (using mock approach)
-      const validCodes = [
-        'WDJB-MJHT',
-        'BCDF-GHJK',
-        'LMNP-QRST',
-        'VWXZ-BCDF',
-      ];
+      const validCodes = ['WDJB-MJHT', 'BCDF-GHJK', 'LMNP-QRST', 'VWXZ-BCDF'];
 
       validCodes.forEach((code) => {
         expect(code).toMatch(userCodePattern);
@@ -418,9 +414,7 @@ describe('OAuth 2.0 Device Authorization Grant (RFC 8628)', () => {
       const clientScopes = ['read', 'write'];
       const requestedScope = null;
 
-      const scopes = requestedScope
-        ? requestedScope.split(' ')
-        : clientScopes;
+      const scopes = requestedScope ? requestedScope.split(' ') : clientScopes;
 
       expect(scopes).toEqual(['read', 'write']);
     });

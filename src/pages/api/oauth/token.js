@@ -1,5 +1,8 @@
 import { TodoDB } from '../../../lib/db.js';
-import { getCorsHeaders, corsPreflightResponse } from '../../../lib/apiResponse.js';
+import {
+  getCorsHeaders,
+  corsPreflightResponse,
+} from '../../../lib/apiResponse.js';
 import crypto from 'crypto';
 
 export async function OPTIONS({ request }) {
@@ -437,7 +440,8 @@ async function handleDeviceCodeGrant(formData, client) {
 
   if (deviceAuth.status === 'authorized') {
     // Consume the device code (mark as used)
-    const consumedAuth = await TodoDB.consumeDeviceAuthorizationCode(deviceCode);
+    const consumedAuth =
+      await TodoDB.consumeDeviceAuthorizationCode(deviceCode);
 
     if (!consumedAuth) {
       return new Response(
