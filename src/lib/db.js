@@ -158,15 +158,22 @@ export class TodoDB {
   }
 
   static async updateProject(id, user_id, updates) {
-    const fields = Object.keys(updates);
-    const values = Object.values(updates);
+    // Whitelist allowed fields to prevent SQL injection via field names
+    const allowedFields = ['name', 'description', 'color'];
+    const fields = Object.keys(updates).filter(f => allowedFields.includes(f));
+
+    if (fields.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    const values = fields.map(f => updates[f]);
     const setClause = fields
       .map((field, index) => `${field} = $${index + 1}`)
       .join(', ');
 
     const result = await this.query(
       `
-      UPDATE projects 
+      UPDATE projects
       SET ${setClause}, updated_at = NOW()
       WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}
       RETURNING *
@@ -400,8 +407,15 @@ export class TodoDB {
   }
 
   static async updateTodo(id, user_id, updates) {
-    const fields = Object.keys(updates);
-    const values = Object.values(updates);
+    // Whitelist allowed fields to prevent SQL injection via field names
+    const allowedFields = ['project_id', 'title', 'description', 'priority', 'status', 'estimated_hours', 'actual_hours', 'due_date', 'completed_date', 'tags', 'context'];
+    const fields = Object.keys(updates).filter(f => allowedFields.includes(f));
+
+    if (fields.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    const values = fields.map(f => updates[f]);
     const setClause = fields
       .map((field, index) => `${field} = $${index + 1}`)
       .join(', ');

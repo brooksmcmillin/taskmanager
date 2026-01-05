@@ -2,6 +2,7 @@ import pg from 'pg';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
@@ -114,8 +115,7 @@ export class MigrationRunner {
   }
 
   generateChecksum(content) {
-    // Simple checksum - in production, use crypto.createHash
-    return Buffer.from(content).toString('base64').slice(0, 8);
+    return crypto.createHash('sha256').update(content).digest('hex');
   }
 
   async close() {

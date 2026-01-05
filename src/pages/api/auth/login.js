@@ -1,14 +1,34 @@
 import { Auth } from '../../../lib/auth.js';
+import { loginRateLimiter } from '../../../lib/rateLimit.js';
 
 export async function POST({ request }) {
-  console.log('[Auth/Login] POST request received');
   try {
+    // Get client IP for rate limiting
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown';
+
+    // Check rate limit before processing
+    const rateLimitCheck = loginRateLimiter.check(clientIp, 5, 15 * 60 * 1000);
+    if (!rateLimitCheck.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: 'Too many login attempts. Please try again later.',
+          retryAfter: rateLimitCheck.retryAfter
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(rateLimitCheck.retryAfter)
+          },
+        }
+      );
+    }
+
     const { username, password } = await request.json();
 
-    console.log('[Auth/Login] Login attempt for username:', username);
-
     if (!username || !password) {
-      console.log('[Auth/Login] Missing credentials');
       return new Response(
         JSON.stringify({ error: 'Username and password required' }),
         {
@@ -18,11 +38,15 @@ export async function POST({ request }) {
       );
     }
 
+    // Record attempt before authentication
+    loginRateLimiter.recordAttempt(clientIp);
+
     const user = await Auth.authenticateUser(username, password);
-    console.log('[Auth/Login] User authenticated:', user.username);
+
+    // Clear rate limit on successful login
+    loginRateLimiter.clearAttempts(clientIp);
 
     const session = await Auth.createSession(user.id);
-    console.log('[Auth/Login] Session created:', session.sessionId);
 
     return new Response(
       JSON.stringify({
@@ -45,8 +69,7 @@ export async function POST({ request }) {
       }
     );
   } catch (error) {
-    console.error('[Auth/Login] Authentication failed:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
     });

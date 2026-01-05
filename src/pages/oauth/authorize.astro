@@ -14,11 +14,6 @@ const codeChallengeMethod = url.searchParams.get('code_challenge_method');
 
 // Validate required parameters
 if (!clientId || !redirectUri || responseType !== 'code') {
-  console.error('[OAuth/Authorize Page] Invalid parameters:', {
-    clientId,
-    redirectUri,
-    responseType,
-  });
   const loginUrl = new URL('/login', url.origin);
   loginUrl.searchParams.set('return_to', url.pathname + url.search);
   return Astro.redirect(loginUrl.toString());
@@ -29,14 +24,9 @@ const sessionId = Auth.getSessionFromRequest(Astro.request);
 const session = await Auth.getSessionUser(sessionId);
 
 if (!session) {
-  console.log(
-    '[OAuth/Authorize Page] User not authenticated, redirecting to login'
-  );
   const returnTo = url.pathname + url.search;
-  console.log('[OAuth/Authorize Page] return_to value:', returnTo);
   const loginUrl = new URL('/login', url.origin);
   loginUrl.searchParams.set('return_to', returnTo);
-  console.log('[OAuth/Authorize Page] Full login URL:', loginUrl.toString());
   return Astro.redirect(loginUrl.toString());
 }
 
@@ -53,24 +43,15 @@ try {
   if (!client) {
     throw new Error('Client not found');
   }
-  console.log('[OAuth/Authorize Page] Client found:', client.name);
 } catch (error) {
-  console.error('[OAuth/Authorize Page] Client not found:', clientId);
   return Astro.redirect('/login?error=invalid_client');
 }
 
 // Validate redirect URI
 const allowedUris = JSON.parse(client.redirect_uris);
 if (!allowedUris.includes(redirectUri)) {
-  console.error('[OAuth/Authorize Page] Invalid redirect URI:', redirectUri);
-  console.error('[OAuth/Authorize Page] Allowed URIs:', allowedUris);
   return Astro.redirect('/login?error=invalid_redirect_uri');
 }
-
-console.log(
-  '[OAuth/Authorize Page] Showing consent screen to user:',
-  user.username
-);
 
 const scopes = scope.split(' ');
 ---

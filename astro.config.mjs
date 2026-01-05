@@ -17,7 +17,7 @@ export default defineConfig({
     },
   },
   security: {
-    checkOrigin: false,
+    checkOrigin: true,
   },
   server: {
     allowedHosts: ['todo.brooksmcmillin.com'],
