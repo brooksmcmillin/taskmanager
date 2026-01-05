@@ -23,13 +23,16 @@ export async function POST({ request }) {
     console.log('[OAuth/Token] Request params:', {
       grant_type: grantType,
       client_id: clientId,
-      has_client_secret: !!clientSecret
+      has_client_secret: !!clientSecret,
     });
 
     // Validate client credentials
     const client = await TodoDB.validateOAuthClient(clientId, clientSecret);
     if (!client) {
-      console.log('[OAuth/Token] Client validation failed for client_id:', clientId);
+      console.log(
+        '[OAuth/Token] Client validation failed for client_id:',
+        clientId
+      );
       return new Response(
         JSON.stringify({
           error: 'invalid_client',
@@ -86,11 +89,13 @@ async function handleAuthorizationCodeGrant(formData, client) {
   console.log('[OAuth/Token] Authorization code grant params:', {
     has_code: !!code,
     redirect_uri: redirectUri,
-    has_code_verifier: !!codeVerifier
+    has_code_verifier: !!codeVerifier,
   });
 
   if (!code || !redirectUri) {
-    console.log('[OAuth/Token] Missing required parameters for auth code grant');
+    console.log(
+      '[OAuth/Token] Missing required parameters for auth code grant'
+    );
     return new Response(
       JSON.stringify({
         error: 'invalid_request',
@@ -129,7 +134,7 @@ async function handleAuthorizationCodeGrant(formData, client) {
   if (authCode.redirect_uri !== redirectUri) {
     console.log('[OAuth/Token] Redirect URI mismatch:', {
       expected: authCode.redirect_uri,
-      received: redirectUri
+      received: redirectUri,
     });
     return new Response(
       JSON.stringify({
@@ -174,7 +179,10 @@ async function handleAuthorizationCodeGrant(formData, client) {
     } else if (challengeMethod === 'plain') {
       derivedChallenge = codeVerifier;
     } else {
-      console.log('[OAuth/Token] Unsupported challenge method:', challengeMethod);
+      console.log(
+        '[OAuth/Token] Unsupported challenge method:',
+        challengeMethod
+      );
       return new Response(
         JSON.stringify({
           error: 'invalid_request',
@@ -206,7 +214,10 @@ async function handleAuthorizationCodeGrant(formData, client) {
 
   // Create access token
   const scopes = JSON.parse(authCode.scopes);
-  console.log('[OAuth/Token] Creating access token for user:', authCode.user_id);
+  console.log(
+    '[OAuth/Token] Creating access token for user:',
+    authCode.user_id
+  );
   const tokenData = await TodoDB.createAccessToken(
     authCode.user_id,
     client.client_id,
@@ -242,7 +253,7 @@ async function handleRefreshTokenGrant(formData, client) {
   const refreshToken = formData.get('refresh_token');
 
   console.log('[OAuth/Token] Refresh token grant params:', {
-    has_refresh_token: !!refreshToken
+    has_refresh_token: !!refreshToken,
   });
 
   if (!refreshToken) {
@@ -296,5 +307,3 @@ async function handleRefreshTokenGrant(formData, client) {
     }
   );
 }
-
-

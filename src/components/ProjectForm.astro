@@ -47,9 +47,9 @@
         <button type="submit" class="btn btn-primary flex-1" id="submit-btn"
           >Create Project</button
         >
-        <button 
-          type="button" 
-          class="btn btn-danger btn-delete hidden" 
+        <button
+          type="button"
+          class="btn btn-danger btn-delete hidden"
           id="delete-btn"
           title="Delete project"
         >
@@ -75,7 +75,7 @@
     // Update button text and modal title
     document.getElementById('submit-btn').textContent = 'Update Project';
     document.querySelector('.modal-header h2').textContent = 'Edit Project';
-    
+
     // Show delete button in edit mode
     document.getElementById('delete-btn').classList.remove('hidden');
   };
@@ -85,7 +85,7 @@
     window.editingProjectId = null;
     document.getElementById('submit-btn').textContent = 'Create Project';
     document.querySelector('.modal-header h2').textContent = 'Add New Project';
-    
+
     // Hide delete button in add mode
     document.getElementById('delete-btn').classList.add('hidden');
   };
@@ -147,8 +147,10 @@
       return;
     }
 
-    const confirmDelete = confirm('Are you sure you want to delete this project? This will also delete all todos associated with this project. This action cannot be undone.');
-    
+    const confirmDelete = confirm(
+      'Are you sure you want to delete this project? This will also delete all todos associated with this project. This action cannot be undone.'
+    );
+
     if (!confirmDelete) {
       return;
     }
@@ -163,14 +165,14 @@
         // Reset form and close modal
         document.getElementById('project-form').reset();
         window.resetProjectFormToAddMode();
-        
+
         // Close the modal
         const modal = document.getElementById('projectModal');
         if (modal) {
           modal.classList.remove('show');
           document.body.style.overflow = '';
         }
-        
+
         // Trigger a custom event to refresh the project list
         window.dispatchEvent(new CustomEvent('projectAdded'));
       } else if (response.status === 401) {
@@ -184,4 +186,3 @@
     }
   });
 </script>
-

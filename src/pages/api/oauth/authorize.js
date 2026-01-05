@@ -21,12 +21,14 @@ export async function GET({ request, redirect, url }) {
     scope,
     has_state: !!state,
     has_code_challenge: !!codeChallenge,
-    code_challenge_method: codeChallengeMethod
+    code_challenge_method: codeChallengeMethod,
   });
 
   // Validate required parameters
   if (!clientId || !redirectUri || responseType !== 'code') {
-    console.log('[OAuth/Authorize] GET validation failed - missing required params');
+    console.log(
+      '[OAuth/Authorize] GET validation failed - missing required params'
+    );
     return new Response('Invalid request parameters', { status: 400 });
   }
 
@@ -34,7 +36,10 @@ export async function GET({ request, redirect, url }) {
     // Validate OAuth client
     const client = await TodoDB.getOAuthClient(clientId);
     if (!client) {
-      console.log('[OAuth/Authorize] GET failed - invalid client_id:', clientId);
+      console.log(
+        '[OAuth/Authorize] GET failed - invalid client_id:',
+        clientId
+      );
       return new Response('Invalid client', { status: 400 });
     }
 
@@ -43,7 +48,10 @@ export async function GET({ request, redirect, url }) {
     // Validate redirect URI
     const allowedUris = JSON.parse(client.redirect_uris);
     if (!allowedUris.includes(redirectUri)) {
-      console.log('[OAuth/Authorize] GET failed - invalid redirect_uri:', redirectUri);
+      console.log(
+        '[OAuth/Authorize] GET failed - invalid redirect_uri:',
+        redirectUri
+      );
       console.log('[OAuth/Authorize] Allowed URIs:', allowedUris);
       return new Response('Invalid redirect URI', { status: 400 });
     }
@@ -55,7 +63,9 @@ export async function GET({ request, redirect, url }) {
     const session = await Auth.getSessionUser(sessionId);
 
     if (!session) {
-      console.log('[OAuth/Authorize] User not authenticated, redirecting to login');
+      console.log(
+        '[OAuth/Authorize] User not authenticated, redirecting to login'
+      );
       // Redirect to login with return URL
       const returnTo = url.pathname + url.search;
       console.log('[OAuth/Authorize] return_to value:', returnTo);
@@ -110,7 +120,7 @@ export async function POST({ request, redirect, url }) {
     scope,
     action,
     has_state: !!state,
-    has_code_challenge: !!codeChallenge
+    has_code_challenge: !!codeChallenge,
   });
 
   try {
@@ -134,7 +144,10 @@ export async function POST({ request, redirect, url }) {
     // Validate OAuth client
     const client = await TodoDB.getOAuthClient(clientId);
     if (!client) {
-      console.log('[OAuth/Authorize] POST failed - invalid client_id:', clientId);
+      console.log(
+        '[OAuth/Authorize] POST failed - invalid client_id:',
+        clientId
+      );
       return new Response('Invalid client', { status: 400 });
     }
 
@@ -151,7 +164,9 @@ export async function POST({ request, redirect, url }) {
     }
 
     if (action === 'allow') {
-      console.log('[OAuth/Authorize] User approved authorization, creating auth code');
+      console.log(
+        '[OAuth/Authorize] User approved authorization, creating auth code'
+      );
       // User approved authorization - create authorization code
       const scopes = scope.split(' ');
       const authCode = await TodoDB.createAuthorizationCode(
@@ -163,7 +178,10 @@ export async function POST({ request, redirect, url }) {
         codeChallengeMethod
       );
 
-      console.log('[OAuth/Authorize] Authorization code created:', authCode.code);
+      console.log(
+        '[OAuth/Authorize] Authorization code created:',
+        authCode.code
+      );
 
       callbackUrl.searchParams.set('code', authCode.code);
       if (state) callbackUrl.searchParams.set('state', state);
@@ -179,4 +197,3 @@ export async function POST({ request, redirect, url }) {
     return new Response('Server error', { status: 500 });
   }
 }
-

@@ -3,7 +3,10 @@ import { Auth } from '../../../../lib/auth.js';
 
 export async function PUT({ request, params }) {
   try {
-    console.log('[OAuth/Clients] PUT request received for client_id:', params.clientId);
+    console.log(
+      '[OAuth/Clients] PUT request received for client_id:',
+      params.clientId
+    );
     const sessionId = Auth.getSessionFromRequest(request);
     const session = await Auth.getSessionUser(sessionId);
 
@@ -27,7 +30,7 @@ export async function PUT({ request, params }) {
       name,
       redirectUris,
       grantTypes,
-      scopes
+      scopes,
     });
 
     if (
@@ -36,7 +39,9 @@ export async function PUT({ request, params }) {
       !Array.isArray(redirectUris) ||
       redirectUris.length === 0
     ) {
-      console.log('[OAuth/Clients] PUT validation failed - missing required fields');
+      console.log(
+        '[OAuth/Clients] PUT validation failed - missing required fields'
+      );
       return new Response(
         JSON.stringify({
           error: 'Invalid request',
@@ -63,21 +68,31 @@ export async function PUT({ request, params }) {
         JSON.stringify(grantTypes),
         JSON.stringify(scopes),
         params.clientId,
-        session.user_id,  // Verify ownership
+        session.user_id, // Verify ownership
       ]
     );
 
     if (result.rows.length === 0) {
-      console.log('[OAuth/Clients] PUT failed - client not found or unauthorized:', params.clientId);
+      console.log(
+        '[OAuth/Clients] PUT failed - client not found or unauthorized:',
+        params.clientId
+      );
       return new Response(
-        JSON.stringify({ error: 'Client not found or you do not have permission to modify it' }),
+        JSON.stringify({
+          error: 'Client not found or you do not have permission to modify it',
+        }),
         {
           status: 404,
           headers: { 'Content-Type': 'application/json' },
         }
       );
     }
-    console.log('[OAuth/Clients] Client updated successfully by user:', session.user_id, '- client_id:', params.clientId);
+    console.log(
+      '[OAuth/Clients] Client updated successfully by user:',
+      session.user_id,
+      '- client_id:',
+      params.clientId
+    );
 
     return new Response(JSON.stringify(result.rows[0]), {
       headers: { 'Content-Type': 'application/json' },
@@ -90,7 +105,10 @@ export async function PUT({ request, params }) {
 
 export async function DELETE({ request, params }) {
   try {
-    console.log('[OAuth/Clients] DELETE request received for client_id:', params.clientId);
+    console.log(
+      '[OAuth/Clients] DELETE request received for client_id:',
+      params.clientId
+    );
     const sessionId = Auth.getSessionFromRequest(request);
     const session = await Auth.getSessionUser(sessionId);
 
@@ -99,7 +117,10 @@ export async function DELETE({ request, params }) {
       return new Response('Unauthorized', { status: 401 });
     }
 
-    console.log('[OAuth/Clients] DELETE authorized for user:', session.username);
+    console.log(
+      '[OAuth/Clients] DELETE authorized for user:',
+      session.username
+    );
 
     // Verify ownership before deleting
     const result = await TodoDB.query(
@@ -112,9 +133,14 @@ export async function DELETE({ request, params }) {
     );
 
     if (result.rows.length === 0) {
-      console.log('[OAuth/Clients] DELETE failed - client not found or unauthorized:', params.clientId);
+      console.log(
+        '[OAuth/Clients] DELETE failed - client not found or unauthorized:',
+        params.clientId
+      );
       return new Response(
-        JSON.stringify({ error: 'Client not found or you do not have permission to delete it' }),
+        JSON.stringify({
+          error: 'Client not found or you do not have permission to delete it',
+        }),
         {
           status: 404,
           headers: { 'Content-Type': 'application/json' },
@@ -122,7 +148,12 @@ export async function DELETE({ request, params }) {
       );
     }
 
-    console.log('[OAuth/Clients] Client deleted successfully by user:', session.user_id, '- client_id:', params.clientId);
+    console.log(
+      '[OAuth/Clients] Client deleted successfully by user:',
+      session.user_id,
+      '- client_id:',
+      params.clientId
+    );
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },

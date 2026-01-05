@@ -14,7 +14,11 @@ const codeChallengeMethod = url.searchParams.get('code_challenge_method');
 
 // Validate required parameters
 if (!clientId || !redirectUri || responseType !== 'code') {
-  console.error('[OAuth/Authorize Page] Invalid parameters:', { clientId, redirectUri, responseType });
+  console.error('[OAuth/Authorize Page] Invalid parameters:', {
+    clientId,
+    redirectUri,
+    responseType,
+  });
   const loginUrl = new URL('/login', url.origin);
   loginUrl.searchParams.set('return_to', url.pathname + url.search);
   return Astro.redirect(loginUrl.toString());
@@ -25,7 +29,9 @@ const sessionId = Auth.getSessionFromRequest(Astro.request);
 const session = await Auth.getSessionUser(sessionId);
 
 if (!session) {
-  console.log('[OAuth/Authorize Page] User not authenticated, redirecting to login');
+  console.log(
+    '[OAuth/Authorize Page] User not authenticated, redirecting to login'
+  );
   const returnTo = url.pathname + url.search;
   console.log('[OAuth/Authorize Page] return_to value:', returnTo);
   const loginUrl = new URL('/login', url.origin);
@@ -61,7 +67,10 @@ if (!allowedUris.includes(redirectUri)) {
   return Astro.redirect('/login?error=invalid_redirect_uri');
 }
 
-console.log('[OAuth/Authorize Page] Showing consent screen to user:', user.username);
+console.log(
+  '[OAuth/Authorize Page] Showing consent screen to user:',
+  user.username
+);
 
 const scopes = scope.split(' ');
 ---
@@ -148,12 +157,11 @@ const scopes = scope.split(' ');
           <p>
             <small
               >⚠️ Only authorize applications you trust. You can revoke access
-              at any time in your account settings.</small>
+              at any time in your account settings.</small
+            >
           </p>
         </div>
       </div>
     </div>
   </div>
-
 </Layout>
-

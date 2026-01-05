@@ -6,19 +6,13 @@ export const POST = async ({ params, request }) => {
   const { id } = params;
 
   if (!id) {
-    return new Response(
-      JSON.stringify({ error: 'Missing id' }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return new Response(JSON.stringify({ error: 'Missing id' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
-  await TodoDB.completeTodo(
-    parseInt(id),
-    session.user_id,
-  );
+  await TodoDB.completeTodo(parseInt(id), session.user_id);
   return new Response(JSON.stringify({ success: true }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },

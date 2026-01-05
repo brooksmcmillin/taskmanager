@@ -9,7 +9,7 @@ import {
   mockOAuthUser,
 } from './setup.js';
 
-const url_origin = "http://localhost:3000"
+const url_origin = 'http://localhost:3000';
 
 describe('Middleware Authentication', () => {
   beforeEach(() => {
@@ -38,7 +38,9 @@ describe('Middleware Authentication', () => {
 
         const result = await onRequest(context, next);
 
-        expect(context.redirect).toHaveBeenCalledWith(url_origin + '/login?return_to=' + encodeURIComponent(route));
+        expect(context.redirect).toHaveBeenCalledWith(
+          url_origin + '/login?return_to=' + encodeURIComponent(route)
+        );
         expect(result).toEqual({
           type: 'redirect',
           status: 302,
@@ -168,7 +170,7 @@ describe('Middleware Authentication', () => {
         url: url_origin + '/login?return_to=' + encodeURIComponent(path),
       });
     }); */
-  //}); 
+  //});
 
   describe('Security Headers', () => {
     it('should set security headers on all responses', async () => {
