@@ -19,9 +19,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     '/api/auth/register',
     '/api/oauth/token',
     '/api/oauth/authorize', // Users authorize BEFORE they have tokens
+    '/api/oauth/device/code', // Device flow: CLI requests device code
     '/oauth/authorize', // Consent page
     '/src/styles/global.css',
   ];
+  // Note: /oauth/device requires authentication - middleware redirects to login
   const isUnprotectedRoute = unprotectedRoutes.some((route) =>
     url.pathname.startsWith(route)
   );

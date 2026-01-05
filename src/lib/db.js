@@ -804,4 +804,279 @@ export class TodoDB {
       client.release();
     }
   }
+
+  // Device Authorization Grant (RFC 8628) methods
+
+  /**
+   * Generate a user-friendly code (e.g., WDJB-MJHT)
+   * Uses characters that are unambiguous (no 0/O, 1/I/L confusion)
+   */
+  static generateUserCode() {
+    const chars = 'BCDFGHJKLMNPQRSTVWXZ'; // Consonants only, no ambiguous chars
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      if (i === 4) code += '-'; // Add hyphen in middle
+      code += chars[crypto.randomInt(chars.length)];
+    }
+    return code;
+  }
+
+  /**
+   * Create a device authorization code for the Device Flow
+   * @param {string} clientId - OAuth client ID
+   * @param {string[]} scopes - Requested scopes
+   * @param {number} expiresIn - Expiration in seconds (default 1800 = 30 minutes)
+   * @param {number} interval - Polling interval in seconds (default 5)
+   * @returns {Object} Device code data including device_code, user_code, etc.
+   */
+  static async createDeviceAuthorizationCode(
+    clientId,
+    scopes,
+    expiresIn = 1800,
+    interval = 5
+  ) {
+    const deviceCode = crypto.randomBytes(32).toString('hex');
+    let userCode;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    // Generate unique user code with retry logic
+    while (attempts < maxAttempts) {
+      userCode = this.generateUserCode();
+      try {
+        const expiresAt = new Date(Date.now() + expiresIn * 1000);
+        const result = await this.query(
+          `
+          INSERT INTO device_authorization_codes
+            (device_code, user_code, client_id, scopes, status, expires_at, interval, created_at)
+          VALUES ($1, $2, $3, $4, 'pending', $5, $6, NOW())
+          RETURNING device_code, user_code, expires_at, interval
+          `,
+          [
+            deviceCode,
+            userCode,
+            clientId,
+            JSON.stringify(scopes),
+            expiresAt,
+            interval,
+          ]
+        );
+        return {
+          ...result.rows[0],
+          expires_in: expiresIn,
+        };
+      } catch (error) {
+        // If unique constraint violation on user_code, retry
+        if (error.code === '23505' && error.constraint?.includes('user_code')) {
+          attempts++;
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('Failed to generate unique user code after max attempts');
+  }
+
+  /**
+   * Get device authorization by user code (for user verification page)
+   * @param {string} userCode - The user-facing code (e.g., WDJB-MJHT)
+   * @returns {Object|null} Device authorization data or null if not found/expired
+   */
+  static async getDeviceAuthorizationByUserCode(userCode) {
+    // Normalize user code: uppercase and remove any spaces/hyphens for matching
+    const normalizedCode = userCode.toUpperCase().replace(/[\s-]/g, '');
+    const formattedCode =
+      normalizedCode.slice(0, 4) + '-' + normalizedCode.slice(4);
+
+    const result = await this.query(
+      `
+      SELECT dac.*, oc.name as client_name
+      FROM device_authorization_codes dac
+      JOIN oauth_clients oc ON dac.client_id = oc.client_id
+      WHERE dac.user_code = $1
+        AND dac.expires_at > NOW()
+        AND dac.status = 'pending'
+      `,
+      [formattedCode]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Get device authorization by device code (for token endpoint polling)
+   * @param {string} deviceCode - The device code (secret)
+   * @param {string} clientId - OAuth client ID
+   * @returns {Object|null} Device authorization data with polling info
+   */
+  static async getDeviceAuthorizationByDeviceCode(deviceCode, clientId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const result = await client.query(
+        `
+        SELECT dac.*, u.username
+        FROM device_authorization_codes dac
+        LEFT JOIN users u ON dac.user_id = u.id
+        WHERE dac.device_code = $1 AND dac.client_id = $2
+        FOR UPDATE
+        `,
+        [deviceCode, clientId]
+      );
+
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const deviceAuth = result.rows[0];
+      const now = new Date();
+
+      // Check rate limiting (slow_down if polling too fast)
+      if (deviceAuth.last_poll_at) {
+        const timeSinceLastPoll =
+          (now - new Date(deviceAuth.last_poll_at)) / 1000;
+        if (timeSinceLastPoll < deviceAuth.interval) {
+          // Update last_poll_at and increase interval
+          await client.query(
+            `
+            UPDATE device_authorization_codes
+            SET last_poll_at = NOW(), interval = interval + 5
+            WHERE device_code = $1
+            `,
+            [deviceCode]
+          );
+          await client.query('COMMIT');
+          return { ...deviceAuth, slow_down: true };
+        }
+      }
+
+      // Update last_poll_at
+      await client.query(
+        `
+        UPDATE device_authorization_codes
+        SET last_poll_at = NOW()
+        WHERE device_code = $1
+        `,
+        [deviceCode]
+      );
+
+      await client.query('COMMIT');
+      return deviceAuth;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Authorize a device code (called when user approves)
+   * @param {string} userCode - The user-facing code
+   * @param {number} userId - The authorizing user's ID
+   * @returns {Object|null} Updated device authorization or null if not found
+   */
+  static async authorizeDeviceCode(userCode, userId) {
+    const normalizedCode = userCode.toUpperCase().replace(/[\s-]/g, '');
+    const formattedCode =
+      normalizedCode.slice(0, 4) + '-' + normalizedCode.slice(4);
+
+    const result = await this.query(
+      `
+      UPDATE device_authorization_codes
+      SET status = 'authorized', user_id = $2
+      WHERE user_code = $1
+        AND expires_at > NOW()
+        AND status = 'pending'
+      RETURNING *
+      `,
+      [formattedCode, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Deny a device code (called when user rejects)
+   * @param {string} userCode - The user-facing code
+   * @returns {Object|null} Updated device authorization or null if not found
+   */
+  static async denyDeviceCode(userCode) {
+    const normalizedCode = userCode.toUpperCase().replace(/[\s-]/g, '');
+    const formattedCode =
+      normalizedCode.slice(0, 4) + '-' + normalizedCode.slice(4);
+
+    const result = await this.query(
+      `
+      UPDATE device_authorization_codes
+      SET status = 'denied'
+      WHERE user_code = $1
+        AND expires_at > NOW()
+        AND status = 'pending'
+      RETURNING *
+      `,
+      [formattedCode]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Consume a device authorization code (mark as used after token issued)
+   * @param {string} deviceCode - The device code
+   * @returns {Object|null} Device authorization data or null
+   */
+  static async consumeDeviceAuthorizationCode(deviceCode) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const result = await client.query(
+        `
+        SELECT dac.*, u.id as user_id
+        FROM device_authorization_codes dac
+        JOIN users u ON dac.user_id = u.id
+        WHERE dac.device_code = $1
+          AND dac.status = 'authorized'
+          AND dac.expires_at > NOW()
+        FOR UPDATE
+        `,
+        [deviceCode]
+      );
+
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      // Mark as consumed by changing status
+      await client.query(
+        `
+        UPDATE device_authorization_codes
+        SET status = 'consumed'
+        WHERE device_code = $1
+        `,
+        [deviceCode]
+      );
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Cleanup expired device authorization codes
+   * @returns {number} Number of rows deleted
+   */
+  static async cleanupExpiredDeviceAuthorizationCodes() {
+    const result = await this.query(`
+      DELETE FROM device_authorization_codes
+      WHERE expires_at <= NOW() OR status IN ('consumed', 'denied')
+    `);
+    return result.rowCount;
+  }
 }

@@ -100,9 +100,12 @@ http://localhost:3000/callback"
             type="text"
             id="grant-types"
             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="authorization_code, refresh_token"
+            placeholder="authorization_code, refresh_token, device_code"
             value="authorization_code"
           />
+          <p class="text-xs text-gray-500 mt-1">
+            Available: authorization_code, refresh_token, client_credentials, device_code
+          </p>
         </div>
 
         <div class="border-t border-gray-200 pt-4">
