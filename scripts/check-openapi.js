@@ -120,7 +120,9 @@ function parseOpenApiPaths(openapiPath) {
 
     // Match HTTP method under current path
     if (currentPath) {
-      const methodMatch = line.match(/^(\s{4})(get|post|put|delete|patch|options):\s*$/);
+      const methodMatch = line.match(
+        /^(\s{4})(get|post|put|delete|patch|options):\s*$/
+      );
       if (methodMatch) {
         paths.get(currentPath).push(methodMatch[2]);
       }
@@ -232,7 +234,9 @@ function validate() {
     console.log('💡 Please update openapi.yaml to match your API endpoints.\n');
     process.exit(1);
   } else {
-    console.log(`✅ All ${codeEndpoints.size} API routes are properly documented in openapi.yaml\n`);
+    console.log(
+      `✅ All ${codeEndpoints.size} API routes are properly documented in openapi.yaml\n`
+    );
     process.exit(0);
   }
 }
