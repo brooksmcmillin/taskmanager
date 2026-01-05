@@ -2,7 +2,7 @@ import pg from 'pg';
 const { Pool } = pg;
 import { config } from 'dotenv';
 import crypto from 'crypto';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 config();
 
