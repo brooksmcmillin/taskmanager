@@ -7,7 +7,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // OAuth endpoints that require Bearer token authentication
   const oauthProtectedRoutes = ['/api/oauth/userinfo'];
-  const isOAuthProtectedRoute = oauthProtectedRoutes.some((route) => url.pathname.startsWith(route));
+  const isOAuthProtectedRoute = oauthProtectedRoutes.some((route) =>
+    url.pathname.startsWith(route)
+  );
 
   // Routes that don't require authentication
   const unprotectedRoutes = [
@@ -16,15 +18,22 @@ export const onRequest = defineMiddleware(async (context, next) => {
     '/api/auth/login',
     '/api/auth/register',
     '/api/oauth/token',
-    '/api/oauth/authorize',  // Users authorize BEFORE they have tokens
-    '/oauth/authorize',      // Consent page
+    '/api/oauth/authorize', // Users authorize BEFORE they have tokens
+    '/oauth/authorize', // Consent page
     '/src/styles/global.css',
   ];
   const isUnprotectedRoute = unprotectedRoutes.some((route) =>
     url.pathname.startsWith(route)
   );
 
-  console.log('[Middleware] Request to:', url.pathname, '- Protected:', isOAuthProtectedRoute, '- Unprotected:', isUnprotectedRoute);
+  console.log(
+    '[Middleware] Request to:',
+    url.pathname,
+    '- Protected:',
+    isOAuthProtectedRoute,
+    '- Unprotected:',
+    isUnprotectedRoute
+  );
 
   // Handle OAuth-protected API routes (require Bearer token)
   if (isOAuthProtectedRoute) {
@@ -33,14 +42,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (!oauthUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
     }
     context.locals.user = oauthUser;
   } else if (!isUnprotectedRoute) {
     const user = await getUser(request);
     if (!user) {
-      console.log('[Middleware] User not authenticated, redirecting to login with return_to:', url.pathname + url.search);
+      console.log(
+        '[Middleware] User not authenticated, redirecting to login with return_to:',
+        url.pathname + url.search
+      );
       const loginUrl = new URL('/login', url.origin);
       loginUrl.searchParams.set('return_to', url.pathname + url.search);
       return redirect(loginUrl.toString());
@@ -77,6 +89,26 @@ export const onRequest = defineMiddleware(async (context, next) => {
 });
 
 export async function getUser(request) {
+  // First try Bearer token authentication (for OAuth2 access tokens)
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    try {
+      const tokenData = await TodoDB.getAccessToken(token);
+      if (tokenData) {
+        return {
+          id: tokenData.user_id,
+          username: tokenData.username,
+          email: tokenData.email || null,
+          auth_type: 'bearer',
+        };
+      }
+    } catch (error) {
+      console.error('[Middleware] Bearer token validation error:', error);
+    }
+  }
+
+  // Fall back to session-based authentication
   const sessionId = await Auth.getSessionFromRequest(request);
   const session = await Auth.getSessionUser(sessionId);
 
@@ -88,6 +120,7 @@ export async function getUser(request) {
     id: session.user_id,
     username: session.username,
     email: session.email,
+    auth_type: 'session',
   };
 }
 

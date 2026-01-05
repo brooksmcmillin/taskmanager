@@ -80,7 +80,9 @@ describe('GET /api/todos', () => {
   });
 
   it('should return raw numeric id for frontend compatibility', async () => {
-    const mockTodos = [{ id: 42, title: 'Test', created_at: new Date(), updated_at: new Date() }];
+    const mockTodos = [
+      { id: 42, title: 'Test', created_at: new Date(), updated_at: new Date() },
+    ];
     TodoDB.getTodosFiltered.mockResolvedValue(mockTodos);
 
     const request = createMockRequest('http://localhost:3000/api/todos');
@@ -135,8 +137,18 @@ describe('GET /api/todos', () => {
 
   it('should wrap response in tasks object for frontend compatibility', async () => {
     const mockTodos = [
-      { id: 1, title: 'Task 1', created_at: new Date(), updated_at: new Date() },
-      { id: 2, title: 'Task 2', created_at: new Date(), updated_at: new Date() },
+      {
+        id: 1,
+        title: 'Task 1',
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+      {
+        id: 2,
+        title: 'Task 2',
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
     ];
     TodoDB.getTodosFiltered.mockResolvedValue(mockTodos);
 
@@ -307,11 +319,14 @@ describe('PUT /api/todos/[id]', () => {
   });
 
   it('should return 400 for invalid todo ID', async () => {
-    const request = createMockRequest('http://localhost:3000/api/todos/invalid', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Test' }),
-    });
+    const request = createMockRequest(
+      'http://localhost:3000/api/todos/invalid',
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Test' }),
+      }
+    );
 
     const response = await updateTodo({ params: { id: 'invalid' }, request });
 

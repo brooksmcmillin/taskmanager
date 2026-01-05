@@ -23,13 +23,16 @@ export async function POST({ request }) {
     console.log('[OAuth/Token] Request params:', {
       grant_type: grantType,
       client_id: clientId,
-      has_client_secret: !!clientSecret
+      has_client_secret: !!clientSecret,
     });
 
     // Validate client credentials
     const client = await TodoDB.validateOAuthClient(clientId, clientSecret);
     if (!client) {
-      console.log('[OAuth/Token] Client validation failed for client_id:', clientId);
+      console.log(
+        '[OAuth/Token] Client validation failed for client_id:',
+        clientId
+      );
       return new Response(
         JSON.stringify({
           error: 'invalid_client',
@@ -50,6 +53,9 @@ export async function POST({ request }) {
     } else if (grantType === 'refresh_token') {
       console.log('[OAuth/Token] Processing refresh_token grant');
       return await handleRefreshTokenGrant(formData, client);
+    } else if (grantType === 'client_credentials') {
+      console.log('[OAuth/Token] Processing client_credentials grant');
+      return await handleClientCredentialsGrant(formData, client);
     } else {
       console.log('[OAuth/Token] Unsupported grant type:', grantType);
       return new Response(
@@ -86,11 +92,13 @@ async function handleAuthorizationCodeGrant(formData, client) {
   console.log('[OAuth/Token] Authorization code grant params:', {
     has_code: !!code,
     redirect_uri: redirectUri,
-    has_code_verifier: !!codeVerifier
+    has_code_verifier: !!codeVerifier,
   });
 
   if (!code || !redirectUri) {
-    console.log('[OAuth/Token] Missing required parameters for auth code grant');
+    console.log(
+      '[OAuth/Token] Missing required parameters for auth code grant'
+    );
     return new Response(
       JSON.stringify({
         error: 'invalid_request',
@@ -129,7 +137,7 @@ async function handleAuthorizationCodeGrant(formData, client) {
   if (authCode.redirect_uri !== redirectUri) {
     console.log('[OAuth/Token] Redirect URI mismatch:', {
       expected: authCode.redirect_uri,
-      received: redirectUri
+      received: redirectUri,
     });
     return new Response(
       JSON.stringify({
@@ -174,7 +182,10 @@ async function handleAuthorizationCodeGrant(formData, client) {
     } else if (challengeMethod === 'plain') {
       derivedChallenge = codeVerifier;
     } else {
-      console.log('[OAuth/Token] Unsupported challenge method:', challengeMethod);
+      console.log(
+        '[OAuth/Token] Unsupported challenge method:',
+        challengeMethod
+      );
       return new Response(
         JSON.stringify({
           error: 'invalid_request',
@@ -206,7 +217,10 @@ async function handleAuthorizationCodeGrant(formData, client) {
 
   // Create access token
   const scopes = JSON.parse(authCode.scopes);
-  console.log('[OAuth/Token] Creating access token for user:', authCode.user_id);
+  console.log(
+    '[OAuth/Token] Creating access token for user:',
+    authCode.user_id
+  );
   const tokenData = await TodoDB.createAccessToken(
     authCode.user_id,
     client.client_id,
@@ -242,7 +256,7 @@ async function handleRefreshTokenGrant(formData, client) {
   const refreshToken = formData.get('refresh_token');
 
   console.log('[OAuth/Token] Refresh token grant params:', {
-    has_refresh_token: !!refreshToken
+    has_refresh_token: !!refreshToken,
   });
 
   if (!refreshToken) {
@@ -297,4 +311,115 @@ async function handleRefreshTokenGrant(formData, client) {
   );
 }
 
+async function handleClientCredentialsGrant(formData, client) {
+  // Client credentials grant is used for machine-to-machine authentication
+  // The client authenticates with its own credentials (already validated)
+  // and receives an access token with the client's owner's permissions
 
+  console.log(
+    '[OAuth/Token] Client credentials grant for client:',
+    client.client_id
+  );
+
+  // Validate that this client is allowed to use client_credentials grant
+  const allowedGrantTypes = JSON.parse(client.grant_types || '[]');
+  if (!allowedGrantTypes.includes('client_credentials')) {
+    console.log(
+      '[OAuth/Token] Client not authorized for client_credentials grant'
+    );
+    return new Response(
+      JSON.stringify({
+        error: 'unauthorized_client',
+        error_description: 'Client is not authorized to use this grant type',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Check that client has an owner (user_id)
+  if (!client.user_id) {
+    console.log('[OAuth/Token] Client has no owner user_id');
+    return new Response(
+      JSON.stringify({
+        error: 'server_error',
+        error_description: 'Client configuration error: no owner assigned',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Get requested scope (optional) or use client's default scopes
+  const requestedScope = formData.get('scope');
+  let scopes;
+
+  if (requestedScope) {
+    // Validate requested scopes against client's allowed scopes
+    const clientScopes = JSON.parse(client.scopes || '["read"]');
+    const requestedScopes = requestedScope.split(' ');
+
+    // Check all requested scopes are allowed
+    const invalidScopes = requestedScopes.filter(
+      (s) => !clientScopes.includes(s)
+    );
+    if (invalidScopes.length > 0) {
+      console.log('[OAuth/Token] Invalid scopes requested:', invalidScopes);
+      return new Response(
+        JSON.stringify({
+          error: 'invalid_scope',
+          error_description: `Invalid scope(s): ${invalidScopes.join(', ')}`,
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+    scopes = requestedScopes;
+  } else {
+    // Use client's default scopes
+    scopes = JSON.parse(client.scopes || '["read"]');
+  }
+
+  console.log(
+    '[OAuth/Token] Creating client credentials token for user:',
+    client.user_id
+  );
+
+  // Create access token using client's owner as the user context
+  // Note: client_credentials tokens typically don't include refresh tokens
+  // as the client can always re-authenticate with its credentials
+  const tokenData = await TodoDB.createAccessToken(
+    client.user_id,
+    client.client_id,
+    scopes,
+    3600 // 1 hour expiry
+  );
+
+  console.log('[OAuth/Token] Client credentials token created successfully');
+
+  return new Response(
+    JSON.stringify({
+      access_token: tokenData.token,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      scope: scopes.join(' '),
+      // Note: refresh_token is intentionally omitted for client_credentials
+      // per OAuth 2.0 spec recommendation (RFC 6749 Section 4.4.3)
+    }),
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    }
+  );
+}

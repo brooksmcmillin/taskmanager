@@ -4,7 +4,7 @@ import { Auth } from '../src/lib/auth.js';
 import { TodoDB } from '../src/lib/db.js';
 import { createMockContext, createMockNext } from './setup.js';
 
-const url_origin = "http://localhost:3000"
+const url_origin = 'http://localhost:3000';
 
 describe('API Route Authentication', () => {
   beforeEach(() => {
@@ -37,7 +37,9 @@ describe('API Route Authentication', () => {
 
         const result = await onRequest(context, next);
 
-        expect(context.redirect).toHaveBeenCalledWith(url_origin + '/login?return_to=' + encodeURIComponent(path));
+        expect(context.redirect).toHaveBeenCalledWith(
+          url_origin + '/login?return_to=' + encodeURIComponent(path)
+        );
         expect(result).toEqual({
           type: 'redirect',
           status: 302,
@@ -68,6 +70,7 @@ describe('API Route Authentication', () => {
           id: 'user123',
           username: 'testuser',
           email: 'test@example.com',
+          auth_type: 'session',
         });
       }
     );
@@ -141,7 +144,7 @@ describe('API Route Authentication', () => {
       }
     ); */
 
-    /*it('should redirect OAuth routes with invalid Bearer token', async () => {
+  /*it('should redirect OAuth routes with invalid Bearer token', async () => {
       const context = createMockContext('/api/oauth/authorize', {
         Authorization: 'Bearer invalid-token',
       });
@@ -162,7 +165,7 @@ describe('API Route Authentication', () => {
       });
     });*/
 
-    /*it('should redirect OAuth routes without Bearer token', async () => {
+  /*it('should redirect OAuth routes without Bearer token', async () => {
       const context = createMockContext('/api/oauth/authorize');
       const next = createMockNext();
 
@@ -176,7 +179,7 @@ describe('API Route Authentication', () => {
       expect(context.redirect).toHaveBeenCalledWith('/login');
     });*/
 
-    /*it('should handle malformed Authorization headers', async () => {
+  /*it('should handle malformed Authorization headers', async () => {
       const malformedHeaders = [
         { Authorization: 'Bearer' },
         { Authorization: 'Basic dXNlcjpwYXNz' },
@@ -252,6 +255,7 @@ describe('API Route Authentication', () => {
         id: 'user123',
         username: 'testuser',
         email: 'test@example.com',
+        auth_type: 'session',
       });
       expect(next).toHaveBeenCalled();
     });
@@ -274,9 +278,10 @@ describe('API Route Authentication', () => {
 
         const result = await onRequest(context, next);
 
-        expect(context.redirect).toHaveBeenCalledWith(url_origin + '/login?return_to=' + encodeURIComponent('/api/todos'));
+        expect(context.redirect).toHaveBeenCalledWith(
+          url_origin + '/login?return_to=' + encodeURIComponent('/api/todos')
+        );
       }
     );
   });
 });
-

@@ -1021,7 +1021,7 @@ components:
           type: string
           nullable: true
           description: Project color hex code for display
-          example: "#3b82f6"
+          example: '#3b82f6'
         priority:
           type: string
           enum: [low, medium, high, urgent]

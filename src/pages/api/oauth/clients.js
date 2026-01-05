@@ -1,37 +1,51 @@
 import { TodoDB } from '../../../lib/db.js';
-import { Auth } from '../../../lib/auth.js';
+import { requireAuth } from '../../../lib/auth.js';
 import crypto from 'crypto';
 
 export async function GET({ request }) {
   try {
     console.log('[OAuth/Clients] GET request received');
-    const sessionId = Auth.getSessionFromRequest(request);
-    console.log('[OAuth/Clients] Session ID:', sessionId ? 'present' : 'missing');
 
-    const session = await Auth.getSessionUser(sessionId);
-
-    if (!session) {
-      console.log('[OAuth/Clients] GET unauthorized - no valid session');
+    // Support both session and Bearer token authentication
+    let session;
+    try {
+      session = await requireAuth(request);
+    } catch (e) {
+      console.log(
+        '[OAuth/Clients] GET unauthorized - no valid session or token'
+      );
       return new Response('Unauthorized', { status: 401 });
     }
 
     const user = {
       id: session.user_id,
       username: session.username,
-      email: session.email,
     };
 
-    console.log('[OAuth/Clients] GET authorized for user:', user.username);
+    console.log(
+      '[OAuth/Clients] GET authorized for user:',
+      user.username,
+      '(auth_type:',
+      session.auth_type + ')'
+    );
 
     // Only return clients owned by this user
-    const clients = await TodoDB.query(`
+    const clients = await TodoDB.query(
+      `
       SELECT id, client_id, name, redirect_uris, grant_types, scopes, is_active, created_at, user_id
       FROM oauth_clients
       WHERE user_id = $1
       ORDER BY created_at DESC
-    `, [user.id]);
+    `,
+      [user.id]
+    );
 
-    console.log('[OAuth/Clients] Returning', clients.rows.length, 'clients for user:', user.id);
+    console.log(
+      '[OAuth/Clients] Returning',
+      clients.rows.length,
+      'clients for user:',
+      user.id
+    );
 
     return new Response(JSON.stringify(clients.rows), {
       headers: { 'Content-Type': 'application/json' },
@@ -45,21 +59,29 @@ export async function GET({ request }) {
 export async function POST({ request }) {
   try {
     console.log('[OAuth/Clients] POST request received');
-    const sessionId = Auth.getSessionFromRequest(request);
-    const session = await Auth.getSessionUser(sessionId);
 
-    if (!session) {
-      console.log('[OAuth/Clients] POST unauthorized - no valid session');
+    // Support both session and Bearer token authentication
+    let session;
+    try {
+      session = await requireAuth(request);
+    } catch (e) {
+      console.log(
+        '[OAuth/Clients] POST unauthorized - no valid session or token'
+      );
       return new Response('Unauthorized', { status: 401 });
     }
 
     const user = {
       id: session.user_id,
       username: session.username,
-      email: session.email,
     };
 
-    console.log('[OAuth/Clients] POST authorized for user:', user.username);
+    console.log(
+      '[OAuth/Clients] POST authorized for user:',
+      user.username,
+      '(auth_type:',
+      session.auth_type + ')'
+    );
 
     const body = await request.json();
     const {
@@ -75,7 +97,7 @@ export async function POST({ request }) {
       redirectUris,
       grantTypes,
       scopes,
-      hasCustomSecret: !!customSecret
+      hasCustomSecret: !!customSecret,
     });
 
     if (
@@ -84,7 +106,9 @@ export async function POST({ request }) {
       !Array.isArray(redirectUris) ||
       redirectUris.length === 0
     ) {
-      console.log('[OAuth/Clients] POST validation failed - missing required fields');
+      console.log(
+        '[OAuth/Clients] POST validation failed - missing required fields'
+      );
       return new Response(
         JSON.stringify({
           error: 'Invalid request',
@@ -98,9 +122,15 @@ export async function POST({ request }) {
     }
 
     // Validate custom secret if provided
-    if (customSecret !== undefined && customSecret !== null && customSecret !== '') {
+    if (
+      customSecret !== undefined &&
+      customSecret !== null &&
+      customSecret !== ''
+    ) {
       if (typeof customSecret !== 'string' || customSecret.length < 11) {
-        console.log('[OAuth/Clients] POST validation failed - custom secret too short');
+        console.log(
+          '[OAuth/Clients] POST validation failed - custom secret too short'
+        );
         return new Response(
           JSON.stringify({
             error: 'Invalid request',
@@ -126,10 +156,15 @@ export async function POST({ request }) {
       redirectUris,
       grantTypes,
       scopes,
-      user.id  // Add user ownership
+      user.id // Add user ownership
     );
 
-    console.log('[OAuth/Clients] Client created successfully for user:', user.id, '- client_id:', client.client_id);
+    console.log(
+      '[OAuth/Clients] Client created successfully for user:',
+      user.id,
+      '- client_id:',
+      client.client_id
+    );
 
     return new Response(
       JSON.stringify({

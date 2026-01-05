@@ -13,13 +13,13 @@ export default defineConfig({
       exclude: ['better-sqlite3'],
     },
     server: {
-      allowedHosts: ['todo.brooksmcmillin.com']
-    }
+      allowedHosts: ['todo.brooksmcmillin.com'],
+    },
   },
   security: {
     checkOrigin: false,
   },
   server: {
-    allowedHosts: ['todo.brooksmcmillin.com']
-  }
+    allowedHosts: ['todo.brooksmcmillin.com'],
+  },
 });
