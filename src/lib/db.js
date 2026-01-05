@@ -482,35 +482,47 @@ export class TodoDB {
 
   // Analytics methods
   static async getCapacityStats(daysBack = 30) {
+    // Validate and sanitize daysBack to prevent SQL injection
+    const days = parseInt(daysBack, 10);
+    if (isNaN(days) || days < 1 || days > 365) {
+      throw new Error('Invalid daysBack parameter: must be between 1 and 365');
+    }
+
     const result = await this.query(`
-      SELECT 
+      SELECT
         DATE(completed_date) as date,
         SUM(actual_hours) as total_hours,
         COUNT(*) as tasks_completed
-      FROM todos 
-      WHERE status = 'completed' 
-        AND completed_date >= NOW() - INTERVAL '${daysBack} days'
+      FROM todos
+      WHERE status = 'completed'
+        AND completed_date >= NOW() - INTERVAL '1 day' * $1
       GROUP BY DATE(completed_date)
       ORDER BY date
-    `);
+    `, [days]);
     return result.rows;
   }
 
   static async getEstimationAccuracy(daysBack = 90) {
+    // Validate and sanitize daysBack to prevent SQL injection
+    const days = parseInt(daysBack, 10);
+    if (isNaN(days) || days < 1 || days > 365) {
+      throw new Error('Invalid daysBack parameter: must be between 1 and 365');
+    }
+
     const result = await this.query(`
-      SELECT 
+      SELECT
         title,
         estimated_hours,
         actual_hours,
         priority,
         (actual_hours / estimated_hours) as accuracy_ratio,
         ABS(actual_hours - estimated_hours) as absolute_error
-      FROM todos 
-      WHERE status = 'completed' 
-        AND completed_date >= NOW() - INTERVAL '${daysBack} days'
+      FROM todos
+      WHERE status = 'completed'
+        AND completed_date >= NOW() - INTERVAL '1 day' * $1
         AND estimated_hours > 0
       ORDER BY completed_date DESC
-    `);
+    `, [days]);
     return result.rows;
   }
 

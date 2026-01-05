@@ -1,15 +1,9 @@
 import { TodoDB } from '../../../lib/db.js';
+import { getCorsHeaders, corsPreflightResponse } from '../../../lib/apiResponse.js';
 import crypto from 'crypto';
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+export async function OPTIONS({ request }) {
+  return corsPreflightResponse(request);
 }
 
 export async function POST({ request }) {
@@ -192,9 +186,6 @@ async function handleAuthorizationCodeGrant(formData, client) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
       },
     }
   );
@@ -331,9 +322,6 @@ async function handleClientCredentialsGrant(formData, client) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
       },
     }
   );
@@ -486,9 +474,6 @@ async function handleDeviceCodeGrant(formData, client) {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
         },
       }
     );

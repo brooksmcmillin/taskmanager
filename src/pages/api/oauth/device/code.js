@@ -1,4 +1,5 @@
 import { TodoDB } from '../../../../lib/db.js';
+import { corsPreflightResponse } from '../../../../lib/apiResponse.js';
 
 /**
  * OAuth 2.0 Device Authorization Endpoint (RFC 8628)
@@ -24,15 +25,8 @@ import { TodoDB } from '../../../../lib/db.js';
  * }
  */
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+export async function OPTIONS({ request }) {
+  return corsPreflightResponse(request);
 }
 
 export async function POST({ request, url }) {
@@ -143,9 +137,6 @@ export async function POST({ request, url }) {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
         },
       }
     );

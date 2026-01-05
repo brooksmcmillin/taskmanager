@@ -43,6 +43,30 @@ import Layout from '../layouts/Layout.astro';
   const urlParams = new URLSearchParams(window.location.search);
   const returnTo = urlParams.get('return_to');
 
+  /**
+   * Validates that a URL is safe for redirection (local URLs only).
+   * Prevents open redirect vulnerabilities.
+   */
+  function isLocalUrl(url) {
+    if (!url) return false;
+
+    // Must start with / but NOT // (which would be protocol-relative)
+    if (url.startsWith('/') && !url.startsWith('//')) {
+      // Additional check: no backslashes (IE quirk), no control chars
+      if (!/[\\<>]/.test(url)) {
+        return true;
+      }
+    }
+
+    // Alternatively, validate against current origin
+    try {
+      const parsed = new URL(url, window.location.origin);
+      return parsed.origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  }
+
   document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -62,8 +86,9 @@ import Layout from '../layouts/Layout.astro';
       const data = await response.json();
 
       if (response.ok) {
-        // Redirect to return_to if present, otherwise go to homepage
-        const redirectUrl = returnTo || '/';
+        // Redirect to return_to if present AND safe, otherwise go to homepage
+        // Prevents open redirect attacks by validating the URL is local
+        const redirectUrl = (returnTo && isLocalUrl(returnTo)) ? returnTo : '/';
         window.location.href = redirectUrl;
       } else {
         errorDiv.textContent = data.error || 'Login failed';

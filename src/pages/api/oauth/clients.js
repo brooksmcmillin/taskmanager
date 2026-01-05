@@ -79,17 +79,51 @@ export async function POST({ request }) {
       );
     }
 
-    // Validate custom secret if provided
+    // Validate custom secret if provided - enforce strong entropy requirements
     if (
       customSecret !== undefined &&
       customSecret !== null &&
       customSecret !== ''
     ) {
-      if (typeof customSecret !== 'string' || customSecret.length < 16) {
+      if (typeof customSecret !== 'string') {
         return new Response(
           JSON.stringify({
             error: 'Invalid request',
-            message: 'Custom client secret must be at least 16 characters',
+            message: 'Client secret must be a string',
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      // Require minimum 32 characters for security
+      if (customSecret.length < 32) {
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid request',
+            message: 'Custom client secret must be at least 32 characters',
+          }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      // Require character diversity for entropy
+      const hasLower = /[a-z]/.test(customSecret);
+      const hasUpper = /[A-Z]/.test(customSecret);
+      const hasNumber = /[0-9]/.test(customSecret);
+      const hasSpecial = /[^a-zA-Z0-9]/.test(customSecret);
+      const diversityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+
+      if (diversityCount < 2) {
+        return new Response(
+          JSON.stringify({
+            error: 'Invalid request',
+            message: 'Client secret must contain at least 2 of: lowercase, uppercase, numbers, special characters',
           }),
           {
             status: 400,

@@ -65,6 +65,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
   response.headers.delete('X-Powered-By');
 
   // Content Security Policy
+  // NOTE: 'unsafe-inline' is required for Astro's inline scripts.
+  // To remove it, implement CSP nonces:
+  // 1. Generate nonce in middleware: crypto.randomBytes(16).toString('base64')
+  // 2. Pass nonce via context.locals.cspNonce
+  // 3. Add nonce={Astro.locals.cspNonce} to all <script> and <style> tags
+  // 4. Update CSP: script-src 'self' 'nonce-{nonce}'
   response.headers.set(
     'Content-Security-Policy',
     "default-src 'self'; " +
@@ -75,7 +81,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     "connect-src 'self'; " +
     "frame-ancestors 'none'; " +
     "base-uri 'self'; " +
-    "form-action 'self'"
+    "form-action 'self'; " +
+    "upgrade-insecure-requests"
   );
 
   // HSTS (only in production)
