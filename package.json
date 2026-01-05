@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
+    "check:openapi": "node scripts/check-openapi.js",
     "prepare": "husky"
   },
   "dependencies": {
