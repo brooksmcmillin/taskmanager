@@ -377,6 +377,89 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /oauth/clients/{clientId}:
+    put:
+      tags:
+        - OAuth
+      summary: Update OAuth client
+      operationId: updateOAuthClient
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - redirectUris
+              properties:
+                name:
+                  type: string
+                redirectUris:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                grantTypes:
+                  type: array
+                  items:
+                    type: string
+                  default: [authorization_code]
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  default: [read]
+      responses:
+        '200':
+          description: OAuth client updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthClient'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    delete:
+      tags:
+        - OAuth
+      summary: Delete OAuth client
+      operationId: deleteOAuthClient
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OAuth client deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /oauth/jwks:
     get:
       tags:
