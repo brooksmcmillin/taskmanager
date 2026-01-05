@@ -6,11 +6,12 @@ on:
 
 jobs:
   precommit:
-    uses: brooksmcmillin/workflows/.github/workflows/python-precommit.yml@main
+    uses: brooksmcmillin/workflows/.github/workflows/node-precommit.yml@main
     with:
-      package-name: taskmanager
+      node-version: '22'
       # Optional: customize checks
-      # python-version: '3.12'
-      # run-security: false  # Disable bandit if using python-security.yml separately
+      # run-type-check: true  # Enable TypeScript checking
+      # run-build: false      # Disable build step
+      # run-security: false   # Disable npm audit
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
