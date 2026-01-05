@@ -26,7 +26,7 @@ const user = auth.user;
   </main>
 
   <!-- Add/Edit Modal -->
-  <div id="client-modal" class="modal hidden">
+  <div id="client-modal" class="modal">
     <div class="modal-content max-w-2xl">
       <div class="flex justify-between items-center mb-6">
         <h2 id="modal-title" class="text-2xl font-bold">Add OAuth Client</h2>
@@ -220,44 +220,6 @@ http://localhost:3000/callback"
   </div>
 </Layout>
 
-<style>
-  .modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-  }
-
-  .modal.hidden {
-    display: none;
-  }
-
-  .modal-content {
-    background: white;
-    padding: 2rem;
-    border-radius: 0.5rem;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  .client-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-  }
-
-  .client-card:hover {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  }
-</style>
 
 <script>
   let editingClientId = null;
@@ -470,11 +432,11 @@ http://localhost:3000/callback"
       ).parentElement.parentElement.style.display = 'block';
     }
 
-    modal.classList.remove('hidden');
+    modal.classList.add('show');
   }
 
   function closeModal() {
-    document.getElementById('client-modal').classList.add('hidden');
+    document.getElementById('client-modal').classList.remove('show');
     document.getElementById('client-form').style.display = 'block';
     document.getElementById('credentials-display').classList.add('hidden');
     editingClientId = null;

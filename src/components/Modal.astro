@@ -1,0 +1,98 @@
+---
+/**
+ * Generic Modal Component
+ * Replaces TodoModal and ProjectModal with a reusable wrapper
+ *
+ * Props:
+ * - id: Modal element ID (required)
+ * - title: Modal header title (required)
+ * - buttonId: ID for the trigger button (required)
+ * - buttonClass: CSS class for the trigger button (default: 'add-todo-btn')
+ * - resetFn: Name of window function to call on reset (optional)
+ * - refreshEvent: Custom event name to dispatch on close (optional)
+ */
+interface Props {
+  id: string;
+  title: string;
+  buttonId: string;
+  buttonClass?: string;
+  resetFn?: string;
+}
+
+const { id, title, buttonId, buttonClass = 'add-todo-btn', resetFn } = Astro.props;
+---
+
+<div id={id} class="modal" data-reset-fn={resetFn}>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>{title}</h2>
+      <span class="close">&times;</span>
+    </div>
+    <div class="modal-body">
+      <slot />
+    </div>
+  </div>
+</div>
+
+<button id={buttonId} class={buttonClass}>
+  <span class="plus-icon">+</span>
+</button>
+
+<script>
+  function initModal(modalEl: HTMLElement) {
+    const modalId = modalEl.id;
+    const resetFnName = modalEl.dataset.resetFn;
+    const form = modalEl.querySelector('form') as HTMLFormElement;
+    const closeBtn = modalEl.querySelector('.close');
+
+    // Find the associated button by looking at sibling elements
+    const addBtn = modalEl.nextElementSibling as HTMLButtonElement;
+
+    function openModal() {
+      if (resetFnName && typeof (window as any)[resetFnName] === 'function') {
+        (window as any)[resetFnName]();
+      }
+      modalEl.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+      modalEl.classList.remove('show');
+      document.body.style.overflow = '';
+      if (form) form.reset();
+      if (resetFnName && typeof (window as any)[resetFnName] === 'function') {
+        (window as any)[resetFnName]();
+      }
+    }
+
+    // Expose open function globally for edit mode
+    (window as any)[`open${modalId.charAt(0).toUpperCase() + modalId.slice(1)}`] = openModal;
+    (window as any)[`close${modalId.charAt(0).toUpperCase() + modalId.slice(1)}`] = closeModal;
+
+    // Event listeners
+    if (addBtn) {
+      addBtn.addEventListener('click', openModal);
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', closeModal);
+    }
+
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) closeModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modalEl.classList.contains('show')) {
+        closeModal();
+      }
+    });
+  }
+
+  // Initialize all modals on page
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.modal[id]').forEach((modal) => {
+      initModal(modal as HTMLElement);
+    });
+  });
+</script>

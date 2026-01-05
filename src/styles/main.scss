@@ -892,6 +892,18 @@ h6 {
 }
 
 // OAuth specific styles
+.client-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: var(--shadow-md);
+  }
+}
+
 .client-info {
   background: var(--bg-secondary);
   padding: 1rem;
@@ -1038,6 +1050,45 @@ h6 {
     background-color: var(--primary-50);
     border-left: 4px solid var(--primary-500);
   }
+}
+
+// Width utilities
+.max-w-2xl {
+  max-width: 42rem;
+}
+.max-w-6xl {
+  max-width: 72rem;
+}
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+// List utilities
+.list-disc {
+  list-style-type: disc;
+}
+.list-inside {
+  list-style-position: inside;
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Border utilities
+.border-t {
+  border-top: 1px solid var(--border-color);
+}
+.border-gray-200 {
+  border-color: var(--border-color);
+}
+.border-gray-300 {
+  border-color: var(--gray-300);
+}
+.pt-4 {
+  padding-top: var(--space-4);
 }
 
 // Utility classes

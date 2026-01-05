@@ -1,67 +1,26 @@
 ---
-import ProjectForm from '../components/ProjectForm.astro';
+import Modal from './Modal.astro';
+import ProjectForm from './ProjectForm.astro';
 ---
 
-<div id="projectModal" class="modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h2>Add New Project</h2>
-      <span class="close">&times;</span>
-    </div>
-    <div class="modal-body">
-      <ProjectForm />
-    </div>
-  </div>
-</div>
-<!-- Add Project Button -->
-<button id="addProjectBtn" class="add-project-btn">
-  <span class="plus-icon">+</span>
-</button>
+<Modal
+  id="projectModal"
+  title="Add New Project"
+  buttonId="addProjectBtn"
+  buttonClass="add-project-btn"
+  resetFn="resetProjectFormToAddMode"
+>
+  <ProjectForm />
+</Modal>
 
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
+  // Expose openEditProjectModal for ProjectForm to call
+  window.openEditProjectModal = function (project: any) {
+    window.populateProjectFormForEdit(project);
     const modal = document.getElementById('projectModal');
-    const addBtn = document.getElementById('addProjectBtn');
-    const closeBtn = document.querySelector('.close');
-    const form = document.getElementById('project-form');
-
-    // Open modal for adding new project
-    addBtn.addEventListener('click', function () {
-      window.resetProjectFormToAddMode();
-      modal.classList.add('show');
-      document.body.style.overflow = 'hidden'; // Prevent background scrolling
-    });
-
-    // Global function to open modal for editing
-    window.openEditProjectModal = function (project) {
-      window.populateProjectFormForEdit(project);
+    if (modal) {
       modal.classList.add('show');
       document.body.style.overflow = 'hidden';
-    };
-
-    // Close modal function
-    function closeModal() {
-      modal.classList.remove('show');
-      document.body.style.overflow = ''; // Restore scrolling
-      form.reset(); // Clear form
-      window.resetProjectFormToAddMode(); // Reset to add mode
     }
-
-    // Close modal events
-    closeBtn.addEventListener('click', closeModal);
-
-    // Close modal when clicking outside
-    modal.addEventListener('click', function (e) {
-      if (e.target === modal) {
-        closeModal();
-      }
-    });
-
-    // Close modal with Escape key
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && modal.classList.contains('show')) {
-        closeModal();
-      }
-    });
-  });
+  };
 </script>

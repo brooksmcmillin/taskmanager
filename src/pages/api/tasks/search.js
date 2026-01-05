@@ -1,5 +1,10 @@
 import { TodoDB } from '../../../lib/db.js';
 import { requireAuth } from '../../../lib/auth.js';
+import {
+  successResponse,
+  errorResponse,
+  formatDateString,
+} from '../../../lib/apiResponse.js';
 
 export const GET = async ({ url, request }) => {
   const session = await requireAuth(request);
@@ -8,13 +13,7 @@ export const GET = async ({ url, request }) => {
   const category = searchParams.get('category');
 
   if (!query) {
-    return new Response(
-      JSON.stringify({ error: 'Query parameter is required' }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return errorResponse('Query parameter is required');
   }
 
   const todos = await TodoDB.searchTodos(session.user_id, query, category);
@@ -23,30 +22,18 @@ export const GET = async ({ url, request }) => {
     id: `task_${todo.id}`,
     title: todo.title,
     description: todo.description || '',
-    due_date: todo.due_date
-      ? new Date(todo.due_date).toISOString().split('T')[0]
-      : null,
+    due_date: formatDateString(todo.due_date),
     status: todo.status,
     category: todo.project_name || null,
     priority: todo.priority,
     tags:
       typeof todo.tags === 'string' ? JSON.parse(todo.tags) : todo.tags || [],
-    created_at: todo.created_at
-      ? new Date(todo.created_at).toISOString().split('T')[0]
-      : null,
-    updated_at: todo.updated_at
-      ? new Date(todo.updated_at).toISOString().split('T')[0]
-      : null,
+    created_at: formatDateString(todo.created_at),
+    updated_at: formatDateString(todo.updated_at),
   }));
 
-  return new Response(
-    JSON.stringify({
-      tasks: formattedTasks,
-      count: formattedTasks.length,
-    }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
+  return successResponse({
+    tasks: formattedTasks,
+    count: formattedTasks.length,
+  });
 };
