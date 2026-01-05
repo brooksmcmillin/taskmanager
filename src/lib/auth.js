@@ -6,6 +6,23 @@ import { config } from 'dotenv';
 config();
 
 export async function requireAuth(request) {
+  // First try Bearer token authentication (for OAuth2 access tokens)
+  const authHeader = request.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const tokenData = await TodoDB.getAccessToken(token);
+    if (tokenData) {
+      return {
+        user_id: tokenData.user_id,
+        username: tokenData.username,
+        // Mark as token-based auth for potential scope checking
+        auth_type: 'bearer',
+        scopes: JSON.parse(tokenData.scopes || '[]'),
+      };
+    }
+  }
+
+  // Fall back to session-based authentication
   const sessionId = await Auth.getSessionFromRequest(request);
   const session = await Auth.getSessionUser(sessionId);
 
@@ -13,7 +30,7 @@ export async function requireAuth(request) {
     throw new Error('Authentication required');
   }
 
-  return session;
+  return { ...session, auth_type: 'session' };
 }
 
 export class Auth {

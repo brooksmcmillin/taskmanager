@@ -630,7 +630,7 @@ export class TodoDB {
     // First get the client by ID
     const result = await this.query(
       `
-      SELECT id, client_id, name, redirect_uris, grant_types, scopes, client_secret_hash
+      SELECT id, client_id, name, redirect_uris, grant_types, scopes, client_secret_hash, user_id
       FROM oauth_clients
       WHERE client_id = $1 AND is_active = true
     `,

@@ -89,6 +89,26 @@ export const onRequest = defineMiddleware(async (context, next) => {
 });
 
 export async function getUser(request) {
+  // First try Bearer token authentication (for OAuth2 access tokens)
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    try {
+      const tokenData = await TodoDB.getAccessToken(token);
+      if (tokenData) {
+        return {
+          id: tokenData.user_id,
+          username: tokenData.username,
+          email: tokenData.email || null,
+          auth_type: 'bearer',
+        };
+      }
+    } catch (error) {
+      console.error('[Middleware] Bearer token validation error:', error);
+    }
+  }
+
+  // Fall back to session-based authentication
   const sessionId = await Auth.getSessionFromRequest(request);
   const session = await Auth.getSessionUser(sessionId);
 
@@ -100,6 +120,7 @@ export async function getUser(request) {
     id: session.user_id,
     username: session.username,
     email: session.email,
+    auth_type: 'session',
   };
 }
 

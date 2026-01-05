@@ -71,6 +71,7 @@ describe('Middleware Authentication', () => {
           id: 'user123',
           username: 'testuser',
           email: 'test@example.com',
+          auth_type: 'session',
         });
         expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
       }
@@ -255,6 +256,7 @@ describe('Middleware Authentication', () => {
           id: 'user123',
           username: 'testuser',
           email: 'test@example.com',
+          auth_type: 'session',
         });
       });
 

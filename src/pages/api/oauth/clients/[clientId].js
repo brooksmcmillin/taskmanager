@@ -1,5 +1,5 @@
 import { TodoDB } from '../../../../lib/db.js';
-import { Auth } from '../../../../lib/auth.js';
+import { requireAuth } from '../../../../lib/auth.js';
 
 export async function PUT({ request, params }) {
   try {
@@ -7,15 +7,24 @@ export async function PUT({ request, params }) {
       '[OAuth/Clients] PUT request received for client_id:',
       params.clientId
     );
-    const sessionId = Auth.getSessionFromRequest(request);
-    const session = await Auth.getSessionUser(sessionId);
 
-    if (!session) {
-      console.log('[OAuth/Clients] PUT unauthorized - no valid session');
+    // Support both session and Bearer token authentication
+    let session;
+    try {
+      session = await requireAuth(request);
+    } catch (e) {
+      console.log(
+        '[OAuth/Clients] PUT unauthorized - no valid session or token'
+      );
       return new Response('Unauthorized', { status: 401 });
     }
 
-    console.log('[OAuth/Clients] PUT authorized for user:', session.username);
+    console.log(
+      '[OAuth/Clients] PUT authorized for user:',
+      session.username,
+      '(auth_type:',
+      session.auth_type + ')'
+    );
 
     const body = await request.json();
     const {
@@ -109,17 +118,23 @@ export async function DELETE({ request, params }) {
       '[OAuth/Clients] DELETE request received for client_id:',
       params.clientId
     );
-    const sessionId = Auth.getSessionFromRequest(request);
-    const session = await Auth.getSessionUser(sessionId);
 
-    if (!session) {
-      console.log('[OAuth/Clients] DELETE unauthorized - no valid session');
+    // Support both session and Bearer token authentication
+    let session;
+    try {
+      session = await requireAuth(request);
+    } catch (e) {
+      console.log(
+        '[OAuth/Clients] DELETE unauthorized - no valid session or token'
+      );
       return new Response('Unauthorized', { status: 401 });
     }
 
     console.log(
       '[OAuth/Clients] DELETE authorized for user:',
-      session.username
+      session.username,
+      '(auth_type:',
+      session.auth_type + ')'
     );
 
     // Verify ownership before deleting

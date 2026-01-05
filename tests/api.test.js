@@ -70,6 +70,7 @@ describe('API Route Authentication', () => {
           id: 'user123',
           username: 'testuser',
           email: 'test@example.com',
+          auth_type: 'session',
         });
       }
     );
@@ -254,6 +255,7 @@ describe('API Route Authentication', () => {
         id: 'user123',
         username: 'testuser',
         email: 'test@example.com',
+        auth_type: 'session',
       });
       expect(next).toHaveBeenCalled();
     });

@@ -1,30 +1,33 @@
 import { TodoDB } from '../../../lib/db.js';
-import { Auth } from '../../../lib/auth.js';
+import { requireAuth } from '../../../lib/auth.js';
 import crypto from 'crypto';
 
 export async function GET({ request }) {
   try {
     console.log('[OAuth/Clients] GET request received');
-    const sessionId = Auth.getSessionFromRequest(request);
-    console.log(
-      '[OAuth/Clients] Session ID:',
-      sessionId ? 'present' : 'missing'
-    );
 
-    const session = await Auth.getSessionUser(sessionId);
-
-    if (!session) {
-      console.log('[OAuth/Clients] GET unauthorized - no valid session');
+    // Support both session and Bearer token authentication
+    let session;
+    try {
+      session = await requireAuth(request);
+    } catch (e) {
+      console.log(
+        '[OAuth/Clients] GET unauthorized - no valid session or token'
+      );
       return new Response('Unauthorized', { status: 401 });
     }
 
     const user = {
       id: session.user_id,
       username: session.username,
-      email: session.email,
     };
 
-    console.log('[OAuth/Clients] GET authorized for user:', user.username);
+    console.log(
+      '[OAuth/Clients] GET authorized for user:',
+      user.username,
+      '(auth_type:',
+      session.auth_type + ')'
+    );
 
     // Only return clients owned by this user
     const clients = await TodoDB.query(
@@ -56,21 +59,29 @@ export async function GET({ request }) {
 export async function POST({ request }) {
   try {
     console.log('[OAuth/Clients] POST request received');
-    const sessionId = Auth.getSessionFromRequest(request);
-    const session = await Auth.getSessionUser(sessionId);
 
-    if (!session) {
-      console.log('[OAuth/Clients] POST unauthorized - no valid session');
+    // Support both session and Bearer token authentication
+    let session;
+    try {
+      session = await requireAuth(request);
+    } catch (e) {
+      console.log(
+        '[OAuth/Clients] POST unauthorized - no valid session or token'
+      );
       return new Response('Unauthorized', { status: 401 });
     }
 
     const user = {
       id: session.user_id,
       username: session.username,
-      email: session.email,
     };
 
-    console.log('[OAuth/Clients] POST authorized for user:', user.username);
+    console.log(
+      '[OAuth/Clients] POST authorized for user:',
+      user.username,
+      '(auth_type:',
+      session.auth_type + ')'
+    );
 
     const body = await request.json();
     const {
