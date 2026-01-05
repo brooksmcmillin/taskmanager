@@ -561,7 +561,8 @@ async function handleDeviceCodeGrant(formData, client) {
     console.log('[OAuth/Token] Device authorized, issuing token');
 
     // Consume the device code (mark as used)
-    const consumedAuth = await TodoDB.consumeDeviceAuthorizationCode(deviceCode);
+    const consumedAuth =
+      await TodoDB.consumeDeviceAuthorizationCode(deviceCode);
 
     if (!consumedAuth) {
       console.log('[OAuth/Token] Failed to consume device code');
@@ -610,7 +611,10 @@ async function handleDeviceCodeGrant(formData, client) {
   }
 
   // Unexpected status
-  console.log('[OAuth/Token] Unexpected device code status:', deviceAuth.status);
+  console.log(
+    '[OAuth/Token] Unexpected device code status:',
+    deviceAuth.status
+  );
   return new Response(
     JSON.stringify({
       error: 'server_error',

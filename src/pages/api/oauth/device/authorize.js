@@ -29,7 +29,10 @@ export async function POST({ request, redirect }) {
     }
 
     const userId = session.user_id;
-    console.log('[OAuth/Device/Authorize] User authenticated:', session.username);
+    console.log(
+      '[OAuth/Device/Authorize] User authenticated:',
+      session.username
+    );
 
     const formData = await request.formData();
     const userCode = formData.get('user_code');
@@ -47,7 +50,9 @@ export async function POST({ request, redirect }) {
 
     if (!action || (action !== 'allow' && action !== 'deny')) {
       console.log('[OAuth/Device/Authorize] Invalid action:', action);
-      return redirect(`/oauth/device?user_code=${encodeURIComponent(userCode)}&error=invalid_action`);
+      return redirect(
+        `/oauth/device?user_code=${encodeURIComponent(userCode)}&error=invalid_action`
+      );
     }
 
     if (action === 'allow') {
@@ -55,7 +60,9 @@ export async function POST({ request, redirect }) {
       const result = await TodoDB.authorizeDeviceCode(userCode, userId);
 
       if (!result) {
-        console.log('[OAuth/Device/Authorize] Failed to authorize - code not found or expired');
+        console.log(
+          '[OAuth/Device/Authorize] Failed to authorize - code not found or expired'
+        );
         return redirect('/oauth/device?error=expired_code');
       }
 
@@ -73,7 +80,9 @@ export async function POST({ request, redirect }) {
       const result = await TodoDB.denyDeviceCode(userCode);
 
       if (!result) {
-        console.log('[OAuth/Device/Authorize] Failed to deny - code not found or expired');
+        console.log(
+          '[OAuth/Device/Authorize] Failed to deny - code not found or expired'
+        );
         return redirect('/oauth/device?error=expired_code');
       }
 

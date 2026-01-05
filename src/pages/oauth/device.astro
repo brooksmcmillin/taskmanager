@@ -49,103 +49,120 @@ const scopes = deviceAuth ? JSON.parse(deviceAuth.scopes) : [];
       <div class="card">
         <h1>Authorize Device</h1>
 
-        {!deviceAuth && (
-          <div class="code-entry">
-            <p>Enter the code displayed on your device to authorize it.</p>
+        {
+          !deviceAuth && (
+            <div class="code-entry">
+              <p>Enter the code displayed on your device to authorize it.</p>
 
-            {error && (
-              <div class="error-message">
-                {error}
+              {error && <div class="error-message">{error}</div>}
+
+              <form method="GET" action="/oauth/device" class="code-form">
+                <div class="form-group">
+                  <label for="user_code">Device Code</label>
+                  <input
+                    type="text"
+                    id="user_code"
+                    name="user_code"
+                    placeholder="XXXX-XXXX"
+                    value={userCodeParam}
+                    class="code-input"
+                    maxlength="9"
+                    pattern="[A-Za-z]{4}-?[A-Za-z]{4}"
+                    required
+                    autofocus
+                  />
+                  <small>The code is case-insensitive</small>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                  Continue
+                </button>
+              </form>
+            </div>
+          )
+        }
+
+        {
+          deviceAuth && (
+            <div class="authorization-content">
+              <div class="client-info">
+                <h2>{deviceAuth.client_name}</h2>
+                <p>
+                  This application is requesting access to your TaskManager
+                  account via a device.
+                </p>
               </div>
-            )}
 
-            <form method="GET" action="/oauth/device" class="code-form">
-              <div class="form-group">
-                <label for="user_code">Device Code</label>
+              <div class="code-display">
+                <p>
+                  Code:{' '}
+                  <strong class="user-code">{deviceAuth.user_code}</strong>
+                </p>
+              </div>
+
+              <div class="permissions">
+                <h3>Requested Permissions:</h3>
+                <ul class="scope-list">
+                  {scopes.map((scopeItem: string) => (
+                    <li class="scope-item">
+                      {scopeItem === 'read' &&
+                        '📖 Read your todos and projects'}
+                      {scopeItem === 'write' &&
+                        '✏️ Create and modify your todos and projects'}
+                      {scopeItem === 'delete' &&
+                        '🗑️ Delete your todos and projects'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div class="user-info">
+                <p>
+                  Signed in as: <strong>{user.username}</strong>
+                </p>
+              </div>
+
+              <form
+                method="POST"
+                action="/api/oauth/device/authorize"
+                class="auth-form"
+              >
                 <input
-                  type="text"
-                  id="user_code"
+                  type="hidden"
                   name="user_code"
-                  placeholder="XXXX-XXXX"
-                  value={userCodeParam}
-                  class="code-input"
-                  maxlength="9"
-                  pattern="[A-Za-z]{4}-?[A-Za-z]{4}"
-                  required
-                  autofocus
+                  value={deviceAuth.user_code}
                 />
-                <small>The code is case-insensitive</small>
+
+                <div class="button-group">
+                  <button
+                    type="submit"
+                    name="action"
+                    value="allow"
+                    class="btn btn-primary"
+                  >
+                    Authorize Device
+                  </button>
+                  <button
+                    type="submit"
+                    name="action"
+                    value="deny"
+                    class="btn btn-secondary"
+                  >
+                    Deny
+                  </button>
+                </div>
+              </form>
+
+              <div class="security-note">
+                <p>
+                  <small>
+                    ⚠️ Only authorize devices you trust. The device will have
+                    access to your account until you revoke it.
+                  </small>
+                </p>
               </div>
-              <button type="submit" class="btn btn-primary">
-                Continue
-              </button>
-            </form>
-          </div>
-        )}
-
-        {deviceAuth && (
-          <div class="authorization-content">
-            <div class="client-info">
-              <h2>{deviceAuth.client_name}</h2>
-              <p>
-                This application is requesting access to your TaskManager account via a device.
-              </p>
             </div>
-
-            <div class="code-display">
-              <p>Code: <strong class="user-code">{deviceAuth.user_code}</strong></p>
-            </div>
-
-            <div class="permissions">
-              <h3>Requested Permissions:</h3>
-              <ul class="scope-list">
-                {scopes.map((scopeItem: string) => (
-                  <li class="scope-item">
-                    {scopeItem === 'read' && '📖 Read your todos and projects'}
-                    {scopeItem === 'write' && '✏️ Create and modify your todos and projects'}
-                    {scopeItem === 'delete' && '🗑️ Delete your todos and projects'}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div class="user-info">
-              <p>Signed in as: <strong>{user.username}</strong></p>
-            </div>
-
-            <form method="POST" action="/api/oauth/device/authorize" class="auth-form">
-              <input type="hidden" name="user_code" value={deviceAuth.user_code} />
-
-              <div class="button-group">
-                <button
-                  type="submit"
-                  name="action"
-                  value="allow"
-                  class="btn btn-primary"
-                >
-                  Authorize Device
-                </button>
-                <button
-                  type="submit"
-                  name="action"
-                  value="deny"
-                  class="btn btn-secondary"
-                >
-                  Deny
-                </button>
-              </div>
-            </form>
-
-            <div class="security-note">
-              <p>
-                <small>
-                  ⚠️ Only authorize devices you trust. The device will have access
-                  to your account until you revoke it.
-                </small>
-              </p>
-            </div>
-          </div>
-        )}
+          )
+        }
       </div>
     </div>
   </div>
@@ -316,7 +333,9 @@ const scopes = deviceAuth ? JSON.parse(deviceAuth.scopes) : [];
     padding: 2rem;
     background: var(--card-bg, white);
     border-radius: 1rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06);
   }
 
   .card h1 {

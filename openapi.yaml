@@ -257,7 +257,13 @@ paths:
               properties:
                 grant_type:
                   type: string
-                  enum: [authorization_code, refresh_token, client_credentials, urn:ietf:params:oauth:grant-type:device_code]
+                  enum:
+                    [
+                      authorization_code,
+                      refresh_token,
+                      client_credentials,
+                      urn:ietf:params:oauth:grant-type:device_code,
+                    ]
                 client_id:
                   type: string
                 client_secret:
