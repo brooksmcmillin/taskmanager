@@ -363,12 +363,29 @@ export const oauthErrors = {
 
 /**
  * Format a date to ISO date string (YYYY-MM-DD) or null
+ * Handles dates without timezone conversion to avoid off-by-one errors
  * @param {Date|string|null} date - Date to format
  * @returns {string|null}
  */
 export function formatDateString(date) {
   if (!date) return null;
-  return new Date(date).toISOString().split('T')[0];
+
+  // If already a YYYY-MM-DD string, return as-is
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+
+  // If it's a string with time component, extract just the date part
+  if (typeof date === 'string' && date.includes('T')) {
+    return date.split('T')[0];
+  }
+
+  // For Date objects, use local date methods to avoid timezone shifts
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**

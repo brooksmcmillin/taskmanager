@@ -49,6 +49,15 @@ const user = Astro.locals.user;
       .replace(/'/g, '&#039;');
   }
 
+  // Format a YYYY-MM-DD date string for display without timezone conversion
+  function formatDateForDisplay(dateStr) {
+    if (!dateStr) return '';
+    // Parse the date string as local date (not UTC)
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString();
+  }
+
   async function loadTodos() {
     try {
       const apiUrl = `/api/todos?status=pending`;
@@ -115,7 +124,7 @@ const user = Astro.locals.user;
                   <div class="font-medium">${escapeHtml(todo.title)}</div>
                   <div class="text-sm text-gray-600">${escapeHtml(todo.description)}</div>
                   <div class="text-xs text-gray-500 mt-1">
-                    Priority: ${escapeHtml(todo.priority)}${todo.due_date ? ` | Due: ${new Date(todo.due_date).toLocaleDateString()}` : ''}
+                    Priority: ${escapeHtml(todo.priority)}${todo.due_date ? ` | Due: ${formatDateForDisplay(todo.due_date)}` : ''}
                   </div>
                 </div>
                 <div class="flex gap-3 ml-4">
