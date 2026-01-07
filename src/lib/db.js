@@ -1192,7 +1192,7 @@ export class TodoDB {
         FROM device_authorization_codes dac
         LEFT JOIN users u ON dac.user_id = u.id
         WHERE dac.device_code = $1 AND dac.client_id = $2
-        FOR UPDATE
+        FOR UPDATE OF dac
         `,
         [deviceCode, clientId]
       );
@@ -1311,7 +1311,7 @@ export class TodoDB {
         WHERE dac.device_code = $1
           AND dac.status = 'authorized'
           AND dac.expires_at > NOW()
-        FOR UPDATE
+        FOR UPDATE OF dac
         `,
         [deviceCode]
       );
