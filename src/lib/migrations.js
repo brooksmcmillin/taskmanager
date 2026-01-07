@@ -1,3 +1,5 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
+// Migration runner - intentionally uses dynamic paths for migration files
 import pg from 'pg';
 import fs from 'fs/promises';
 import path from 'path';

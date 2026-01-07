@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+/* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-regexp */
 /**
  * OpenAPI Route Coverage Check
  *
  * Validates that all API endpoints in src/pages/api are documented in openapi.yaml
  * and vice versa. Exits with code 1 if there are discrepancies.
+ *
+ * Note: This script intentionally uses dynamic paths and regex for file traversal.
  */
 
 import { readFileSync, readdirSync, statSync } from 'fs';

@@ -1,3 +1,5 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
+// Migration script - intentionally uses dynamic paths for migration files
 import { MigrationRunner } from '../src/lib/migrations.js';
 import { config } from 'dotenv';
 import path from 'path';
