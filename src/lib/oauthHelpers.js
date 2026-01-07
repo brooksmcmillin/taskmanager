@@ -38,7 +38,9 @@ export function validateScopes(requestedScope, client) {
 
   // Parse and validate requested scopes
   const requestedScopes = requestedScope.split(' ').filter(Boolean);
-  const invalidScopes = requestedScopes.filter((s) => !clientScopes.includes(s));
+  const invalidScopes = requestedScopes.filter(
+    (s) => !clientScopes.includes(s)
+  );
 
   if (invalidScopes.length > 0) {
     return {
@@ -90,7 +92,9 @@ export function validatePKCE(codeVerifier, codeChallenge, codeChallengeMethod) {
  */
 export function validateClientOwner(client) {
   if (!client.user_id) {
-    return oauthErrors.serverError('Client configuration error: no owner assigned');
+    return oauthErrors.serverError(
+      'Client configuration error: no owner assigned'
+    );
   }
   return null;
 }

@@ -32,7 +32,10 @@ export function validateRequired(value, fieldName) {
     return { valid: false, error: errors.required(fieldName) };
   }
   if (typeof value !== 'string') {
-    return { valid: false, error: errors.invalid(fieldName, 'must be a string') };
+    return {
+      valid: false,
+      error: errors.invalid(fieldName, 'must be a string'),
+    };
   }
   return { valid: true, error: null, value: value.trim() };
 }
@@ -78,7 +81,10 @@ export function validateEmail(email) {
   }
 
   if (normalized.length > config.validation.maxEmailLength) {
-    return { valid: false, error: errors.tooLong('Email', config.validation.maxEmailLength) };
+    return {
+      valid: false,
+      error: errors.tooLong('Email', config.validation.maxEmailLength),
+    };
   }
 
   return { valid: true, error: null, value: normalized };
@@ -114,7 +120,9 @@ export function validatePassword(password) {
   const hasNumber = /[0-9]/.test(pwd);
   const hasSpecial = /[^a-zA-Z0-9]/.test(pwd);
 
-  const diversityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+  const diversityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(
+    Boolean
+  ).length;
 
   if (diversityCount < 2) {
     return {
@@ -151,13 +159,19 @@ export function validateUsername(username) {
   }
 
   if (name.length > config.validation.maxUsernameLength) {
-    return { valid: false, error: errors.tooLong('Username', config.validation.maxUsernameLength) };
+    return {
+      valid: false,
+      error: errors.tooLong('Username', config.validation.maxUsernameLength),
+    };
   }
 
   if (!USERNAME_REGEX.test(name)) {
     return {
       valid: false,
-      error: errors.invalid('Username', 'must start with a letter and contain only letters, numbers, underscores, and hyphens'),
+      error: errors.invalid(
+        'Username',
+        'must start with a letter and contain only letters, numbers, underscores, and hyphens'
+      ),
     };
   }
 
@@ -182,7 +196,10 @@ export function validateClientSecret(secret) {
   if (secret.length < minLength) {
     return {
       valid: false,
-      error: errors.validation(`Client secret must be at least ${minLength} characters`, 'clientSecret'),
+      error: errors.validation(
+        `Client secret must be at least ${minLength} characters`,
+        'clientSecret'
+      ),
     };
   }
 
@@ -192,7 +209,9 @@ export function validateClientSecret(secret) {
   const hasNumber = /[0-9]/.test(secret);
   const hasSpecial = /[^a-zA-Z0-9]/.test(secret);
 
-  const diversityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+  const diversityCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(
+    Boolean
+  ).length;
 
   if (diversityCount < 2) {
     return {
@@ -234,7 +253,8 @@ export function validateUrl(url, options = {}) {
     // Check protocol
     if (requireHttps && parsed.protocol !== 'https:') {
       // Allow localhost exception if enabled
-      const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+      const isLocalhost =
+        parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
       if (!allowLocalhost || !isLocalhost) {
         return {
           valid: false,
@@ -265,7 +285,10 @@ export function validateRedirectUris(uris) {
   if (!Array.isArray(uris) || uris.length === 0) {
     return {
       valid: false,
-      error: errors.validation('At least one redirect URI is required', 'redirectUris'),
+      error: errors.validation(
+        'At least one redirect URI is required',
+        'redirectUris'
+      ),
     };
   }
 
@@ -274,7 +297,10 @@ export function validateRedirectUris(uris) {
     if (!result.valid) {
       return {
         valid: false,
-        error: errors.validation(`Invalid redirect URI: ${uri}`, 'redirectUris'),
+        error: errors.validation(
+          `Invalid redirect URI: ${uri}`,
+          'redirectUris'
+        ),
       };
     }
   }
@@ -349,15 +375,16 @@ const VALID_SCOPES = ['read', 'write', 'admin'];
  */
 export function validateScopes(scopes, allowedScopes = VALID_SCOPES) {
   // Parse scopes if string
-  const scopeArray = typeof scopes === 'string'
-    ? scopes.split(/[\s,]+/).filter(Boolean)
-    : scopes;
+  const scopeArray =
+    typeof scopes === 'string'
+      ? scopes.split(/[\s,]+/).filter(Boolean)
+      : scopes;
 
   if (!Array.isArray(scopeArray) || scopeArray.length === 0) {
     return { valid: true, error: null, value: ['read'] }; // Default scope
   }
 
-  const invalidScopes = scopeArray.filter(s => !allowedScopes.includes(s));
+  const invalidScopes = scopeArray.filter((s) => !allowedScopes.includes(s));
 
   if (invalidScopes.length > 0) {
     return {
@@ -387,20 +414,24 @@ const VALID_GRANT_TYPES = [
  * @returns {ValidationResult}
  */
 export function validateGrantTypes(grantTypes) {
-  const typesArray = typeof grantTypes === 'string'
-    ? grantTypes.split(/[\s,]+/).filter(Boolean)
-    : grantTypes;
+  const typesArray =
+    typeof grantTypes === 'string'
+      ? grantTypes.split(/[\s,]+/).filter(Boolean)
+      : grantTypes;
 
   if (!Array.isArray(typesArray) || typesArray.length === 0) {
     return { valid: true, error: null, value: ['authorization_code'] }; // Default
   }
 
-  const invalidTypes = typesArray.filter(t => !VALID_GRANT_TYPES.includes(t));
+  const invalidTypes = typesArray.filter((t) => !VALID_GRANT_TYPES.includes(t));
 
   if (invalidTypes.length > 0) {
     return {
       valid: false,
-      error: errors.validation(`Invalid grant type(s): ${invalidTypes.join(', ')}`, 'grantTypes'),
+      error: errors.validation(
+        `Invalid grant type(s): ${invalidTypes.join(', ')}`,
+        'grantTypes'
+      ),
     };
   }
 

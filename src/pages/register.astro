@@ -92,7 +92,8 @@ import Layout from '../layouts/Layout.astro';
           }, 2000);
         } else {
           // Handle both old format (data.error = string) and new format (data.error = {code, message})
-          const errorMessage = typeof data.error === 'object' ? data.error.message : data.error;
+          const errorMessage =
+            typeof data.error === 'object' ? data.error.message : data.error;
           errorDiv.textContent = errorMessage || 'Registration failed';
           errorDiv.style.display = 'block';
         }

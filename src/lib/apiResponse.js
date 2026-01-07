@@ -138,16 +138,19 @@ export function noContentResponse() {
  * @returns {Response}
  */
 export function paginatedResponse(items, { page, limit, total }) {
-  return jsonResponse({
-    data: items,
-    meta: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      hasMore: page * limit < total,
+  return jsonResponse(
+    {
+      data: items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      },
     },
-  }, 200);
+    200
+  );
 }
 
 // =============================================================================
@@ -307,12 +310,17 @@ export const oauthErrors = {
     oauthErrorResponse('invalid_grant', description, 400),
 
   /** Client not authorized for this grant type */
-  unauthorizedClient: (description = 'Client is not authorized to use this grant type') =>
-    oauthErrorResponse('unauthorized_client', description, 400),
+  unauthorizedClient: (
+    description = 'Client is not authorized to use this grant type'
+  ) => oauthErrorResponse('unauthorized_client', description, 400),
 
   /** Unsupported grant type */
   unsupportedGrantType: () =>
-    oauthErrorResponse('unsupported_grant_type', 'Grant type not supported', 400),
+    oauthErrorResponse(
+      'unsupported_grant_type',
+      'Grant type not supported',
+      400
+    ),
 
   /** Invalid or unauthorized scope */
   invalidScope: (scopes) =>

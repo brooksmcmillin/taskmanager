@@ -96,10 +96,10 @@ components:
           properties:
             code:
               type: string
-              example: "VALIDATION_001"
+              example: 'VALIDATION_001'
             message:
               type: string
-              example: "Invalid input"
+              example: 'Invalid input'
             details:
               type: object
 
@@ -156,7 +156,7 @@ components:
           nullable: true
         color:
           type: string
-          pattern: "^#[0-9a-fA-F]{6}$"
+          pattern: '^#[0-9a-fA-F]{6}$'
         is_active:
           type: boolean
         created_at:
@@ -181,7 +181,13 @@ components:
           type: array
           items:
             type: string
-            enum: [authorization_code, refresh_token, client_credentials, device_code]
+            enum:
+              [
+                authorization_code,
+                refresh_token,
+                client_credentials,
+                device_code,
+              ]
         scopes:
           type: array
           items:
@@ -205,7 +211,7 @@ components:
           type: string
         token_type:
           type: string
-          example: "Bearer"
+          example: 'Bearer'
         expires_in:
           type: integer
           description: Token lifetime in seconds
@@ -265,11 +271,11 @@ paths:
                   type: string
                   minLength: 8
       responses:
-        "201":
+        '201':
           description: User created
-        "400":
+        '400':
           description: Validation error
-        "409":
+        '409':
           description: User already exists
 
   /api/auth/login:
@@ -289,11 +295,11 @@ paths:
                 password:
                   type: string
       responses:
-        "200":
+        '200':
           description: Login successful
-        "401":
+        '401':
           description: Invalid credentials
-        "429":
+        '429':
           description: Rate limited
 
   /api/auth/logout:
@@ -303,7 +309,7 @@ paths:
       security:
         - sessionCookie: []
       responses:
-        "200":
+        '200':
           description: Logged out
 
   /api/todos:
@@ -328,8 +334,40 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: List of todos
+
+    put:
+      tags: [Todos]
+      summary: Bulk update todos
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, updates]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                updates:
+                  type: object
+                  properties:
+                    status:
+                      type: string
+                      enum: [pending, in_progress, completed]
+                    priority:
+                      type: integer
+                    project_id:
+                      type: integer
+      responses:
+        '200':
+          description: Todos updated
 
     post:
       tags: [Todos]
@@ -365,7 +403,7 @@ paths:
                   items:
                     type: string
       responses:
-        "201":
+        '201':
           description: Todo created
 
   /api/todos/{id}:
@@ -382,9 +420,9 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: Todo details
-        "404":
+        '404':
           description: Todo not found
 
     put:
@@ -400,7 +438,7 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: Todo updated
 
     delete:
@@ -416,7 +454,7 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: Todo deleted
 
   /api/todos/{id}/complete:
@@ -433,7 +471,7 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: Todo completed
 
   /api/tasks/search:
@@ -450,7 +488,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Search results
 
   /api/projects:
@@ -461,7 +499,7 @@ paths:
         - sessionCookie: []
         - bearerAuth: []
       responses:
-        "200":
+        '200':
           description: List of projects
 
     post:
@@ -484,9 +522,9 @@ paths:
                   type: string
                 color:
                   type: string
-                  default: "#3b82f6"
+                  default: '#3b82f6'
       responses:
-        "201":
+        '201':
           description: Project created
 
   /api/projects/{id}:
@@ -503,9 +541,9 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: Project details
-        "404":
+        '404':
           description: Project not found
 
     put:
@@ -521,7 +559,7 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: Project updated
 
     delete:
@@ -537,7 +575,7 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: Project deleted
 
   /api/oauth/authorize:
@@ -579,8 +617,40 @@ paths:
             type: string
             enum: [S256, plain]
       responses:
-        "302":
+        '302':
           description: Redirect to consent page
+
+    post:
+      tags: [OAuth]
+      summary: Process authorization consent
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [approve, deny]
+                client_id:
+                  type: string
+                redirect_uri:
+                  type: string
+                scope:
+                  type: string
+                state:
+                  type: string
+                code_challenge:
+                  type: string
+                code_challenge_method:
+                  type: string
+      responses:
+        '302':
+          description: Redirect to client with authorization code or error
 
   /api/oauth/token:
     post:
@@ -600,7 +670,7 @@ paths:
                     - authorization_code
                     - refresh_token
                     - client_credentials
-                    - "urn:ietf:params:oauth:grant-type:device_code"
+                    - 'urn:ietf:params:oauth:grant-type:device_code'
                 client_id:
                   type: string
                 client_secret:
@@ -618,7 +688,7 @@ paths:
                 scope:
                   type: string
       responses:
-        "200":
+        '200':
           description: Token response
 
   /api/oauth/device/code:
@@ -638,7 +708,7 @@ paths:
                 scope:
                   type: string
       responses:
-        "200":
+        '200':
           description: Device code response
 
   /api/oauth/device/authorize:
@@ -648,7 +718,7 @@ paths:
       security:
         - sessionCookie: []
       responses:
-        "302":
+        '302':
           description: Redirect to success or denied page
 
   /api/oauth/clients:
@@ -659,7 +729,7 @@ paths:
         - sessionCookie: []
         - bearerAuth: []
       responses:
-        "200":
+        '200':
           description: List of OAuth clients
 
     post:
@@ -695,13 +765,13 @@ paths:
                 clientSecret:
                   type: string
       responses:
-        "201":
+        '201':
           description: Client created
 
   /api/oauth/clients/{clientId}:
-    get:
+    put:
       tags: [OAuth]
-      summary: Get OAuth client
+      summary: Update OAuth client
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -711,9 +781,32 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                redirectUris:
+                  type: array
+                  items:
+                    type: string
+                grantTypes:
+                  type: array
+                  items:
+                    type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                isActive:
+                  type: boolean
       responses:
-        "200":
-          description: Client details
+        '200':
+          description: Client updated
 
     delete:
       tags: [OAuth]
@@ -728,7 +821,7 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: Client deleted
 
   /api/categories:
@@ -739,5 +832,5 @@ paths:
         - sessionCookie: []
         - bearerAuth: []
       responses:
-        "200":
+        '200':
           description: Categories with counts

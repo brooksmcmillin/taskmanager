@@ -62,7 +62,7 @@ function extractHttpMethods(filePath) {
 
 /**
  * Convert file path to OpenAPI route path
- * e.g., src/pages/api/todos/[id].js -> /todos/{id}
+ * e.g., src/pages/api/todos/[id].js -> /api/todos/{id}
  */
 function filePathToRoute(filePath, apiDir) {
   let route = relative(apiDir, filePath);
@@ -76,11 +76,11 @@ function filePathToRoute(filePath, apiDir) {
   // Handle index files
   route = route.replace(/\/index$/, '');
 
-  // Ensure leading slash
-  route = '/' + route;
-
   // Normalize path separators for Windows
   route = route.replace(/\\/g, '/');
+
+  // Ensure /api/ prefix to match OpenAPI spec paths
+  route = '/api/' + route;
 
   return route;
 }

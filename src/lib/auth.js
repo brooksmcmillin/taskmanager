@@ -14,7 +14,9 @@ import { CONFIG } from './config.js';
  * @returns {string|null} The token or null if not present/invalid
  */
 export function extractBearerToken(request) {
-  const authHeader = request.headers.get('Authorization') || request.headers.get('authorization');
+  const authHeader =
+    request.headers.get('Authorization') ||
+    request.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
   }

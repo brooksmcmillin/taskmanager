@@ -25,7 +25,10 @@ function parseIntEnv(envVar, defaultValue) {
 function parseArrayEnv(envVar, defaultValue) {
   const value = process.env[envVar];
   if (!value) return defaultValue;
-  return value.split(',').map(s => s.trim()).filter(Boolean);
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export const config = {
@@ -40,7 +43,8 @@ export const config = {
     sessionDurationDays: parseIntEnv('SESSION_DURATION_DAYS', 7),
 
     /** Session cookie name (uses __Host- prefix in production for security) */
-    sessionCookieName: process.env.NODE_ENV === 'production' ? '__Host-session' : 'session',
+    sessionCookieName:
+      process.env.NODE_ENV === 'production' ? '__Host-session' : 'session',
 
     /** Maximum login attempts before rate limiting */
     maxLoginAttempts: parseIntEnv('LOGIN_MAX_ATTEMPTS', 5),
@@ -74,12 +78,14 @@ export const config = {
     allowedOrigins: parseArrayEnv('ALLOWED_ORIGINS', [
       'https://todo.brooksmcmillin.com',
       // Development origins (only if not in production)
-      ...(process.env.NODE_ENV !== 'production' ? [
-        'http://localhost:4321',
-        'http://localhost:3000',
-        'http://127.0.0.1:4321',
-        'http://127.0.0.1:3000',
-      ] : []),
+      ...(process.env.NODE_ENV !== 'production'
+        ? [
+            'http://localhost:4321',
+            'http://localhost:3000',
+            'http://127.0.0.1:4321',
+            'http://127.0.0.1:3000',
+          ]
+        : []),
     ]),
   },
 
@@ -100,11 +106,16 @@ export const config = {
   database: {
     /** Build connection string from environment variables */
     get connectionString() {
-      return 'postgresql://' +
-        process.env.POSTGRES_USER + ':' +
-        process.env.POSTGRES_PASSWORD + '@' +
-        (process.env.POSTGRES_HOST || 'localhost') + ':5432/' +
-        process.env.POSTGRES_DB;
+      return (
+        'postgresql://' +
+        process.env.POSTGRES_USER +
+        ':' +
+        process.env.POSTGRES_PASSWORD +
+        '@' +
+        (process.env.POSTGRES_HOST || 'localhost') +
+        ':5432/' +
+        process.env.POSTGRES_DB
+      );
     },
   },
 
@@ -140,7 +151,8 @@ export const CONFIG = {
   SESSION_DURATION_DAYS: config.auth.sessionDurationDays,
   SESSION_COOKIE_NAME: config.auth.sessionCookieName,
   ACCESS_TOKEN_EXPIRY_SECONDS: config.oauth.accessTokenExpirySeconds,
-  AUTHORIZATION_CODE_EXPIRY_MINUTES: config.oauth.authorizationCodeExpiryMinutes,
+  AUTHORIZATION_CODE_EXPIRY_MINUTES:
+    config.oauth.authorizationCodeExpiryMinutes,
   DEVICE_CODE_EXPIRY_SECONDS: config.oauth.deviceCodeExpirySeconds,
   DEVICE_POLL_INTERVAL_SECONDS: config.oauth.devicePollIntervalSeconds,
   LOGIN_MAX_ATTEMPTS: config.auth.maxLoginAttempts,

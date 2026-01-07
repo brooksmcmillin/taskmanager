@@ -152,12 +152,16 @@ async function handleClientCredentialsGrant(formData, client) {
   // Validate that this client is allowed to use client_credentials grant
   const allowedGrantTypes = JSON.parse(client.grant_types || '[]');
   if (!allowedGrantTypes.includes('client_credentials')) {
-    return oauthErrors.unauthorizedClient('Client is not authorized to use this grant type');
+    return oauthErrors.unauthorizedClient(
+      'Client is not authorized to use this grant type'
+    );
   }
 
   // Check that client has an owner (user_id)
   if (!client.user_id) {
-    return oauthErrors.serverError('Client configuration error: no owner assigned');
+    return oauthErrors.serverError(
+      'Client configuration error: no owner assigned'
+    );
   }
 
   // Get requested scope (optional) or use client's default scopes
@@ -174,7 +178,9 @@ async function handleClientCredentialsGrant(formData, client) {
       (s) => !clientScopes.includes(s)
     );
     if (invalidScopes.length > 0) {
-      return oauthErrors.invalidScope(`Invalid scope(s): ${invalidScopes.join(', ')}`);
+      return oauthErrors.invalidScope(
+        `Invalid scope(s): ${invalidScopes.join(', ')}`
+      );
     }
     scopes = requestedScopes;
   } else {
@@ -219,7 +225,9 @@ async function handleDeviceCodeGrant(formData, client) {
   // Validate that this client is allowed to use device_code grant
   const allowedGrantTypes = JSON.parse(client.grant_types || '[]');
   if (!allowedGrantTypes.includes('device_code')) {
-    return oauthErrors.unauthorizedClient('Client is not authorized to use device flow');
+    return oauthErrors.unauthorizedClient(
+      'Client is not authorized to use device flow'
+    );
   }
 
   // Get device authorization status
@@ -248,7 +256,9 @@ async function handleDeviceCodeGrant(formData, client) {
   }
 
   if (deviceAuth.status === 'pending') {
-    return oauthErrors.authorizationPending('User has not yet authorized the device');
+    return oauthErrors.authorizationPending(
+      'User has not yet authorized the device'
+    );
   }
 
   if (deviceAuth.status === 'authorized') {

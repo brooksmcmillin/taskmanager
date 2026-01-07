@@ -71,7 +71,10 @@ export const POST = async ({ request }) => {
     // Map category to project_id if provided
     let todoData = { ...body, title: titleResult.value };
     if (body.category && !body.project_id) {
-      const project = await TodoDB.getProjectByName(session.user_id, body.category);
+      const project = await TodoDB.getProjectByName(
+        session.user_id,
+        body.category
+      );
       if (project) {
         todoData.project_id = project.id;
       }
@@ -102,7 +105,11 @@ export const PUT = async ({ request }) => {
     }
 
     const { id, ...updates } = body;
-    const updated = await TodoDB.updateTodo(idResult.value, session.user_id, updates);
+    const updated = await TodoDB.updateTodo(
+      idResult.value,
+      session.user_id,
+      updates
+    );
 
     if (!updated) {
       return errors.todoNotFound().toResponse();

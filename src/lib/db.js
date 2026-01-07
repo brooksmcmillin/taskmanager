@@ -19,7 +19,8 @@ import { CONFIG } from './config.js';
 // Regex patterns for validation
 const VALID_FIELD_NAME = /^[a-zA-Z_][a-zA-Z0-9_.]*$/;
 // eslint-disable-next-line security/detect-unsafe-regex -- Used for ORDER BY validation with bounded input; ReDoS risk is minimal
-const VALID_ORDER_CLAUSE = /^[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?(\s*,\s*[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?)*$/;
+const VALID_ORDER_CLAUSE =
+  /^[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?(\s*,\s*[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?)*$/;
 
 /**
  * Validate a field name to prevent SQL injection
@@ -683,8 +684,9 @@ export class TodoDB {
       [user_id, searchQuery]
     );
 
-    qb.whereIf('p.name = ?', category)
-      .orderBy('t.priority DESC, t.created_at ASC');
+    qb.whereIf('p.name = ?', category).orderBy(
+      't.priority DESC, t.created_at ASC'
+    );
 
     const { query, params } = qb.build();
     const result = await this.query(query, params);

@@ -39,7 +39,10 @@ export async function POST({ request }) {
     // Record attempt before authentication
     loginRateLimiter.recordAttempt(clientIp);
 
-    const user = await Auth.authenticateUser(usernameResult.value, passwordResult.value);
+    const user = await Auth.authenticateUser(
+      usernameResult.value,
+      passwordResult.value
+    );
 
     // Clear rate limit on successful login
     loginRateLimiter.clearAttempts(clientIp);

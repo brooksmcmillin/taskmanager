@@ -13,7 +13,10 @@ export const GET = async ({ params, request }) => {
       return idResult.error.toResponse();
     }
 
-    const project = await TodoDB.getProjectById(idResult.value, session.user_id);
+    const project = await TodoDB.getProjectById(
+      idResult.value,
+      session.user_id
+    );
 
     if (!project) {
       return errors.notFound('Project').toResponse();
@@ -40,7 +43,10 @@ export const PUT = async ({ params, request }) => {
     const updates = await request.json();
 
     // Check if project exists and belongs to user
-    const project = await TodoDB.getProjectById(idResult.value, session.user_id);
+    const project = await TodoDB.getProjectById(
+      idResult.value,
+      session.user_id
+    );
     if (!project) {
       return errors.notFound('Project').toResponse();
     }
@@ -66,7 +72,10 @@ export const DELETE = async ({ params, request }) => {
     }
 
     // Check if project exists and belongs to user
-    const project = await TodoDB.getProjectById(idResult.value, session.user_id);
+    const project = await TodoDB.getProjectById(
+      idResult.value,
+      session.user_id
+    );
     if (!project) {
       return errors.notFound('Project').toResponse();
     }

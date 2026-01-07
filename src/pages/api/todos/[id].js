@@ -48,7 +48,10 @@ export const PUT = async ({ params, request }) => {
     // Map category to project_id if provided (using direct lookup instead of N+1 query)
     let updateData = { ...updates };
     if (updates.category && !updates.project_id) {
-      const project = await TodoDB.getProjectByName(session.user_id, updates.category);
+      const project = await TodoDB.getProjectByName(
+        session.user_id,
+        updates.category
+      );
       if (project) {
         updateData.project_id = project.id;
       }

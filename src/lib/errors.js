@@ -79,16 +79,13 @@ export const errors = {
     new ApiError('AUTH_001', 401, 'Invalid username or password'),
 
   /** Authentication required but not provided */
-  authRequired: () =>
-    new ApiError('AUTH_002', 401, 'Authentication required'),
+  authRequired: () => new ApiError('AUTH_002', 401, 'Authentication required'),
 
   /** Session has expired */
-  sessionExpired: () =>
-    new ApiError('AUTH_003', 401, 'Session has expired'),
+  sessionExpired: () => new ApiError('AUTH_003', 401, 'Session has expired'),
 
   /** Invalid or expired token */
-  invalidToken: () =>
-    new ApiError('AUTH_004', 401, 'Invalid or expired token'),
+  invalidToken: () => new ApiError('AUTH_004', 401, 'Invalid or expired token'),
 
   // ===========================================================================
   // Authorization Errors (403)
@@ -124,19 +121,33 @@ export const errors = {
 
   /** Field value too short */
   tooShort: (field, min) =>
-    new ApiError('VALIDATION_004', 400, `${field} must be at least ${min} characters`, { field, min }),
+    new ApiError(
+      'VALIDATION_004',
+      400,
+      `${field} must be at least ${min} characters`,
+      { field, min }
+    ),
 
   /** Field value too long */
   tooLong: (field, max) =>
-    new ApiError('VALIDATION_005', 400, `${field} must be at most ${max} characters`, { field, max }),
+    new ApiError(
+      'VALIDATION_005',
+      400,
+      `${field} must be at most ${max} characters`,
+      { field, max }
+    ),
 
   /** Invalid email format */
   invalidEmail: () =>
-    new ApiError('VALIDATION_006', 400, 'Invalid email format', { field: 'email' }),
+    new ApiError('VALIDATION_006', 400, 'Invalid email format', {
+      field: 'email',
+    }),
 
   /** Password does not meet requirements */
   weakPassword: (reason) =>
-    new ApiError('VALIDATION_007', 400, `Password ${reason}`, { field: 'password' }),
+    new ApiError('VALIDATION_007', 400, `Password ${reason}`, {
+      field: 'password',
+    }),
 
   /** Invalid URL format */
   invalidUrl: (field = 'url') =>
@@ -151,16 +162,14 @@ export const errors = {
     new ApiError('NOT_FOUND_001', 404, `${resource} not found`),
 
   /** User not found */
-  userNotFound: () =>
-    new ApiError('NOT_FOUND_002', 404, 'User not found'),
+  userNotFound: () => new ApiError('NOT_FOUND_002', 404, 'User not found'),
 
   /** Project not found */
   projectNotFound: () =>
     new ApiError('NOT_FOUND_003', 404, 'Project not found'),
 
   /** Task/Todo not found */
-  todoNotFound: () =>
-    new ApiError('NOT_FOUND_004', 404, 'Task not found'),
+  todoNotFound: () => new ApiError('NOT_FOUND_004', 404, 'Task not found'),
 
   /** OAuth client not found */
   clientNotFound: () =>
@@ -176,7 +185,11 @@ export const errors = {
 
   /** User already exists */
   userExists: () =>
-    new ApiError('CONFLICT_002', 409, 'User with this username or email already exists'),
+    new ApiError(
+      'CONFLICT_002',
+      409,
+      'User with this username or email already exists'
+    ),
 
   // ===========================================================================
   // Rate Limiting Errors (429)
@@ -184,8 +197,12 @@ export const errors = {
 
   /** Too many requests */
   rateLimited: (retryAfter = null) =>
-    new ApiError('RATE_001', 429, 'Too many requests. Please try again later.',
-      retryAfter ? { retryAfter } : null),
+    new ApiError(
+      'RATE_001',
+      429,
+      'Too many requests. Please try again later.',
+      retryAfter ? { retryAfter } : null
+    ),
 
   // ===========================================================================
   // OAuth Errors (RFC 6749 compliant)
@@ -205,7 +222,11 @@ export const errors = {
 
   /** Client not authorized for grant type */
   oauthUnauthorizedClient: (grantType) =>
-    new ApiError('OAUTH_004', 400, `Client is not authorized to use ${grantType} grant`),
+    new ApiError(
+      'OAUTH_004',
+      400,
+      `Client is not authorized to use ${grantType} grant`
+    ),
 
   /** Unsupported grant type */
   oauthUnsupportedGrant: () =>
@@ -242,12 +263,16 @@ export const errors = {
     new ApiError('SERVER_001', 500, message),
 
   /** Database error */
-  database: () =>
-    new ApiError('SERVER_002', 500, 'Database error occurred'),
+  database: () => new ApiError('SERVER_002', 500, 'Database error occurred'),
 
   /** Configuration error */
   configError: (detail = null) =>
-    new ApiError('SERVER_003', 500, 'Server configuration error', detail ? { detail } : null),
+    new ApiError(
+      'SERVER_003',
+      500,
+      'Server configuration error',
+      detail ? { detail } : null
+    ),
 };
 
 /**
