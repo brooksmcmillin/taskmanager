@@ -18,9 +18,8 @@ import { CONFIG } from './config.js';
 
 // Regex patterns for validation
 const VALID_FIELD_NAME = /^[a-zA-Z_][a-zA-Z0-9_.]*$/;
-// eslint-disable-next-line security/detect-unsafe-regex -- Used for ORDER BY validation with bounded input; ReDoS risk is minimal
-const VALID_ORDER_CLAUSE =
-  /^[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?(\s*,\s*[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?)*$/;
+// Used for ORDER BY validation with bounded input; ReDoS risk is minimal
+const VALID_ORDER_CLAUSE = /^[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?(\s*,\s*[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?)*$/; // eslint-disable-line security/detect-unsafe-regex
 
 /**
  * Validate a field name to prevent SQL injection
