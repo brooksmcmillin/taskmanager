@@ -1,1309 +1,167 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: TaskManager API
-  description: RESTful API for managing tasks, projects, and user authentication with OAuth 2.0 support
+  description: |
+    Task management API with OAuth 2.0 support.
+
+    ## Authentication
+
+    Most endpoints require authentication via one of:
+    - **Session cookie**: Obtained after login via `/api/auth/login`
+    - **Bearer token**: OAuth 2.0 access token in `Authorization: Bearer <token>` header
+
+    ## Response Format
+
+    ### Success Responses
+    ```json
+    {
+      "data": <payload>,
+      "meta": { "count": 10, "page": 1 }  // optional
+    }
+    ```
+
+    ### Error Responses
+    ```json
+    {
+      "error": {
+        "code": "ERROR_CODE",
+        "message": "Human readable message",
+        "details": {}  // optional
+      }
+    }
+    ```
+
+    ## Error Codes
+
+    | Code | Status | Description |
+    |------|--------|-------------|
+    | AUTH_001 | 401 | Invalid credentials |
+    | AUTH_002 | 401 | Authentication required |
+    | AUTH_003 | 401 | Session expired |
+    | AUTH_004 | 401 | Invalid token |
+    | AUTHZ_001 | 403 | Permission denied |
+    | AUTHZ_002 | 403 | Not resource owner |
+    | AUTHZ_003 | 403 | Insufficient OAuth scope |
+    | VALIDATION_001-008 | 400 | Input validation errors |
+    | NOT_FOUND_001-005 | 404 | Resource not found |
+    | CONFLICT_001-002 | 409 | Resource conflict |
+    | RATE_001 | 429 | Rate limited |
+    | OAUTH_001-010 | 400/401 | OAuth errors |
+    | SERVER_001-003 | 500 | Server errors |
+
   version: 1.0.0
   contact:
-    name: TaskManager Support
-    email: support@taskmanager.com
+    name: Brooks McMillin
+    url: https://todo.brooksmcmillin.com
 
 servers:
-  - url: http://localhost:4321/api
-    description: Development server
-  - url: https://api.taskmanager.com
-    description: Production server
+  - url: https://todo.brooksmcmillin.com
+    description: Production
+  - url: http://localhost:4321
+    description: Development
 
-security:
-  - cookieAuth: []
-  - bearerAuth: []
-
-paths:
-  /auth/register:
-    post:
-      tags:
-        - Authentication
-      summary: Register a new user
-      operationId: registerUser
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - username
-                - email
-                - password
-              properties:
-                username:
-                  type: string
-                  minLength: 3
-                  maxLength: 50
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                  minLength: 6
-      responses:
-        '201':
-          description: User created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  userId:
-                    type: integer
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /auth/login:
-    post:
-      tags:
-        - Authentication
-      summary: Login user
-      operationId: loginUser
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - username
-                - password
-              properties:
-                username:
-                  type: string
-                password:
-                  type: string
-      responses:
-        '200':
-          description: Login successful
-          headers:
-            Set-Cookie:
-              schema:
-                type: string
-                description: Session cookie
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  user:
-                    $ref: '#/components/schemas/User'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /auth/logout:
-    post:
-      tags:
-        - Authentication
-      summary: Logout user
-      operationId: logoutUser
-      responses:
-        '200':
-          description: Logout successful
-          headers:
-            Set-Cookie:
-              schema:
-                type: string
-                description: Cleared session cookie
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-  /oauth/authorize:
-    get:
-      tags:
-        - OAuth
-      summary: OAuth authorization endpoint
-      operationId: authorizeOAuth
-      parameters:
-        - in: query
-          name: client_id
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: redirect_uri
-          required: true
-          schema:
-            type: string
-            format: uri
-        - in: query
-          name: response_type
-          required: true
-          schema:
-            type: string
-            enum: [code]
-        - in: query
-          name: scope
-          schema:
-            type: string
-            default: read
-        - in: query
-          name: state
-          schema:
-            type: string
-        - in: query
-          name: code_challenge
-          schema:
-            type: string
-        - in: query
-          name: code_challenge_method
-          schema:
-            type: string
-            enum: [plain, S256]
-      responses:
-        '302':
-          description: Redirect to consent page or login
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-    post:
-      tags:
-        - OAuth
-      summary: Handle OAuth authorization consent
-      operationId: consentOAuth
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required:
-                - client_id
-                - redirect_uri
-                - action
-              properties:
-                client_id:
-                  type: string
-                redirect_uri:
-                  type: string
-                scope:
-                  type: string
-                state:
-                  type: string
-                code_challenge:
-                  type: string
-                code_challenge_method:
-                  type: string
-                action:
-                  type: string
-                  enum: [allow, deny]
-      responses:
-        '302':
-          description: Redirect to callback with authorization code or error
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-  /oauth/token:
-    options:
-      tags:
-        - OAuth
-      summary: CORS preflight for token endpoint
-      operationId: tokenOptions
-      security: []
-      responses:
-        '200':
-          description: CORS headers returned
-          headers:
-            Access-Control-Allow-Origin:
-              schema:
-                type: string
-            Access-Control-Allow-Methods:
-              schema:
-                type: string
-            Access-Control-Allow-Headers:
-              schema:
-                type: string
-
-    post:
-      tags:
-        - OAuth
-      summary: OAuth token endpoint
-      operationId: getOAuthToken
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required:
-                - grant_type
-                - client_id
-                - client_secret
-              properties:
-                grant_type:
-                  type: string
-                  enum:
-                    [
-                      authorization_code,
-                      refresh_token,
-                      client_credentials,
-                      urn:ietf:params:oauth:grant-type:device_code,
-                    ]
-                client_id:
-                  type: string
-                client_secret:
-                  type: string
-                code:
-                  type: string
-                  description: Required for authorization_code grant
-                redirect_uri:
-                  type: string
-                  description: Required for authorization_code grant
-                code_verifier:
-                  type: string
-                  description: Required for PKCE
-                refresh_token:
-                  type: string
-                  description: Required for refresh_token grant
-                device_code:
-                  type: string
-                  description: Required for device_code grant
-                scope:
-                  type: string
-                  description: Optional scope for client_credentials grant
-      responses:
-        '200':
-          description: Token response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  access_token:
-                    type: string
-                  token_type:
-                    type: string
-                    enum: [Bearer]
-                  expires_in:
-                    type: integer
-                  refresh_token:
-                    type: string
-                  scope:
-                    type: string
-        '400':
-          description: OAuth error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthError'
-        '401':
-          description: Invalid client
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthError'
-
-  /oauth/clients:
-    get:
-      tags:
-        - OAuth
-      summary: List OAuth clients
-      operationId: listOAuthClients
-      responses:
-        '200':
-          description: List of OAuth clients
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/OAuthClient'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-    post:
-      tags:
-        - OAuth
-      summary: Create OAuth client
-      operationId: createOAuthClient
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-                - redirectUris
-              properties:
-                name:
-                  type: string
-                redirectUris:
-                  type: array
-                  items:
-                    type: string
-                    format: uri
-                grantTypes:
-                  type: array
-                  items:
-                    type: string
-                  default: [authorization_code]
-                scopes:
-                  type: array
-                  items:
-                    type: string
-                  default: [read]
-      responses:
-        '201':
-          description: OAuth client created
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/OAuthClient'
-                  - type: object
-                    properties:
-                      client_secret:
-                        type: string
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-  /oauth/clients/{clientId}:
-    put:
-      tags:
-        - OAuth
-      summary: Update OAuth client
-      operationId: updateOAuthClient
-      parameters:
-        - name: clientId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-                - redirectUris
-              properties:
-                name:
-                  type: string
-                redirectUris:
-                  type: array
-                  items:
-                    type: string
-                    format: uri
-                grantTypes:
-                  type: array
-                  items:
-                    type: string
-                  default: [authorization_code]
-                scopes:
-                  type: array
-                  items:
-                    type: string
-                  default: [read]
-      responses:
-        '200':
-          description: OAuth client updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthClient'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-    delete:
-      tags:
-        - OAuth
-      summary: Delete OAuth client
-      operationId: deleteOAuthClient
-      parameters:
-        - name: clientId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OAuth client deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-  /oauth/jwks:
-    get:
-      tags:
-        - OAuth
-      summary: Get JSON Web Key Set
-      operationId: getJWKS
-      security: []
-      responses:
-        '200':
-          description: JWKS response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  keys:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        kty:
-                          type: string
-                        use:
-                          type: string
-                        kid:
-                          type: string
-                        alg:
-                          type: string
-                        n:
-                          type: string
-                        e:
-                          type: string
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-  /oauth/device/code:
-    options:
-      tags:
-        - OAuth
-      summary: CORS preflight for device code endpoint
-      operationId: deviceCodeOptions
-      security: []
-      responses:
-        '200':
-          description: CORS headers returned
-          headers:
-            Access-Control-Allow-Origin:
-              schema:
-                type: string
-            Access-Control-Allow-Methods:
-              schema:
-                type: string
-            Access-Control-Allow-Headers:
-              schema:
-                type: string
-
-    post:
-      tags:
-        - OAuth
-      summary: Request device authorization code (RFC 8628)
-      description: |
-        Initiates the OAuth 2.0 Device Authorization Grant flow.
-        The CLI calls this endpoint to get a device code and user code.
-        The user then visits the verification URL and enters the user code to authorize the device.
-      operationId: requestDeviceCode
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required:
-                - client_id
-              properties:
-                client_id:
-                  type: string
-                  description: The OAuth client ID
-                scope:
-                  type: string
-                  description: Space-separated list of requested scopes (optional, defaults to client's scopes)
-      responses:
-        '200':
-          description: Device authorization response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeviceAuthorizationResponse'
-        '400':
-          description: Invalid request or scope
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthError'
-        '401':
-          description: Invalid or unauthorized client
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OAuthError'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-  /oauth/device/authorize:
-    post:
-      tags:
-        - OAuth
-      summary: Authorize or deny device (user consent)
-      description: |
-        Handles the user's authorization decision for the device flow.
-        Called when the user approves or denies access on the device verification page.
-        Requires user authentication via session cookie.
-      operationId: authorizeDevice
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              required:
-                - user_code
-                - action
-              properties:
-                user_code:
-                  type: string
-                  description: The user code entered by the user (e.g., WDJB-MJHT)
-                action:
-                  type: string
-                  enum: [allow, deny]
-                  description: User's authorization decision
-      responses:
-        '302':
-          description: Redirect to success or denied page
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/ServerError'
-
-  /projects:
-    get:
-      tags:
-        - Projects
-      summary: List user projects
-      operationId: listProjects
-      responses:
-        '200':
-          description: List of projects
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Project'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-    post:
-      tags:
-        - Projects
-      summary: Create project
-      operationId: createProject
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-                color:
-                  type: string
-                  pattern: '^#[0-9A-Fa-f]{6}$'
-      responses:
-        '201':
-          description: Project created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: integer
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /projects/{id}:
-    get:
-      tags:
-        - Projects
-      summary: Get project by ID
-      operationId: getProject
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-      responses:
-        '200':
-          description: Project details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Project'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    put:
-      tags:
-        - Projects
-      summary: Update project
-      operationId: updateProject
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                description:
-                  type: string
-                color:
-                  type: string
-                  pattern: '^#[0-9A-Fa-f]{6}$'
-      responses:
-        '200':
-          description: Project updated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-    delete:
-      tags:
-        - Projects
-      summary: Delete project
-      operationId: deleteProject
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-      responses:
-        '200':
-          description: Project deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /todos:
-    get:
-      tags:
-        - Todos
-      summary: List todos (get_tasks)
-      description: Retrieve tasks with filtering options
-      operationId: listTodos
-      parameters:
-        - in: query
-          name: project_id
-          schema:
-            type: integer
-          description: Filter by project ID
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum: [pending, in_progress, completed, cancelled, overdue, all]
-          description: Filter by status. Use "overdue" for pending tasks past due date, "all" for no status filter.
-        - in: query
-          name: start_date
-          schema:
-            type: string
-            format: date
-          description: Filter tasks with due_date on or after this date (ISO format)
-        - in: query
-          name: end_date
-          schema:
-            type: string
-            format: date
-          description: Filter tasks with due_date on or before this date (ISO format)
-        - in: query
-          name: category
-          schema:
-            type: string
-          description: Filter by category name (project name)
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            minimum: 1
-          description: Maximum number of tasks to return
-      responses:
-        '200':
-          description: List of todos
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-    post:
-      tags:
-        - Todos
-      summary: Create todo (create_task)
-      description: Create a new task
-      operationId: createTodo
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - title
-              properties:
-                title:
-                  type: string
-                  description: Task title
-                description:
-                  type: string
-                  description: Task details
-                project_id:
-                  type: integer
-                  description: Project ID (alternative to category)
-                category:
-                  type: string
-                  description: Task category name (maps to project)
-                priority:
-                  type: string
-                  enum: [low, medium, high, urgent]
-                  description: Task priority
-                due_date:
-                  type: string
-                  format: date
-                  description: Due date in ISO format
-                estimated_hours:
-                  type: number
-                tags:
-                  type: array
-                  items:
-                    type: string
-                  description: Task tags
-      responses:
-        '201':
-          description: Todo created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskCreateResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-    put:
-      tags:
-        - Todos
-      summary: Update todo (deprecated - use /todos/{id} instead)
-      operationId: updateTodoDeprecated
-      deprecated: true
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - id
-              properties:
-                id:
-                  type: integer
-                title:
-                  type: string
-                description:
-                  type: string
-                status:
-                  type: string
-                  enum: [pending, in_progress, completed, cancelled]
-                priority:
-                  type: string
-                  enum: [low, medium, high, urgent]
-                due_date:
-                  type: string
-                  format: date-time
-                estimated_hours:
-                  type: number
-                actual_hours:
-                  type: number
-                tags:
-                  type: array
-                  items:
-                    type: string
-      responses:
-        '200':
-          description: Todo updated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /todos/{id}:
-    get:
-      tags:
-        - Todos
-      summary: Get todo by ID
-      operationId: getTodo
-      parameters:
-        - $ref: '#/components/parameters/TodoId'
-      responses:
-        '200':
-          description: Todo details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Todo'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    put:
-      tags:
-        - Todos
-      summary: Update todo (update_task)
-      description: Update an existing task
-      operationId: updateTodo
-      parameters:
-        - $ref: '#/components/parameters/TodoId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                title:
-                  type: string
-                  description: New title
-                description:
-                  type: string
-                  description: New description
-                status:
-                  type: string
-                  enum: [pending, in_progress, completed, cancelled]
-                  description: New status
-                category:
-                  type: string
-                  description: New category name (maps to project)
-                priority:
-                  type: string
-                  enum: [low, medium, high, urgent]
-                  description: New priority
-                due_date:
-                  type: string
-                  format: date
-                  description: New due date (for rescheduling)
-                estimated_hours:
-                  type: number
-                actual_hours:
-                  type: number
-                tags:
-                  type: array
-                  items:
-                    type: string
-                  description: New tags
-      responses:
-        '200':
-          description: Todo updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskUpdateResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      tags:
-        - Todos
-      summary: Delete todo
-      operationId: deleteTodo
-      parameters:
-        - $ref: '#/components/parameters/TodoId'
-      responses:
-        '200':
-          description: Todo deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /todos/{id}/complete:
-    post:
-      tags:
-        - Todos
-      summary: Mark todo as complete
-      operationId: completeTodo
-      parameters:
-        - $ref: '#/components/parameters/TodoId'
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                actual_hours:
-                  type: number
-                  minimum: 0
-                  description: Optional actual hours spent on the task
-      responses:
-        '200':
-          description: Todo completed
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /categories:
-    get:
-      tags:
-        - Categories
-      summary: List categories (get_categories)
-      description: List all available task categories with task counts
-      operationId: listCategories
-      responses:
-        '200':
-          description: List of categories with task counts
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CategoryListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /tasks/search:
-    get:
-      tags:
-        - Todos
-      summary: Search tasks (search_tasks)
-      description: Search tasks by keyword using full-text search
-      operationId: searchTasks
-      parameters:
-        - in: query
-          name: query
-          required: true
-          schema:
-            type: string
-          description: Search query string
-        - in: query
-          name: category
-          schema:
-            type: string
-          description: Filter results by category name
-      responses:
-        '200':
-          description: Search results
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskSearchResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Todos
+    description: Task management
+  - name: Projects
+    description: Project management
+  - name: OAuth
+    description: OAuth 2.0 authorization server
 
 components:
   securitySchemes:
-    cookieAuth:
+    sessionCookie:
       type: apiKey
       in: cookie
       name: session
+      description: Session cookie from login
     bearerAuth:
       type: http
       scheme: bearer
-
-  parameters:
-    ProjectId:
-      in: path
-      name: id
-      required: true
-      schema:
-        type: integer
-      description: Project ID
-
-    TodoId:
-      in: path
-      name: id
-      required: true
-      schema:
-        type: integer
-      description: Todo ID
+      description: OAuth 2.0 access token
 
   schemas:
-    User:
+    Error:
       type: object
+      required:
+        - error
       properties:
-        id:
-          type: integer
-        username:
-          type: string
-        email:
-          type: string
-          format: email
-
-    Project:
-      type: object
-      properties:
-        id:
-          type: integer
-        user_id:
-          type: integer
-        name:
-          type: string
-        description:
-          type: string
-        color:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_001"
+            message:
+              type: string
+              example: "Invalid input"
+            details:
+              type: object
 
     Todo:
       type: object
       properties:
         id:
           type: integer
-        user_id:
-          type: integer
-        project_id:
-          type: integer
         title:
           type: string
         description:
           type: string
+          nullable: true
         status:
           type: string
-          enum: [pending, in_progress, completed, cancelled]
+          enum: [pending, in_progress, completed]
         priority:
-          type: string
-          enum: [low, medium, high, urgent]
-        due_date:
-          type: string
-          format: date-time
-        estimated_hours:
-          type: number
-        actual_hours:
-          type: number
-        tags:
-          type: array
-          items:
-            type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        completed_at:
-          type: string
-          format: date-time
-
-    Task:
-      type: object
-      description: Task object returned by API endpoints
-      properties:
-        id:
           type: integer
-          description: Task ID
-          example: 123
-        title:
-          type: string
-          description: Task title
-        description:
-          type: string
-          description: Task details
+          minimum: 1
+          maximum: 5
         due_date:
           type: string
           format: date
           nullable: true
-          description: Due date in ISO format
-        status:
-          type: string
-          enum: [pending, in_progress, completed, cancelled]
-        category:
-          type: string
+        project_id:
+          type: integer
           nullable: true
-          description: Category name (project name)
         project_name:
           type: string
           nullable: true
-          description: Project name for display
         project_color:
           type: string
           nullable: true
-          description: Project color hex code for display
-          example: '#3b82f6'
-        priority:
-          type: string
-          enum: [low, medium, high, urgent]
         tags:
           type: array
           items:
             type: string
         created_at:
           type: string
-          format: date
-          nullable: true
+          format: date-time
         updated_at:
           type: string
-          format: date
-          nullable: true
+          format: date-time
 
-    TaskListResponse:
-      type: object
-      properties:
-        tasks:
-          type: array
-          items:
-            $ref: '#/components/schemas/Task'
-
-    TaskCreateResponse:
+    Project:
       type: object
       properties:
         id:
           type: integer
-          description: Task ID
-          example: 456
-        title:
-          type: string
-          description: Task title
-        status:
-          type: string
-          enum: [created]
-          description: Creation status
-
-    TaskUpdateResponse:
-      type: object
-      properties:
-        id:
-          type: integer
-          description: Task ID
-          example: 123
-        updated_fields:
-          type: array
-          items:
-            type: string
-          description: List of field names that were updated
-        status:
-          type: string
-          enum: [updated]
-          description: Update status
-
-    TaskSearchResponse:
-      type: object
-      properties:
-        tasks:
-          type: array
-          items:
-            $ref: '#/components/schemas/Task'
-        count:
-          type: integer
-          description: Number of matching tasks
-
-    Category:
-      type: object
-      properties:
         name:
           type: string
-          description: Category name
-        task_count:
-          type: integer
-          description: Number of tasks in this category
-
-    CategoryListResponse:
-      type: object
-      properties:
-        categories:
-          type: array
-          items:
-            $ref: '#/components/schemas/Category'
+        description:
+          type: string
+          nullable: true
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
 
     OAuthClient:
       type: object
@@ -1315,118 +173,571 @@ components:
         name:
           type: string
         redirect_uris:
-          type: string
-          description: JSON array of redirect URIs
+          type: array
+          items:
+            type: string
+            format: uri
         grant_types:
-          type: string
-          description: JSON array of grant types
+          type: array
+          items:
+            type: string
+            enum: [authorization_code, refresh_token, client_credentials, device_code]
         scopes:
-          type: string
-          description: JSON array of scopes
+          type: array
+          items:
+            type: string
         is_active:
+          type: boolean
+        is_public:
           type: boolean
         created_at:
           type: string
           format: date-time
 
-    DeviceAuthorizationResponse:
+    TokenResponse:
       type: object
-      description: Response from the device authorization endpoint (RFC 8628)
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          description: Token lifetime in seconds
+        refresh_token:
+          type: string
+        scope:
+          type: string
+
+    DeviceCodeResponse:
+      type: object
+      required:
+        - device_code
+        - user_code
+        - verification_uri
+        - expires_in
+        - interval
       properties:
         device_code:
           type: string
-          description: The device verification code (secret, used for polling)
+          description: Device verification code (keep secret)
         user_code:
           type: string
-          description: The user code to display (e.g., WDJB-MJHT)
-          example: WDJB-MJHT
+          description: User-facing code (e.g., WDJB-MJHT)
         verification_uri:
           type: string
           format: uri
-          description: The URL the user should visit to authorize
-          example: https://example.com/oauth/device
         verification_uri_complete:
           type: string
           format: uri
-          description: The URL with user_code pre-filled
-          example: https://example.com/oauth/device?user_code=WDJB-MJHT
         expires_in:
           type: integer
-          description: Lifetime in seconds of the device code
-          example: 1800
         interval:
           type: integer
           description: Minimum polling interval in seconds
-          example: 5
 
-    OAuthError:
-      type: object
-      properties:
-        error:
-          type: string
-          enum:
-            - invalid_request
-            - invalid_client
-            - invalid_grant
-            - unauthorized_client
-            - unsupported_grant_type
-            - invalid_scope
-            - server_error
-            - access_denied
-            - authorization_pending
-            - slow_down
-            - expired_token
-          description: |
-            OAuth error codes. Device flow specific codes:
-            - authorization_pending: User hasn't authorized yet, keep polling
-            - slow_down: Client is polling too frequently
-            - expired_token: Device code has expired
-        error_description:
-          type: string
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 50
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        "201":
+          description: User created
+        "400":
+          description: Validation error
+        "409":
+          description: User already exists
 
-    Error:
-      type: object
-      properties:
-        error:
-          type: string
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and create session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+        "401":
+          description: Invalid credentials
+        "429":
+          description: Rate limited
 
-  responses:
-    BadRequest:
-      description: Bad request
-      content:
-        application/json:
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout and clear session
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Logged out
+
+  /api/todos:
+    get:
+      tags: [Todos]
+      summary: List todos
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
           schema:
-            $ref: '#/components/schemas/Error'
-
-    Unauthorized:
-      description: Unauthorized
-      content:
-        application/json:
+            type: string
+            enum: [pending, in_progress, completed, overdue, all]
+        - name: project_id
+          in: query
           schema:
-            $ref: '#/components/schemas/Error'
-
-    NotFound:
-      description: Resource not found
-      content:
-        application/json:
+            type: integer
+        - name: category
+          in: query
           schema:
-            $ref: '#/components/schemas/Error'
+            type: string
+      responses:
+        "200":
+          description: List of todos
 
-    ServerError:
-      description: Internal server error
-      content:
-        application/json:
+    post:
+      tags: [Todos]
+      summary: Create a todo
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                priority:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                due_date:
+                  type: string
+                  format: date
+                project_id:
+                  type: integer
+                category:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "201":
+          description: Todo created
+
+  /api/todos/{id}:
+    get:
+      tags: [Todos]
+      summary: Get a todo by ID
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
           schema:
-            $ref: '#/components/schemas/Error'
+            type: integer
+      responses:
+        "200":
+          description: Todo details
+        "404":
+          description: Todo not found
 
-tags:
-  - name: Authentication
-    description: User authentication endpoints
-  - name: OAuth
-    description: OAuth 2.0 authorization endpoints
-  - name: Projects
-    description: Project management endpoints
-  - name: Todos
-    description: Todo task management endpoints
-  - name: Categories
-    description: Task category management endpoints
+    put:
+      tags: [Todos]
+      summary: Update a todo
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Todo updated
+
+    delete:
+      tags: [Todos]
+      summary: Delete a todo
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Todo deleted
+
+  /api/todos/{id}/complete:
+    post:
+      tags: [Todos]
+      summary: Mark todo as complete
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Todo completed
+
+  /api/tasks/search:
+    get:
+      tags: [Todos]
+      summary: Search todos
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+
+  /api/projects:
+    get:
+      tags: [Projects]
+      summary: List projects
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of projects
+
+    post:
+      tags: [Projects]
+      summary: Create a project
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                color:
+                  type: string
+                  default: "#3b82f6"
+      responses:
+        "201":
+          description: Project created
+
+  /api/projects/{id}:
+    get:
+      tags: [Projects]
+      summary: Get a project by ID
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project details
+        "404":
+          description: Project not found
+
+    put:
+      tags: [Projects]
+      summary: Update a project
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project updated
+
+    delete:
+      tags: [Projects]
+      summary: Delete a project
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project deleted
+
+  /api/oauth/authorize:
+    get:
+      tags: [OAuth]
+      summary: Authorization endpoint
+      parameters:
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: scope
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+            enum: [S256, plain]
+      responses:
+        "302":
+          description: Redirect to consent page
+
+  /api/oauth/token:
+    post:
+      tags: [OAuth]
+      summary: Token endpoint
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id]
+              properties:
+                grant_type:
+                  type: string
+                  enum:
+                    - authorization_code
+                    - refresh_token
+                    - client_credentials
+                    - "urn:ietf:params:oauth:grant-type:device_code"
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                code:
+                  type: string
+                redirect_uri:
+                  type: string
+                code_verifier:
+                  type: string
+                refresh_token:
+                  type: string
+                device_code:
+                  type: string
+                scope:
+                  type: string
+      responses:
+        "200":
+          description: Token response
+
+  /api/oauth/device/code:
+    post:
+      tags: [OAuth]
+      summary: Device authorization endpoint (RFC 8628)
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [client_id]
+              properties:
+                client_id:
+                  type: string
+                scope:
+                  type: string
+      responses:
+        "200":
+          description: Device code response
+
+  /api/oauth/device/authorize:
+    post:
+      tags: [OAuth]
+      summary: Authorize or deny device
+      security:
+        - sessionCookie: []
+      responses:
+        "302":
+          description: Redirect to success or denied page
+
+  /api/oauth/clients:
+    get:
+      tags: [OAuth]
+      summary: List OAuth clients
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of OAuth clients
+
+    post:
+      tags: [OAuth]
+      summary: Create OAuth client
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, redirectUris]
+              properties:
+                name:
+                  type: string
+                redirectUris:
+                  type: array
+                  items:
+                    type: string
+                grantTypes:
+                  type: array
+                  items:
+                    type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                isPublic:
+                  type: boolean
+                clientSecret:
+                  type: string
+      responses:
+        "201":
+          description: Client created
+
+  /api/oauth/clients/{clientId}:
+    get:
+      tags: [OAuth]
+      summary: Get OAuth client
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Client details
+
+    delete:
+      tags: [OAuth]
+      summary: Delete OAuth client
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Client deleted
+
+  /api/categories:
+    get:
+      tags: [Projects]
+      summary: Get categories with task counts
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Categories with counts

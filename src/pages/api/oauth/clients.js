@@ -59,7 +59,15 @@ export async function POST({ request }) {
       grantTypes = ['authorization_code'],
       scopes = ['read'],
       clientSecret: customSecret,
+      // Support RFC 7591 token_endpoint_auth_method or explicit isPublic flag
+      token_endpoint_auth_method,
+      isPublic: explicitIsPublic,
     } = body;
+
+    // Determine if this is a public client (RFC 6749 Section 2.1)
+    // Public clients: native apps, SPAs, device flow clients that can't securely store secrets
+    const isPublic =
+      explicitIsPublic === true || token_endpoint_auth_method === 'none';
 
     if (
       !name ||
@@ -79,8 +87,24 @@ export async function POST({ request }) {
       );
     }
 
+    // Public clients don't use client secrets - reject if one is provided
+    if (isPublic && customSecret) {
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid request',
+          message: 'Public clients cannot have a client secret',
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // Validate custom secret if provided - enforce strong entropy requirements
+    // (only for confidential clients)
     if (
+      !isPublic &&
       customSecret !== undefined &&
       customSecret !== null &&
       customSecret !== ''
@@ -138,7 +162,10 @@ export async function POST({ request }) {
 
     // Generate client credentials
     const clientId = crypto.randomBytes(16).toString('hex');
-    const clientSecret = customSecret || crypto.randomBytes(32).toString('hex');
+    // Public clients don't get a secret; confidential clients get provided or generated one
+    const clientSecret = isPublic
+      ? null
+      : customSecret || crypto.randomBytes(32).toString('hex');
 
     const client = await TodoDB.createOAuthClient(
       clientId,
@@ -147,19 +174,25 @@ export async function POST({ request }) {
       redirectUris,
       grantTypes,
       scopes,
-      user.id // Add user ownership
+      user.id,
+      isPublic
     );
 
-    return new Response(
-      JSON.stringify({
-        ...client,
-        client_secret: clientSecret, // Return secret only once
-      }),
-      {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    // Build response with RFC 7591 compliant fields
+    const response = {
+      ...client,
+      token_endpoint_auth_method: isPublic ? 'none' : 'client_secret_post',
+    };
+
+    // Only include client_secret for confidential clients (return only once)
+    if (!isPublic) {
+      response.client_secret = clientSecret;
+    }
+
+    return new Response(JSON.stringify(response), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     console.error('[OAuth/Clients] Error:', error.message);
     return new Response('Server error', { status: 500 });

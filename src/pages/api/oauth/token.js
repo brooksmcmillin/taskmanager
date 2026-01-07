@@ -1,7 +1,9 @@
 import { TodoDB } from '../../../lib/db.js';
+import { config } from '../../../lib/config.js';
 import {
   getCorsHeaders,
   corsPreflightResponse,
+  oauthErrors,
 } from '../../../lib/apiResponse.js';
 import crypto from 'crypto';
 
@@ -19,16 +21,7 @@ export async function POST({ request }) {
     // Validate client credentials
     const client = await TodoDB.validateOAuthClient(clientId, clientSecret);
     if (!client) {
-      return new Response(
-        JSON.stringify({
-          error: 'invalid_client',
-          error_description: 'Invalid client credentials',
-        }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return oauthErrors.invalidClient('Invalid client credentials');
     }
 
     if (grantType === 'authorization_code') {
@@ -40,29 +33,11 @@ export async function POST({ request }) {
     } else if (grantType === 'urn:ietf:params:oauth:grant-type:device_code') {
       return await handleDeviceCodeGrant(formData, client);
     } else {
-      return new Response(
-        JSON.stringify({
-          error: 'unsupported_grant_type',
-          error_description: 'Grant type not supported',
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return oauthErrors.unsupportedGrantType('Grant type not supported');
     }
   } catch (error) {
     console.error('[OAuth/Token] Error:', error.message);
-    return new Response(
-      JSON.stringify({
-        error: 'server_error',
-        error_description: 'Internal server error',
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.serverError('Internal server error');
   }
 }
 
@@ -72,16 +47,7 @@ async function handleAuthorizationCodeGrant(formData, client) {
   const codeVerifier = formData.get('code_verifier');
 
   if (!code || !redirectUri) {
-    return new Response(
-      JSON.stringify({
-        error: 'invalid_request',
-        error_description: 'Missing required parameters',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.invalidRequest('Missing required parameters');
   }
 
   // Consume authorization code
@@ -90,45 +56,18 @@ async function handleAuthorizationCodeGrant(formData, client) {
     client.client_id
   );
   if (!authCode) {
-    return new Response(
-      JSON.stringify({
-        error: 'invalid_grant',
-        error_description: 'Invalid or expired authorization code',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.invalidGrant('Invalid or expired authorization code');
   }
 
   // Validate redirect URI matches
   if (authCode.redirect_uri !== redirectUri) {
-    return new Response(
-      JSON.stringify({
-        error: 'invalid_grant',
-        error_description: 'Redirect URI mismatch',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.invalidGrant('Redirect URI mismatch');
   }
 
   // Validate PKCE if used
   if (authCode.code_challenge) {
     if (!codeVerifier) {
-      return new Response(
-        JSON.stringify({
-          error: 'invalid_request',
-          error_description: 'Code verifier required for PKCE',
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return oauthErrors.invalidRequest('Code verifier required for PKCE');
     }
 
     const challengeMethod = authCode.code_challenge_method || 'plain';
@@ -142,54 +81,35 @@ async function handleAuthorizationCodeGrant(formData, client) {
     } else if (challengeMethod === 'plain') {
       derivedChallenge = codeVerifier;
     } else {
-      return new Response(
-        JSON.stringify({
-          error: 'invalid_request',
-          error_description: 'Unsupported code challenge method',
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return oauthErrors.invalidRequest('Unsupported code challenge method');
     }
 
     if (derivedChallenge !== authCode.code_challenge) {
-      return new Response(
-        JSON.stringify({
-          error: 'invalid_grant',
-          error_description: 'Code verifier validation failed',
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return oauthErrors.invalidGrant('Code verifier validation failed');
     }
   }
 
   // Create access token
   const scopes = JSON.parse(authCode.scopes);
+  const expiresIn = config.oauth.accessTokenExpirySeconds;
   const tokenData = await TodoDB.createAccessToken(
     authCode.user_id,
     client.client_id,
     scopes,
-    3600 // 1 hour expiry
+    expiresIn
   );
 
   return new Response(
     JSON.stringify({
       access_token: tokenData.token,
       token_type: 'Bearer',
-      expires_in: 3600,
+      expires_in: expiresIn,
       refresh_token: tokenData.refresh_token,
       scope: scopes.join(' '),
     }),
     {
       status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
     }
   );
 }
@@ -198,16 +118,7 @@ async function handleRefreshTokenGrant(formData, client) {
   const refreshToken = formData.get('refresh_token');
 
   if (!refreshToken) {
-    return new Response(
-      JSON.stringify({
-        error: 'invalid_request',
-        error_description: 'Missing refresh token',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.invalidRequest('Missing refresh token');
   }
 
   // Refresh the access token
@@ -216,23 +127,16 @@ async function handleRefreshTokenGrant(formData, client) {
     client.client_id
   );
   if (!tokenData) {
-    return new Response(
-      JSON.stringify({
-        error: 'invalid_grant',
-        error_description: 'Invalid refresh token',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.invalidGrant('Invalid refresh token');
   }
+
+  const expiresIn = config.oauth.accessTokenExpirySeconds;
 
   return new Response(
     JSON.stringify({
       access_token: tokenData.token,
       token_type: 'Bearer',
-      expires_in: 3600,
+      expires_in: expiresIn,
       refresh_token: tokenData.refresh_token,
     }),
     {
@@ -248,30 +152,12 @@ async function handleClientCredentialsGrant(formData, client) {
   // Validate that this client is allowed to use client_credentials grant
   const allowedGrantTypes = JSON.parse(client.grant_types || '[]');
   if (!allowedGrantTypes.includes('client_credentials')) {
-    return new Response(
-      JSON.stringify({
-        error: 'unauthorized_client',
-        error_description: 'Client is not authorized to use this grant type',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.unauthorizedClient('Client is not authorized to use this grant type');
   }
 
   // Check that client has an owner (user_id)
   if (!client.user_id) {
-    return new Response(
-      JSON.stringify({
-        error: 'server_error',
-        error_description: 'Client configuration error: no owner assigned',
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.serverError('Client configuration error: no owner assigned');
   }
 
   // Get requested scope (optional) or use client's default scopes
@@ -288,16 +174,7 @@ async function handleClientCredentialsGrant(formData, client) {
       (s) => !clientScopes.includes(s)
     );
     if (invalidScopes.length > 0) {
-      return new Response(
-        JSON.stringify({
-          error: 'invalid_scope',
-          error_description: `Invalid scope(s): ${invalidScopes.join(', ')}`,
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return oauthErrors.invalidScope(`Invalid scope(s): ${invalidScopes.join(', ')}`);
     }
     scopes = requestedScopes;
   } else {
@@ -306,26 +183,25 @@ async function handleClientCredentialsGrant(formData, client) {
   }
 
   // Create access token using client's owner as the user context
+  const expiresIn = config.oauth.accessTokenExpirySeconds;
   const tokenData = await TodoDB.createAccessToken(
     client.user_id,
     client.client_id,
     scopes,
-    3600 // 1 hour expiry
+    expiresIn
   );
 
   return new Response(
     JSON.stringify({
       access_token: tokenData.token,
       token_type: 'Bearer',
-      expires_in: 3600,
+      expires_in: expiresIn,
       scope: scopes.join(' '),
       // Note: refresh_token is intentionally omitted for client_credentials
     }),
     {
       status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
     }
   );
 }
@@ -337,31 +213,13 @@ async function handleDeviceCodeGrant(formData, client) {
   const deviceCode = formData.get('device_code');
 
   if (!deviceCode) {
-    return new Response(
-      JSON.stringify({
-        error: 'invalid_request',
-        error_description: 'device_code is required',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.invalidRequest('device_code is required');
   }
 
   // Validate that this client is allowed to use device_code grant
   const allowedGrantTypes = JSON.parse(client.grant_types || '[]');
   if (!allowedGrantTypes.includes('device_code')) {
-    return new Response(
-      JSON.stringify({
-        error: 'unauthorized_client',
-        error_description: 'Client is not authorized to use device flow',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.unauthorizedClient('Client is not authorized to use device flow');
   }
 
   // Get device authorization status
@@ -371,71 +229,26 @@ async function handleDeviceCodeGrant(formData, client) {
   );
 
   if (!deviceAuth) {
-    return new Response(
-      JSON.stringify({
-        error: 'invalid_grant',
-        error_description: 'Invalid device code',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.invalidGrant('Invalid device code');
   }
 
   // Check for rate limiting (slow_down)
   if (deviceAuth.slow_down) {
-    return new Response(
-      JSON.stringify({
-        error: 'slow_down',
-        error_description: 'Polling too frequently. Please wait longer.',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.slowDown('Polling too frequently. Please wait longer.');
   }
 
   // Check if expired
   if (new Date(deviceAuth.expires_at) <= new Date()) {
-    return new Response(
-      JSON.stringify({
-        error: 'expired_token',
-        error_description: 'Device code has expired',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.expiredToken('Device code has expired');
   }
 
   // Check authorization status
   if (deviceAuth.status === 'denied') {
-    return new Response(
-      JSON.stringify({
-        error: 'access_denied',
-        error_description: 'User denied authorization',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.accessDenied('User denied authorization');
   }
 
   if (deviceAuth.status === 'pending') {
-    return new Response(
-      JSON.stringify({
-        error: 'authorization_pending',
-        error_description: 'User has not yet authorized the device',
-      }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return oauthErrors.authorizationPending('User has not yet authorized the device');
   }
 
   if (deviceAuth.status === 'authorized') {
@@ -444,32 +257,24 @@ async function handleDeviceCodeGrant(formData, client) {
       await TodoDB.consumeDeviceAuthorizationCode(deviceCode);
 
     if (!consumedAuth) {
-      return new Response(
-        JSON.stringify({
-          error: 'invalid_grant',
-          error_description: 'Device code already used or expired',
-        }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      return oauthErrors.invalidGrant('Device code already used or expired');
     }
 
     // Create access token
     const scopes = JSON.parse(consumedAuth.scopes);
+    const expiresIn = config.oauth.accessTokenExpirySeconds;
     const tokenData = await TodoDB.createAccessToken(
       consumedAuth.user_id,
       client.client_id,
       scopes,
-      3600 // 1 hour expiry
+      expiresIn
     );
 
     return new Response(
       JSON.stringify({
         access_token: tokenData.token,
         token_type: 'Bearer',
-        expires_in: 3600,
+        expires_in: expiresIn,
         refresh_token: tokenData.refresh_token,
         scope: scopes.join(' '),
       }),
@@ -484,14 +289,5 @@ async function handleDeviceCodeGrant(formData, client) {
   }
 
   // Unexpected status
-  return new Response(
-    JSON.stringify({
-      error: 'server_error',
-      error_description: 'Unexpected authorization status',
-    }),
-    {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    }
-  );
+  return oauthErrors.serverError('Unexpected authorization status');
 }
