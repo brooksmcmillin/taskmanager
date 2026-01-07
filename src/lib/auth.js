@@ -1,15 +1,32 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 import { TodoDB } from './db.js';
-import { config } from 'dotenv';
+import { CONFIG } from './config.js';
 
-config();
+/**
+ * Authentication helper utilities
+ * Consolidates common auth-related operations
+ */
+
+/**
+ * Extract Bearer token from Authorization header
+ * @param {Request} request - The incoming request
+ * @returns {string|null} The token or null if not present/invalid
+ */
+export function extractBearerToken(request) {
+  const authHeader =
+    request.headers.get('Authorization') ||
+    request.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  return authHeader.substring(7);
+}
 
 export async function requireAuth(request) {
   // First try Bearer token authentication (for OAuth2 access tokens)
-  const authHeader = request.headers.get('authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
+  const token = extractBearerToken(request);
+  if (token) {
     const tokenData = await TodoDB.getAccessToken(token);
     if (tokenData) {
       return {
@@ -33,9 +50,74 @@ export async function requireAuth(request) {
   return { ...session, auth_type: 'session' };
 }
 
+/**
+ * Check authentication for Astro pages (non-throwing version)
+ * Returns { user } if authenticated, or { redirect } if not
+ */
+export function checkAuth(request) {
+  const sessionId = Auth.getSessionFromRequest(request);
+
+  if (!sessionId) {
+    return {
+      redirect: new Response(null, {
+        status: 302,
+        headers: { Location: '/login' },
+      }),
+    };
+  }
+
+  // Return a promise-like structure for sync checking
+  // The actual user fetch happens async, so we return a wrapper
+  return {
+    user: null,
+    sessionId,
+    async getUser() {
+      const user = await Auth.getSessionUser(this.sessionId);
+      if (!user) {
+        return {
+          redirect: new Response(null, {
+            status: 302,
+            headers: { Location: '/login' },
+          }),
+        };
+      }
+      return { user };
+    },
+  };
+}
+
+/**
+ * Async version of checkAuth for Astro pages
+ */
+export async function checkAuthAsync(request) {
+  const sessionId = Auth.getSessionFromRequest(request);
+
+  if (!sessionId) {
+    return {
+      redirect: new Response(null, {
+        status: 302,
+        headers: { Location: '/login' },
+      }),
+    };
+  }
+
+  const user = await Auth.getSessionUser(sessionId);
+
+  if (!user) {
+    return {
+      redirect: new Response(null, {
+        status: 302,
+        headers: { Location: '/login' },
+      }),
+    };
+  }
+
+  return { user };
+}
+
 export class Auth {
   static async hashPassword(password) {
-    return await bcrypt.hash(password, 12);
+    return await bcrypt.hash(password, CONFIG.BCRYPT_ROUNDS);
   }
 
   static async verifyPassword(password, hash) {
@@ -129,8 +211,11 @@ export class Auth {
 
     // In production, use __Host- prefix for maximum security
     // __Host- requires: Secure, Path=/, and NO Domain attribute
+    // SameSite=Lax allows cookies on top-level navigations (form submissions, links)
+    // while protecting against CSRF from embedded content. Using Lax instead of Strict
+    // to support OAuth flows where users are redirected from external auth servers.
     if (isProduction) {
-      return `__Host-session=${sessionId}; HttpOnly; SameSite=Strict; Path=/; Expires=${expires}; Secure`;
+      return `__Host-session=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Expires=${expires}; Secure`;
     }
 
     // For development, use regular cookie without __Host- prefix (requires Secure)
@@ -142,7 +227,7 @@ export class Auth {
 
     // Match the cookie name used in createSessionCookie
     if (isProduction) {
-      return '__Host-session=; HttpOnly; SameSite=Strict; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure';
+      return '__Host-session=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure';
     }
 
     return 'session=; HttpOnly; SameSite=Lax; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT';

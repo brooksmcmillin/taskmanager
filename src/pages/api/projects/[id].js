@@ -1,57 +1,92 @@
 import { TodoDB } from '../../../lib/db.js';
 import { requireAuth } from '../../../lib/auth.js';
-import {
-  successResponse,
-  errorResponse,
-  notFoundResponse,
-} from '../../../lib/apiResponse.js';
+import { errors } from '../../../lib/errors.js';
+import { validateId } from '../../../lib/validators.js';
+import { successResponse } from '../../../lib/apiResponse.js';
 
 export const GET = async ({ params, request }) => {
-  const session = await requireAuth(request);
-  const projectId = parseInt(params.id);
+  try {
+    const session = await requireAuth(request);
 
-  if (!projectId) {
-    return errorResponse('Invalid project ID');
+    const idResult = validateId(params.id, 'Project ID');
+    if (!idResult.valid) {
+      return idResult.error.toResponse();
+    }
+
+    const project = await TodoDB.getProjectById(
+      idResult.value,
+      session.user_id
+    );
+
+    if (!project) {
+      return errors.notFound('Project').toResponse();
+    }
+
+    return successResponse(project);
+  } catch (error) {
+    if (error.message === 'Authentication required') {
+      return errors.authRequired().toResponse();
+    }
+    return errors.internal(error.message).toResponse();
   }
-
-  const project = await TodoDB.getProjectById(projectId, session.user_id);
-
-  if (!project) {
-    return notFoundResponse('Project not found');
-  }
-
-  return successResponse(project);
 };
 
 export const PUT = async ({ params, request }) => {
-  const session = await requireAuth(request);
-  const projectId = parseInt(params.id);
-  const updates = await request.json();
+  try {
+    const session = await requireAuth(request);
 
-  if (!projectId) {
-    return errorResponse('Invalid project ID');
+    const idResult = validateId(params.id, 'Project ID');
+    if (!idResult.valid) {
+      return idResult.error.toResponse();
+    }
+
+    const updates = await request.json();
+
+    // Check if project exists and belongs to user
+    const project = await TodoDB.getProjectById(
+      idResult.value,
+      session.user_id
+    );
+    if (!project) {
+      return errors.notFound('Project').toResponse();
+    }
+
+    await TodoDB.updateProject(idResult.value, session.user_id, updates);
+
+    return successResponse({ updated: true });
+  } catch (error) {
+    if (error.message === 'Authentication required') {
+      return errors.authRequired().toResponse();
+    }
+    return errors.internal(error.message).toResponse();
   }
-
-  await TodoDB.updateProject(projectId, session.user_id, updates);
-
-  return successResponse({ success: true });
 };
 
 export const DELETE = async ({ params, request }) => {
-  const session = await requireAuth(request);
-  const projectId = parseInt(params.id);
+  try {
+    const session = await requireAuth(request);
 
-  if (!projectId) {
-    return errorResponse('Invalid project ID');
+    const idResult = validateId(params.id, 'Project ID');
+    if (!idResult.valid) {
+      return idResult.error.toResponse();
+    }
+
+    // Check if project exists and belongs to user
+    const project = await TodoDB.getProjectById(
+      idResult.value,
+      session.user_id
+    );
+    if (!project) {
+      return errors.notFound('Project').toResponse();
+    }
+
+    await TodoDB.deleteProject(idResult.value, session.user_id);
+
+    return successResponse({ deleted: true });
+  } catch (error) {
+    if (error.message === 'Authentication required') {
+      return errors.authRequired().toResponse();
+    }
+    return errors.internal(error.message).toResponse();
   }
-
-  // Check if project exists and belongs to user
-  const project = await TodoDB.getProjectById(projectId, session.user_id);
-  if (!project) {
-    return notFoundResponse('Project not found');
-  }
-
-  await TodoDB.deleteProject(projectId, session.user_id);
-
-  return successResponse({ success: true });
 };

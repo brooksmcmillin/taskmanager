@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+/* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-regexp */
 /**
  * OpenAPI Route Coverage Check
  *
  * Validates that all API endpoints in src/pages/api are documented in openapi.yaml
  * and vice versa. Exits with code 1 if there are discrepancies.
+ *
+ * Note: This script intentionally uses dynamic paths and regex for file traversal.
  */
 
 import { readFileSync, readdirSync, statSync } from 'fs';
@@ -59,7 +62,7 @@ function extractHttpMethods(filePath) {
 
 /**
  * Convert file path to OpenAPI route path
- * e.g., src/pages/api/todos/[id].js -> /todos/{id}
+ * e.g., src/pages/api/todos/[id].js -> /api/todos/{id}
  */
 function filePathToRoute(filePath, apiDir) {
   let route = relative(apiDir, filePath);
@@ -73,11 +76,11 @@ function filePathToRoute(filePath, apiDir) {
   // Handle index files
   route = route.replace(/\/index$/, '');
 
-  // Ensure leading slash
-  route = '/' + route;
-
   // Normalize path separators for Windows
   route = route.replace(/\\/g, '/');
+
+  // Ensure /api/ prefix to match OpenAPI spec paths
+  route = '/api/' + route;
 
   return route;
 }

@@ -1,10 +1,229 @@
 import pg from 'pg';
-const { Pool } = pg;
-import { config } from 'dotenv';
+import { config as dotenvConfig } from 'dotenv';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { CONFIG } from './config.js';
 
-config();
+/**
+ * SQL Query Builder utility
+ * Provides a safe, fluent API for building parameterized SQL queries
+ * Eliminates repetitive paramCount++ patterns and reduces SQL injection risk
+ */
+
+/**
+ * @typedef {Object} QueryResult
+ * @property {string} query - The SQL query string with placeholders
+ * @property {Array} params - The parameter values
+ */
+
+// Regex patterns for validation
+const VALID_FIELD_NAME = /^[a-zA-Z_][a-zA-Z0-9_.]*$/;
+// Used for ORDER BY validation with bounded input; ReDoS risk is minimal
+const VALID_ORDER_CLAUSE =
+  /^[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?(\s*,\s*[a-zA-Z_][a-zA-Z0-9_., ]*(ASC|DESC|asc|desc)?)*$/; // eslint-disable-line security/detect-unsafe-regex
+
+/**
+ * Validate a field name to prevent SQL injection
+ * @param {string} field - The field name to validate
+ * @throws {Error} If field name is invalid
+ */
+function validateFieldName(field) {
+  if (!VALID_FIELD_NAME.test(field)) {
+    throw new Error(`Invalid field name: ${field}`);
+  }
+}
+
+/**
+ * Validate an ORDER BY clause to prevent SQL injection
+ * @param {string} orderClause - The ORDER BY clause to validate
+ * @throws {Error} If order clause is invalid
+ */
+function validateOrderClause(orderClause) {
+  if (!VALID_ORDER_CLAUSE.test(orderClause)) {
+    throw new Error(`Invalid ORDER BY clause: ${orderClause}`);
+  }
+}
+
+class QueryBuilder {
+  /**
+   * Create a new QueryBuilder
+   * @param {string} baseQuery - The base SELECT/UPDATE/DELETE query
+   * @param {Array} initialParams - Initial parameters (default: [])
+   */
+  constructor(baseQuery, initialParams = []) {
+    this.query = baseQuery;
+    this.params = [...initialParams];
+    this.paramCount = initialParams.length;
+    this.hasWhere = baseQuery.toLowerCase().includes('where');
+  }
+
+  /**
+   * Add a WHERE or AND condition based on whether WHERE exists
+   * @param {string} condition - SQL condition with ? placeholder (e.g., "status = ?")
+   * @param {*} value - The value to bind
+   * @returns {QueryBuilder} this for chaining
+   */
+  where(condition, value) {
+    if (value === null || value === undefined) {
+      return this;
+    }
+    this.paramCount++;
+    const keyword = this.hasWhere ? ' AND' : ' WHERE';
+    this.query += `${keyword} ${condition.replace('?', `$${this.paramCount}`)}`;
+    this.params.push(value);
+    this.hasWhere = true;
+    return this;
+  }
+
+  /**
+   * Add a condition only if the value is truthy
+   * @param {string} condition - SQL condition with ? placeholder
+   * @param {*} value - The value to bind (condition added only if truthy)
+   * @returns {QueryBuilder} this for chaining
+   */
+  whereIf(condition, value) {
+    if (value) {
+      return this.where(condition, value);
+    }
+    return this;
+  }
+
+  /**
+   * Add a raw SQL fragment (no parameter binding)
+   * WARNING: Only use with static SQL strings, never with user input!
+   * @param {string} sql - Raw SQL to append (must be static/hardcoded)
+   * @returns {QueryBuilder} this for chaining
+   */
+  whereRaw(sql) {
+    // Development warning for potential misuse
+    if (process.env.NODE_ENV !== 'production') {
+      if (/\$\{|\$[a-zA-Z]|`/.test(sql)) {
+        console.warn(
+          '[QueryBuilder] whereRaw may contain template literal - potential SQL injection risk'
+        );
+      }
+    }
+    const keyword = this.hasWhere ? ' AND' : ' WHERE';
+    this.query += `${keyword} ${sql}`;
+    this.hasWhere = true;
+    return this;
+  }
+
+  /**
+   * Add a date range condition
+   * @param {string} field - The date field name (must be valid SQL identifier)
+   * @param {string|Date|null} startDate - Start date (inclusive)
+   * @param {string|Date|null} endDate - End date (inclusive)
+   * @returns {QueryBuilder} this for chaining
+   * @throws {Error} If field name is invalid
+   */
+  whereDateRange(field, startDate, endDate) {
+    validateFieldName(field);
+    if (startDate) {
+      this.where(`${field} >= ?`, startDate);
+    }
+    if (endDate) {
+      this.where(`${field} <= ?`, endDate);
+    }
+    return this;
+  }
+
+  /**
+   * Add an IN condition
+   * @param {string} field - The field name (must be valid SQL identifier)
+   * @param {Array} values - Array of values
+   * @returns {QueryBuilder} this for chaining
+   * @throws {Error} If field name is invalid
+   */
+  whereIn(field, values) {
+    if (!values || values.length === 0) {
+      return this;
+    }
+    validateFieldName(field);
+    const placeholders = values.map(() => {
+      this.paramCount++;
+      return `$${this.paramCount}`;
+    });
+    const keyword = this.hasWhere ? ' AND' : ' WHERE';
+    this.query += `${keyword} ${field} IN (${placeholders.join(', ')})`;
+    this.params.push(...values);
+    this.hasWhere = true;
+    return this;
+  }
+
+  /**
+   * Add ORDER BY clause
+   * @param {string} orderClause - The order clause (e.g., "created_at DESC")
+   * @returns {QueryBuilder} this for chaining
+   * @throws {Error} If order clause contains invalid characters
+   */
+  orderBy(orderClause) {
+    validateOrderClause(orderClause);
+    this.query += ` ORDER BY ${orderClause}`;
+    return this;
+  }
+
+  /**
+   * Add LIMIT clause
+   * @param {number|null} limit - The limit value
+   * @returns {QueryBuilder} this for chaining
+   */
+  limit(limit) {
+    if (limit && Number.isInteger(limit) && limit > 0) {
+      this.paramCount++;
+      this.query += ` LIMIT $${this.paramCount}`;
+      this.params.push(limit);
+    }
+    return this;
+  }
+
+  /**
+   * Add OFFSET clause
+   * @param {number|null} offset - The offset value
+   * @returns {QueryBuilder} this for chaining
+   */
+  offset(offset) {
+    if (offset && Number.isInteger(offset) && offset >= 0) {
+      this.paramCount++;
+      this.query += ` OFFSET $${this.paramCount}`;
+      this.params.push(offset);
+    }
+    return this;
+  }
+
+  /**
+   * Build and return the query and params
+   * @returns {QueryResult} Object with query string and params array
+   */
+  build() {
+    return {
+      query: this.query,
+      params: this.params,
+    };
+  }
+
+  /**
+   * Get the current parameter count (useful for continuing manual building)
+   * @returns {number}
+   */
+  getParamCount() {
+    return this.paramCount;
+  }
+}
+
+/**
+ * Create a new QueryBuilder instance
+ * @param {string} baseQuery - The base SQL query
+ * @param {Array} initialParams - Initial parameters
+ * @returns {QueryBuilder}
+ */
+export function createQuery(baseQuery, initialParams = []) {
+  return new QueryBuilder(baseQuery, initialParams);
+}
+
+const { Pool } = pg;
+
+dotenvConfig();
 
 const database_url =
   'postgresql://' +
@@ -88,9 +307,9 @@ export class TodoDB {
   static async getSession(sessionId) {
     const result = await this.query(
       `
-      SELECT s.*, u.username, u.email 
-      FROM sessions s 
-      JOIN users u ON s.user_id = u.id 
+      SELECT s.*, u.username, u.email
+      FROM sessions s
+      JOIN users u ON s.user_id = u.id
       WHERE s.id = $1 AND s.expires_at > now() AND u.is_active = true
     `,
       [sessionId]
@@ -119,7 +338,7 @@ export class TodoDB {
   static async getProjects(user_id) {
     const result = await this.query(
       `
-      SELECT * FROM projects 
+      SELECT * FROM projects
       WHERE is_active = true
       AND user_id = $1
       ORDER BY name
@@ -149,10 +368,27 @@ export class TodoDB {
   static async getProjectById(id, user_id) {
     const result = await this.query(
       `
-      SELECT * FROM projects 
+      SELECT * FROM projects
       WHERE id = $1 AND user_id = $2 AND is_active = true
     `,
       [id, user_id]
+    );
+    return result.rows[0];
+  }
+
+  /**
+   * Get a project by name (case-insensitive)
+   * @param {number} userId - User ID
+   * @param {string} name - Project name to search for
+   * @returns {Promise<Object|undefined>} Project or undefined if not found
+   */
+  static async getProjectByName(userId, name) {
+    const result = await this.query(
+      `
+      SELECT * FROM projects
+      WHERE user_id = $1 AND LOWER(name) = LOWER($2) AND is_active = true
+    `,
+      [userId, name]
     );
     return result.rows[0];
   }
@@ -224,33 +460,20 @@ export class TodoDB {
     status = null,
     dueDate = null
   ) {
-    let query = `
-      SELECT t.*, p.name as project_name, p.color as project_color
-      FROM todos t
-      LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.user_id = $1
-    `;
-    const params = [user_id];
-    let paramCount = 1;
+    const qb = createQuery(
+      `SELECT t.*, p.name as project_name, p.color as project_color
+       FROM todos t
+       LEFT JOIN projects p ON t.project_id = p.id
+       WHERE t.user_id = $1`,
+      [user_id]
+    );
 
-    if (projectId) {
-      paramCount++;
-      query += ` AND t.project_id = $${paramCount}`;
-      params.push(projectId);
-    }
-    if (status) {
-      paramCount++;
-      query += ` AND t.status = $${paramCount}`;
-      params.push(status);
-    }
-    if (dueDate) {
-      paramCount++;
-      query += ` AND t.due_date <= $${paramCount}`;
-      params.push(dueDate);
-    }
+    qb.whereIf('t.project_id = ?', projectId)
+      .whereIf('t.status = ?', status)
+      .whereIf('t.due_date <= ?', dueDate)
+      .orderBy('t.priority DESC, t.created_at ASC');
 
-    query += ' ORDER BY t.priority DESC, t.created_at ASC';
-
+    const { query, params } = qb.build();
     const result = await this.query(query, params);
     return result.rows;
   }
@@ -258,58 +481,36 @@ export class TodoDB {
   static async getTodosFiltered(user_id, options = {}) {
     const { projectId, category, status, startDate, endDate, limit } = options;
 
-    let query = `
-      SELECT t.*, p.name as project_name, p.color as project_color
-      FROM todos t
-      LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.user_id = $1
-    `;
-    const params = [user_id];
-    let paramCount = 1;
+    const qb = createQuery(
+      `SELECT t.*, p.name as project_name, p.color as project_color
+       FROM todos t
+       LEFT JOIN projects p ON t.project_id = p.id
+       WHERE t.user_id = $1`,
+      [user_id]
+    );
 
     // Filter by project/category (category maps to project name)
     if (projectId) {
-      paramCount++;
-      query += ` AND t.project_id = $${paramCount}`;
-      params.push(projectId);
+      qb.where('t.project_id = ?', projectId);
     } else if (category) {
-      paramCount++;
-      query += ` AND p.name = $${paramCount}`;
-      params.push(category);
+      qb.where('p.name = ?', category);
     }
 
     // Filter by status (handle 'overdue' as special case)
     if (status && status !== 'all') {
       if (status === 'overdue') {
-        query += ` AND t.status = 'pending' AND t.due_date < CURRENT_DATE`;
+        qb.whereRaw("t.status = 'pending' AND t.due_date < CURRENT_DATE");
       } else {
-        paramCount++;
-        query += ` AND t.status = $${paramCount}`;
-        params.push(status);
+        qb.where('t.status = ?', status);
       }
     }
 
     // Filter by date range
-    if (startDate) {
-      paramCount++;
-      query += ` AND t.due_date >= $${paramCount}`;
-      params.push(startDate);
-    }
-    if (endDate) {
-      paramCount++;
-      query += ` AND t.due_date <= $${paramCount}`;
-      params.push(endDate);
-    }
+    qb.whereDateRange('t.due_date', startDate, endDate)
+      .orderBy('t.priority DESC, t.created_at ASC')
+      .limit(limit);
 
-    query += ' ORDER BY t.priority DESC, t.created_at ASC';
-
-    // Apply limit
-    if (limit && Number.isInteger(limit) && limit > 0) {
-      paramCount++;
-      query += ` LIMIT $${paramCount}`;
-      params.push(limit);
-    }
-
+    const { query, params } = qb.build();
     const result = await this.query(query, params);
     return result.rows;
   }
@@ -317,7 +518,7 @@ export class TodoDB {
   static async getTodoById(id, user_id) {
     const result = await this.query(
       `
-      SELECT 
+      SELECT
         t.*,
         p.name as project_name,
         p.color as project_color
@@ -338,7 +539,7 @@ export class TodoDB {
     strict
   ) {
     let query = `
-      SELECT 
+      SELECT
         t.*,
         p.name as project_name,
         p.color as project_color
@@ -473,26 +674,22 @@ export class TodoDB {
     return result.rows[0];
   }
 
-  static async searchTodos(user_id, query, category = null) {
-    let sql = `
-      SELECT t.*, p.name as project_name, p.color as project_color
-      FROM todos t
-      LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.user_id = $1
-        AND to_tsvector('english', t.title || ' ' || COALESCE(t.description, '')) @@ plainto_tsquery('english', $2)
-    `;
-    const params = [user_id, query];
-    let paramCount = 2;
+  static async searchTodos(user_id, searchQuery, category = null) {
+    const qb = createQuery(
+      `SELECT t.*, p.name as project_name, p.color as project_color
+       FROM todos t
+       LEFT JOIN projects p ON t.project_id = p.id
+       WHERE t.user_id = $1
+         AND to_tsvector('english', t.title || ' ' || COALESCE(t.description, '')) @@ plainto_tsquery('english', $2)`,
+      [user_id, searchQuery]
+    );
 
-    if (category) {
-      paramCount++;
-      sql += ` AND p.name = $${paramCount}`;
-      params.push(category);
-    }
+    qb.whereIf('p.name = ?', category).orderBy(
+      't.priority DESC, t.created_at ASC'
+    );
 
-    sql += ' ORDER BY t.priority DESC, t.created_at ASC';
-
-    const result = await this.query(sql, params);
+    const { query, params } = qb.build();
+    const result = await this.query(query, params);
     return result.rows;
   }
 
@@ -550,8 +747,7 @@ export class TodoDB {
 
   // API Key methods
   static async createApiKey(userId, apiKey) {
-    // Use bcrypt with 12 rounds (secure and performant)
-    const hashedKey = await bcrypt.hash(apiKey, 12);
+    const hashedKey = await bcrypt.hash(apiKey, CONFIG.BCRYPT_ROUNDS);
     const result = await this.query(
       `
       INSERT INTO api_keys (user_id, key_hash, created_at)
@@ -622,7 +818,7 @@ export class TodoDB {
     const result = await this.query(
       `
       SELECT id, name, created_at, is_active
-      FROM api_keys 
+      FROM api_keys
       WHERE user_id = $1
       ORDER BY created_at DESC
     `,
@@ -632,6 +828,18 @@ export class TodoDB {
   }
 
   // OAuth methods
+  /**
+   * Create a new OAuth client
+   * @param {string} clientId - Unique client identifier
+   * @param {string|null} clientSecret - Client secret (null for public clients)
+   * @param {string} name - Human-readable client name
+   * @param {string[]} redirectUris - Allowed redirect URIs
+   * @param {string[]} grantTypes - Allowed grant types
+   * @param {string[]} scopes - Allowed scopes
+   * @param {number|null} userId - Owner user ID
+   * @param {boolean} isPublic - True for public clients (RFC 6749 Section 2.1)
+   * @returns {Object} Created client record
+   */
   static async createOAuthClient(
     clientId,
     clientSecret,
@@ -639,15 +847,19 @@ export class TodoDB {
     redirectUris,
     grantTypes = ['authorization_code'],
     scopes = ['read'],
-    userId = null
+    userId = null,
+    isPublic = false
   ) {
-    // Use bcrypt with 12 rounds for secure password hashing
-    const hashedSecret = await bcrypt.hash(clientSecret, 12);
+    // Public clients (native apps, SPAs, devices) don't use client_secret
+    const hashedSecret = isPublic
+      ? null
+      : await bcrypt.hash(clientSecret, CONFIG.BCRYPT_ROUNDS);
+
     const result = await this.query(
       `
-      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, grant_types, scopes, user_id, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-      RETURNING id, client_id, name, redirect_uris, user_id
+      INSERT INTO oauth_clients (client_id, client_secret_hash, name, redirect_uris, grant_types, scopes, user_id, is_public, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      RETURNING id, client_id, name, redirect_uris, user_id, is_public
     `,
       [
         clientId,
@@ -657,6 +869,7 @@ export class TodoDB {
         JSON.stringify(grantTypes),
         JSON.stringify(scopes),
         userId,
+        isPublic,
       ]
     );
     return result.rows[0];
@@ -665,8 +878,8 @@ export class TodoDB {
   static async getOAuthClient(clientId) {
     const result = await this.query(
       `
-      SELECT id, client_id, name, redirect_uris, grant_types, scopes, is_active
-      FROM oauth_clients 
+      SELECT id, client_id, name, redirect_uris, grant_types, scopes, is_active, is_public
+      FROM oauth_clients
       WHERE client_id = $1 AND is_active = true
     `,
       [clientId]
@@ -678,7 +891,7 @@ export class TodoDB {
     // First get the client by ID
     const result = await this.query(
       `
-      SELECT id, client_id, name, redirect_uris, grant_types, scopes, client_secret_hash, user_id
+      SELECT id, client_id, name, redirect_uris, grant_types, scopes, client_secret_hash, user_id, is_public
       FROM oauth_clients
       WHERE client_id = $1 AND is_active = true
     `,
@@ -690,6 +903,18 @@ export class TodoDB {
     }
 
     const client = result.rows[0];
+
+    // Check if this is a public client using the database field (RFC 6749 Section 2.1)
+    // Public clients (native apps, SPAs) don't require client_secret
+    if (client.is_public === true) {
+      delete client.client_secret_hash;
+      return client;
+    }
+
+    // For confidential clients, validate the secret
+    if (!clientSecret) {
+      return null;
+    }
 
     // Use bcrypt to compare the provided secret with the stored hash
     const match = await bcrypt.compare(clientSecret, client.client_secret_hash);

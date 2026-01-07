@@ -8,6 +8,7 @@ vi.mock('../src/lib/db.js', () => ({
     updateTodo: vi.fn(),
     getTodoById: vi.fn(),
     getProjects: vi.fn(),
+    getProjectByName: vi.fn(),
     getCategoriesWithCounts: vi.fn(),
     searchTodos: vi.fn(),
   },
@@ -236,20 +237,18 @@ describe('POST /api/todos', () => {
     expect(response.status).toBe(201);
     const data = await response.json();
 
+    // createdResponse wraps data in { data: ... }
     expect(data).toEqual({
-      id: 123,
-      title: 'New Task',
-      status: 'created',
+      data: {
+        id: 123,
+        title: 'New Task',
+      },
     });
   });
 
   it('should map category to project_id when provided', async () => {
-    const mockProjects = [
-      { id: 5, name: 'Work' },
-      { id: 6, name: 'Personal' },
-    ];
-
-    TodoDB.getProjects.mockResolvedValue(mockProjects);
+    // Mock getProjectByName to return a project when searching by category name
+    TodoDB.getProjectByName.mockResolvedValue({ id: 5, name: 'Work' });
     TodoDB.createTodo.mockResolvedValue({ id: 456 });
 
     const request = createMockRequest('http://localhost:3000/api/todos', {
@@ -263,6 +262,10 @@ describe('POST /api/todos', () => {
 
     await createTodo({ request });
 
+    // Verify getProjectByName was called with user_id and category name
+    expect(TodoDB.getProjectByName).toHaveBeenCalledWith(1, 'work');
+    // Verify createTodo was called with project_id mapped from category
+    // Note: category remains in todoData alongside project_id
     expect(TodoDB.createTodo).toHaveBeenCalledWith(1, {
       title: 'Categorized Task',
       category: 'work',
@@ -315,7 +318,9 @@ describe('PUT /api/todos/[id]', () => {
 
     expect(response.status).toBe(404);
     const data = await response.json();
-    expect(data.error).toBe('Todo not found');
+    // New error format uses { error: { code, message } }
+    expect(data.error.code).toBe('NOT_FOUND_004');
+    expect(data.error.message).toBe('Task not found');
   });
 
   it('should return 400 for invalid todo ID', async () => {
@@ -334,10 +339,8 @@ describe('PUT /api/todos/[id]', () => {
   });
 
   it('should map category to project_id when updating', async () => {
-    const mockProjects = [{ id: 10, name: 'Research' }];
-
     TodoDB.getTodoById.mockResolvedValue({ id: 123 });
-    TodoDB.getProjects.mockResolvedValue(mockProjects);
+    TodoDB.getProjectByName.mockResolvedValue({ id: 10, name: 'Research' });
     TodoDB.updateTodo.mockResolvedValue({ id: 123 });
 
     const request = createMockRequest('http://localhost:3000/api/todos/123', {
@@ -348,6 +351,10 @@ describe('PUT /api/todos/[id]', () => {
 
     await updateTodo({ params: { id: '123' }, request });
 
+    // Verify getProjectByName was called with user_id and category name
+    expect(TodoDB.getProjectByName).toHaveBeenCalledWith(1, 'research');
+    // Verify updateTodo was called with project_id mapped from category
+    // Note: PUT handler removes category after mapping to project_id
     expect(TodoDB.updateTodo).toHaveBeenCalledWith(123, 1, { project_id: 10 });
   });
 });

@@ -1,5 +1,9 @@
 import { Auth } from '../../../lib/auth.js';
 import { loginRateLimiter } from '../../../lib/rateLimit.js';
+import { config } from '../../../lib/config.js';
+import { errors } from '../../../lib/errors.js';
+import { validateRequired } from '../../../lib/validators.js';
+import { apiResponse, rateLimitResponse } from '../../../lib/apiResponse.js';
 
 export async function POST({ request }) {
   try {
@@ -10,39 +14,35 @@ export async function POST({ request }) {
       'unknown';
 
     // Check rate limit before processing
-    const rateLimitCheck = loginRateLimiter.check(clientIp, 5, 15 * 60 * 1000);
+    const rateLimitCheck = loginRateLimiter.check(
+      clientIp,
+      config.auth.maxLoginAttempts,
+      config.auth.rateLimitWindowMs
+    );
     if (!rateLimitCheck.allowed) {
-      return new Response(
-        JSON.stringify({
-          error: 'Too many login attempts. Please try again later.',
-          retryAfter: rateLimitCheck.retryAfter,
-        }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(rateLimitCheck.retryAfter),
-          },
-        }
-      );
+      return rateLimitResponse(rateLimitCheck.retryAfter);
     }
 
-    const { username, password } = await request.json();
+    const body = await request.json();
 
-    if (!username || !password) {
-      return new Response(
-        JSON.stringify({ error: 'Username and password required' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+    // Validate required fields
+    const usernameResult = validateRequired(body.username, 'Username');
+    if (!usernameResult.valid) {
+      return usernameResult.error.toResponse();
+    }
+
+    const passwordResult = validateRequired(body.password, 'Password');
+    if (!passwordResult.valid) {
+      return passwordResult.error.toResponse();
     }
 
     // Record attempt before authentication
     loginRateLimiter.recordAttempt(clientIp);
 
-    const user = await Auth.authenticateUser(username, password);
+    const user = await Auth.authenticateUser(
+      usernameResult.value,
+      passwordResult.value
+    );
 
     // Clear rate limit on successful login
     loginRateLimiter.clearAttempts(clientIp);
@@ -51,11 +51,12 @@ export async function POST({ request }) {
 
     return new Response(
       JSON.stringify({
-        success: true,
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
+        data: {
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+          },
         },
       }),
       {
@@ -70,9 +71,6 @@ export async function POST({ request }) {
       }
     );
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return errors.invalidCredentials().toResponse();
   }
 }

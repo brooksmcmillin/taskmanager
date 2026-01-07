@@ -5,6 +5,39 @@ import { TodoDB } from './lib/db.js';
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, redirect } = context;
 
+  // CSRF Protection (replaces Astro's checkOrigin with OAuth exceptions)
+  // OAuth endpoints are exempt because they use client credentials, not cookies
+  const csrfExemptRoutes = [
+    '/api/oauth/token',
+    '/api/oauth/device/code',
+    '/api/oauth/authorize',
+  ];
+  const isCSRFExempt = csrfExemptRoutes.some((route) =>
+    url.pathname.startsWith(route)
+  );
+
+  if (
+    !isCSRFExempt &&
+    ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)
+  ) {
+    const origin = request.headers.get('origin');
+    const host = request.headers.get('host');
+
+    // Allow requests with no origin (same-origin, non-browser clients like curl)
+    // But if origin IS present, it must match the host
+    if (origin) {
+      const originUrl = new URL(origin);
+      const expectedHost = host?.split(':')[0]; // Remove port if present
+
+      if (originUrl.host.split(':')[0] !== expectedHost) {
+        return new Response(
+          JSON.stringify({ error: 'CSRF validation failed: origin mismatch' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+  }
+
   // OAuth endpoints that require Bearer token authentication
   const oauthProtectedRoutes = ['/api/oauth/userinfo'];
   const isOAuthProtectedRoute = oauthProtectedRoutes.some((route) =>
@@ -50,6 +83,32 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   const response = await next();
+
+  // Set cache control headers based on content type
+  const contentType = response.headers.get('Content-Type') || '';
+  const isAPI = url.pathname.startsWith('/api/');
+  const isStaticAsset =
+    url.pathname.startsWith('/_astro/') ||
+    url.pathname.match(
+      /\.(js|css|woff2?|ttf|eot|ico|png|jpg|jpeg|gif|svg|webp)$/
+    );
+
+  if (isAPI) {
+    // API responses should never be cached (contain user-specific data)
+    response.headers.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate'
+    );
+  } else if (isStaticAsset) {
+    // Static assets with hashed filenames can be cached long-term
+    response.headers.set(
+      'Cache-Control',
+      'public, max-age=31536000, immutable'
+    );
+  } else if (contentType.includes('text/html')) {
+    // HTML pages should revalidate to get fresh content
+    response.headers.set('Cache-Control', 'no-cache, must-revalidate');
+  }
 
   // Set security headers on the response
   response.headers.set('X-Content-Type-Options', 'nosniff');

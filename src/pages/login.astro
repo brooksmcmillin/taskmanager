@@ -91,7 +91,10 @@ import Layout from '../layouts/Layout.astro';
         const redirectUrl = returnTo && isLocalUrl(returnTo) ? returnTo : '/';
         window.location.href = redirectUrl;
       } else {
-        errorDiv.textContent = data.error || 'Login failed';
+        // Handle both old format (data.error = string) and new format (data.error = {code, message})
+        const errorMessage =
+          typeof data.error === 'object' ? data.error.message : data.error;
+        errorDiv.textContent = errorMessage || 'Login failed';
         errorDiv.style.display = 'block';
       }
     } catch (error) {
