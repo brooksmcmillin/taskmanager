@@ -51,6 +51,23 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const response = await next();
 
+  // Set cache control headers based on content type
+  const contentType = response.headers.get('Content-Type') || '';
+  const isAPI = url.pathname.startsWith('/api/');
+  const isStaticAsset = url.pathname.startsWith('/_astro/') ||
+                        url.pathname.match(/\.(js|css|woff2?|ttf|eot|ico|png|jpg|jpeg|gif|svg|webp)$/);
+
+  if (isAPI) {
+    // API responses should never be cached (contain user-specific data)
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  } else if (isStaticAsset) {
+    // Static assets with hashed filenames can be cached long-term
+    response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  } else if (contentType.includes('text/html')) {
+    // HTML pages should revalidate to get fresh content
+    response.headers.set('Cache-Control', 'no-cache, must-revalidate');
+  }
+
   // Set security headers on the response
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
