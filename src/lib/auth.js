@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
-import { TodoDB, CONFIG } from './db.js';
-import { config } from 'dotenv';
+import { TodoDB } from './db.js';
+import { CONFIG } from './config.js';
 
 /**
  * Authentication helper utilities
@@ -20,8 +20,6 @@ export function extractBearerToken(request) {
   }
   return authHeader.substring(7);
 }
-
-config();
 
 export async function requireAuth(request) {
   // First try Bearer token authentication (for OAuth2 access tokens)

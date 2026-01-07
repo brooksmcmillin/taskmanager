@@ -2,13 +2,14 @@ import { TodoDB } from '../../lib/db.js';
 import { requireAuth } from '../../lib/auth.js';
 import { errors } from '../../lib/errors.js';
 import { validateRequired } from '../../lib/validators.js';
-import { apiResponse, createdResponse } from '../../lib/apiResponse.js';
+import { successResponse, createdResponse } from '../../lib/apiResponse.js';
 
 export const GET = async ({ request }) => {
   try {
     const session = await requireAuth(request);
     const projects = await TodoDB.getProjects(session.user_id);
-    return apiResponse(projects, { count: projects.length });
+    // Return raw array for frontend compatibility
+    return successResponse(projects);
   } catch (error) {
     if (error.message === 'Authentication required') {
       return errors.authRequired().toResponse();

@@ -3,9 +3,10 @@ import { requireAuth } from '../../lib/auth.js';
 import { errors } from '../../lib/errors.js';
 import { validateRequired, validateId } from '../../lib/validators.js';
 import {
-  apiResponse,
+  successResponse,
   createdResponse,
   formatDateString,
+  jsonResponse,
 } from '../../lib/apiResponse.js';
 
 export const GET = async ({ url, request }) => {
@@ -46,7 +47,8 @@ export const GET = async ({ url, request }) => {
       updated_at: formatDateString(todo.updated_at),
     }));
 
-    return apiResponse(formattedTasks, { count: formattedTasks.length });
+    // Return in legacy format expected by frontend
+    return successResponse({ tasks: formattedTasks });
   } catch (error) {
     if (error.message === 'Authentication required') {
       return errors.authRequired().toResponse();
@@ -106,7 +108,7 @@ export const PUT = async ({ request }) => {
       return errors.todoNotFound().toResponse();
     }
 
-    return apiResponse({ updated: true });
+    return successResponse({ updated: true });
   } catch (error) {
     if (error.message === 'Authentication required') {
       return errors.authRequired().toResponse();

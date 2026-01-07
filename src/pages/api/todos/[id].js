@@ -2,7 +2,7 @@ import { TodoDB } from '../../../lib/db.js';
 import { requireAuth } from '../../../lib/auth.js';
 import { errors } from '../../../lib/errors.js';
 import { validateId } from '../../../lib/validators.js';
-import { apiResponse } from '../../../lib/apiResponse.js';
+import { successResponse } from '../../../lib/apiResponse.js';
 
 export const GET = async ({ params, request }) => {
   try {
@@ -19,7 +19,7 @@ export const GET = async ({ params, request }) => {
       return errors.todoNotFound().toResponse();
     }
 
-    return apiResponse(todo);
+    return successResponse(todo);
   } catch (error) {
     if (error.message === 'Authentication required') {
       return errors.authRequired().toResponse();
@@ -60,7 +60,7 @@ export const PUT = async ({ params, request }) => {
 
     await TodoDB.updateTodo(idResult.value, session.user_id, updateData);
 
-    return apiResponse({
+    return successResponse({
       id: idResult.value,
       updated_fields: updatedFields,
       status: 'updated',
@@ -90,7 +90,7 @@ export const DELETE = async ({ params, request }) => {
 
     await TodoDB.deleteTodo(idResult.value, session.user_id);
 
-    return apiResponse({ deleted: true });
+    return successResponse({ deleted: true });
   } catch (error) {
     if (error.message === 'Authentication required') {
       return errors.authRequired().toResponse();
