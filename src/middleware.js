@@ -5,6 +5,36 @@ import { TodoDB } from './lib/db.js';
 export const onRequest = defineMiddleware(async (context, next) => {
   const { request, url, redirect } = context;
 
+  // CSRF Protection (replaces Astro's checkOrigin with OAuth exceptions)
+  // OAuth endpoints are exempt because they use client credentials, not cookies
+  const csrfExemptRoutes = [
+    '/api/oauth/token',
+    '/api/oauth/device/code',
+    '/api/oauth/authorize',
+  ];
+  const isCSRFExempt = csrfExemptRoutes.some((route) =>
+    url.pathname.startsWith(route)
+  );
+
+  if (!isCSRFExempt && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+    const origin = request.headers.get('origin');
+    const host = request.headers.get('host');
+
+    // Allow requests with no origin (same-origin, non-browser clients like curl)
+    // But if origin IS present, it must match the host
+    if (origin) {
+      const originUrl = new URL(origin);
+      const expectedHost = host?.split(':')[0]; // Remove port if present
+
+      if (originUrl.host.split(':')[0] !== expectedHost) {
+        return new Response(
+          JSON.stringify({ error: 'CSRF validation failed: origin mismatch' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+  }
+
   // OAuth endpoints that require Bearer token authentication
   const oauthProtectedRoutes = ['/api/oauth/userinfo'];
   const isOAuthProtectedRoute = oauthProtectedRoutes.some((route) =>

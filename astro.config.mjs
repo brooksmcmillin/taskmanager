@@ -25,7 +25,9 @@ export default defineConfig({
     },
   },
   security: {
-    checkOrigin: true,
+    // Disabled: We implement CSRF protection manually in middleware
+    // to allow exceptions for OAuth endpoints (machine-to-machine APIs)
+    checkOrigin: false,
   },
   server: {
     allowedHosts: ['todo.brooksmcmillin.com'],
