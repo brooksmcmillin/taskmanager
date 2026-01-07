@@ -91,7 +91,9 @@ import Layout from '../layouts/Layout.astro';
             window.location.href = '/login';
           }, 2000);
         } else {
-          errorDiv.textContent = data.error || 'Registration failed';
+          // Handle both old format (data.error = string) and new format (data.error = {code, message})
+          const errorMessage = typeof data.error === 'object' ? data.error.message : data.error;
+          errorDiv.textContent = errorMessage || 'Registration failed';
           errorDiv.style.display = 'block';
         }
       } catch (error) {
