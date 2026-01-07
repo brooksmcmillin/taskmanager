@@ -50,6 +50,71 @@ export async function requireAuth(request) {
   return { ...session, auth_type: 'session' };
 }
 
+/**
+ * Check authentication for Astro pages (non-throwing version)
+ * Returns { user } if authenticated, or { redirect } if not
+ */
+export function checkAuth(request) {
+  const sessionId = Auth.getSessionFromRequest(request);
+
+  if (!sessionId) {
+    return {
+      redirect: new Response(null, {
+        status: 302,
+        headers: { Location: '/login' },
+      }),
+    };
+  }
+
+  // Return a promise-like structure for sync checking
+  // The actual user fetch happens async, so we return a wrapper
+  return {
+    user: null,
+    sessionId,
+    async getUser() {
+      const user = await Auth.getSessionUser(this.sessionId);
+      if (!user) {
+        return {
+          redirect: new Response(null, {
+            status: 302,
+            headers: { Location: '/login' },
+          }),
+        };
+      }
+      return { user };
+    },
+  };
+}
+
+/**
+ * Async version of checkAuth for Astro pages
+ */
+export async function checkAuthAsync(request) {
+  const sessionId = Auth.getSessionFromRequest(request);
+
+  if (!sessionId) {
+    return {
+      redirect: new Response(null, {
+        status: 302,
+        headers: { Location: '/login' },
+      }),
+    };
+  }
+
+  const user = await Auth.getSessionUser(sessionId);
+
+  if (!user) {
+    return {
+      redirect: new Response(null, {
+        status: 302,
+        headers: { Location: '/login' },
+      }),
+    };
+  }
+
+  return { user };
+}
+
 export class Auth {
   static async hashPassword(password) {
     return await bcrypt.hash(password, CONFIG.BCRYPT_ROUNDS);

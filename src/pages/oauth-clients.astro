@@ -1,9 +1,9 @@
 ---
 // src/pages/oauth-clients.astro - OAuth Client Management Page
 import Layout from '../layouts/Layout.astro';
-import { checkAuth } from '../lib/serverAuth.js';
+import { checkAuthAsync } from '../lib/auth.js';
 
-const auth = checkAuth(Astro.request);
+const auth = await checkAuthAsync(Astro.request);
 if (auth.redirect) return auth.redirect;
 const user = auth.user;
 ---
