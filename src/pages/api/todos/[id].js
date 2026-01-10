@@ -69,6 +69,7 @@ export const PUT = async ({ params, request }) => {
       status: 'updated',
     });
   } catch (error) {
+    console.error('[PUT /api/todos/:id]', error);
     if (error.message === 'Authentication required') {
       return errors.authRequired().toResponse();
     }

@@ -847,10 +847,18 @@ h6 {
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 16px;
 
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
+  }
+}
+
+.form-full-width {
+  grid-column: span 2;
+
+  @media (max-width: 640px) {
+    grid-column: span 1;
   }
 }
 
@@ -932,11 +940,16 @@ h6 {
 }
 
 // Calendar specific styles (from DragDropCalendar)
+#calendar-container {
+  overflow-x: auto;
+}
+
 .calendar-headers {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(100px, 1fr));
   gap: 8px;
   margin-bottom: 16px;
+  min-width: 700px;
 }
 
 .calendar-header-day {
@@ -948,8 +961,9 @@ h6 {
 
 #calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(100px, 1fr));
   gap: 8px;
+  min-width: 700px;
 }
 
 .calendar-day {
