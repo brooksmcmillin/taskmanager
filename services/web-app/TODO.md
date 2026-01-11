@@ -98,3 +98,40 @@ After stabilization, add tests for:
 - [ ] Validator functions in `validators.js`
 - [ ] API response format consistency
 - [ ] OAuth public client flow
+- [ ] Recurring tasks CRUD operations
+- [ ] Recurring task generation logic
+- [ ] `calculateNextDueDate` edge cases (month boundaries, leap years)
+
+---
+
+## Recurring Tasks Enhancements
+
+The initial recurring tasks implementation (v1) supports basic patterns. Future enhancements to consider:
+
+### Complex Recurrence Patterns
+- [ ] Biweekly recurrence (every 2 weeks on specific days)
+- [ ] "Nth weekday of month" patterns (e.g., "3rd Tuesday of every month")
+- [ ] "Last day of month" pattern
+- [ ] Custom RRULE-style patterns for full iCalendar compatibility
+
+### Fixed Schedule Mode (`skip_missed: false`)
+- [ ] Generate backlog of missed tasks when user returns after absence
+- [ ] Option to bulk-complete or bulk-skip missed instances
+- [ ] Dashboard widget showing overdue recurring task instances
+
+### User Interface
+- [ ] Frontend UI for creating/editing recurring tasks
+- [ ] Visual indicator on task cards showing recurrence pattern
+- [ ] "Edit series" vs "Edit this instance" option when modifying recurring tasks
+- [ ] Recurrence summary text (e.g., "Every Friday" or "Monthly on the 15th")
+
+### Background Processing
+- [ ] Optional scheduled job runner for large-scale deployments
+- [ ] Batch generation of recurring tasks for performance
+- [ ] Configurable look-ahead period (generate tasks N days in advance)
+
+### Additional Features
+- [ ] Pause/resume recurring tasks without deleting
+- [ ] Recurring task statistics (completion rate, average delay)
+- [ ] Snooze a recurring task instance to next occurrence
+- [ ] Integration with calendar export (iCal format)

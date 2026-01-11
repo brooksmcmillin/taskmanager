@@ -175,6 +175,10 @@ export const errors = {
   clientNotFound: () =>
     new ApiError('NOT_FOUND_005', 404, 'OAuth client not found'),
 
+  /** Recurring task not found */
+  recurringTaskNotFound: () =>
+    new ApiError('NOT_FOUND_006', 404, 'Recurring task not found'),
+
   // ===========================================================================
   // Conflict Errors (409)
   // ===========================================================================
