@@ -5,8 +5,11 @@ import { config } from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import pg from 'pg';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
-config();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+config({ path: path.resolve(__dirname, '../../../.env') });
 
 const database_url =
   'postgresql://' +
