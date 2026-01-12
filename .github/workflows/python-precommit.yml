@@ -1,0 +1,36 @@
+name: Python Pre-commit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/mcp-auth/**'
+      - 'services/mcp-resource/**'
+      - 'packages/taskmanager-sdk/**'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/python-precommit.yml'
+
+jobs:
+  mcp-auth:
+    uses: brooksmcmillin/workflows/.github/workflows/python-precommit.yml@main
+    with:
+      package-name: mcp-auth
+      working-directory: services/mcp-auth
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  mcp-resource:
+    uses: brooksmcmillin/workflows/.github/workflows/python-precommit.yml@main
+    with:
+      package-name: mcp-resource
+      working-directory: services/mcp-resource
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  sdk:
+    uses: brooksmcmillin/workflows/.github/workflows/python-precommit.yml@main
+    with:
+      package-name: taskmanager-sdk
+      working-directory: packages/taskmanager-sdk
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
