@@ -1,0 +1,47 @@
+name: Python CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/mcp-auth/**'
+      - 'services/mcp-resource/**'
+      - 'packages/taskmanager-sdk/**'
+      - '.github/workflows/python-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/mcp-auth/**'
+      - 'services/mcp-resource/**'
+      - 'packages/taskmanager-sdk/**'
+      - '.github/workflows/python-ci.yml'
+
+jobs:
+  mcp-auth:
+    uses: brooksmcmillin/workflows/.github/workflows/python-ci.yml@main
+    with:
+      package-name: mcp_auth
+      working-directory: services/mcp-auth
+      python-versions: '["3.13"]'
+      skip-install-test: true
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  mcp-resource:
+    uses: brooksmcmillin/workflows/.github/workflows/python-ci.yml@main
+    with:
+      package-name: mcp_resource
+      working-directory: services/mcp-resource
+      python-versions: '["3.13"]'
+      skip-install-test: true
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  sdk:
+    uses: brooksmcmillin/workflows/.github/workflows/python-ci.yml@main
+    with:
+      package-name: taskmanager_sdk
+      working-directory: packages/taskmanager-sdk
+      python-versions: '["3.12", "3.13"]'
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
