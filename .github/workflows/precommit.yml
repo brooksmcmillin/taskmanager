@@ -6,12 +6,8 @@ on:
 
 jobs:
   precommit:
-    uses: brooksmcmillin/workflows/.github/workflows/node-precommit.yml@main
+    uses: ./.github/workflows/node-precommit.yml
     with:
       node-version: '22'
-      # Optional: customize checks
-      # run-type-check: true  # Enable TypeScript checking
-      # run-build: false      # Disable build step
-      # run-security: false   # Disable npm audit
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

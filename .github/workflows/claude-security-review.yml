@@ -1,0 +1,35 @@
+# Local copy of claude-security-review workflow
+
+name: Claude Security Review
+
+on:
+  workflow_call:
+    inputs:
+      comment-pr:
+        description: 'Whether to comment on the PR with findings'
+        type: boolean
+        default: true
+    secrets:
+      CLAUDE_API_KEY:
+        description: 'Claude API key for security review'
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  claude-security-review:
+    name: Claude Security Reviewer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: ${{ inputs.comment-pr }}
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
