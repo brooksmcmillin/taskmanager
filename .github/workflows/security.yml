@@ -11,11 +11,11 @@ on:
 
 jobs:
   security:
-    uses: brooksmcmillin/workflows/.github/workflows/node-security.yml@main
+    uses: ./.github/workflows/node-security.yml
     with:
       node-version: '22'
 
   claude-security:
-    uses: brooksmcmillin/workflows/.github/workflows/claude-security-review.yml@main
+    uses: ./.github/workflows/claude-security-review.yml
     secrets:
       CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
