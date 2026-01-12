@@ -1,7 +1,7 @@
 services:
   app:
     build:
-      context: .
+      context: ./services/web-app
       dockerfile: Dockerfile
     container_name: taskmanager-app
     restart: unless-stopped
@@ -13,10 +13,35 @@ services:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - PORT=4321
-      - POSTGRES_HOST=postgres_db
+      - POSTGRES_HOST=postgres
+    depends_on:
+      - postgres
     networks:
-      - shared_network
+      - taskmanager_network
+
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: postgres_db
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./services/db/certs/server.crt:/var/lib/postgresql/server.crt:ro
+      - ./services/db/certs/server.key:/var/lib/postgresql/server.key:ro
+    command: >
+      postgres
+      -c ssl=on
+      -c ssl_cert_file=/var/lib/postgresql/server.crt
+      -c ssl_key_file=/var/lib/postgresql/server.key
+    networks:
+      - taskmanager_network
+
+volumes:
+  postgres_data:
 
 networks:
-  shared_network:
-    external: true
+  taskmanager_network:
+    driver: bridge

@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskmanager-app
+    restart: unless-stopped
+    ports:
+      - '4321:4321'
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=4321
+      - POSTGRES_HOST=postgres_db
+    networks:
+      - shared_network
+
+networks:
+  shared_network:
+    external: true
