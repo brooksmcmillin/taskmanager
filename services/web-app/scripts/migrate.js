@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import pg from 'pg';
 import { fileURLToPath } from 'url';
-import { dirname} from 'path';
+import { dirname } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: path.resolve(__dirname, '../../../.env') });
