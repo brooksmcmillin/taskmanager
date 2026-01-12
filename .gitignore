@@ -37,3 +37,5 @@ security-report*.txt
 *-audit-report.txt
 vulnerability-report/
 .scannerwork/
+
+db/certs/

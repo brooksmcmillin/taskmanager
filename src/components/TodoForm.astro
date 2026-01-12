@@ -5,82 +5,82 @@
 <div class="todo-form-container">
   <form id="todo-form" class="card">
     <div class="form-grid">
-      <!-- Left Column -->
-      <div class="form-column">
-        <div>
-          <label
-            for="project_id"
-            class="block text-sm font-medium text-gray-700">Project</label
-          >
-          <select id="project_id" name="project_id" class="form-select mt-1">
-            <option value="">Select a project...</option>
-          </select>
-        </div>
-
-        <div>
-          <label for="title" class="block text-sm font-medium text-gray-700"
-            >Title</label
-          >
-          <input
-            type="text"
-            id="title"
-            name="title"
-            required
-            class="form-input mt-1"
-          />
-        </div>
-
-        <div>
-          <label
-            for="description"
-            class="block text-sm font-medium text-gray-700">Description</label
-          >
-          <textarea
-            id="description"
-            name="description"
-            rows="3"
-            class="form-textarea mt-1"></textarea>
-        </div>
-
-        <div>
-          <label for="tags" class="block text-sm font-medium text-gray-700"
-            >Tags (comma-separated)</label
-          >
-          <input
-            type="text"
-            id="tags"
-            name="tags"
-            placeholder="backend, urgent, review"
-            class="form-input mt-1"
-          />
-        </div>
+      <!-- Title - full width -->
+      <div class="form-full-width">
+        <label for="title" class="block text-sm font-medium text-gray-700"
+          >Title</label
+        >
+        <input
+          type="text"
+          id="title"
+          name="title"
+          required
+          class="form-input mt-1"
+        />
       </div>
 
-      <!-- Right Column -->
-      <div class="form-column">
-        <div>
-          <label for="priority" class="block text-sm font-medium text-gray-700"
-            >Priority</label
-          >
-          <select id="priority" name="priority" class="form-select mt-1">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </div>
+      <!-- Project -->
+      <div>
+        <label
+          for="project_id"
+          class="block text-sm font-medium text-gray-700">Project</label
+        >
+        <select id="project_id" name="project_id" class="form-select mt-1">
+          <option value="">Select a project...</option>
+        </select>
+      </div>
 
-        <div>
-          <label for="due_date" class="block text-sm font-medium text-gray-700"
-            >Due Date (Optional)</label
-          >
-          <input
-            type="date"
-            id="due_date"
-            name="due_date"
-            class="form-input mt-1"
-          />
-        </div>
+      <!-- Due Date -->
+      <div>
+        <label for="due_date" class="block text-sm font-medium text-gray-700"
+          >Due Date (Optional)</label
+        >
+        <input
+          type="date"
+          id="due_date"
+          name="due_date"
+          class="form-input mt-1"
+        />
+      </div>
+
+      <!-- Tags -->
+      <div>
+        <label for="tags" class="block text-sm font-medium text-gray-700"
+          >Tags (comma-separated)</label
+        >
+        <input
+          type="text"
+          id="tags"
+          name="tags"
+          placeholder="backend, urgent, review"
+          class="form-input mt-1"
+        />
+      </div>
+
+      <!-- Priority -->
+      <div>
+        <label for="priority" class="block text-sm font-medium text-gray-700"
+          >Priority</label
+        >
+        <select id="priority" name="priority" class="form-select mt-1">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+
+      <!-- Description - full width -->
+      <div class="form-full-width">
+        <label
+          for="description"
+          class="block text-sm font-medium text-gray-700">Description</label
+        >
+        <textarea
+          id="description"
+          name="description"
+          rows="3"
+          class="form-textarea mt-1"></textarea>
       </div>
     </div>
 

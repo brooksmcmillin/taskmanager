@@ -632,7 +632,13 @@ export class TodoDB {
       throw new Error('No valid fields to update');
     }
 
-    const values = fields.map((f) => updates[f]);
+    const values = fields.map((f) => {
+      // Tags need to be JSON stringified for PostgreSQL
+      if (f === 'tags') {
+        return JSON.stringify(updates[f] || []);
+      }
+      return updates[f];
+    });
     const setClause = fields
       .map((field, index) => `${field} = $${index + 1}`)
       .join(', ');
