@@ -4,7 +4,6 @@ from unittest.mock import Mock
 
 import pytest
 import requests
-
 from taskmanager_sdk import TaskManagerClient, create_authenticated_client
 from taskmanager_sdk.exceptions import (
     AuthenticationError,

@@ -56,6 +56,9 @@ include = ["taskmanager_sdk*"]
 [tool.setuptools.package-data]
 taskmanager_sdk = ["py.typed"]
 
+[tool.ruff]
+exclude = ["build"]
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true

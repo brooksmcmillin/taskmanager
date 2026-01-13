@@ -41,8 +41,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
-
-from .config import TokenConfig
+from taskmanager_sdk import TokenConfig
 
 if TYPE_CHECKING:
     from .token_storage import TokenStorage
@@ -219,7 +218,8 @@ class TaskManagerOAuthProvider(
         This stores the client information locally and optionally registers
         it with the taskmanager system if admin credentials are available.
         """
-        assert client_info.client_id is not None
+        if client_info.client_id is None:
+            raise ValueError("client_id is required for OAuth client registration")
         self.clients[client_info.client_id] = client_info
         logger.info(f"Registered OAuth client: {client_info.client_id}")
 
@@ -458,7 +458,8 @@ class TaskManagerOAuthProvider(
         logger.info(f"Generated MCP token: {mcp_token}")
 
         # Store MCP token (linked to taskmanager token if needed)
-        assert client.client_id is not None
+        if client.client_id is None:
+            raise ValueError("client_id is required for token exchange")
         expires_at = int(time.time()) + TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS
         access_token = AccessToken(
             token=mcp_token,
@@ -535,7 +536,6 @@ class TaskManagerOAuthProvider(
                 resource=token_data["resource"],
             )
 
-            assert isinstance(access_token, AccessToken)
             logger.info(f"Token valid, expires at: {access_token.expires_at}")
             return cast(AccessTokenT, access_token)
 

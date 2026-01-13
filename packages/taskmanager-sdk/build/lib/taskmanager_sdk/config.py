@@ -1,8 +1,8 @@
 """
-Centralized configuration constants for the MCP Resource server.
+Shared configuration constants for MCP servers.
 
-This module contains all token expiration times, timeouts, and other
-configuration values.
+This module contains token expiration times, timeouts, and other
+configuration values used by both MCP Auth and MCP Resource servers.
 """
 
 

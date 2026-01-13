@@ -59,7 +59,7 @@ select = [
     "F",  # pyflakes
     "I",  # isort
     "N",  # pep8-naming
-    "S",  # bandit (security)
+    "S",  # flake8-bandit (security)
     "B",  # flake8-bugbear
     "C4", # flake8-comprehensions
     "UP", # pyupgrade
@@ -85,12 +85,13 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [tool.uv.sources]
-taskmanager-sdk = { path = "/packages/taskmanager-sdk" }
+taskmanager-sdk = { path = "../../packages/taskmanager-sdk" }
 
 [dependency-groups]
 dev = [
     "asyncpg-stubs>=0.31.1",
     "mypy>=1.19.0",
+    "pyright>=1.1.400",
     "pytest>=9.0.2",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",

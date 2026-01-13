@@ -20,10 +20,19 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
-from taskmanager_sdk import AuthenticationError, TaskManagerClient
+from taskmanager_sdk import AuthenticationError, TaskManagerClient, TokenConfig
 from uvicorn import Config, Server
 
-from .config import TokenConfig
+from .responses import (
+    backend_connection_error,
+    backend_invalid_response,
+    backend_timeout,
+    invalid_client,
+    invalid_request,
+    rate_limit_exceeded,
+    server_error,
+    slow_down,
+)
 from .taskmanager_oauth_provider import TaskManagerAuthSettings, TaskManagerOAuthProvider
 from .token_storage import TokenStorage
 
@@ -311,45 +320,25 @@ async def handle_device_code_token_exchange(
 
     # === Input Validation ===
     if not device_code:
-        return JSONResponse(
-            {"error": "invalid_request", "error_description": "device_code is required"},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_request("device_code is required")
 
     if not client_id:
-        return JSONResponse(
-            {"error": "invalid_request", "error_description": "client_id is required"},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_request("client_id is required")
 
     # Validate input format to prevent injection attacks
     if not VALID_ID_PATTERN.match(client_id):
         logger.warning("Invalid client_id format in device token exchange")
-        return JSONResponse(
-            {"error": "invalid_request", "error_description": "Invalid client_id format"},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_request("Invalid client_id format")
 
     if not VALID_ID_PATTERN.match(device_code):
         logger.warning(f"Invalid device_code format from client: {client_id}")
-        return JSONResponse(
-            {"error": "invalid_request", "error_description": "Invalid device_code format"},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_request("Invalid device_code format")
 
     # === Rate Limiting ===
     if not token_poll_limiter.is_allowed(client_id):
         retry_after = token_poll_limiter.get_retry_after(client_id)
         logger.warning(f"Rate limit exceeded for client: {client_id}")
-        return JSONResponse(
-            {"error": "slow_down", "error_description": "Polling too frequently"},
-            status_code=400,
-            headers={"Cache-Control": "no-store", "Retry-After": str(retry_after)},
-        )
+        return slow_down("Polling too frequently", retry_after)
 
     # === Client Authentication Validation ===
     # Check if client exists and validate authentication requirements
@@ -361,20 +350,16 @@ async def handle_device_code_token_exchange(
         if auth_method != "none":
             if not client_secret:
                 logger.warning(f"Missing client_secret for confidential client: {client_id}")
-                return JSONResponse(
-                    {"error": "invalid_client", "error_description": "client_secret required"},
-                    status_code=401,
-                    headers={"Cache-Control": "no-store"},
-                )
+                return invalid_client("client_secret required")
 
             expected_secret = client.get("client_secret")
-            if expected_secret and client_secret != expected_secret:
+            # Use constant-time comparison to prevent timing attacks
+            if expected_secret and not secrets.compare_digest(
+                client_secret.encode("utf-8") if client_secret else b"",
+                expected_secret.encode("utf-8"),
+            ):
                 logger.warning(f"Invalid client_secret for client: {client_id}")
-                return JSONResponse(
-                    {"error": "invalid_client", "error_description": "Invalid client credentials"},
-                    status_code=401,
-                    headers={"Cache-Control": "no-store"},
-                )
+                return invalid_client("Invalid client credentials")
 
     # === Proxy to TaskManager with timeout ===
     timeout = aiohttp.ClientTimeout(total=TokenConfig.HTTP_REQUEST_TIMEOUT_SECONDS)
@@ -398,28 +383,14 @@ async def handle_device_code_token_exchange(
                     response_data = await resp.json()
                 except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
                     logger.error(f"Invalid JSON response from TaskManager: {e}")
-                    return JSONResponse(
-                        {
-                            "error": "server_error",
-                            "error_description": "Invalid response from backend",
-                        },
-                        status_code=502,
-                        headers={"Cache-Control": "no-store"},
-                    )
+                    return backend_invalid_response()
 
                 # Validate response is a dict
                 if not isinstance(response_data, dict):
                     logger.error(
                         f"Unexpected response type from TaskManager: {type(response_data)}"
                     )
-                    return JSONResponse(
-                        {
-                            "error": "server_error",
-                            "error_description": "Invalid response from backend",
-                        },
-                        status_code=502,
-                        headers={"Cache-Control": "no-store"},
-                    )
+                    return backend_invalid_response()
 
                 logger.debug(f"TaskManager device token response status: {resp.status}")
 
@@ -436,14 +407,7 @@ async def handle_device_code_token_exchange(
                 taskmanager_token = response_data.get("access_token")
                 if not taskmanager_token:
                     logger.error("No access_token in successful TaskManager response")
-                    return JSONResponse(
-                        {
-                            "error": "server_error",
-                            "error_description": "No access token from backend",
-                        },
-                        status_code=500,
-                        headers={"Cache-Control": "no-store"},
-                    )
+                    return server_error("No access token from backend")
 
                 # Generate MCP access token
                 mcp_token = f"mcp_{secrets.token_hex(32)}"
@@ -495,18 +459,10 @@ async def handle_device_code_token_exchange(
 
     except TimeoutError:
         logger.error("Timeout connecting to TaskManager for device token exchange")
-        return JSONResponse(
-            {"error": "server_error", "error_description": "Backend timeout"},
-            status_code=504,
-            headers={"Cache-Control": "no-store"},
-        )
+        return backend_timeout()
     except aiohttp.ClientError as e:
         logger.error(f"Connection error to TaskManager: {e}")
-        return JSONResponse(
-            {"error": "server_error", "error_description": "Backend connection error"},
-            status_code=502,
-            headers={"Cache-Control": "no-store"},
-        )
+        return backend_connection_error()
 
 
 def create_authorization_server(
@@ -646,10 +602,7 @@ def create_authorization_server(
                 except Exception as e:
                     logger.error(f"Token endpoint error: {e}")
                     logger.error("Traceback: ", exc_info=True)
-                    return JSONResponse(
-                        {"error": "server_error", "error_description": str(e)},
-                        status_code=500,
-                    )
+                    return server_error(str(e))
 
             # Replace the route with debug wrapper
             routes[i] = Route(route.path, debug_token_handler, methods=route.methods)
@@ -760,10 +713,7 @@ def create_authorization_server(
             logger.warning(f"Parsed registration data: {registration_data}")
         except Exception as e:
             logger.error(f"Failed to parse registration request: {e}")
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Invalid JSON"},
-                status_code=400,
-            )
+            return invalid_request("Invalid JSON")
 
         # Set default redirect URIs if not provided
         redirect_uris = registration_data.get("redirect_uris", [])
@@ -795,13 +745,7 @@ def create_authorization_server(
         # Use ensure_valid_api_client() to handle token expiration
         valid_client = ensure_valid_api_client()
         if not valid_client:
-            return JSONResponse(
-                {
-                    "error": "server_error",
-                    "error_description": "Backend API not available",
-                },
-                status_code=500,
-            )
+            return server_error("Backend API not available")
 
         client_name = f"claude-code-{secrets.token_hex(4)}"
 
@@ -822,13 +766,7 @@ def create_authorization_server(
 
         if not api_response.success:
             logger.error(f"Failed to create OAuth client: {api_response.error}")
-            return JSONResponse(
-                {
-                    "error": "server_error",
-                    "error_description": f"Failed to create client: {api_response.error}",
-                },
-                status_code=500,
-            )
+            return server_error(f"Failed to create client: {api_response.error}")
 
         # Extract client credentials from API response
         client_data = api_response.data
@@ -837,26 +775,14 @@ def create_authorization_server(
             logger.error(
                 f"Full API response: success={api_response.success}, status={api_response.status_code}, error={api_response.error}"
             )
-            return JSONResponse(
-                {
-                    "error": "server_error",
-                    "error_description": "No client data returned from backend",
-                },
-                status_code=500,
-            )
+            return server_error("No client data returned from backend")
 
         # Validate that client_data is a dictionary before calling .get()
         if not isinstance(client_data, dict):
             logger.error(
                 f"Invalid client data type from API: expected dict, got {type(client_data).__name__}. Value: {client_data!r}"
             )
-            return JSONResponse(
-                {
-                    "error": "server_error",
-                    "error_description": f"Backend returned invalid response format: expected JSON object, got {type(client_data).__name__}",
-                },
-                status_code=500,
-            )
+            return server_error("Invalid response from backend")
 
         client_id = client_data.get("client_id") or client_data.get("clientId")
         client_secret = client_data.get("client_secret") or client_data.get("clientSecret")
@@ -870,13 +796,7 @@ def create_authorization_server(
         # Public clients don't have secrets - only require client_id
         if not client_id or (not client_secret and not is_public_client):
             logger.error(f"Invalid client data returned from API: {client_data}")
-            return JSONResponse(
-                {
-                    "error": "server_error",
-                    "error_description": "Invalid client data from backend",
-                },
-                status_code=500,
-            )
+            return server_error("Invalid client data from backend")
 
         # Store in local cache for immediate use
         # Use the actual auth method from the API response (we create public clients for MCP)
@@ -948,22 +868,14 @@ def create_authorization_server(
 
         # === Input Validation ===
         if not client_id:
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "client_id is required"},
-                status_code=400,
-                headers={"Cache-Control": "no-store"},
-            )
+            return invalid_request("client_id is required")
 
         client_id_str = str(client_id)
 
         # Validate client_id format to prevent injection attacks
         if not VALID_ID_PATTERN.match(client_id_str):
             logger.warning("Invalid client_id format in device code request")
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Invalid client_id format"},
-                status_code=400,
-                headers={"Cache-Control": "no-store"},
-            )
+            return invalid_request("Invalid client_id format")
 
         # === Rate Limiting ===
         if not device_code_limiter.is_allowed(client_id_str):
@@ -971,11 +883,7 @@ def create_authorization_server(
             logger.warning(
                 f"Rate limit exceeded for device code request from client: {client_id_str}"
             )
-            return JSONResponse(
-                {"error": "slow_down", "error_description": "Too many device code requests"},
-                status_code=429,
-                headers={"Cache-Control": "no-store", "Retry-After": str(retry_after)},
-            )
+            return rate_limit_exceeded("Too many device code requests", retry_after)
 
         # === Proxy request to TaskManager with timeout ===
         timeout = aiohttp.ClientTimeout(total=TokenConfig.HTTP_REQUEST_TIMEOUT_SECONDS)
@@ -994,28 +902,14 @@ def create_authorization_server(
                         response_data = await resp.json()
                     except (aiohttp.ContentTypeError, json.JSONDecodeError) as e:
                         logger.error(f"Invalid JSON response from TaskManager device endpoint: {e}")
-                        return JSONResponse(
-                            {
-                                "error": "server_error",
-                                "error_description": "Invalid response from backend",
-                            },
-                            status_code=502,
-                            headers={"Cache-Control": "no-store"},
-                        )
+                        return backend_invalid_response()
 
                     # Validate response is a dict
                     if not isinstance(response_data, dict):
                         logger.error(
                             f"Unexpected response type from TaskManager: {type(response_data)}"
                         )
-                        return JSONResponse(
-                            {
-                                "error": "server_error",
-                                "error_description": "Invalid response from backend",
-                            },
-                            status_code=502,
-                            headers={"Cache-Control": "no-store"},
-                        )
+                        return backend_invalid_response()
 
                     if resp.status != 200:
                         logger.warning(f"Device code request failed with status: {resp.status}")
@@ -1036,18 +930,10 @@ def create_authorization_server(
 
         except TimeoutError:
             logger.error("Timeout connecting to TaskManager for device code request")
-            return JSONResponse(
-                {"error": "server_error", "error_description": "Backend timeout"},
-                status_code=504,
-                headers={"Cache-Control": "no-store"},
-            )
+            return backend_timeout()
         except aiohttp.ClientError as e:
             logger.error(f"Connection error to TaskManager: {e}")
-            return JSONResponse(
-                {"error": "server_error", "error_description": "Backend connection error"},
-                status_code=502,
-                headers={"Cache-Control": "no-store"},
-            )
+            return backend_connection_error()
 
     routes.append(
         Route(
@@ -1265,8 +1151,8 @@ def main(port: int, taskmanager_url: str, server_url: str | None = None) -> int:
         client_secret=oauth_client_secret,
     )
 
-    # Bind to 0.0.0.0 for Docker networking
-    host = "0.0.0.0"  # noqa: S104
+    # Bind address configurable via environment, defaults to all interfaces for Docker
+    host = os.getenv("MCP_AUTH_HOST", "0.0.0.0")  # noqa: S104
 
     # Use environment variable for public server URL, or default to localhost
     if server_url is None:
