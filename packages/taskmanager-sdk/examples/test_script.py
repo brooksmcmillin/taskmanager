@@ -20,11 +20,9 @@ Setup:
 
 import os
 from datetime import datetime, timedelta
-from typing import Optional
 
 import typer
 from dotenv import load_dotenv
-
 from taskmanager_sdk import TaskManagerClient, create_authenticated_client
 from taskmanager_sdk.exceptions import TaskManagerError
 
@@ -53,7 +51,7 @@ def get_client() -> TaskManagerClient:
         return client
     except TaskManagerError as e:
         typer.echo(f"❌ Authentication failed: {e}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -149,7 +147,7 @@ def projects():
 
 
 @app.command()
-def todos(project_id: Optional[int] = None):
+def todos(project_id: int | None = None):
     """Test todo management endpoints."""
     typer.echo("✅ Testing Todo Management...")
 

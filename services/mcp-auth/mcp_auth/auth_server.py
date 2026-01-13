@@ -1151,8 +1151,8 @@ def main(port: int, taskmanager_url: str, server_url: str | None = None) -> int:
         client_secret=oauth_client_secret,
     )
 
-    # Bind to 0.0.0.0 for Docker networking
-    host = "0.0.0.0"  # noqa: S104
+    # Bind address configurable via environment, defaults to all interfaces for Docker
+    host = os.getenv("MCP_AUTH_HOST", "0.0.0.0")  # nosec B104
 
     # Use environment variable for public server URL, or default to localhost
     if server_url is None:

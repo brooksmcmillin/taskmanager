@@ -149,7 +149,7 @@ class TaskManagerClient:
             )
 
         except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+            raise NetworkError(str(e))
 
     # Authentication methods
     def login(self, username: str, password: str) -> ApiResponse:
@@ -630,7 +630,7 @@ class TaskManagerClient:
             )
 
         except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+            raise NetworkError(str(e))
 
     def authorize_device(self, user_code: str, action: str) -> ApiResponse:
         """
@@ -681,7 +681,7 @@ class TaskManagerClient:
             return ApiResponse(success=True, status_code=response.status_code)
 
         except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+            raise NetworkError(str(e))
 
     def oauth_authorize(
         self,
@@ -786,7 +786,7 @@ class TaskManagerClient:
             return ApiResponse(success=True, status_code=response.status_code)
 
         except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+            raise NetworkError(str(e))
 
     def oauth_token(
         self,
@@ -878,7 +878,7 @@ class TaskManagerClient:
             )
 
         except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+            raise NetworkError(str(e))
 
 
 def create_authenticated_client(
@@ -977,4 +977,4 @@ def create_client_credentials_client(
         return client
 
     except requests.exceptions.RequestException as e:
-        raise NetworkError(f"Network error during authentication: {e}") from e
+        raise NetworkError(f"Network error during authentication: {e}")

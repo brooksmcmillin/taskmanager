@@ -1,7 +1,6 @@
 """Tests for TaskManager SDK exceptions."""
 
 import pytest
-
 from taskmanager_sdk.exceptions import (
     AuthenticationError,
     AuthorizationError,
