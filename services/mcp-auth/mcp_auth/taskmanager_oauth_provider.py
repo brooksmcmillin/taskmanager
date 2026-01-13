@@ -41,8 +41,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
-
-from .config import TokenConfig
+from taskmanager_sdk import TokenConfig
 
 if TYPE_CHECKING:
     from .token_storage import TokenStorage

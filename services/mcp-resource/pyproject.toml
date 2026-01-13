@@ -83,7 +83,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [tool.uv.sources]
-taskmanager-sdk = { path = "/packages/taskmanager-sdk" }
+taskmanager-sdk = { path = "../../packages/taskmanager-sdk" }
 
 [dependency-groups]
 dev = [

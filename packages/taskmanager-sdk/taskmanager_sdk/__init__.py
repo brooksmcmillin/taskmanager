@@ -31,6 +31,7 @@ from .client import (
     create_authenticated_client,
     create_client_credentials_client,
 )
+from .config import TokenConfig
 from .exceptions import (
     AuthenticationError,
     AuthorizationError,
@@ -62,6 +63,8 @@ from .models import (
 __all__ = [
     # Client classes
     "TaskManagerClient",
+    # Configuration
+    "TokenConfig",
     "create_authenticated_client",
     "create_client_credentials_client",
     # Models
