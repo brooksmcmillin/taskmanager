@@ -1,17 +1,5 @@
 # Root pyproject.toml for monorepo-wide tool configuration
 
-[tool.bandit]
-exclude_dirs = [
-    ".venv",
-    "venv",
-    "node_modules",
-    "__pycache__",
-    ".git",
-    "build",
-    "dist",
-]
-skips = ["B101"]  # assert statements OK in tests
-
 [tool.ruff]
 line-length = 100
 target-version = "py313"
@@ -23,7 +11,7 @@ select = [
     "F",   # pyflakes
     "I",   # isort
     "N",   # pep8-naming
-    "S",   # bandit (security)
+    "S",   # flake8-bandit (security)
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
@@ -51,4 +39,9 @@ testpaths = [
     "services/mcp-auth/tests",
     "services/mcp-resource/tests",
     "packages/taskmanager-sdk/tests",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
 ]

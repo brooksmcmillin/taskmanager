@@ -133,9 +133,7 @@ def require_list(
     return data
 
 
-def require_dict(
-    response: ApiResponse, context: str
-) -> dict[str, Any] | str:
+def require_dict(response: ApiResponse, context: str) -> dict[str, Any] | str:
     """Validate dict response, returning either the dict or an error string.
 
     This is a convenience wrapper that returns a JSON error string directly

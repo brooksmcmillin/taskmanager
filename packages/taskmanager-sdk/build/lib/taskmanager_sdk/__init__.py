@@ -31,6 +31,7 @@ from .client import (
     create_authenticated_client,
     create_client_credentials_client,
 )
+from .config import TokenConfig
 from .exceptions import (
     AuthenticationError,
     AuthorizationError,
@@ -41,7 +42,6 @@ from .exceptions import (
     TaskManagerError,
     ValidationError,
 )
-from .config import TokenConfig
 from .models import (
     ApiResponse,
     Category,

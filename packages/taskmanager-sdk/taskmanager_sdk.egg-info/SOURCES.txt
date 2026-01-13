@@ -3,6 +3,7 @@ README.md
 openapi.yaml
 py.typed
 pyproject.toml
+uv.lock
 examples/test_script.py
 taskmanager_sdk/__init__.py
 taskmanager_sdk/client.py
@@ -15,8 +16,18 @@ taskmanager_sdk.egg-info/SOURCES.txt
 taskmanager_sdk.egg-info/dependency_links.txt
 taskmanager_sdk.egg-info/requires.txt
 taskmanager_sdk.egg-info/top_level.txt
+taskmanager_sdk/__pycache__/__init__.cpython-313.pyc
+taskmanager_sdk/__pycache__/client.cpython-313.pyc
+taskmanager_sdk/__pycache__/config.cpython-313.pyc
+taskmanager_sdk/__pycache__/exceptions.cpython-313.pyc
+taskmanager_sdk/__pycache__/models.cpython-313.pyc
 tests/__init__.py
 tests/conftest.py
 tests/test_client.py
 tests/test_exceptions.py
 tests/test_models.py
+tests/__pycache__/__init__.cpython-313.pyc
+tests/__pycache__/conftest.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_client.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_exceptions.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_models.cpython-313-pytest-9.0.2.pyc

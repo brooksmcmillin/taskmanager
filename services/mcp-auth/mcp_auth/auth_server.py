@@ -1152,7 +1152,7 @@ def main(port: int, taskmanager_url: str, server_url: str | None = None) -> int:
     )
 
     # Bind address configurable via environment, defaults to all interfaces for Docker
-    host = os.getenv("MCP_AUTH_HOST", "0.0.0.0")  # nosec B104
+    host = os.getenv("MCP_AUTH_HOST", "0.0.0.0")  # noqa: S104
 
     # Use environment variable for public server URL, or default to localhost
     if server_url is None:
