@@ -800,7 +800,8 @@ export class TodoDB {
     // Calculate initial next_due_date based on start_date and pattern
     let next_due_date = new Date(start_date);
 
-    // For weekly tasks with specific weekdays, find the first matching day on or after start_date
+    // For weekly tasks with specific weekdays, find the first matching day
+    // on or after start_date
     if (frequency === 'weekly' && weekdays && weekdays.length > 0) {
       const startDay = next_due_date.getDay();
       const sortedDays = [...weekdays].sort((a, b) => a - b);
@@ -827,10 +828,11 @@ export class TodoDB {
       `
       INSERT INTO recurring_tasks (
         user_id, frequency, interval_value, weekdays, day_of_month,
-        start_date, end_date, next_due_date,
-        project_id, title, description, priority, estimated_hours, tags, context,
-        skip_missed
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        start_date, end_date, next_due_date, project_id, title,
+        description, priority, estimated_hours, tags, context, skip_missed
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+      )
       RETURNING *
       `,
       [

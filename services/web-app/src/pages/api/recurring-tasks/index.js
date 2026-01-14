@@ -86,7 +86,9 @@ export const POST = async ({ request }) => {
 
     // Validate start_date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(body.start_date)) {
-      return errors.invalid('Start date', 'must be in YYYY-MM-DD format').toResponse();
+      return errors
+        .invalid('Start date', 'must be in YYYY-MM-DD format')
+        .toResponse();
     }
 
     // Validate weekdays if provided
