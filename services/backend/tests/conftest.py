@@ -16,8 +16,22 @@ from app.models.user import User
 
 
 # Use a separate test database
-# pragma: allowlist nextline secret
-TEST_DATABASE_URL = "postgresql+asyncpg://taskmanager:p3LmaMx98qoZ%40RXDNXE@localhost:5432/taskmanager_test"
+import os
+
+# Read credentials from environment variables, same as production
+POSTGRES_USER = os.getenv("POSTGRES_USER", "taskmanager")
+POSTGRES_PASSWORD = os.getenv(
+    "POSTGRES_PASSWORD", "taskmanager"
+)  # pragma: allowlist secret
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+
+# URL-encode the password to handle special characters
+from urllib.parse import quote_plus
+
+encoded_password = quote_plus(POSTGRES_PASSWORD)
+
+TEST_DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{encoded_password}@{POSTGRES_HOST}:{POSTGRES_PORT}/taskmanager_test"
 
 
 @pytest.fixture(scope="session")
