@@ -31,6 +31,12 @@ const { user } = Astro.props;
               >
                 OAuth Clients
               </a>
+              <a
+                href="/trash"
+                class={`nav-link ${currentPath === '/trash' ? 'active' : ''}`}
+              >
+                Trash
+              </a>
             </div>
           )
         }
