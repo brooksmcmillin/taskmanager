@@ -17,7 +17,7 @@ from app.models.user import User
 
 # Use a separate test database
 # pragma: allowlist nextline secret
-TEST_DATABASE_URL = "postgresql+asyncpg://taskmanager:taskmanager@localhost:5432/taskmanager_test"
+TEST_DATABASE_URL = "postgresql+asyncpg://taskmanager:p3LmaMx98qoZ%40RXDNXE@localhost:5432/taskmanager_test"
 
 
 @pytest.fixture(scope="session")
