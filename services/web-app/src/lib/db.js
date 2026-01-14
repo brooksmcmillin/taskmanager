@@ -443,7 +443,7 @@ export class TodoDB {
         p.name,
         COUNT(t.id) as task_count
       FROM projects p
-      LEFT JOIN todos t ON p.id = t.project_id AND t.user_id = $1
+      LEFT JOIN todos t ON p.id = t.project_id AND t.user_id = $1 AND t.deleted_at IS NULL
       WHERE p.is_active = true AND p.user_id = $1
       GROUP BY p.id, p.name
       ORDER BY p.name
@@ -464,7 +464,7 @@ export class TodoDB {
       `SELECT t.*, p.name as project_name, p.color as project_color
        FROM todos t
        LEFT JOIN projects p ON t.project_id = p.id
-       WHERE t.user_id = $1`,
+       WHERE t.user_id = $1 AND t.deleted_at IS NULL`,
       [user_id]
     );
 
@@ -485,7 +485,7 @@ export class TodoDB {
       `SELECT t.*, p.name as project_name, p.color as project_color
        FROM todos t
        LEFT JOIN projects p ON t.project_id = p.id
-       WHERE t.user_id = $1`,
+       WHERE t.user_id = $1 AND t.deleted_at IS NULL`,
       [user_id]
     );
 
@@ -524,7 +524,7 @@ export class TodoDB {
         p.color as project_color
       FROM todos t
       LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.id = $1 AND t.user_id = $2
+      WHERE t.id = $1 AND t.user_id = $2 AND t.deleted_at IS NULL
     `,
       [id, user_id]
     );
@@ -545,7 +545,7 @@ export class TodoDB {
         p.color as project_color
       FROM todos t
       LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.user_id = $1
+      WHERE t.user_id = $1 AND t.deleted_at IS NULL
     `;
 
     const params = [user_id];
@@ -671,9 +671,81 @@ export class TodoDB {
   }
 
   static async deleteTodo(id, user_id) {
+    // Soft delete - set deleted_at timestamp
     const result = await this.query(
       `
-      DELETE FROM todos WHERE id = $1 AND user_id = $2 RETURNING *
+      UPDATE todos
+      SET deleted_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+      RETURNING *
+    `,
+      [id, user_id]
+    );
+    return result.rows[0];
+  }
+
+  // Trash/deleted todos methods
+  static async getDeletedTodos(user_id) {
+    const result = await this.query(
+      `
+      SELECT t.*, p.name as project_name, p.color as project_color
+      FROM todos t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.user_id = $1 AND t.deleted_at IS NOT NULL
+      ORDER BY t.deleted_at DESC
+    `,
+      [user_id]
+    );
+    return result.rows;
+  }
+
+  static async getDeletedTodoById(id, user_id) {
+    const result = await this.query(
+      `
+      SELECT t.*, p.name as project_name, p.color as project_color
+      FROM todos t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.id = $1 AND t.user_id = $2 AND t.deleted_at IS NOT NULL
+    `,
+      [id, user_id]
+    );
+    return result.rows[0];
+  }
+
+  static async searchDeletedTodos(user_id, searchQuery) {
+    const result = await this.query(
+      `
+      SELECT t.*, p.name as project_name, p.color as project_color
+      FROM todos t
+      LEFT JOIN projects p ON t.project_id = p.id
+      WHERE t.user_id = $1 AND t.deleted_at IS NOT NULL
+        AND to_tsvector('english', t.title || ' ' || COALESCE(t.description, '')) @@ plainto_tsquery('english', $2)
+      ORDER BY t.deleted_at DESC
+    `,
+      [user_id, searchQuery]
+    );
+    return result.rows;
+  }
+
+  static async restoreTodo(id, user_id) {
+    const result = await this.query(
+      `
+      UPDATE todos
+      SET deleted_at = NULL, updated_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND deleted_at IS NOT NULL
+      RETURNING *
+    `,
+      [id, user_id]
+    );
+    return result.rows[0];
+  }
+
+  static async permanentlyDeleteTodo(id, user_id) {
+    const result = await this.query(
+      `
+      DELETE FROM todos
+      WHERE id = $1 AND user_id = $2 AND deleted_at IS NOT NULL
+      RETURNING *
     `,
       [id, user_id]
     );
@@ -685,7 +757,7 @@ export class TodoDB {
       `SELECT t.*, p.name as project_name, p.color as project_color
        FROM todos t
        LEFT JOIN projects p ON t.project_id = p.id
-       WHERE t.user_id = $1
+       WHERE t.user_id = $1 AND t.deleted_at IS NULL
          AND to_tsvector('english', t.title || ' ' || COALESCE(t.description, '')) @@ plainto_tsquery('english', $2)`,
       [user_id, searchQuery]
     );

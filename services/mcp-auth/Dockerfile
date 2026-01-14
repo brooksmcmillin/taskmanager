@@ -19,8 +19,9 @@ COPY packages/taskmanager-sdk /packages/taskmanager-sdk
 # Copy dependency files
 COPY services/mcp-auth/pyproject.toml ./
 
-# Install dependencies using uv
-RUN uv sync --no-dev
+# Update pyproject.toml to use absolute path for Docker build, then install dependencies
+RUN sed -i 's|path = "../../packages/taskmanager-sdk"|path = "/packages/taskmanager-sdk"|' pyproject.toml \
+    && uv sync --no-dev
 
 # Copy application code
 COPY services/mcp-auth/mcp_auth ./mcp_auth
