@@ -12,6 +12,9 @@ class TokenConfig:
     # Access token lifetime (1 hour)
     MCP_ACCESS_TOKEN_TTL_SECONDS: int = 3600
 
+    # Refresh token lifetime (7 days)
+    MCP_REFRESH_TOKEN_TTL_SECONDS: int = 7 * 24 * 3600
+
     # Authorization code lifetime (5 minutes)
     AUTHORIZATION_CODE_TTL_SECONDS: int = 300
 

@@ -123,6 +123,10 @@ class TaskManagerOAuthProvider(
         self.clients: dict[str, OAuthClientInformationFull] = {}
         self.auth_codes: dict[str, AuthorizationCode] = {}
         self.tokens: dict[str, AccessToken] = {}  # Fallback if no token_storage
+        self.refresh_tokens: dict[str, RefreshToken] = {}  # In-memory refresh tokens
+        self.refresh_token_resources: dict[
+            str, str | None
+        ] = {}  # Resource binding for refresh tokens
         self.state_mapping: dict[str, dict[str, str | None]] = {}
         self.registered_clients: dict[str, Any] = {}
 
@@ -436,10 +440,11 @@ class TaskManagerOAuthProvider(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
     ) -> OAuthToken:
         """
-        Exchange MCP authorization code for MCP access token.
+        Exchange MCP authorization code for MCP access token and refresh token.
 
         This creates the final MCP access token that will be used by
-        the MCP client to access protected resources.
+        the MCP client to access protected resources, along with a refresh
+        token for obtaining new access tokens without re-authentication.
         """
         logger.info("=== EXCHANGING AUTH CODE ===")
         logger.info(f"Auth code: {authorization_code.code}")
@@ -456,6 +461,11 @@ class TaskManagerOAuthProvider(
         # Generate MCP access token
         mcp_token = f"mcp_{secrets.token_hex(32)}"
         logger.info(f"Generated MCP token: {mcp_token}")
+
+        # Generate MCP refresh token
+        mcp_refresh_token = f"mcp_rt_{secrets.token_hex(32)}"
+        refresh_expires_at = int(time.time()) + TokenConfig.MCP_REFRESH_TOKEN_TTL_SECONDS
+        logger.info(f"Generated MCP refresh token: {mcp_refresh_token[:20]}...")
 
         # Store MCP token (linked to taskmanager token if needed)
         if client.client_id is None:
@@ -478,11 +488,29 @@ class TaskManagerOAuthProvider(
                 expires_at=expires_at,
                 resource=authorization_code.resource,
             )
+            await self.token_storage.store_refresh_token(
+                refresh_token=mcp_refresh_token,
+                client_id=client.client_id,
+                scopes=authorization_code.scopes,
+                expires_at=refresh_expires_at,
+                resource=authorization_code.resource,
+            )
             token_count = await self.token_storage.get_token_count()
-            logger.info(f"Stored access token in database, total tokens: {token_count}")
+            logger.info(
+                f"Stored access and refresh tokens in database, total access tokens: {token_count}"
+            )
         else:
             self.tokens[mcp_token] = access_token
-            logger.info(f"Stored access token in memory, total tokens: {len(self.tokens)}")
+            self.refresh_tokens[mcp_refresh_token] = RefreshToken(
+                token=mcp_refresh_token,
+                client_id=client.client_id,
+                scopes=authorization_code.scopes,
+                expires_at=refresh_expires_at,
+            )
+            self.refresh_token_resources[mcp_refresh_token] = authorization_code.resource
+            logger.info(
+                f"Stored access and refresh tokens in memory, total access tokens: {len(self.tokens)}"
+            )
 
         # Clean up authorization code
         del self.auth_codes[authorization_code.code]
@@ -491,8 +519,9 @@ class TaskManagerOAuthProvider(
         oauth_token = OAuthToken(
             access_token=mcp_token,
             token_type="Bearer",  # nosec B106 - OAuth token type, not a password
-            expires_in=3600,
+            expires_in=TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS,
             scope=" ".join(authorization_code.scopes),
+            refresh_token=mcp_refresh_token,
         )
 
         return oauth_token
@@ -561,13 +590,93 @@ class TaskManagerOAuthProvider(
         logger.info(f"Token valid, expires at: {access_token.expires_at}")
         return cast(AccessTokenT, access_token)
 
+    async def _get_refresh_token_resource(self, refresh_token: str) -> str | None:
+        """
+        Get the resource binding for a refresh token.
+
+        Args:
+            refresh_token: The refresh token string
+
+        Returns:
+            Resource string if bound, None otherwise
+        """
+        if self.token_storage:
+            token_data = await self.token_storage.load_refresh_token(refresh_token)
+            return token_data["resource"] if token_data else None
+        return self.refresh_token_resources.get(refresh_token)
+
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
     ) -> RefreshTokenT | None:
-        """Load a refresh token - implement if refresh tokens are needed."""
-        # TODO: Implement refresh token support if needed
-        del client, refresh_token  # Unused - required by interface
-        return None
+        """
+        Load and validate a refresh token.
+
+        Args:
+            client: The OAuth client making the request
+            refresh_token: The refresh token string to validate
+
+        Returns:
+            RefreshToken if valid, None otherwise
+        """
+        logger.info("=== LOAD REFRESH TOKEN ===")
+        logger.info(
+            f"Looking for refresh token: {refresh_token[:20]}..."
+            if len(refresh_token) > 20
+            else f"Token: {refresh_token}"
+        )
+        logger.info(f"Client: {client.client_id}")
+
+        # Try database storage first if available
+        if self.token_storage:
+            token_data = await self.token_storage.load_refresh_token(refresh_token)
+            if not token_data:
+                logger.warning("Refresh token NOT FOUND in database!")
+                return None
+
+            # Verify the token belongs to the requesting client
+            if token_data["client_id"] != client.client_id:
+                logger.warning(
+                    f"Refresh token client mismatch: token belongs to {token_data['client_id']}, "
+                    f"but request from {client.client_id}"
+                )
+                return None
+
+            logger.info(f"Refresh token found in database for client: {token_data['client_id']}")
+
+            refresh_token_obj = RefreshToken(
+                token=token_data["token"],
+                client_id=token_data["client_id"],
+                scopes=token_data["scopes"],
+                expires_at=token_data["expires_at"],
+            )
+            return cast(RefreshTokenT, refresh_token_obj)
+
+        # Fall back to in-memory storage
+        logger.info(f"In-memory refresh token storage has {len(self.refresh_tokens)} tokens")
+
+        stored_token = self.refresh_tokens.get(refresh_token)
+        if not stored_token:
+            logger.warning("Refresh token NOT FOUND in memory storage!")
+            return None
+
+        # Verify the token belongs to the requesting client
+        if stored_token.client_id != client.client_id:
+            logger.warning(
+                f"Refresh token client mismatch: token belongs to {stored_token.client_id}, "
+                f"but request from {client.client_id}"
+            )
+            return None
+
+        # Check if expired
+        if stored_token.expires_at and stored_token.expires_at < time.time():
+            logger.warning(f"Refresh token expired at {stored_token.expires_at}")
+            del self.refresh_tokens[refresh_token]
+            if refresh_token in self.refresh_token_resources:
+                del self.refresh_token_resources[refresh_token]
+            return None
+
+        logger.info(f"Refresh token valid, expires at: {stored_token.expires_at}")
+        return cast(RefreshTokenT, stored_token)
 
     async def exchange_refresh_token(
         self,
@@ -575,10 +684,107 @@ class TaskManagerOAuthProvider(
         refresh_token: RefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
-        """Exchange refresh token - implement if refresh tokens are needed."""
-        # TODO: Implement refresh token exchange if needed
-        del client, refresh_token, scopes  # Unused - required by interface
-        raise NotImplementedError("Refresh tokens not yet implemented")
+        """
+        Exchange a refresh token for a new access token and refresh token.
+
+        This implements refresh token rotation - the old refresh token is
+        invalidated and a new one is issued for security.
+
+        Args:
+            client: The OAuth client making the request
+            refresh_token: The refresh token to exchange
+            scopes: Requested scopes (must be subset of original scopes)
+
+        Returns:
+            OAuthToken with new access_token and refresh_token
+        """
+        logger.info("=== EXCHANGE REFRESH TOKEN ===")
+        logger.info(f"Client: {client.client_id}")
+        logger.info(f"Refresh token: {refresh_token.token[:20]}...")
+        logger.info(f"Requested scopes: {scopes}")
+        logger.info(f"Original scopes: {refresh_token.scopes}")
+
+        if client.client_id is None:
+            raise ValueError("client_id is required for refresh token exchange")
+
+        # Get the resource binding for the old refresh token
+        resource = await self._get_refresh_token_resource(refresh_token.token)
+
+        # Validate requested scopes are a subset of the original scopes
+        original_scopes = set(refresh_token.scopes)
+        requested_scopes = set(scopes) if scopes else original_scopes
+        if not requested_scopes.issubset(original_scopes):
+            logger.error(f"Requested scopes {requested_scopes} not subset of {original_scopes}")
+            raise ValueError("Requested scopes exceed original grant")
+
+        # Use the requested scopes, or fall back to original scopes
+        final_scopes = list(requested_scopes) if scopes else refresh_token.scopes
+
+        # Generate new access token
+        new_access_token = f"mcp_{secrets.token_hex(32)}"
+        access_expires_at = int(time.time()) + TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS
+
+        # Generate new refresh token (token rotation for security)
+        new_refresh_token = f"mcp_rt_{secrets.token_hex(32)}"
+        refresh_expires_at = int(time.time()) + TokenConfig.MCP_REFRESH_TOKEN_TTL_SECONDS
+
+        logger.info(f"Generated new access token: {new_access_token[:20]}...")
+        logger.info(f"Generated new refresh token: {new_refresh_token[:20]}...")
+
+        # Store new tokens and invalidate old refresh token
+        if self.token_storage:
+            # Store new access token
+            await self.token_storage.store_token(
+                token=new_access_token,
+                client_id=client.client_id,
+                scopes=final_scopes,
+                expires_at=access_expires_at,
+                resource=resource,
+            )
+            # Store new refresh token
+            await self.token_storage.store_refresh_token(
+                refresh_token=new_refresh_token,
+                client_id=client.client_id,
+                scopes=final_scopes,
+                expires_at=refresh_expires_at,
+                resource=resource,
+            )
+            # Delete old refresh token (rotation)
+            await self.token_storage.delete_refresh_token(refresh_token.token)
+            logger.info("Stored new tokens in database, rotated old refresh token")
+        else:
+            # In-memory storage
+            self.tokens[new_access_token] = AccessToken(
+                token=new_access_token,
+                client_id=client.client_id,
+                scopes=final_scopes,
+                expires_at=access_expires_at,
+                resource=resource,
+            )
+            self.refresh_tokens[new_refresh_token] = RefreshToken(
+                token=new_refresh_token,
+                client_id=client.client_id,
+                scopes=final_scopes,
+                expires_at=refresh_expires_at,
+            )
+            self.refresh_token_resources[new_refresh_token] = resource
+            # Delete old refresh token (rotation)
+            if refresh_token.token in self.refresh_tokens:
+                del self.refresh_tokens[refresh_token.token]
+            if refresh_token.token in self.refresh_token_resources:
+                del self.refresh_token_resources[refresh_token.token]
+            logger.info("Stored new tokens in memory, rotated old refresh token")
+
+        oauth_token = OAuthToken(
+            access_token=new_access_token,
+            token_type="Bearer",  # nosec B106 - OAuth token type, not a password
+            expires_in=TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS,
+            scope=" ".join(final_scopes),
+            refresh_token=new_refresh_token,
+        )
+
+        logger.info(f"Refresh token exchange complete for client: {client.client_id}")
+        return oauth_token
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
         """

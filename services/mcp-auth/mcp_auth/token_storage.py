@@ -193,6 +193,131 @@ class TokenStorage:
             row = await conn.fetchrow("SELECT COUNT(*) as count FROM mcp_access_tokens")
         return row["count"] if row else 0
 
+    async def store_refresh_token(
+        self,
+        refresh_token: str,
+        client_id: str,
+        scopes: list[str],
+        expires_at: int,
+        resource: str | None = None,
+    ) -> None:
+        """
+        Store a refresh token in the database.
+
+        Args:
+            refresh_token: The refresh token string
+            client_id: OAuth client ID
+            scopes: List of granted scopes
+            expires_at: Unix timestamp when token expires
+            resource: Optional RFC 8707 resource binding
+        """
+        if not self._pool:
+            raise RuntimeError("Token storage not initialized. Call initialize() first.")
+
+        expires_datetime = datetime.utcfromtimestamp(expires_at)
+        scopes_str = " ".join(scopes)
+
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO mcp_refresh_tokens (token, client_id, scopes, resource, expires_at)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (token) DO UPDATE SET
+                    client_id = EXCLUDED.client_id,
+                    scopes = EXCLUDED.scopes,
+                    resource = EXCLUDED.resource,
+                    expires_at = EXCLUDED.expires_at
+                """,
+                refresh_token,
+                client_id,
+                scopes_str,
+                resource,
+                expires_datetime,
+            )
+        logger.debug(f"Stored refresh token {refresh_token[:20]}... for client {client_id}")
+
+    async def load_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
+        """
+        Load a refresh token from the database.
+
+        Args:
+            refresh_token: The refresh token string to look up
+
+        Returns:
+            Token data dict if found and not expired, None otherwise
+        """
+        if not self._pool:
+            raise RuntimeError("Token storage not initialized. Call initialize() first.")
+
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT token, client_id, scopes, resource, expires_at, created_at
+                FROM mcp_refresh_tokens
+                WHERE token = $1
+                """,
+                refresh_token,
+            )
+
+        if not row:
+            logger.debug(f"Refresh token {refresh_token[:20]}... not found in database")
+            return None
+
+        # Check if expired
+        expires_at = row["expires_at"]
+        now = datetime.utcnow()
+        if expires_at < now:
+            logger.debug(f"Refresh token {refresh_token[:20]}... has expired")
+            await self.delete_refresh_token(refresh_token)
+            return None
+
+        return {
+            "token": row["token"],
+            "client_id": row["client_id"],
+            "scopes": row["scopes"].split() if row["scopes"] else [],
+            "resource": row["resource"],
+            "expires_at": int(expires_at.timestamp()),
+            "created_at": int(row["created_at"].timestamp()) if row["created_at"] else None,
+        }
+
+    async def delete_refresh_token(self, refresh_token: str) -> None:
+        """
+        Delete a refresh token from the database.
+
+        Args:
+            refresh_token: The refresh token string to delete
+        """
+        if not self._pool:
+            raise RuntimeError("Token storage not initialized. Call initialize() first.")
+
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM mcp_refresh_tokens WHERE token = $1",
+                refresh_token,
+            )
+        logger.debug(f"Deleted refresh token {refresh_token[:20]}...")
+
+    async def cleanup_expired_refresh_tokens(self) -> int:
+        """
+        Remove all expired refresh tokens from the database.
+
+        Returns:
+            Number of tokens removed
+        """
+        if not self._pool:
+            raise RuntimeError("Token storage not initialized. Call initialize() first.")
+
+        now = datetime.utcnow()
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(
+                "DELETE FROM mcp_refresh_tokens WHERE expires_at < $1",
+                now,
+            )
+        count = int(result.split()[-1]) if result else 0
+        if count > 0:
+            logger.info(f"Cleaned up {count} expired refresh tokens")
+        return count
+
 
 # Global token storage instance
 _token_storage: TokenStorage | None = None
