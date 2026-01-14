@@ -11,6 +11,7 @@ vi.mock('../src/lib/db.js', () => ({
     getProjectByName: vi.fn(),
     getCategoriesWithCounts: vi.fn(),
     searchTodos: vi.fn(),
+    generateDueRecurringTasks: vi.fn(),
   },
 }));
 
@@ -35,6 +36,8 @@ describe('GET /api/todos', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     requireAuth.mockResolvedValue(mockSession);
+    // Mock generateDueRecurringTasks to return empty array (no recurring tasks to generate)
+    TodoDB.generateDueRecurringTasks.mockResolvedValue([]);
   });
 
   it('should return tasks with proper format', async () => {
@@ -75,6 +78,7 @@ describe('GET /api/todos', () => {
       project_color: '#3b82f6',
       priority: 'high',
       tags: ['urgent'],
+      recurring_task_id: null,
       created_at: '2025-12-01',
       updated_at: '2025-12-10',
     });

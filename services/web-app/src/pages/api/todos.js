@@ -12,6 +12,11 @@ import {
 export const GET = async ({ url, request }) => {
   try {
     const session = await requireAuth(request);
+
+    // Generate any due recurring tasks before fetching
+    // This ensures recurring task instances are created on-demand
+    await TodoDB.generateDueRecurringTasks(session.user_id);
+
     const searchParams = new URL(url).searchParams;
     const projectId = searchParams.get('project_id');
     const status = searchParams.get('status');
@@ -43,6 +48,7 @@ export const GET = async ({ url, request }) => {
       priority: todo.priority,
       tags:
         typeof todo.tags === 'string' ? JSON.parse(todo.tags) : todo.tags || [],
+      recurring_task_id: todo.recurring_task_id || null,
       created_at: formatDateString(todo.created_at),
       updated_at: formatDateString(todo.updated_at),
     }));

@@ -65,6 +65,8 @@ tags:
     description: Authentication endpoints
   - name: Todos
     description: Task management
+  - name: Recurring Tasks
+    description: Recurring task templates
   - name: Trash
     description: Deleted task management
   - name: Projects
@@ -492,6 +494,250 @@ paths:
       responses:
         '200':
           description: Search results
+
+  /api/recurring-tasks:
+    get:
+      tags: [Recurring Tasks]
+      summary: List recurring tasks
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: active_only
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Only return active recurring tasks
+      responses:
+        '200':
+          description: List of recurring tasks
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags: [Recurring Tasks]
+      summary: Create a recurring task
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, frequency, start_date]
+              properties:
+                title:
+                  type: string
+                frequency:
+                  type: string
+                  enum: [daily, weekly, monthly, yearly]
+                start_date:
+                  type: string
+                  format: date
+                interval_value:
+                  type: integer
+                  default: 1
+                weekdays:
+                  type: array
+                  items:
+                    type: integer
+                    minimum: 0
+                    maximum: 6
+                  description: For weekly (0=Sun, 6=Sat)
+                day_of_month:
+                  type: integer
+                  minimum: 1
+                  maximum: 31
+                  description: For monthly frequency
+                end_date:
+                  type: string
+                  format: date
+                project_id:
+                  type: integer
+                description:
+                  type: string
+                priority:
+                  type: string
+                  enum: [low, medium, high, urgent]
+                  default: medium
+                estimated_hours:
+                  type: number
+                  default: 1.0
+                tags:
+                  type: array
+                  items:
+                    type: string
+                context:
+                  type: string
+                  default: work
+                skip_missed:
+                  type: boolean
+                  default: true
+                  description: >
+                    If true (floating), next occurrence is calculated from
+                    today when completed. If false (fixed), uses strict
+                    schedule.
+      responses:
+        '201':
+          description: Recurring task created
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/recurring-tasks/{id}:
+    get:
+      tags: [Recurring Tasks]
+      summary: Get a recurring task by ID
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recurring task details
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Recurring task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [Recurring Tasks]
+      summary: Update a recurring task
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                frequency:
+                  type: string
+                  enum: [daily, weekly, monthly, yearly]
+                interval_value:
+                  type: integer
+                weekdays:
+                  type: array
+                  items:
+                    type: integer
+                day_of_month:
+                  type: integer
+                start_date:
+                  type: string
+                  format: date
+                end_date:
+                  type: string
+                  format: date
+                next_due_date:
+                  type: string
+                  format: date
+                project_id:
+                  type: integer
+                description:
+                  type: string
+                priority:
+                  type: string
+                  enum: [low, medium, high, urgent]
+                estimated_hours:
+                  type: number
+                tags:
+                  type: array
+                  items:
+                    type: string
+                context:
+                  type: string
+                skip_missed:
+                  type: boolean
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Recurring task updated
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Recurring task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [Recurring Tasks]
+      summary: Deactivate a recurring task
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recurring task deactivated
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Recurring task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/trash:
     get:

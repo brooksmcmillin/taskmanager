@@ -771,6 +771,430 @@ export class TodoDB {
     return result.rows;
   }
 
+  // Recurring Task methods
+
+  /**
+   * Calculate the next due date based on recurrence pattern
+   * @param {Object} recurringTask - The recurring task
+   * @param {Date|string} fromDate - The reference date to calculate from
+   * @returns {Date|null} The next due date, or null if past end_date
+   */
+  static calculateNextDueDate(recurringTask, fromDate) {
+    const from = new Date(fromDate);
+    const { frequency, interval_value, weekdays, day_of_month, end_date } =
+      recurringTask;
+
+    let next = new Date(from);
+
+    switch (frequency) {
+      case 'daily':
+        next.setDate(next.getDate() + interval_value);
+        break;
+
+      case 'weekly':
+        if (weekdays && weekdays.length > 0) {
+          // Find the next matching weekday
+          const sortedDays = [...weekdays].sort((a, b) => a - b);
+          const currentDay = next.getDay();
+
+          // Look for next day this week
+          let foundThisWeek = false;
+          for (const day of sortedDays) {
+            if (day > currentDay) {
+              next.setDate(next.getDate() + (day - currentDay));
+              foundThisWeek = true;
+              break;
+            }
+          }
+
+          // If not found this week, go to first day of next interval
+          if (!foundThisWeek) {
+            const daysUntilNextWeek = 7 - currentDay + sortedDays[0];
+            const additionalWeeks = (interval_value - 1) * 7;
+            next.setDate(next.getDate() + daysUntilNextWeek + additionalWeeks);
+          }
+        } else {
+          // Simple weekly: same day next week(s)
+          next.setDate(next.getDate() + 7 * interval_value);
+        }
+        break;
+
+      case 'monthly':
+        next.setMonth(next.getMonth() + interval_value);
+        if (day_of_month) {
+          // Handle months with fewer days (e.g., Feb 30 -> Feb 28)
+          const lastDay = new Date(
+            next.getFullYear(),
+            next.getMonth() + 1,
+            0
+          ).getDate();
+          next.setDate(Math.min(day_of_month, lastDay));
+        }
+        break;
+
+      case 'yearly':
+        next.setFullYear(next.getFullYear() + interval_value);
+        break;
+    }
+
+    // Check if past end_date
+    if (end_date && next > new Date(end_date)) {
+      return null;
+    }
+
+    return next;
+  }
+
+  /**
+   * Create a new recurring task
+   * @param {number} user_id - User ID
+   * @param {Object} task - Recurring task data
+   * @returns {Object} Created recurring task
+   */
+  static async createRecurringTask(user_id, task) {
+    const {
+      frequency,
+      interval_value = 1,
+      weekdays = null,
+      day_of_month = null,
+      start_date,
+      end_date = null,
+      project_id = null,
+      title,
+      description = null,
+      priority = 'medium',
+      estimated_hours = 1.0,
+      tags = [],
+      context = 'work',
+      skip_missed = true,
+    } = task;
+
+    // Calculate initial next_due_date based on start_date and pattern
+    let next_due_date = new Date(start_date);
+
+    // For weekly tasks with specific weekdays, find the first matching day
+    // on or after start_date
+    if (frequency === 'weekly' && weekdays && weekdays.length > 0) {
+      const startDay = next_due_date.getDay();
+      const sortedDays = [...weekdays].sort((a, b) => a - b);
+
+      // Find first matching day on or after start
+      let foundDay = false;
+      for (const day of sortedDays) {
+        if (day >= startDay) {
+          next_due_date.setDate(next_due_date.getDate() + (day - startDay));
+          foundDay = true;
+          break;
+        }
+      }
+      if (!foundDay) {
+        // Wrap to next week
+        const daysUntilNextWeek = 7 - startDay + sortedDays[0];
+        next_due_date.setDate(next_due_date.getDate() + daysUntilNextWeek);
+      }
+    }
+
+    const result = await this.query(
+      `
+      INSERT INTO recurring_tasks (
+        user_id, frequency, interval_value, weekdays, day_of_month,
+        start_date, end_date, next_due_date, project_id, title,
+        description, priority, estimated_hours, tags, context, skip_missed
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+      )
+      RETURNING *
+      `,
+      [
+        user_id,
+        frequency,
+        interval_value,
+        weekdays,
+        day_of_month,
+        start_date,
+        end_date,
+        next_due_date.toISOString().split('T')[0],
+        project_id,
+        title,
+        description,
+        priority,
+        estimated_hours,
+        JSON.stringify(tags),
+        context,
+        skip_missed,
+      ]
+    );
+
+    return result.rows[0];
+  }
+
+  /**
+   * Get all recurring tasks for a user
+   * @param {number} user_id - User ID
+   * @param {boolean} activeOnly - Only return active recurring tasks
+   * @returns {Array} Recurring tasks
+   */
+  static async getRecurringTasks(user_id, activeOnly = true) {
+    const qb = createQuery(
+      `SELECT rt.*, p.name as project_name, p.color as project_color
+       FROM recurring_tasks rt
+       LEFT JOIN projects p ON rt.project_id = p.id
+       WHERE rt.user_id = $1`,
+      [user_id]
+    );
+
+    if (activeOnly) {
+      qb.whereRaw('rt.is_active = true');
+    }
+
+    qb.orderBy('rt.next_due_date ASC, rt.created_at ASC');
+
+    const { query, params } = qb.build();
+    const result = await this.query(query, params);
+    return result.rows;
+  }
+
+  /**
+   * Get a single recurring task by ID
+   * @param {number} id - Recurring task ID
+   * @param {number} user_id - User ID
+   * @returns {Object|null} Recurring task or null
+   */
+  static async getRecurringTaskById(id, user_id) {
+    const result = await this.query(
+      `
+      SELECT rt.*, p.name as project_name, p.color as project_color
+      FROM recurring_tasks rt
+      LEFT JOIN projects p ON rt.project_id = p.id
+      WHERE rt.id = $1 AND rt.user_id = $2
+      `,
+      [id, user_id]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Update a recurring task
+   * @param {number} id - Recurring task ID
+   * @param {number} user_id - User ID
+   * @param {Object} updates - Fields to update
+   * @returns {Object|null} Updated recurring task
+   */
+  static async updateRecurringTask(id, user_id, updates) {
+    const allowedFields = [
+      'frequency',
+      'interval_value',
+      'weekdays',
+      'day_of_month',
+      'start_date',
+      'end_date',
+      'next_due_date',
+      'project_id',
+      'title',
+      'description',
+      'priority',
+      'estimated_hours',
+      'tags',
+      'context',
+      'skip_missed',
+      'is_active',
+    ];
+
+    const fields = Object.keys(updates).filter((f) =>
+      allowedFields.includes(f)
+    );
+
+    if (fields.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    const values = fields.map((f) => {
+      if (f === 'tags') return JSON.stringify(updates[f]);
+      return updates[f];
+    });
+
+    const setClause = fields
+      .map((field, index) => `${field} = $${index + 1}`)
+      .join(', ');
+
+    const result = await this.query(
+      `
+      UPDATE recurring_tasks
+      SET ${setClause}, updated_at = NOW()
+      WHERE id = $${fields.length + 1} AND user_id = $${fields.length + 2}
+      RETURNING *
+      `,
+      [...values, id, user_id]
+    );
+
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Deactivate a recurring task (soft delete)
+   * @param {number} id - Recurring task ID
+   * @param {number} user_id - User ID
+   * @returns {Object|null} Deactivated recurring task
+   */
+  static async deleteRecurringTask(id, user_id) {
+    const result = await this.query(
+      `
+      UPDATE recurring_tasks
+      SET is_active = false, updated_at = NOW()
+      WHERE id = $1 AND user_id = $2
+      RETURNING *
+      `,
+      [id, user_id]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Generate todos for recurring tasks that are due
+   * Called on-demand when fetching tasks
+   * @param {number} user_id - User ID
+   * @returns {Array} Generated todos
+   */
+  static async generateDueRecurringTasks(user_id) {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Find recurring tasks that need generation (next_due_date <= today)
+    const dueRecurring = await this.query(
+      `
+      SELECT * FROM recurring_tasks
+      WHERE user_id = $1
+        AND is_active = true
+        AND next_due_date <= $2
+        AND (end_date IS NULL OR end_date >= $2)
+      `,
+      [user_id, today]
+    );
+
+    const generatedTodos = [];
+
+    for (const recurring of dueRecurring.rows) {
+      // Check if a todo for this occurrence already exists
+      const existing = await this.query(
+        `
+        SELECT id FROM todos
+        WHERE recurring_task_id = $1 AND due_date = $2
+        `,
+        [recurring.id, recurring.next_due_date]
+      );
+
+      if (existing.rows.length === 0) {
+        // Create the todo
+        const todoResult = await this.query(
+          `
+          INSERT INTO todos (
+            user_id, project_id, title, description, priority,
+            estimated_hours, due_date, tags, context, recurring_task_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          RETURNING *
+          `,
+          [
+            user_id,
+            recurring.project_id,
+            recurring.title,
+            recurring.description,
+            recurring.priority,
+            recurring.estimated_hours,
+            recurring.next_due_date,
+            recurring.tags,
+            recurring.context,
+            recurring.id,
+          ]
+        );
+        generatedTodos.push(todoResult.rows[0]);
+      }
+
+      // Calculate and update the next due date
+      const nextDate = this.calculateNextDueDate(
+        recurring,
+        recurring.next_due_date
+      );
+
+      if (nextDate) {
+        await this.query(
+          `
+          UPDATE recurring_tasks
+          SET next_due_date = $1, updated_at = NOW()
+          WHERE id = $2
+          `,
+          [nextDate.toISOString().split('T')[0], recurring.id]
+        );
+      } else {
+        // No more occurrences (past end_date), deactivate
+        await this.query(
+          `
+          UPDATE recurring_tasks
+          SET is_active = false, updated_at = NOW()
+          WHERE id = $1
+          `,
+          [recurring.id]
+        );
+      }
+    }
+
+    return generatedTodos;
+  }
+
+  /**
+   * Complete a recurring todo with proper recurrence handling
+   * If skip_missed is true (floating), recalculates next_due_date from today
+   * @param {number} id - Todo ID
+   * @param {number} user_id - User ID
+   * @returns {Object} Completed todo and optionally next occurrence info
+   */
+  static async completeRecurringTodo(id, user_id) {
+    // Get the todo to check if it's recurring
+    const todo = await this.getTodoById(id, user_id);
+    if (!todo) {
+      return null;
+    }
+
+    // Mark as complete
+    const completed = await this.completeTodo(id, user_id);
+
+    // If not a recurring task, just return the completed todo
+    if (!todo.recurring_task_id) {
+      return { todo: completed, recurring: null };
+    }
+
+    // Get the recurring task
+    const recurring = await this.getRecurringTaskById(
+      todo.recurring_task_id,
+      user_id
+    );
+
+    if (!recurring || !recurring.is_active) {
+      return { todo: completed, recurring: null };
+    }
+
+    // If skip_missed is true (floating), recalculate from today
+    if (recurring.skip_missed) {
+      const today = new Date();
+      const nextDate = this.calculateNextDueDate(recurring, today);
+
+      if (nextDate) {
+        await this.query(
+          `
+          UPDATE recurring_tasks
+          SET next_due_date = $1, updated_at = NOW()
+          WHERE id = $2
+          `,
+          [nextDate.toISOString().split('T')[0], recurring.id]
+        );
+        return {
+          todo: completed,
+          recurring: { next_due_date: nextDate.toISOString().split('T')[0] },
+        };
+      }
+    }
+
+    return { todo: completed, recurring };
+  }
+
   // Analytics methods
   static async getCapacityStats(daysBack = 30) {
     // Validate and sanitize daysBack to prevent SQL injection
