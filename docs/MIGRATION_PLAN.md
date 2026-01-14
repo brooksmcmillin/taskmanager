@@ -986,7 +986,7 @@ PUBLIC_APP_NAME=TaskManager
 #### Backend Migration
 - [X] Set up FastAPI project structure
 - [X] Implement SQLAlchemy models
-- [ ] Create Alembic migrations (or reuse existing schema)
+- [X] Create Alembic migrations (or reuse existing schema)
 - [ ] Port all API endpoints
 - [ ] Implement OAuth 2.0 server
 - [ ] Port rate limiting logic
