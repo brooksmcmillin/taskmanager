@@ -1,11 +1,18 @@
 """Project model."""
 
-from datetime import datetime
+from __future__ import annotations
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Boolean, func
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
+
+if TYPE_CHECKING:
+    from app.models.todo import Todo
+    from app.models.user import User
 
 
 class Project(Base):
@@ -14,8 +21,10 @@ class Project(Base):
     __tablename__ = "projects"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    name: Mapped[str] = mapped_column(String(100))
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    name: Mapped[str] = mapped_column(String(255), unique=True)
     description: Mapped[str | None] = mapped_column(Text)
     color: Mapped[str] = mapped_column(String(7), default="#3b82f6")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -27,7 +36,5 @@ class Project(Base):
     )
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="projects")  # noqa: F821
-    todos: Mapped[list["Todo"]] = relationship(  # noqa: F821
-        "Todo", back_populates="project"
-    )
+    user: Mapped[User | None] = relationship("User", back_populates="projects")
+    todos: Mapped[list[Todo]] = relationship("Todo", back_populates="project")
