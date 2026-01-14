@@ -94,7 +94,7 @@ jobs:
 
       - name: Secret Detection
         working-directory: .
-        run: |
+        run: | # pragma: allowlist secret
           echo -e "\n### Secret Detection ###" >> services/web-app/security-report.txt
 
           patterns=(
@@ -131,7 +131,7 @@ jobs:
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
-    if: ${{ inputs.run-codeql }}
+    if: ${{ inputs.run-codeql && github.repository_visibility == 'public' }}
     permissions:
       security-events: write
       contents: read
@@ -176,7 +176,7 @@ jobs:
 
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && github.repository_visibility == 'public'
         with:
           sarif_file: trivy-results.sarif
           category: trivy
