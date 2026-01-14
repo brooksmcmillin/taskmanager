@@ -381,8 +381,8 @@ class TestDeviceCodeTokenExchange:
             assert data["token_type"] == "Bearer"
             assert data["expires_in"] == 3600
             assert data["scope"] == "read"
-            # Refresh token should be passed through
-            assert data["refresh_token"] == "taskmanager-refresh-token-xyz"
+            # Refresh token should be an MCP refresh token (not TaskManager's)
+            assert data["refresh_token"].startswith("mcp_rt_")
 
 
 class TestDeviceFlowSecurity:

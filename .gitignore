@@ -1,5 +1,15 @@
 # build output
 dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+build/
+.venv/
+.pytest_cache/
 # generated types
 .astro/
 

@@ -294,6 +294,128 @@ def load_registered_clients() -> dict[str, Any]:
 registered_clients = {}
 
 
+async def handle_refresh_token_exchange(
+    parsed_body: dict[str, list[str]],
+    oauth_provider: "TaskManagerAuthProvider",  # type: ignore[type-arg]
+) -> Response:
+    """
+    Handle refresh_token grant type token exchange (RFC 6749 Section 6).
+
+    This function validates the refresh token and issues a new access token
+    and refresh token (token rotation).
+
+    Security features:
+    - Client authentication validation
+    - Refresh token validation and expiration check
+    - Token rotation (old refresh token is invalidated)
+    - Scope validation (requested scopes must be subset of original)
+    """
+    refresh_token_str = parsed_body.get("refresh_token", [""])[0]
+    client_id = parsed_body.get("client_id", [""])[0]
+    client_secret = parsed_body.get("client_secret", [""])[0]
+    scope = parsed_body.get("scope", [""])[0]
+
+    logger.info("=== REFRESH TOKEN EXCHANGE ===")
+    logger.debug(f"Refresh token exchange initiated for client: {client_id}")
+
+    # === Input Validation ===
+    if not refresh_token_str:
+        return JSONResponse(
+            {"error": "invalid_request", "error_description": "refresh_token is required"},
+            status_code=400,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    if not client_id:
+        return JSONResponse(
+            {"error": "invalid_request", "error_description": "client_id is required"},
+            status_code=400,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    # Validate client_id format
+    if not VALID_ID_PATTERN.match(client_id):
+        logger.warning("Invalid client_id format in refresh token exchange")
+        return JSONResponse(
+            {"error": "invalid_request", "error_description": "Invalid client_id format"},
+            status_code=400,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    # === Client Authentication ===
+    # Get client information
+    client = await oauth_provider.get_client(client_id)
+    if not client:
+        logger.warning(f"Unknown client in refresh token exchange: {client_id}")
+        return JSONResponse(
+            {"error": "invalid_client", "error_description": "Unknown client"},
+            status_code=401,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    # Check if client requires authentication
+    auth_method = client.token_endpoint_auth_method or "client_secret_post"
+    if auth_method != "none":
+        if not client_secret:
+            logger.warning(f"Missing client_secret for confidential client: {client_id}")
+            return JSONResponse(
+                {"error": "invalid_client", "error_description": "client_secret required"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+        if client.client_secret and client_secret != client.client_secret:
+            logger.warning(f"Invalid client_secret for client: {client_id}")
+            return JSONResponse(
+                {"error": "invalid_client", "error_description": "Invalid client credentials"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    # === Load and Validate Refresh Token ===
+    refresh_token = await oauth_provider.load_refresh_token(client, refresh_token_str)
+    if not refresh_token:
+        logger.warning(f"Invalid or expired refresh token for client: {client_id}")
+        return JSONResponse(
+            {"error": "invalid_grant", "error_description": "Invalid or expired refresh token"},
+            status_code=400,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    # === Exchange Refresh Token ===
+    try:
+        requested_scopes = scope.split() if scope else []
+        oauth_token = await oauth_provider.exchange_refresh_token(
+            client, refresh_token, requested_scopes
+        )
+
+        logger.info(f"Refresh token exchange successful for client: {client_id}")
+        return JSONResponse(
+            {
+                "access_token": oauth_token.access_token,
+                "token_type": oauth_token.token_type,
+                "expires_in": oauth_token.expires_in,
+                "refresh_token": oauth_token.refresh_token,
+                "scope": oauth_token.scope,
+            },
+            status_code=200,
+            headers={"Cache-Control": "no-store"},
+        )
+    except ValueError as e:
+        logger.error(f"Refresh token exchange failed: {e}")
+        return JSONResponse(
+            {"error": "invalid_scope", "error_description": str(e)},
+            status_code=400,
+            headers={"Cache-Control": "no-store"},
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error in refresh token exchange: {e}")
+        return JSONResponse(
+            {"error": "server_error", "error_description": "Internal server error"},
+            status_code=500,
+            headers={"Cache-Control": "no-store"},
+        )
+
+
 async def handle_device_code_token_exchange(
     parsed_body: dict[str, list[str]],
     oauth_provider: "TaskManagerAuthProvider",  # type: ignore[type-arg]
@@ -413,11 +535,15 @@ async def handle_device_code_token_exchange(
                 mcp_token = f"mcp_{secrets.token_hex(32)}"
                 expires_at = int(time.time()) + TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS
 
+                # Generate MCP refresh token
+                mcp_refresh_token = f"mcp_rt_{secrets.token_hex(32)}"
+                refresh_expires_at = int(time.time()) + TokenConfig.MCP_REFRESH_TOKEN_TTL_SECONDS
+
                 # Get scopes from response or use default
                 scope_str = response_data.get("scope", auth_settings.mcp_scope)
                 scopes = scope_str.split() if scope_str else [auth_settings.mcp_scope]
 
-                # Store MCP token in database if available
+                # Store MCP tokens in database if available
                 if oauth_provider.token_storage:
                     await oauth_provider.token_storage.store_token(
                         token=mcp_token,
@@ -426,10 +552,19 @@ async def handle_device_code_token_exchange(
                         expires_at=expires_at,
                         resource=None,
                     )
-                    logger.debug("Stored MCP token from device flow in database")
+                    await oauth_provider.token_storage.store_refresh_token(
+                        refresh_token=mcp_refresh_token,
+                        client_id=client_id,
+                        scopes=scopes,
+                        expires_at=refresh_expires_at,
+                        resource=None,
+                    )
+                    logger.debug(
+                        "Stored MCP access and refresh tokens from device flow in database"
+                    )
                 else:
                     # Fall back to in-memory storage
-                    from mcp.server.auth.provider import AccessToken
+                    from mcp.server.auth.provider import AccessToken, RefreshToken
 
                     oauth_provider.tokens[mcp_token] = AccessToken(
                         token=mcp_token,
@@ -438,21 +573,27 @@ async def handle_device_code_token_exchange(
                         expires_at=expires_at,
                         resource=None,
                     )
-                    logger.debug("Stored MCP token from device flow in memory")
+                    oauth_provider.refresh_tokens[mcp_refresh_token] = RefreshToken(
+                        token=mcp_refresh_token,
+                        client_id=client_id,
+                        scopes=scopes,
+                        expires_at=refresh_expires_at,
+                    )
+                    oauth_provider.refresh_token_resources[mcp_refresh_token] = None
+                    logger.debug("Stored MCP access and refresh tokens from device flow in memory")
 
-                # Return MCP token response
+                # Return MCP token response with our own refresh token
                 mcp_response: dict[str, str | int] = {
                     "access_token": mcp_token,
                     "token_type": "Bearer",
                     "expires_in": TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS,
                     "scope": " ".join(scopes),
+                    "refresh_token": mcp_refresh_token,
                 }
 
-                # Include refresh token if TaskManager provided one
-                if response_data.get("refresh_token"):
-                    mcp_response["refresh_token"] = response_data["refresh_token"]
-
-                logger.info(f"Issued MCP token for device flow to client: {client_id}")
+                logger.info(
+                    f"Issued MCP access and refresh tokens for device flow to client: {client_id}"
+                )
                 return JSONResponse(
                     mcp_response, status_code=200, headers={"Cache-Control": "no-store"}
                 )
@@ -531,6 +672,10 @@ def create_authorization_server(
                         return await handle_device_code_token_exchange(
                             parsed_body, oauth_provider, auth_settings
                         )
+
+                    if grant_type == "refresh_token":
+                        logger.info("=== REFRESH TOKEN EXCHANGE ===")
+                        return await handle_refresh_token_exchange(parsed_body, oauth_provider)
 
                     # Try to parse form data
                     if request.headers.get("content-type", "").startswith(
@@ -1040,7 +1185,10 @@ async def run_server(
             # Clean up any expired tokens on startup
             cleaned = await token_storage.cleanup_expired_tokens()
             if cleaned > 0:
-                logger.info(f"Cleaned up {cleaned} expired tokens on startup")
+                logger.info(f"Cleaned up {cleaned} expired access tokens on startup")
+            cleaned_refresh = await token_storage.cleanup_expired_refresh_tokens()
+            if cleaned_refresh > 0:
+                logger.info(f"Cleaned up {cleaned_refresh} expired refresh tokens on startup")
         except Exception as e:
             logger.error(f"Failed to initialize database token storage: {e}")
             logger.warning("Falling back to in-memory token storage")
