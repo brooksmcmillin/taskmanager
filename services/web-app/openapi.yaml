@@ -67,6 +67,8 @@ tags:
     description: Task management
   - name: Recurring Tasks
     description: Recurring task templates
+  - name: Trash
+    description: Deleted task management
   - name: Projects
     description: Project management
   - name: OAuth
@@ -497,6 +499,11 @@ paths:
     get:
       tags: [Recurring Tasks]
       summary: List recurring tasks
+  /api/trash:
+    get:
+      tags: [Trash]
+      summary: List deleted todos
+      description: Returns all soft-deleted todos for the authenticated user. Supports full-text search via query parameter.
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -584,6 +591,45 @@ paths:
     get:
       tags: [Recurring Tasks]
       summary: Get a recurring task by ID
+        - name: query
+          in: query
+          description: Search query for filtering deleted todos by title/description
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of deleted todos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Todo'
+                        - type: object
+                          properties:
+                            deleted_at:
+                              type: string
+                              format: date
+                              description: Date when the todo was deleted
+                  count:
+                    type: integer
+                    description: Number of deleted todos returned
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/trash/{id}/restore:
+    post:
+      tags: [Trash]
+      summary: Restore a deleted todo
+      description: Restores a soft-deleted todo back to the active todos list.
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -591,6 +637,7 @@ paths:
         - name: id
           in: path
           required: true
+          description: ID of the deleted todo to restore
           schema:
             type: integer
       responses:
@@ -682,6 +729,36 @@ paths:
           description: Recurring task deactivated
         '404':
           description: Recurring task not found
+          description: Todo restored successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored:
+                    type: boolean
+                    example: true
+                  id:
+                    type: integer
+                    description: ID of the restored todo
+        '400':
+          description: Invalid todo ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Deleted todo not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/projects:
     get:

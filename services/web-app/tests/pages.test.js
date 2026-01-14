@@ -15,6 +15,7 @@ describe('Page Route Authentication', () => {
     const protectedPageRoutes = [
       { path: '/', name: 'Home page' },
       { path: '/projects', name: 'Projects page' },
+      { path: '/trash', name: 'Trash page' },
     ];
 
     it.each(protectedPageRoutes)(
