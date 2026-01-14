@@ -1,0 +1,102 @@
+# Pre-commit hooks for code quality and security
+# Install: pip install pre-commit
+# Setup: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # =============================================================================
+  # General hooks (all files)
+  # =============================================================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+
+  # Secret detection
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: |
+          (?x)^(
+            package-lock\.json|
+            .*\.lock|
+            \.env\.example
+          )$
+
+  # =============================================================================
+  # Python hooks (MCP servers and SDK)
+  # =============================================================================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^(services/mcp-auth|services/mcp-resource|packages/taskmanager-sdk)/
+      - id: ruff-format
+        files: ^(services/mcp-auth|services/mcp-resource|packages/taskmanager-sdk)/
+
+  # Python type checking
+  - repo: local
+    hooks:
+      - id: pyright-mcp-auth
+        name: pyright (mcp-auth)
+        entry: bash -c 'cd services/mcp-auth && uv run pyright'
+        language: system
+        files: ^services/mcp-auth/
+        types: [python]
+        pass_filenames: false
+
+      - id: pyright-mcp-resource
+        name: pyright (mcp-resource)
+        entry: bash -c 'cd services/mcp-resource && uv run pyright'
+        language: system
+        files: ^services/mcp-resource/
+        types: [python]
+        pass_filenames: false
+
+      - id: pyright-sdk
+        name: pyright (taskmanager-sdk)
+        entry: bash -c 'cd packages/taskmanager-sdk && uv run pyright'
+        language: system
+        files: ^packages/taskmanager-sdk/
+        types: [python]
+        pass_filenames: false
+
+  # =============================================================================
+  # Node.js hooks (web-app)
+  # =============================================================================
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint (web-app)
+        entry: bash -c 'cd services/web-app && npm run lint'
+        language: system
+        files: ^services/web-app/.*\.(js|ts|astro)$
+        pass_filenames: false
+
+      - id: prettier-check
+        name: prettier (web-app)
+        entry: bash -c 'cd services/web-app && npm run format:check'
+        language: system
+        files: ^services/web-app/
+        pass_filenames: false
+
+  # =============================================================================
+  # Docker linting
+  # =============================================================================
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.1-beta
+    hooks:
+      - id: hadolint-docker
+        args: ['--ignore', 'DL3008', '--ignore', 'DL3013']
