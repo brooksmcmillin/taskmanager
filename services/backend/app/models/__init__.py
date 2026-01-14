@@ -1,10 +1,11 @@
 """SQLAlchemy models."""
 
-from app.models.user import User
-from app.models.session import Session
-from app.models.todo import Todo, Priority, Status
+from app.models.oauth import AccessToken, AuthorizationCode, DeviceCode, OAuthClient
 from app.models.project import Project
-from app.models.oauth import OAuthClient, AuthorizationCode, AccessToken, DeviceCode
+from app.models.recurring_task import Frequency, RecurringTask
+from app.models.session import Session
+from app.models.todo import Priority, Status, TimeHorizon, Todo
+from app.models.user import User
 
 __all__ = [
     "User",
@@ -12,9 +13,12 @@ __all__ = [
     "Todo",
     "Priority",
     "Status",
+    "TimeHorizon",
     "Project",
     "OAuthClient",
     "AuthorizationCode",
     "AccessToken",
     "DeviceCode",
+    "RecurringTask",
+    "Frequency",
 ]

@@ -1,11 +1,21 @@
 """User model."""
 
-from datetime import datetime
+from __future__ import annotations
 
-from sqlalchemy import String, DateTime, func
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
+
+if TYPE_CHECKING:
+    from app.models.oauth import OAuthClient
+    from app.models.project import Project
+    from app.models.recurring_task import RecurringTask
+    from app.models.session import Session
+    from app.models.todo import Todo
 
 
 class User(Base):
@@ -14,9 +24,10 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -25,15 +36,18 @@ class User(Base):
     )
 
     # Relationships
-    sessions: Mapped[list["Session"]] = relationship(  # noqa: F821
+    sessions: Mapped[list[Session]] = relationship(
         "Session", back_populates="user", cascade="all, delete-orphan"
     )
-    todos: Mapped[list["Todo"]] = relationship(  # noqa: F821
+    todos: Mapped[list[Todo]] = relationship(
         "Todo", back_populates="user", cascade="all, delete-orphan"
     )
-    projects: Mapped[list["Project"]] = relationship(  # noqa: F821
+    projects: Mapped[list[Project]] = relationship(
         "Project", back_populates="user", cascade="all, delete-orphan"
     )
-    oauth_clients: Mapped[list["OAuthClient"]] = relationship(  # noqa: F821
+    oauth_clients: Mapped[list[OAuthClient]] = relationship(
         "OAuthClient", back_populates="user", cascade="all, delete-orphan"
+    )
+    recurring_tasks: Mapped[list[RecurringTask]] = relationship(
+        "RecurringTask", back_populates="user", cascade="all, delete-orphan"
     )

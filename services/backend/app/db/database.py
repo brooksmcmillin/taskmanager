@@ -43,6 +43,13 @@ async def init_db() -> None:
     """
     async with _engine.begin() as conn:
         # Import all models to ensure they're registered
-        from app.models import user, session, todo, project, oauth  # noqa: F401
+        from app.models import (  # noqa: F401
+            user,
+            session,
+            todo,
+            project,
+            oauth,
+            recurring_task,
+        )
 
         await conn.run_sync(Base.metadata.create_all)
