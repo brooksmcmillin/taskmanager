@@ -1,35 +1,57 @@
-# Local copy of claude-security-review workflow
-
 name: Claude Security Review
 
 on:
-  workflow_call:
-    inputs:
-      comment-pr:
-        description: 'Whether to comment on the PR with findings'
-        type: boolean
-        default: true
-    secrets:
-      CLAUDE_API_KEY:
-        description: 'Claude API key for security review'
-        required: true
-
-permissions:
-  contents: read
-  pull-requests: write
-  security-events: write
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
   claude-security-review:
-    name: Claude Security Reviewer
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 2
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
 
-      - uses: anthropics/claude-code-security-review@main
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          comment-pr: ${{ inputs.comment-pr }}
-          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          fetch-depth: 1
+
+      - name: Run Claude Security Review
+        id: claude-security-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please perform a security-focused review of this pull request. Analyze the changes for:
+
+            **Security Concerns:**
+            - Authentication and authorization vulnerabilities
+            - Injection attacks (SQL, command, code injection)
+            - Sensitive data exposure (credentials, API keys, PII)
+            - Insecure dependencies or imports
+            - Path traversal or file access issues
+            - Improper input validation or sanitization
+            - Cryptographic weaknesses
+            - OAuth/token handling issues
+            - Race conditions or TOCTOU vulnerabilities
+
+            **Code Quality (security-relevant):**
+            - Error handling that might leak sensitive info
+            - Logging that might expose secrets
+            - Unsafe deserialization
+            - Resource exhaustion possibilities
+
+            Use the repository's CLAUDE.md for guidance on the codebase architecture.
+
+            Be specific about any issues found, including file paths and line numbers.
+            If no security issues are found, briefly confirm the changes look safe.
+
+            Use `gh pr comment` with your Bash tool to leave your security review as a comment on the PR.
+
+          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
