@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.api import auth, todos, projects, categories, search
+from app.api import auth, todos, projects, categories, search, trash, recurring_tasks
 from app.api.oauth import authorize, token, clients, device
 from app.db.database import init_db
 
@@ -41,6 +41,8 @@ app.include_router(todos.router)
 app.include_router(projects.router)
 app.include_router(categories.router)
 app.include_router(search.router)
+app.include_router(trash.router)
+app.include_router(recurring_tasks.router)
 app.include_router(authorize.router)
 app.include_router(token.router)
 app.include_router(clients.router)

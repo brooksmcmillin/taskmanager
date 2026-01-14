@@ -155,6 +155,11 @@ class Errors:
             {"field": field, "allowed": allowed},
         )
 
+    @staticmethod
+    def validation(message: str) -> ApiError:
+        """VALIDATION_009: General validation error."""
+        return ApiError("VALIDATION_009", 400, message)
+
     # =========================================================================
     # Not Found Errors (NOT_FOUND_001 - NOT_FOUND_005)
     # =========================================================================
@@ -188,6 +193,11 @@ class Errors:
     def oauth_client_not_found() -> ApiError:
         """NOT_FOUND_005: OAuth client not found."""
         return ApiError("NOT_FOUND_005", 404, "OAuth client not found")
+
+    @staticmethod
+    def recurring_task_not_found() -> ApiError:
+        """NOT_FOUND_006: Recurring task not found."""
+        return ApiError("NOT_FOUND_006", 404, "Recurring task not found")
 
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
