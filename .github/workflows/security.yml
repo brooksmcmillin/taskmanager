@@ -9,6 +9,11 @@ on:
     - cron: '0 2 * * 1'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
 jobs:
   security:
     uses: ./.github/workflows/node-security.yml
