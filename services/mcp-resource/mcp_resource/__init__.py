@@ -9,6 +9,13 @@ from taskmanager_sdk import (
     create_authenticated_client,
 )
 
+from .lakera_guard import (
+    LakeraGuardError,
+    guard_content,
+    guard_tool,
+    is_content_flagged,
+    screen_content,
+)
 from .token_verifier import IntrospectionTokenVerifier
 
 # Backwards compatibility alias
@@ -20,6 +27,12 @@ __all__ = [
     "TaskManagerClient",
     "create_authenticated_client",
     "IntrospectionTokenVerifier",
+    # Lakera Guard security
+    "LakeraGuardError",
+    "guard_content",
+    "guard_tool",
+    "is_content_flagged",
+    "screen_content",
 ]
 
 __version__ = "0.1.0"

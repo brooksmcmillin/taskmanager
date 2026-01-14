@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from taskmanager_sdk import TaskManagerClient
 
+from .lakera_guard import guard_tool
 from .token_verifier import IntrospectionTokenVerifier
 from .validation import validate_dict_response, validate_list_response
 
@@ -400,6 +401,7 @@ def create_resource_server(
         )
 
     @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
     async def get_time() -> dict[str, Any]:
         """
         Get the current server time.
@@ -420,6 +422,7 @@ def create_resource_server(
         }
 
     @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
     async def check_task_system_status() -> dict[str, Any]:
         """
         Check the health and operational status of the task management backend.
@@ -542,6 +545,7 @@ def create_resource_server(
         }
 
     @app.tool()
+    @guard_tool(input_params=["status", "category"], screen_output=True)
     async def get_tasks(
         status: str | None = None,
         start_date: str | None = None,
@@ -618,6 +622,7 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
+    @guard_tool(input_params=["title", "description", "category", "tags"], screen_output=True)
     async def create_task(
         title: str,
         description: str | None = None,
@@ -684,6 +689,10 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
+    @guard_tool(
+        input_params=["title", "description", "status", "category", "tags"],
+        screen_output=True,
+    )
     async def update_task(
         task_id: str,
         title: str | None = None,
@@ -770,6 +779,7 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
     async def get_categories() -> str:
         """
         List all available task categories.
@@ -802,6 +812,7 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
+    @guard_tool(input_params=["query", "category"], screen_output=True)
     async def search_tasks(
         query: str,
         category: str | None = None,
