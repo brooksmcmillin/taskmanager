@@ -72,10 +72,7 @@ export const POST = async ({ request }) => {
     const validFrequencies = ['daily', 'weekly', 'monthly', 'yearly'];
     if (!validFrequencies.includes(body.frequency)) {
       return errors
-        .invalid(
-          'Frequency',
-          `must be one of: ${validFrequencies.join(', ')}`
-        )
+        .invalid('Frequency', `must be one of: ${validFrequencies.join(', ')}`)
         .toResponse();
     }
 

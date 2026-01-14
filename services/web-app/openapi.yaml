@@ -499,11 +499,6 @@ paths:
     get:
       tags: [Recurring Tasks]
       summary: List recurring tasks
-  /api/trash:
-    get:
-      tags: [Trash]
-      summary: List deleted todos
-      description: Returns all soft-deleted todos for the authenticated user. Supports full-text search via query parameter.
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -517,6 +512,12 @@ paths:
       responses:
         '200':
           description: List of recurring tasks
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     post:
       tags: [Recurring Tasks]
@@ -586,38 +587,12 @@ paths:
       responses:
         '201':
           description: Recurring task created
-
-  /api/recurring-tasks/{id}:
-    get:
-      tags: [Recurring Tasks]
-      summary: Get a recurring task by ID
-        - name: query
-          in: query
-          description: Search query for filtering deleted todos by title/description
-          schema:
-            type: string
-      responses:
-        '200':
-          description: List of deleted todos
+        '400':
+          description: Validation error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  tasks:
-                    type: array
-                    items:
-                      allOf:
-                        - $ref: '#/components/schemas/Todo'
-                        - type: object
-                          properties:
-                            deleted_at:
-                              type: string
-                              format: date
-                              description: Date when the todo was deleted
-                  count:
-                    type: integer
-                    description: Number of deleted todos returned
+                $ref: '#/components/schemas/Error'
         '401':
           description: Authentication required
           content:
@@ -625,11 +600,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/trash/{id}/restore:
-    post:
-      tags: [Trash]
-      summary: Restore a deleted todo
-      description: Restores a soft-deleted todo back to the active todos list.
+  /api/recurring-tasks/{id}:
+    get:
+      tags: [Recurring Tasks]
+      summary: Get a recurring task by ID
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -637,14 +611,23 @@ paths:
         - name: id
           in: path
           required: true
-          description: ID of the deleted todo to restore
           schema:
             type: integer
       responses:
         '200':
           description: Recurring task details
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Recurring task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     put:
       tags: [Recurring Tasks]
@@ -709,8 +692,24 @@ paths:
       responses:
         '200':
           description: Recurring task updated
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Recurring task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     delete:
       tags: [Recurring Tasks]
@@ -727,8 +726,79 @@ paths:
       responses:
         '200':
           description: Recurring task deactivated
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: Recurring task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/trash:
+    get:
+      tags: [Trash]
+      summary: List deleted todos
+      description: Returns all soft-deleted todos for the authenticated user. Supports full-text search via query parameter.
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          description: Search query for filtering deleted todos by title/description
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of deleted todos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Todo'
+                        - type: object
+                          properties:
+                            deleted_at:
+                              type: string
+                              format: date
+                              description: Date when the todo was deleted
+                  count:
+                    type: integer
+                    description: Number of deleted todos returned
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/trash/{id}/restore:
+    post:
+      tags: [Trash]
+      summary: Restore a deleted todo
+      description: Restores a soft-deleted todo back to the active todos list.
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID of the deleted todo to restore
+          schema:
+            type: integer
+      responses:
+        '200':
           description: Todo restored successfully
           content:
             application/json:

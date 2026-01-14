@@ -882,9 +882,7 @@ export class TodoDB {
       let foundDay = false;
       for (const day of sortedDays) {
         if (day >= startDay) {
-          next_due_date.setDate(
-            next_due_date.getDate() + (day - startDay)
-          );
+          next_due_date.setDate(next_due_date.getDate() + (day - startDay));
           foundDay = true;
           break;
         }
