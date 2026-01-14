@@ -500,7 +500,7 @@ from httpx import AsyncClient
 async def test_login_success(client: AsyncClient, test_user):
     response = await client.post("/api/auth/login", json={
         "username": "testuser",
-        "password": "TestPass123!"
+        "password": "TestPass123!" # pragma: allowlist secret
     })
     assert response.status_code == 200
     assert "session_id" in response.cookies
@@ -510,7 +510,7 @@ async def test_login_success(client: AsyncClient, test_user):
 async def test_login_invalid_credentials(client: AsyncClient):
     response = await client.post("/api/auth/login", json={
         "username": "nonexistent",
-        "password": "wrongpass"
+        "password": "wrongpass" # pragma: allowlist secret
     })
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "AUTH_001"
@@ -945,7 +945,7 @@ volumes:
 
 ```env
 # Database
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/taskmanager
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/taskmanager # pragma: allowlist secret
 
 # Security
 SECRET_KEY=your-secret-key-here
@@ -978,16 +978,16 @@ PUBLIC_APP_NAME=TaskManager
 ### 3.3 Migration Checklist
 
 #### Pre-Migration
-- [ ] Back up existing PostgreSQL database
-- [ ] Document current API response formats
-- [ ] Inventory all environment variables
-- [ ] Set up staging environment
+- [X] Back up existing PostgreSQL database
+- [X] Document current API response formats
+- [X] Inventory all environment variables
+- [X] Set up staging environment
 
 #### Backend Migration
-- [ ] Set up FastAPI project structure
+- [X] Set up FastAPI project structure
 - [ ] Implement SQLAlchemy models
 - [ ] Create Alembic migrations (or reuse existing schema)
-- [ ] Port all 16 API endpoints
+- [ ] Port all API endpoints
 - [ ] Implement OAuth 2.0 server
 - [ ] Port rate limiting logic
 - [ ] Write and pass all backend tests

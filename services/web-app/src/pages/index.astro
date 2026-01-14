@@ -67,6 +67,12 @@ const user = Astro.locals.user;
         fetch('/api/projects'),
       ]);
 
+      // Handle authentication errors - redirect to login
+      if (todosResponse.status === 401 || projectsResponse.status === 401) {
+        window.location.href = '/login';
+        return;
+      }
+
       if (!todosResponse.ok || !projectsResponse.ok) {
         throw new Error('Failed to load data');
       }
