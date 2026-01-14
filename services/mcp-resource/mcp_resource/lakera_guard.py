@@ -11,7 +11,7 @@ import json
 import logging
 import os
 from collections.abc import Callable
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar, cast
 
 import httpx
 
@@ -162,7 +162,7 @@ def guard_content(
                             )
 
             # Execute the actual function
-            result = await func(*args, **kwargs)  # type: ignore[misc]
+            result: R = await func(*args, **kwargs)  # type: ignore[misc]
 
             # Screen output if enabled
             if screen_output and result:
@@ -174,7 +174,7 @@ def guard_content(
                     block_on_detection=block_on_detection,
                 )
 
-            return result
+            return cast(R, result)
 
         return wrapper  # type: ignore[return-value]
 
