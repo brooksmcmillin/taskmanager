@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 
 	export let title: string;
@@ -15,6 +15,9 @@
 		}
 	}
 
+	/**
+	 * Opens the modal and locks body scrolling
+	 */
 	export function openModal() {
 		show = true;
 		if (browser) {
@@ -39,6 +42,13 @@
 	} else if (browser) {
 		document.body.style.overflow = '';
 	}
+
+	// Ensure body overflow is reset when component is destroyed
+	onDestroy(() => {
+		if (browser) {
+			document.body.style.overflow = '';
+		}
+	});
 </script>
 
 <svelte:window on:keydown={handleKeydown} />

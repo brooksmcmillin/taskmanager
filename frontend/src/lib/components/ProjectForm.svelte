@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import { projects } from '$lib/stores/projects';
+	import { toasts } from '$lib/stores/ui';
 	import type { Project } from '$lib/types';
 
 	export let editingProject: Project | null = null;
@@ -24,6 +25,9 @@
 		};
 	}
 
+	/**
+	 * Resets the form to its initial state
+	 */
 	export function reset() {
 		formData = {
 			name: '',
@@ -33,6 +37,9 @@
 		editingProject = null;
 	}
 
+	/**
+	 * Handles form submission for creating or updating a project
+	 */
 	async function handleSubmit() {
 		try {
 			const projectData = {
@@ -43,19 +50,26 @@
 
 			if (isEditing && editingProject) {
 				await projects.updateProject(editingProject.id, projectData);
+				toasts.show('Project updated successfully', 'success');
 			} else {
 				await projects.add(projectData);
+				toasts.show('Project created successfully', 'success');
 			}
 
 			reset();
 			dispatch('success');
 		} catch (error) {
-			alert(
-				`Error ${isEditing ? 'updating' : 'creating'} project: ` + (error as Error).message
+			toasts.show(
+				`Error ${isEditing ? 'updating' : 'creating'} project: ` +
+					(error as Error).message,
+				'error'
 			);
 		}
 	}
 
+	/**
+	 * Handles deleting a project with confirmation
+	 */
 	async function handleDelete() {
 		if (!editingProject) return;
 
@@ -67,10 +81,11 @@
 
 		try {
 			await projects.remove(editingProject.id);
+			toasts.show('Project deleted successfully', 'success');
 			reset();
 			dispatch('success');
 		} catch (error) {
-			alert('Error deleting project: ' + (error as Error).message);
+			toasts.show('Error deleting project: ' + (error as Error).message, 'error');
 		}
 	}
 </script>

@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import ThemeToggle from './ThemeToggle.svelte';
 	import { api } from '$lib/api/client';
+	import { toasts } from '$lib/stores/ui';
 	import type { User } from '$lib/types';
 
 	export let user: User | null = null;
@@ -12,7 +13,7 @@
 			await api.post('/api/auth/logout');
 			goto('/login');
 		} catch (error) {
-			alert('Logout failed: ' + (error as Error).message);
+			toasts.show('Logout failed: ' + (error as Error).message, 'error');
 		}
 	}
 

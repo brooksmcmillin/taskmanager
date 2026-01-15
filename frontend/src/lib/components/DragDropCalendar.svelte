@@ -2,10 +2,12 @@
 	import { onMount } from 'svelte';
 	import { dndzone } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
-	import { todos } from '$lib/stores/todos';
+	import { todos, pendingTodos } from '$lib/stores/todos';
 	import { hexTo50Shade } from '$lib/utils/colors';
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
 	import type { Todo } from '$lib/types';
+
+	const DEFAULT_PROJECT_COLOR = '#6b7280';
 
 	export let onEditTodo: ((todo: Todo) => void) | null = null;
 
@@ -70,8 +72,8 @@
 
 			if (movedTodo) {
 				try {
+					// Store's updateTodo already updates local state, no need to reload all todos
 					await todos.updateTodo(movedTodo.id, { due_date: dateStr });
-					await loadTodos();
 				} catch (error) {
 					console.error('Failed to update todo date:', error);
 				}
@@ -98,8 +100,9 @@
 	}
 
 	onMount(() => {
-		const unsubscribe = todos.subscribe((value) => {
-			todoList = value.filter((t) => t.status === 'pending');
+		// Use the pendingTodos derived store instead of filtering locally
+		const unsubscribe = pendingTodos.subscribe((value) => {
+			todoList = value;
 		});
 
 		loadTodos();
@@ -146,8 +149,8 @@
 							<div
 								class="calendar-task {todo.priority}-priority"
 								style="background-color: {hexTo50Shade(
-									todo.project_color || '#6b7280'
-								)}; border-left: 4px solid {todo.project_color || '#6b7280'}"
+									todo.project_color || DEFAULT_PROJECT_COLOR
+								)}; border-left: 4px solid {todo.project_color || DEFAULT_PROJECT_COLOR}"
 								on:dblclick={() => handleEditTodo(todo)}
 								role="button"
 								tabindex="0"

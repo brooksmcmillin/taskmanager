@@ -9,11 +9,18 @@ function createTodoStore() {
 		subscribe,
 		load: async (filters?: TodoFilters) => {
 			try {
+				// Convert filter values to strings properly
+				const params = filters
+					? (Object.fromEntries(
+							Object.entries(filters)
+								.filter(([, value]) => value !== undefined)
+								.map(([key, value]) => [key, String(value)])
+						) as Record<string, string>)
+					: undefined;
+
 				const response = await api.get<{ tasks: Todo[]; meta: { count: number } }>(
 					'/api/todos',
-					{
-						params: filters as Record<string, string>
-					}
+					{ params }
 				);
 				set(response.tasks || []);
 			} catch (error) {

@@ -15,8 +15,9 @@
 	}
 
 	onMount(() => {
-		// Load theme from localStorage
-		const savedTheme = localStorage.getItem('theme');
+		// Load theme from localStorage (with SSR safety check)
+		const savedTheme =
+			typeof localStorage !== 'undefined' ? localStorage.getItem('theme') : null;
 		if (savedTheme) {
 			currentTheme = savedTheme;
 			document.documentElement.setAttribute('data-theme', savedTheme);

@@ -2,6 +2,7 @@
 	import { onMount, createEventDispatcher } from 'svelte';
 	import { todos } from '$lib/stores/todos';
 	import { projects } from '$lib/stores/projects';
+	import { toasts } from '$lib/stores/ui';
 	import { formatDateForInput } from '$lib/utils/dates';
 	import type { Todo, Project } from '$lib/types';
 
@@ -39,6 +40,9 @@
 		};
 	}
 
+	/**
+	 * Resets the form to its initial state
+	 */
 	export function reset() {
 		formData = {
 			project_id: '',
@@ -51,6 +55,9 @@
 		editingTodo = null;
 	}
 
+	/**
+	 * Handles form submission for creating or updating a todo
+	 */
 	async function handleSubmit() {
 		try {
 			const todoData = {
@@ -67,19 +74,25 @@
 
 			if (isEditing && editingTodo) {
 				await todos.updateTodo(editingTodo.id, todoData);
+				toasts.show('Todo updated successfully', 'success');
 			} else {
 				await todos.add(todoData);
+				toasts.show('Todo created successfully', 'success');
 			}
 
 			reset();
 			dispatch('success');
 		} catch (error) {
-			alert(
-				`Error ${isEditing ? 'updating' : 'creating'} todo: ` + (error as Error).message
+			toasts.show(
+				`Error ${isEditing ? 'updating' : 'creating'} todo: ` + (error as Error).message,
+				'error'
 			);
 		}
 	}
 
+	/**
+	 * Handles deleting a todo with confirmation
+	 */
 	async function handleDelete() {
 		if (!editingTodo) return;
 
@@ -91,22 +104,27 @@
 
 		try {
 			await todos.remove(editingTodo.id);
+			toasts.show('Todo deleted successfully', 'success');
 			reset();
 			dispatch('success');
 		} catch (error) {
-			alert('Error deleting todo: ' + (error as Error).message);
+			toasts.show('Error deleting todo: ' + (error as Error).message, 'error');
 		}
 	}
 
+	/**
+	 * Marks the current todo as complete
+	 */
 	async function handleComplete() {
 		if (!editingTodo) return;
 
 		try {
 			await todos.complete(editingTodo.id);
+			toasts.show('Todo marked as complete', 'success');
 			reset();
 			dispatch('success');
 		} catch (error) {
-			alert('Error completing todo: ' + (error as Error).message);
+			toasts.show('Error completing todo: ' + (error as Error).message, 'error');
 		}
 	}
 </script>
