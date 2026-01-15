@@ -8,7 +8,7 @@
 	let editingProject: Project | null = null;
 
 	onMount(async () => {
-		await projects.loadProjects();
+		await projects.load();
 	});
 
 	function openEditModal(project: Project) {
@@ -29,7 +29,7 @@
 <main class="container py-8">
 	<h1 class="text-3xl font-bold text-gray-900 mb-8">Manage Projects</h1>
 
-	<ProjectModal bind:show={showModal} project={editingProject} on:save={() => projects.loadProjects()} />
+	<ProjectModal bind:show={showModal} project={editingProject} on:save={() => projects.load()} />
 
 	<!-- Existing Projects -->
 	<div class="max-w-4xl mx-auto">
