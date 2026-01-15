@@ -2,7 +2,7 @@ import pg from 'pg';
 import { config as dotenvConfig } from 'dotenv';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { CONFIG } from './config.js';
+import { CONFIG, config } from './config.js';
 
 /**
  * SQL Query Builder utility
