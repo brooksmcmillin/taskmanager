@@ -2,7 +2,9 @@ import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import type { ApiResponse } from '$lib/types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+// Always use relative URLs in production to go through SvelteKit's server-side proxy
+// This ensures cookies are properly forwarded between frontend and backend
+const BASE_URL = '';
 
 class ApiClient {
 	private async request<T>(

@@ -47,9 +47,7 @@ class RecurringTask(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
 
     # Recurrence pattern
-    frequency: Mapped[Frequency] = mapped_column(
-        Enum(Frequency, name="frequency_enum", create_constraint=False)
-    )
+    frequency: Mapped[Frequency] = mapped_column(String(20))
     interval_value: Mapped[int] = mapped_column(Integer, default=1)
     weekdays: Mapped[list[int] | None] = mapped_column(
         ARRAY(Integer)

@@ -1,6 +1,8 @@
 import type { Handle } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 
-const BACKEND_URL = 'http://backend:8000';
+// Use environment variable with fallback to Docker service name
+const BACKEND_URL = env.BACKEND_URL || env.VITE_API_URL || 'http://backend:8000';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Proxy API requests to backend
