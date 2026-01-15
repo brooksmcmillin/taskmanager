@@ -989,7 +989,7 @@ PUBLIC_APP_NAME=TaskManager
 - [X] Create Alembic migrations (or reuse existing schema)
 - [X] Port all API endpoints
 - [X] Implement OAuth 2.0 server
-- [ ] Port rate limiting logic
+- [X] Port rate limiting logic
 - [ ] Write and pass all backend tests
 - [ ] Validate bcrypt password compatibility
 
