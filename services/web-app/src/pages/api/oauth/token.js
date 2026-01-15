@@ -37,6 +37,7 @@ export async function POST({ request }) {
     }
   } catch (error) {
     console.error('[OAuth/Token] Error:', error.message);
+    console.error('[OAuth/Token] Stack:', error.stack);
     return oauthErrors.serverError('Internal server error');
   }
 }
