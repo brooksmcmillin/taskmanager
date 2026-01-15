@@ -233,7 +233,16 @@ function getPool() {
     const host = process.env.POSTGRES_HOST || 'localhost';
     const database = process.env.POSTGRES_DB;
 
-    console.log('[DB] Creating pool with params - USER:', user, 'DB:', database, 'HOST:', host, 'PWD:', password ? '***' : 'undefined');
+    console.log(
+      '[DB] Creating pool with params - USER:',
+      user,
+      'DB:',
+      database,
+      'HOST:',
+      host,
+      'PWD:',
+      password ? '***' : 'undefined'
+    );
 
     pool = new Pool({
       user,
@@ -251,7 +260,12 @@ export class TodoDB {
   static async query(text, params = []) {
     try {
       const poolInstance = getPool();
-      console.log('[DB] Pool instance:', poolInstance ? 'exists' : 'null', 'options:', poolInstance?.options);
+      console.log(
+        '[DB] Pool instance:',
+        poolInstance ? 'exists' : 'null',
+        'options:',
+        poolInstance?.options
+      );
       const client = await poolInstance.connect();
       console.log('[DB] Client connected successfully');
       try {
