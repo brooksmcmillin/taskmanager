@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, createEventDispatcher } from 'svelte';
 	import { dndzone } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { todos, pendingTodos } from '$lib/stores/todos';
@@ -8,12 +8,14 @@
 	import type { Todo } from '$lib/types';
 
 	const DEFAULT_PROJECT_COLOR = '#6b7280';
-
-	export let onEditTodo: ((todo: Todo) => void) | null = null;
+	const dispatch = createEventDispatcher<{ editTodo: Todo }>();
 
 	let currentWeekStart = getStartOfWeek(new Date());
-	let todoList: Todo[] = [];
 	let todosByDate: Record<string, Todo[]> = {};
+	// Track drag operation state
+	let draggedTodoId: number | null = null;
+	let originalDate: string | null = null;
+	let isDragging = false;
 
 	interface Day {
 		date: Date;
@@ -37,6 +39,13 @@
 
 	function groupTodosByDate(todosList: Todo[]): Record<string, Todo[]> {
 		const grouped: Record<string, Todo[]> = {};
+
+		// Initialize arrays for all visible dates
+		for (const day of days) {
+			grouped[day.dateStr] = [];
+		}
+
+		// Add todos to their respective dates
 		todosList.forEach((todo) => {
 			if (todo.due_date) {
 				const dateStr = todo.due_date.split('T')[0];
@@ -44,40 +53,56 @@
 				grouped[dateStr].push(todo);
 			}
 		});
+
 		return grouped;
 	}
 
-	$: todosByDate = groupTodosByDate(todoList);
-
-	async function loadTodos() {
-		try {
-			await todos.load({ status: 'pending' });
-		} catch (error) {
-			console.error('Failed to load todos:', error);
-		}
-	}
-
-	async function handleDrop(dateStr: string, event: CustomEvent<DndEvent>) {
-		const items = event.detail.items as Todo[];
-
-		// Update local state
-		todosByDate[dateStr] = items;
-
-		// If this is the finalize event (actual drop, not just dragging over)
-		if (event.type === 'finalize') {
-			const movedTodo = items.find((item) => {
-				const originalDate = item.due_date?.split('T')[0];
-				return originalDate !== dateStr;
-			});
-
-			if (movedTodo) {
-				try {
-					// Store's updateTodo already updates local state, no need to reload all todos
-					await todos.updateTodo(movedTodo.id, { due_date: dateStr });
-				} catch (error) {
-					console.error('Failed to update todo date:', error);
+	function handleConsider(dateStr: string, event: CustomEvent<DndEvent>) {
+		// Track what's being dragged when drag starts
+		if (event.detail.info.trigger === 'dragStarted') {
+			isDragging = true;
+			const draggedId = event.detail.info.id;
+			// Find the todo being dragged across all dates
+			for (const [date, todosInDate] of Object.entries(todosByDate)) {
+				if (todosInDate) {
+					const todo = todosInDate.find(t => t && t.id === draggedId);
+					if (todo && todo.due_date) {
+						draggedTodoId = draggedId as number;
+						originalDate = todo.due_date.split('T')[0];
+						break;
+					}
 				}
 			}
+		}
+
+		// Update local state - svelte-dnd-action gives us the new items array for this date
+		// This is what the date WILL look like if the drag completes
+		todosByDate = { ...todosByDate, [dateStr]: event.detail.items };
+	}
+
+	async function handleFinalize(dateStr: string, event: CustomEvent<DndEvent>) {
+		// Only make API call if item was actually moved to a different date
+		if (draggedTodoId !== null && originalDate !== null && originalDate !== dateStr) {
+			const todoId = draggedTodoId;
+
+			try {
+				await todos.updateTodo(todoId, { due_date: dateStr });
+				// Store update will trigger subscription which rebuilds todosByDate
+			} catch (error) {
+				console.error('Failed to update todo date:', error);
+				// Reload all todos to revert the change
+				await todos.load({ status: 'pending' });
+			} finally {
+				// Clear drag tracking AFTER API call completes (success or error)
+				isDragging = false;
+				draggedTodoId = null;
+				originalDate = null;
+			}
+		} else {
+			// No actual move, just clear drag state
+			isDragging = false;
+			draggedTodoId = null;
+			originalDate = null;
 		}
 	}
 
@@ -94,18 +119,20 @@
 	}
 
 	function handleEditTodo(todo: Todo) {
-		if (onEditTodo) {
-			onEditTodo(todo);
-		}
+		dispatch('editTodo', todo);
 	}
 
 	onMount(() => {
-		// Use the pendingTodos derived store instead of filtering locally
+		// Subscribe to pendingTodos and rebuild the calendar whenever it changes
+		// But don't update during drag operations to avoid interfering with the drag
 		const unsubscribe = pendingTodos.subscribe((value) => {
-			todoList = value;
+			if (!isDragging) {
+				todosByDate = groupTodosByDate(value);
+			}
 		});
 
-		loadTodos();
+		// Load initial todos
+		todos.load({ status: 'pending' });
 
 		return unsubscribe;
 	});
@@ -129,22 +156,21 @@
 
 		<div id="calendar-grid">
 			{#each days as { date, dateStr, isToday: isTodayDay }}
-				<div
-					class="calendar-day"
-					class:today={isTodayDay}
-					data-date={dateStr}
-					use:dndzone={{
-						items: todosByDate[dateStr] || [],
-						dropTargetStyle: { outline: '2px dashed #3b82f6' },
-						type: 'todo'
-					}}
-					on:consider={(e) => handleDrop(dateStr, e)}
-					on:finalize={(e) => handleDrop(dateStr, e)}
-				>
+				<div class="calendar-day" class:today={isTodayDay} data-date={dateStr}>
 					<div class="calendar-date">
 						{date.getMonth() + 1}/{date.getDate()}
 					</div>
-					<div class="tasks-container">
+					<div
+						class="tasks-container"
+						use:dndzone={{
+							items: todosByDate[dateStr] || [],
+							dropTargetStyle: { outline: '2px dashed #3b82f6' },
+							type: 'todo',
+							flipDurationMs: 200
+						}}
+						on:consider={(e) => handleConsider(dateStr, e)}
+						on:finalize={(e) => handleFinalize(dateStr, e)}
+					>
 						{#each todosByDate[dateStr] || [] as todo (todo.id)}
 							<div
 								class="calendar-task {todo.priority}-priority"
