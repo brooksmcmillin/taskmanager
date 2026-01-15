@@ -1,6 +1,16 @@
 # Frontend E2E Tests
 
-This directory contains end-to-end tests for the TaskManager SvelteKit frontend using Playwright.
+⚠️ **Status: Test Specifications - Not Yet Executable**
+
+This directory contains end-to-end test specifications for the TaskManager SvelteKit frontend using Playwright. These tests serve as detailed specifications for the intended functionality and will become executable once the corresponding pages and features are implemented.
+
+## Current State
+
+- ✅ Test infrastructure configured (Playwright, cross-browser testing)
+- ✅ 27 test specifications written covering all user flows
+- ⏳ **Pending**: Page implementations (login, register, dashboard)
+- ⏳ **Pending**: Backend API integration
+- ⏳ **Pending**: Test database seeding scripts
 
 ## Setup
 
@@ -74,14 +84,35 @@ Configuration is in `playwright.config.ts`:
 - HTML report generation
 - Cross-browser testing (Chromium, Firefox, WebKit)
 
-## Test Data
+## Test Data Requirements
 
-Tests assume:
-- A test user exists with credentials:
-  - Username: `testuser`
-  - Password: `TestPass123!` # pragma: allowlist secret
-- Backend API is running and accessible
-- Database is in a clean state
+⚠️ **Setup Required Before Tests Can Run**
+
+### Database Seeding
+Tests require a test database with seeded data. Create a test database setup script with:
+
+```sql
+-- Create test user (password: TestPass123!)
+INSERT INTO users (username, email, password_hash)
+VALUES ('testuser', 'test@example.com', '$2a$12$...');
+```
+
+**Note**: Use unique test data per test run to avoid conflicts. Consider:
+- Dynamic usernames: `testuser-${timestamp}`
+- Test data cleanup in `afterEach` hooks
+- Isolated test database instance
+
+### Required Test Environment
+- ✅ Backend API running and accessible
+- ✅ Test database with clean state before each run
+- ✅ Proper CORS configuration for test origin
+- ⏳ Test user seeded (see above)
+
+### Test Credentials
+- Username: `testuser` (or dynamic per test)
+- Password: `TestPass123!` # pragma: allowlist secret
+
+**Security Note**: These credentials are for local testing only. Never use in production.
 
 ## CI/CD Integration
 

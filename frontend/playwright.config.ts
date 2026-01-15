@@ -24,7 +24,9 @@ const config: PlaywrightTestConfig = {
 	expect: {
 		timeout: 5000
 	},
-	fullyParallel: true,
+	// Disable parallel execution until test isolation is fixed
+	// (shared test data can cause race conditions)
+	fullyParallel: false,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	workers: process.env.CI ? 1 : undefined,

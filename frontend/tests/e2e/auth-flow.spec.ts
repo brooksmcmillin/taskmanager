@@ -1,6 +1,10 @@
 /**
  * E2E Test: Authentication Flow
  *
+ * ⚠️ Status: Test Specification - Not Yet Executable
+ * These tests serve as specifications for authentication functionality.
+ * They will become executable once login/register pages are implemented.
+ *
  * Tests user registration, login, and logout functionality
  */
 

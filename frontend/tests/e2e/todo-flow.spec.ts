@@ -1,6 +1,10 @@
 /**
  * E2E Test: Todo Management Flow
  *
+ * ⚠️ Status: Test Specification - Not Yet Executable
+ * These tests serve as specifications for todo management functionality.
+ * They will become executable once dashboard pages are implemented.
+ *
  * Tests creating, editing, completing, and deleting todos
  */
 

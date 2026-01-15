@@ -1,22 +1,29 @@
 /**
  * E2E Test: Calendar Drag and Drop
  *
+ * ⚠️ Status: Test Specification - Not Yet Executable
+ * These tests serve as specifications for the drag-drop calendar functionality.
+ * They will become executable once pages are implemented and backend is integrated.
+ *
  * Tests drag-and-drop functionality for the 3-week calendar view
  */
 
 import { test, expect } from '@playwright/test';
+import {
+	login,
+	createTodoViaUI,
+	getFutureDate,
+	waitForApiResponse,
+	waitForNetworkIdle
+} from '../helpers/test-utils';
 
 test.describe('Calendar Drag and Drop', () => {
 	test.beforeEach(async ({ page }) => {
-		// Login before each test
-		await page.goto('/login');
-		await page.fill('[name=username]', 'testuser');
-		await page.fill('[name=password]', 'TestPass123!');
-		await page.click('button[type=submit]');
-		await expect(page).toHaveURL('/');
+		// Login using helper
+		await login(page);
 
 		// Wait for calendar to load
-		await page.waitForSelector('#drag-drop-calendar');
+		await page.waitForSelector('#drag-drop-calendar', { timeout: 10000 });
 	});
 
 	test('should display 3-week calendar view', async ({ page }) => {
@@ -70,51 +77,55 @@ test.describe('Calendar Drag and Drop', () => {
 	});
 
 	test('should display todos on calendar', async ({ page }) => {
-		// Create a todo with a due date
-		await page.click('[data-testid=add-todo-button]');
-		await page.fill('[name=title]', 'Calendar Task');
-		await page.fill('[name=due_date]', '2026-01-20');
-		await page.click('[data-testid=save-todo]');
+		// Create a todo with a due date (5 days from now)
+		const dueDate = getFutureDate(5);
 
-		// Wait for calendar to update
-		await page.waitForTimeout(1000);
+		await createTodoViaUI(page, 'Calendar Task', { dueDate });
+
+		// Wait for calendar to update (wait for network idle instead of fixed timeout)
+		await waitForNetworkIdle(page);
 
 		// Find the todo on the calendar
-		const calendarDay = page.locator('.calendar-day[data-date="2026-01-20"]');
+		const calendarDay = page.locator(`.calendar-day[data-date="${dueDate}"]`);
 		const todoItem = calendarDay.locator('.calendar-task');
 
-		await expect(todoItem).toBeVisible();
+		await expect(todoItem).toBeVisible({ timeout: 5000 });
 		await expect(todoItem).toContainText('Calendar Task');
 	});
 
 	test('should drag todo to different date', async ({ page }) => {
-		// Create a todo with a due date
-		await page.click('[data-testid=add-todo-button]');
-		await page.fill('[name=title]', 'Draggable Task');
-		await page.fill('[name=due_date]', '2026-01-15');
-		await page.click('[data-testid=save-todo]');
+		// Create a todo with a due date (3 days from now)
+		const sourceDate = getFutureDate(3);
+		const targetDate = getFutureDate(8); // 8 days from now
 
-		await page.waitForTimeout(1000);
+		await createTodoViaUI(page, 'Draggable Task', { dueDate: sourceDate });
+
+		// Wait for todo to appear
+		await waitForNetworkIdle(page);
 
 		// Find the todo on the calendar
-		const sourceDayCell = page.locator('.calendar-day[data-date="2026-01-15"]');
-		const todoItem = sourceDayCell.locator('.calendar-task').filter({ hasText: 'Draggable Task' });
+		const sourceDayCell = page.locator(`.calendar-day[data-date="${sourceDate}"]`);
+		const todoItem = sourceDayCell
+			.locator('.calendar-task')
+			.filter({ hasText: 'Draggable Task' });
 
 		// Verify it's in the source date
-		await expect(todoItem).toBeVisible();
+		await expect(todoItem).toBeVisible({ timeout: 5000 });
 
 		// Drag to target date
-		const targetDayCell = page.locator('.calendar-day[data-date="2026-01-20"]');
+		const targetDayCell = page.locator(`.calendar-day[data-date="${targetDate}"]`);
 
 		// Use Playwright's drag and drop
 		await todoItem.dragTo(targetDayCell);
 
-		// Wait for API call to complete
-		await page.waitForTimeout(1000);
+		// Wait for API call to complete (PUT /api/todos/{id})
+		await waitForApiResponse(page, '/api/todos/', 'PUT');
 
 		// Verify todo moved to new date
-		const movedTodo = targetDayCell.locator('.calendar-task').filter({ hasText: 'Draggable Task' });
-		await expect(movedTodo).toBeVisible();
+		const movedTodo = targetDayCell
+			.locator('.calendar-task')
+			.filter({ hasText: 'Draggable Task' });
+		await expect(movedTodo).toBeVisible({ timeout: 5000 });
 
 		// Verify it's no longer in the source date
 		const oldTodo = sourceDayCell.locator('.calendar-task').filter({ hasText: 'Draggable Task' });
@@ -122,16 +133,14 @@ test.describe('Calendar Drag and Drop', () => {
 	});
 
 	test('should show drop target indicator during drag', async ({ page }) => {
-		// Create a todo
-		await page.click('[data-testid=add-todo-button]');
-		await page.fill('[name=title]', 'Drag Me');
-		await page.fill('[name=due_date]', '2026-01-15');
-		await page.click('[data-testid=save-todo]');
+		// Create a todo with dynamic date
+		const dueDate = getFutureDate(3);
 
-		await page.waitForTimeout(1000);
+		await createTodoViaUI(page, 'Drag Me', { dueDate });
+		await waitForNetworkIdle(page);
 
 		const todoItem = page
-			.locator('.calendar-day[data-date="2026-01-15"] .calendar-task')
+			.locator(`.calendar-day[data-date="${dueDate}"] .calendar-task`)
 			.filter({ hasText: 'Drag Me' });
 
 		// Start dragging (hover + mousedown)
@@ -139,7 +148,8 @@ test.describe('Calendar Drag and Drop', () => {
 		await page.mouse.down();
 
 		// Move over target day
-		const targetDay = page.locator('.calendar-day[data-date="2026-01-20"]');
+		const targetDate = getFutureDate(8);
+		const targetDay = page.locator(`.calendar-day[data-date="${targetDate}"]`);
 		await targetDay.hover();
 
 		// Verify drop indicator appears (2px dashed blue outline)
@@ -154,19 +164,19 @@ test.describe('Calendar Drag and Drop', () => {
 	test('should display project colors on calendar tasks', async ({ page }) => {
 		// Assume a project with a specific color exists
 		const projectColor = '#3b82f6'; // Blue
+		const dueDate = getFutureDate(5);
 
 		// Create a todo assigned to that project
-		await page.click('[data-testid=add-todo-button]');
-		await page.fill('[name=title]', 'Colored Task');
-		await page.selectOption('[name=project_id]', '1'); // Assume project ID 1
-		await page.fill('[name=due_date]', '2026-01-20');
-		await page.click('[data-testid=save-todo]');
+		await createTodoViaUI(page, 'Colored Task', {
+			dueDate,
+			projectId: '1' // Assume project ID 1
+		});
 
-		await page.waitForTimeout(1000);
+		await waitForNetworkIdle(page);
 
 		// Find the task on calendar
 		const todoItem = page
-			.locator('.calendar-day[data-date="2026-01-20"] .calendar-task')
+			.locator(`.calendar-day[data-date="${dueDate}"] .calendar-task`)
 			.filter({ hasText: 'Colored Task' });
 
 		// Verify it has project color styling
@@ -176,58 +186,55 @@ test.describe('Calendar Drag and Drop', () => {
 	});
 
 	test('should show priority styling on calendar tasks', async ({ page }) => {
-		// Create urgent priority task
-		await page.click('[data-testid=add-todo-button]');
-		await page.fill('[name=title]', 'Urgent Task');
-		await page.selectOption('[name=priority]', 'urgent');
-		await page.fill('[name=due_date]', '2026-01-20');
-		await page.click('[data-testid=save-todo]');
+		// Create urgent priority task with dynamic date
+		const dueDate = getFutureDate(5);
 
-		await page.waitForTimeout(1000);
+		await createTodoViaUI(page, 'Urgent Task', {
+			dueDate,
+			priority: 'urgent'
+		});
+
+		await waitForNetworkIdle(page);
 
 		// Find the task on calendar
 		const todoItem = page
-			.locator('.calendar-day[data-date="2026-01-20"] .calendar-task')
+			.locator(`.calendar-day[data-date="${dueDate}"] .calendar-task`)
 			.filter({ hasText: 'Urgent Task' });
 
 		// Verify priority class is applied
-		await expect(todoItem).toHaveClass(/urgent-priority/);
+		await expect(todoItem).toHaveClass(/urgent-priority/, { timeout: 5000 });
 	});
 
 	test('should open edit modal on double-click', async ({ page }) => {
-		// Create a task
-		await page.click('[data-testid=add-todo-button]');
-		await page.fill('[name=title]', 'Double Click Me');
-		await page.fill('[name=due_date]', '2026-01-20');
-		await page.click('[data-testid=save-todo]');
+		// Create a task with dynamic date
+		const dueDate = getFutureDate(5);
 
-		await page.waitForTimeout(1000);
+		await createTodoViaUI(page, 'Double Click Me', { dueDate });
+		await waitForNetworkIdle(page);
 
 		// Find the task on calendar
 		const todoItem = page
-			.locator('.calendar-day[data-date="2026-01-20"] .calendar-task')
+			.locator(`.calendar-day[data-date="${dueDate}"] .calendar-task`)
 			.filter({ hasText: 'Double Click Me' });
 
 		// Double-click the task
 		await todoItem.dblclick();
 
 		// Verify modal opens with pre-filled data
-		await expect(page.locator('.modal')).toBeVisible();
+		await expect(page.locator('.modal')).toBeVisible({ timeout: 5000 });
 		await expect(page.locator('[name=title]')).toHaveValue('Double Click Me');
 	});
 
 	test('should handle keyboard navigation on calendar tasks', async ({ page }) => {
-		// Create a task
-		await page.click('[data-testid=add-todo-button]');
-		await page.fill('[name=title]', 'Keyboard Task');
-		await page.fill('[name=due_date]', '2026-01-20');
-		await page.click('[data-testid=save-todo]');
+		// Create a task with dynamic date
+		const dueDate = getFutureDate(5);
 
-		await page.waitForTimeout(1000);
+		await createTodoViaUI(page, 'Keyboard Task', { dueDate });
+		await waitForNetworkIdle(page);
 
 		// Find the task on calendar
 		const todoItem = page
-			.locator('.calendar-day[data-date="2026-01-20"] .calendar-task')
+			.locator(`.calendar-day[data-date="${dueDate}"] .calendar-task`)
 			.filter({ hasText: 'Keyboard Task' });
 
 		// Focus the task
@@ -237,29 +244,28 @@ test.describe('Calendar Drag and Drop', () => {
 		await page.keyboard.press('Enter');
 
 		// Verify modal opens
-		await expect(page.locator('.modal')).toBeVisible();
+		await expect(page.locator('.modal')).toBeVisible({ timeout: 5000 });
 	});
 
 	test('should show only pending todos on calendar', async ({ page }) => {
-		// Create pending task
-		await page.click('[data-testid=add-todo-button]');
-		await page.fill('[name=title]', 'Pending Task');
-		await page.fill('[name=due_date]', '2026-01-20');
-		await page.click('[data-testid=save-todo]');
+		// Create pending task with dynamic date
+		const dueDate = getFutureDate(5);
 
-		await page.waitForTimeout(1000);
+		await createTodoViaUI(page, 'Pending Task', { dueDate });
+		await waitForNetworkIdle(page);
 
 		// Verify it appears
 		const pendingTask = page
-			.locator('.calendar-day[data-date="2026-01-20"] .calendar-task')
+			.locator(`.calendar-day[data-date="${dueDate}"] .calendar-task`)
 			.filter({ hasText: 'Pending Task' });
-		await expect(pendingTask).toBeVisible();
+		await expect(pendingTask).toBeVisible({ timeout: 5000 });
 
 		// Complete the task
 		const completeButton = page.locator('[data-testid=complete-todo]').first();
 		await completeButton.click();
 
-		await page.waitForTimeout(1000);
+		// Wait for completion API call
+		await waitForApiResponse(page, '/api/todos/', 'POST');
 
 		// Verify it no longer appears on calendar (completed tasks are filtered out)
 		await expect(pendingTask).not.toBeVisible();

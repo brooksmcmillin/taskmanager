@@ -1,15 +1,26 @@
 # Test Coverage Summary
 
-This document provides an overview of the E2E test coverage for the TaskManager SvelteKit frontend migration.
+⚠️ **Status: Test Specifications - Not Yet Executable**
+
+This document provides an overview of the E2E test specifications for the TaskManager SvelteKit frontend migration. These tests serve as detailed specifications for the intended functionality and will become executable once pages are implemented and the backend API is integrated.
 
 ## Test Files Overview
 
 | Test File | Test Count | Coverage Area | Status |
 |-----------|------------|---------------|--------|
-| `auth-flow.spec.ts` | 6 tests | Authentication | ✅ Ready |
-| `todo-flow.spec.ts` | 10 tests | Todo Management | ✅ Ready |
-| `calendar-drag-drop.spec.ts` | 11 tests | Calendar & DnD | ✅ Ready |
-| **Total** | **27 tests** | **All core flows** | ✅ Ready |
+| `auth-flow.spec.ts` | 6 tests | Authentication | ⏳ Specification |
+| `todo-flow.spec.ts` | 10 tests | Todo Management | ⏳ Specification |
+| `calendar-drag-drop.spec.ts` | 11 tests | Calendar & DnD | ⏳ Specification |
+| **Total** | **27 tests** | **All core flows** | ⏳ Pending Implementation |
+
+## Prerequisites for Execution
+
+Before these tests can run:
+- [ ] Implement login/register pages (`/login`, `/register`)
+- [ ] Implement dashboard page (`/`) with todo list
+- [ ] Add required `data-testid` attributes to components (see `REQUIRED_TEST_IDS.md`)
+- [ ] Set up test database with seeding scripts
+- [ ] Ensure backend API is running and accessible
 
 ## User Flow Coverage
 
@@ -220,15 +231,36 @@ CI=true npm test
 - [ ] Implement API mocking for isolated tests
 - [ ] Add performance monitoring
 
+## Code Quality Improvements
+
+### Addressed Code Review Issues
+
+✅ **Fixed hardcoded dates** - All tests now use dynamic date generation via `getFutureDate()` helper
+✅ **Removed `waitForTimeout` anti-pattern** - Replaced with `waitForNetworkIdle()` and `waitForApiResponse()`
+✅ **Added test utilities** - Created `test-utils.ts` with reusable helpers
+✅ **Documented required test IDs** - See `REQUIRED_TEST_IDS.md` for implementation guidance
+✅ **Added status warnings** - All test files clearly marked as specifications
+✅ **Improved test reliability** - Using API response waits and proper selectors
+
+### Remaining Improvements for Future PRs
+
+- [ ] Implement test database seeding/cleanup
+- [ ] Add page object models for complex pages
+- [ ] Implement test isolation (unique users per test)
+- [ ] Add API mocking layer for unit-style E2E tests
+- [ ] Add visual regression tests (screenshot comparison)
+- [ ] Add accessibility audits (axe-core integration)
+
 ## Success Criteria
 
 The migration is considered successful when:
 
-- ✅ All 27 tests pass consistently
-- ✅ Tests run on all 3 browsers
-- ✅ No flaky tests (consistent pass rate)
-- ✅ Tests complete in < 5 minutes
-- ✅ Coverage meets targets (90%+ for core flows)
+- [ ] All required pages implemented (login, register, dashboard)
+- [ ] All 27 tests pass consistently
+- [ ] Tests run on all 3 browsers
+- [ ] No flaky tests (consistent pass rate)
+- [ ] Tests complete in < 5 minutes
+- [ ] Coverage meets targets (90%+ for core flows)
 
 ## Next Steps
 
@@ -247,6 +279,6 @@ The migration is considered successful when:
 
 ---
 
-**Document Version**: 1.0
+**Document Version**: 1.1
 **Last Updated**: 2026-01-15
-**Status**: Phase 2 Complete - Ready for Integration Testing
+**Status**: Test Specifications Complete - Pending Page Implementation
