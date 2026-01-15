@@ -238,6 +238,10 @@ function getPool() {
       (process.env.POSTGRES_HOST || 'localhost') +
       ':5432/' +
       process.env.POSTGRES_DB;
+
+    console.log('[DB] Creating pool with connection string:', database_url.replace(/:([^@]+)@/, ':***@'));
+    console.log('[DB] ENV check - USER:', process.env.POSTGRES_USER, 'DB:', process.env.POSTGRES_DB, 'HOST:', process.env.POSTGRES_HOST);
+
     pool = new Pool({
       connectionString: database_url,
     });
