@@ -158,3 +158,15 @@ async def logout(
     response.delete_cookie("session")
 
     return {"message": "Logged out successfully"}
+
+
+@router.get("/session")
+async def get_session(user: CurrentUser) -> dict:
+    """Get current session user information."""
+    return {
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+        }
+    }
