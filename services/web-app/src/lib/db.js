@@ -229,18 +229,13 @@ dotenvConfig();
 let pool;
 function getPool() {
   if (!pool) {
-    const database_url =
-      'postgresql://' +
-      process.env.POSTGRES_USER +
-      ':' +
-      process.env.POSTGRES_PASSWORD +
-      '@' +
-      (process.env.POSTGRES_HOST || 'localhost') +
-      ':5432/' +
-      process.env.POSTGRES_DB;
+    // Access env vars through a function to prevent Vite build-time optimization
+    const getEnv = (key) => process.env[key];
+
+    const database_url = `postgresql://${getEnv('POSTGRES_USER')}:${getEnv('POSTGRES_PASSWORD')}@${getEnv('POSTGRES_HOST') || 'localhost'}:5432/${getEnv('POSTGRES_DB')}`;
 
     console.log('[DB] Creating pool with connection string:', database_url.replace(/:([^@]+)@/, ':***@'));
-    console.log('[DB] ENV check - USER:', process.env.POSTGRES_USER, 'DB:', process.env.POSTGRES_DB, 'HOST:', process.env.POSTGRES_HOST);
+    console.log('[DB] ENV check - USER:', getEnv('POSTGRES_USER'), 'DB:', getEnv('POSTGRES_DB'), 'HOST:', getEnv('POSTGRES_HOST'));
 
     pool = new Pool({
       connectionString: database_url,
