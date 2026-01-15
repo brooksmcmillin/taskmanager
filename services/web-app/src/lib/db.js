@@ -225,23 +225,29 @@ const { Pool } = pg;
 
 dotenvConfig();
 
-const database_url =
-  'postgresql://' +
-  process.env.POSTGRES_USER +
-  ':' +
-  process.env.POSTGRES_PASSWORD +
-  '@' +
-  (process.env.POSTGRES_HOST || 'localhost') +
-  ':5432/' +
-  process.env.POSTGRES_DB;
-// Database connection
-const pool = new Pool({
-  connectionString: database_url,
-});
+// Database connection - use lazy initialization to allow runtime env vars
+let pool;
+function getPool() {
+  if (!pool) {
+    const database_url =
+      'postgresql://' +
+      process.env.POSTGRES_USER +
+      ':' +
+      process.env.POSTGRES_PASSWORD +
+      '@' +
+      (process.env.POSTGRES_HOST || 'localhost') +
+      ':5432/' +
+      process.env.POSTGRES_DB;
+    pool = new Pool({
+      connectionString: database_url,
+    });
+  }
+  return pool;
+}
 
 export class TodoDB {
   static async query(text, params = []) {
-    const client = await pool.connect();
+    const client = await getPool().connect();
     try {
       const result = await client.query(text, params);
       return result;
