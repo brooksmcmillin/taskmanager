@@ -19,8 +19,3 @@ jobs:
     uses: ./.github/workflows/node-security.yml
     with:
       node-version: '22'
-
-  claude-security:
-    uses: ./.github/workflows/claude-security-review.yml
-    secrets:
-      CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}

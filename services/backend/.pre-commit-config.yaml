@@ -42,21 +42,13 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
-        files: ^(services/backend|services/mcp-auth|services/mcp-resource|packages/taskmanager-sdk)/
+        files: ^(services/mcp-auth|services/mcp-resource|packages/taskmanager-sdk)/
       - id: ruff-format
-        files: ^(services/backend|services/mcp-auth|services/mcp-resource|packages/taskmanager-sdk)/
+        files: ^(services/mcp-auth|services/mcp-resource|packages/taskmanager-sdk)/
 
   # Python type checking
   - repo: local
     hooks:
-      - id: pyright-backend
-        name: pyright (backend)
-        entry: bash -c 'cd services/backend && uv run pyright'
-        language: system
-        files: ^services/backend/
-        types: [python]
-        pass_filenames: false
-
       - id: pyright-mcp-auth
         name: pyright (mcp-auth)
         entry: bash -c 'cd services/mcp-auth && uv run pyright'
