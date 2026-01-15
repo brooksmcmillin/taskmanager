@@ -93,3 +93,79 @@ async def test_logout(authenticated_client: AsyncClient):
 
     assert response.status_code == 200
     assert response.json()["message"] == "Logged out successfully"
+
+
+@pytest.mark.asyncio
+async def test_login_rate_limit_triggers(client: AsyncClient, test_user):
+    """Test that rate limiting triggers after max failed attempts."""
+    # Make 5 failed login attempts
+    for _ in range(5):
+        response = await client.post(
+            "/api/auth/login",
+            json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+        )
+        assert response.status_code == 401
+
+    # 6th attempt should be rate limited
+    response = await client.post(
+        "/api/auth/login",
+        json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+    )
+
+    assert response.status_code == 429
+    data = response.json()
+    assert data["detail"]["code"] == "RATE_001"
+    assert "retry_after" in data["detail"]
+
+
+@pytest.mark.asyncio
+async def test_login_rate_limit_resets_on_success(client: AsyncClient, test_user):
+    """Test that rate limiting resets after successful login."""
+    # Make 3 failed attempts
+    for _ in range(3):
+        response = await client.post(
+            "/api/auth/login",
+            json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+        )
+        assert response.status_code == 401
+
+    # Successful login should reset the counter
+    response = await client.post(
+        "/api/auth/login",
+        json={"username": "testuser", "password": TEST_PASSWORD_LOGIN},
+    )
+    assert response.status_code == 200
+
+    # Now we should be able to make failed attempts again without being rate limited
+    for _ in range(3):
+        response = await client.post(
+            "/api/auth/login",
+            json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+        )
+        assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_login_rate_limit_per_username(client: AsyncClient, test_user):
+    """Test that rate limiting is per username, not global."""
+    # Make 5 failed attempts for testuser
+    for _ in range(5):
+        response = await client.post(
+            "/api/auth/login",
+            json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+        )
+        assert response.status_code == 401
+
+    # testuser should be rate limited
+    response = await client.post(
+        "/api/auth/login",
+        json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+    )
+    assert response.status_code == 429
+
+    # But a different username should not be rate limited
+    response = await client.post(
+        "/api/auth/login",
+        json={"username": "otheruser", "password": TEST_PASSWORD_WRONG},
+    )
+    assert response.status_code == 401  # Invalid credentials, not rate limited
