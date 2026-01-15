@@ -3,9 +3,6 @@ name: Claude Security Review
 on:
   pull_request:
     types: [opened]
-    paths:
-      - "**/*.py"
-      - "**/*.js"
 
 jobs:
   claude-security-review:

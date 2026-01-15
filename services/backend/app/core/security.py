@@ -2,23 +2,25 @@
 
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from passlib.context import CryptContext
+import bcrypt
 
 from app.config import settings
 
-# BCrypt context - compatible with Node.js bcryptjs
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=settings.bcrypt_rounds,
-)
-
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt.
+
+    Compatible with Node.js bcryptjs hashes.
+    """
+    # Convert password to bytes
+    password_bytes = password.encode("utf-8")
+    # Generate salt and hash
+    salt = bcrypt.gensalt(rounds=settings.bcrypt_rounds)
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    # Return as string
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -26,7 +28,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
     Compatible with hashes created by Node.js bcryptjs.
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        password_bytes = plain_password.encode("utf-8")
+        hash_bytes = hashed_password.encode("utf-8")
+        return bcrypt.checkpw(password_bytes, hash_bytes)
+    except Exception:
+        return False
 
 
 def generate_token(length: int = 32) -> str:
@@ -65,10 +72,10 @@ def validate_password_strength(password: str) -> bool:
 
 def get_session_expiry() -> datetime:
     """Get session expiry datetime."""
-    return datetime.now(timezone.utc) + timedelta(days=settings.session_duration_days)
+    return datetime.now(UTC) + timedelta(days=settings.session_duration_days)
 
 
 def get_token_expiry(seconds: int | None = None) -> datetime:
     """Get token expiry datetime."""
     expiry_seconds = seconds if seconds is not None else settings.access_token_expiry
-    return datetime.now(timezone.utc) + timedelta(seconds=expiry_seconds)
+    return datetime.now(UTC) + timedelta(seconds=expiry_seconds)
