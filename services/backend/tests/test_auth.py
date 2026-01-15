@@ -115,7 +115,7 @@ async def test_login_rate_limit_triggers(client: AsyncClient, test_user):
     assert response.status_code == 429
     data = response.json()
     assert data["detail"]["code"] == "RATE_001"
-    assert "retry_after" in data["detail"]["details"]
+    assert "retry_after" in data["detail"]
 
 
 @pytest.mark.asyncio
