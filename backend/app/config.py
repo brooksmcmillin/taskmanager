@@ -23,10 +23,14 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Build async database URL."""
+        """Build async database URL with proper URL encoding."""
+        from urllib.parse import quote_plus
+        encoded_password = quote_plus(self.postgres_password)
+        # Add SSL parameter to prefer SSL but allow non-SSL connections
         return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+asyncpg://{self.postgres_user}:{encoded_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+            f"?ssl=prefer"
         )
 
     # Security

@@ -1,4 +1,5 @@
 services:
+  # ========== ORIGINAL ASTRO APP (Legacy) ==========
   app:
     build:
       context: ./services/web-app
@@ -22,6 +23,50 @@ services:
     networks:
       - taskmanager_network
 
+  # ========== NEW FASTAPI BACKEND (Migration) ==========
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: taskmanager-backend
+    restart: unless-stopped
+    ports:
+      - '8000:8000'
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_PORT=5432
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - ENVIRONMENT=production
+      - DEBUG=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - taskmanager_network
+
+  # ========== NEW SVELTEKIT FRONTEND (Migration) ==========
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: taskmanager-frontend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - VITE_API_URL=http://backend:8000
+      - PUBLIC_APP_NAME=TaskManager
+      - ORIGIN=http://localhost:3000
+    depends_on:
+      - backend
+    networks:
+      - taskmanager_network
+
   postgres:
     image: pgvector/pgvector:pg15
     container_name: postgres_db
@@ -39,6 +84,11 @@ services:
       -c ssl=on
       -c ssl_cert_file=/var/lib/postgresql/server.crt
       -c ssl_key_file=/var/lib/postgresql/server.key
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - taskmanager_network
 
