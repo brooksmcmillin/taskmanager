@@ -76,11 +76,11 @@ class Todo(Base):
     title: Mapped[str] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text)
     priority: Mapped[Priority] = mapped_column(
-        Enum(Priority, name="priority_enum", create_constraint=False),
+        String(20),
         default=Priority.medium,
     )
     status: Mapped[Status] = mapped_column(
-        Enum(Status, name="status_enum", create_constraint=False),
+        String(20),
         default=Status.pending,
     )
     due_date: Mapped[date | None] = mapped_column(Date)
@@ -89,9 +89,7 @@ class Todo(Base):
     actual_hours: Mapped[float | None] = mapped_column(Numeric(5, 2))
     tags: Mapped[list] = mapped_column(JSONB, default=list)
     context: Mapped[str | None] = mapped_column(String(50))
-    time_horizon: Mapped[TimeHorizon | None] = mapped_column(
-        Enum(TimeHorizon, name="time_horizon_enum", create_constraint=False)
-    )
+    time_horizon: Mapped[TimeHorizon | None] = mapped_column(String(20))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

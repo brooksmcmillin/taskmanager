@@ -59,6 +59,7 @@ class Settings(BaseSettings):
         # Default origins
         return [
             "https://todo.brooksmcmillin.com",
+            "https://todo2.brooksmcmillin.com",
             "http://localhost:4321",
             "http://localhost:3000",
         ]

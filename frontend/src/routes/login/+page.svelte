@@ -65,10 +65,13 @@
 				// Redirect to return_to if present AND safe, otherwise go to homepage
 				goto(returnTo, { replaceState: true });
 			} else {
-				// Handle both old format (data.error = string) and new format (data.error = {code, message})
+				// Handle FastAPI error format: data.detail.message
+				// Also support legacy formats for compatibility
 				const errorMessage =
-					typeof data.error === 'object' ? data.error.message : data.error;
-				error = errorMessage || 'Login failed';
+					data.detail?.message ||
+					(typeof data.error === 'object' ? data.error.message : data.error) ||
+					'Login failed';
+				error = errorMessage;
 			}
 		} catch (err) {
 			error = 'Network error. Please try again.';
