@@ -100,6 +100,13 @@ repos:
         files: ^services/web-app/
         pass_filenames: false
 
+      - id: npm-audit
+        name: npm audit (frontend)
+        entry: bash -c 'cd frontend && npm audit --production --audit-level=high'
+        language: system
+        files: ^frontend/(package\.json|package-lock\.json)$
+        pass_filenames: false
+
   # =============================================================================
   # Docker linting
   # =============================================================================
