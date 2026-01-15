@@ -260,7 +260,10 @@ async def update_todo(
     project_color = None
     if todo.project_id:
         project_result = await db.execute(
-            select(Project).where(Project.id == todo.project_id)
+            select(Project).where(
+                Project.id == todo.project_id,
+                Project.user_id == user.id  # Authorization check: verify project belongs to user
+            )
         )
         project = project_result.scalar_one_or_none()
         if project:

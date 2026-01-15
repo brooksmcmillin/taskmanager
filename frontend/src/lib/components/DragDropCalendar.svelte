@@ -96,14 +96,19 @@
 				// After API succeeds, manually rebuild from store to get authoritative data
 				const currentTodos = get(pendingTodos);
 				todosByDate = groupTodosByDate(currentTodos);
+
+				// Clear drag tracking AFTER manual rebuild to prevent subscription race
+				isDragging = false;
+				draggedTodoId = null;
+				originalDate = null;
 			} catch (error) {
 				console.error('Failed to update todo date:', error);
 				// Reload all todos to revert the change
 				await todos.load({ status: 'pending' });
 				const currentTodos = get(pendingTodos);
 				todosByDate = groupTodosByDate(currentTodos);
-			} finally {
-				// Clear drag tracking after everything is done
+
+				// Clear drag tracking after error recovery
 				isDragging = false;
 				draggedTodoId = null;
 				originalDate = null;
