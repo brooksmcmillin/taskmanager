@@ -11,6 +11,7 @@ jobs:
     uses: ./.github/workflows/node-ci.yml
     with:
       node-version: '22'
+      run-lint: false  # Lint is covered by pre-commit hooks
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 

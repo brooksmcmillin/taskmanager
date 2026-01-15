@@ -12,7 +12,7 @@ on:
       run-npm-audit:
         description: 'Run npm audit'
         type: boolean
-        default: true
+        default: false  # Covered by pre-commit hooks
       run-codeql:
         description: 'Run CodeQL analysis'
         type: boolean
