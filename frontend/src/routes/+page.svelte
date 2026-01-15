@@ -101,7 +101,7 @@
 	</div>
 
 	<!-- Todo Modal -->
-	<TodoModal bind:show={showModal} todo={editingTodo} on:save={() => todos.loadTodos({ status: 'pending' })} />
+	<TodoModal bind:show={showModal} todo={editingTodo} on:save={() => todos.load({ status: 'pending' })} />
 
 	<!-- List View -->
 	{#if currentView === 'list'}
