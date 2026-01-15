@@ -1,5 +1,4 @@
 import pg from 'pg';
-import { config as dotenvConfig } from 'dotenv';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { CONFIG, config } from './config.js';
@@ -223,20 +222,26 @@ export function createQuery(baseQuery, initialParams = []) {
 
 const { Pool } = pg;
 
-dotenvConfig();
-
 // Database connection - use lazy initialization to allow runtime env vars
 let pool;
 function getPool() {
   if (!pool) {
-    // Use config getter to avoid Vite build-time optimization
-    const database_url = config.database.connectionString;
+    // Use individual connection parameters instead of connection string
+    // to avoid Vite build-time optimization issues
+    const user = process.env.POSTGRES_USER;
+    const password = process.env.POSTGRES_PASSWORD;
+    const host = process.env.POSTGRES_HOST || 'localhost';
+    const database = process.env.POSTGRES_DB;
 
-    console.log('[DB] Creating pool with connection string:', database_url.replace(/:([^@]+)@/, ':***@'));
-    console.log('[DB] ENV check - USER:', process.env['POSTGRES_USER'], 'DB:', process.env['POSTGRES_DB'], 'HOST:', process.env['POSTGRES_HOST']);
+    console.log('[DB] Creating pool with params - USER:', user, 'DB:', database, 'HOST:', host, 'PWD:', password ? '***' : 'undefined');
 
     pool = new Pool({
-      connectionString: database_url,
+      user,
+      password,
+      host,
+      port: 5432,
+      database,
+      ssl: false, // Disable SSL for internal Docker network
     });
   }
   return pool;
@@ -244,12 +249,21 @@ function getPool() {
 
 export class TodoDB {
   static async query(text, params = []) {
-    const client = await getPool().connect();
     try {
-      const result = await client.query(text, params);
-      return result;
-    } finally {
-      client.release();
+      const poolInstance = getPool();
+      console.log('[DB] Pool instance:', poolInstance ? 'exists' : 'null', 'options:', poolInstance?.options);
+      const client = await poolInstance.connect();
+      console.log('[DB] Client connected successfully');
+      try {
+        const result = await client.query(text, params);
+        return result;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error('[DB] Query error:', error.message);
+      console.error('[DB] Error stack:', error.stack);
+      throw error;
     }
   }
 
@@ -1462,7 +1476,7 @@ export class TodoDB {
   }
 
   static async consumeAuthorizationCode(code, clientId) {
-    const client = await pool.connect();
+    const client = await getPool().connect();
     try {
       await client.query('BEGIN');
 
@@ -1527,7 +1541,7 @@ export class TodoDB {
   }
 
   static async refreshAccessToken(refreshToken, clientId) {
-    const client = await pool.connect();
+    const client = await getPool().connect();
     try {
       await client.query('BEGIN');
 
@@ -1687,7 +1701,7 @@ export class TodoDB {
    * @returns {Object|null} Device authorization data with polling info
    */
   static async getDeviceAuthorizationByDeviceCode(deviceCode, clientId) {
-    const client = await pool.connect();
+    const client = await getPool().connect();
     try {
       await client.query('BEGIN');
 
@@ -1804,7 +1818,7 @@ export class TodoDB {
    * @returns {Object|null} Device authorization data or null
    */
   static async consumeDeviceAuthorizationCode(deviceCode) {
-    const client = await pool.connect();
+    const client = await getPool().connect();
     try {
       await client.query('BEGIN');
 

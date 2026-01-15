@@ -8,15 +8,15 @@ services:
     ports:
       - '4321:4321'
     env_file:
-      - .env
+      - ../../.env
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - PORT=4321
       - POSTGRES_HOST=postgres_db
     networks:
-      - shared_network
+      - taskmanager_taskmanager_network
 
 networks:
-  shared_network:
+  taskmanager_taskmanager_network:
     external: true
