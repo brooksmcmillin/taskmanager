@@ -1,23 +1,23 @@
 """Pytest fixtures for testing."""
 
 import asyncio
+import os
 from collections.abc import AsyncGenerator
+from urllib.parse import quote_plus
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.main import app
+from app.core.rate_limit import login_rate_limiter
+from app.core.security import hash_password
 from app.db.database import Base
 from app.dependencies import get_db
-from app.core.security import hash_password
+from app.main import app
 from app.models.user import User
 
-
 # Use a separate test database
-import os
-
 # Read credentials from environment variables, same as production
 POSTGRES_USER = os.getenv("POSTGRES_USER", "taskmanager")
 POSTGRES_PASSWORD = os.getenv(
@@ -27,7 +27,6 @@ POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 
 # URL-encode the password to handle special characters
-from urllib.parse import quote_plus
 
 encoded_password = quote_plus(POSTGRES_PASSWORD)
 
@@ -81,6 +80,9 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_db] = override_get_db
 
+    # Reset rate limiter before each test
+    login_rate_limiter._attempts.clear()
+
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
@@ -88,6 +90,8 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield ac
 
     app.dependency_overrides.clear()
+    # Reset rate limiter after each test
+    login_rate_limiter._attempts.clear()
 
 
 TEST_USER_PASSWORD = "TestPass123!"  # pragma: allowlist secret

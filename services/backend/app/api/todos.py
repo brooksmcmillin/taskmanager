@@ -1,16 +1,15 @@
 """Todo API routes."""
 
-from datetime import date, datetime, timezone
-from typing import Annotated
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 
-from app.dependencies import DbSession, CurrentUser
 from app.core.errors import errors
-from app.models.todo import Todo, Priority, Status
+from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
+from app.models.todo import Priority, Status, Todo
 
 router = APIRouter(prefix="/api/todos", tags=["todos"])
 
@@ -89,12 +88,16 @@ async def list_todos(
     status: str | None = Query(None),
     project_id: int | None = Query(None),
     category: str | None = Query(None),
-    start_date: date | None = Query(None),
-    end_date: date | None = Query(None),
+    start_date: date | None = Query(None),  # noqa: B008
+    end_date: date | None = Query(None),  # noqa: B008
 ) -> TodoListResponse:
     """List todos with optional filters."""
     query = (
-        select(Todo, Project.name.label("project_name"), Project.color.label("project_color"))
+        select(
+            Todo,
+            Project.name.label("project_name"),
+            Project.color.label("project_color"),
+        )
         .outerjoin(Project, Todo.project_id == Project.id)
         .where(Todo.user_id == user.id)
         .where(Todo.deleted_at.is_(None))
@@ -145,7 +148,9 @@ async def list_todos(
                 project_color=row.project_color,
                 tags=todo.tags or [],
                 context=todo.context,
-                estimated_hours=float(todo.estimated_hours) if todo.estimated_hours else None,
+                estimated_hours=float(todo.estimated_hours)
+                if todo.estimated_hours
+                else None,
                 actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
                 created_at=todo.created_at,
                 updated_at=todo.updated_at,
@@ -188,14 +193,41 @@ async def get_todo(
 ) -> dict:
     """Get a todo by ID."""
     result = await db.execute(
-        select(Todo).where(Todo.id == todo_id, Todo.user_id == user.id)
+        select(
+            Todo,
+            Project.name.label("project_name"),
+            Project.color.label("project_color"),
+        )
+        .outerjoin(Project, Todo.project_id == Project.id)
+        .where(Todo.id == todo_id, Todo.user_id == user.id)
     )
-    todo = result.scalar_one_or_none()
+    row = result.one_or_none()
 
-    if not todo:
+    if not row:
         raise errors.todo_not_found()
 
-    return {"data": todo}
+    todo = row[0]
+    return {
+        "data": TodoResponse(
+            id=todo.id,
+            title=todo.title,
+            description=todo.description,
+            priority=todo.priority,
+            status=todo.status,
+            due_date=todo.due_date,
+            project_id=todo.project_id,
+            project_name=row.project_name,
+            project_color=row.project_color,
+            tags=todo.tags or [],
+            context=todo.context,
+            estimated_hours=float(todo.estimated_hours)
+            if todo.estimated_hours
+            else None,
+            actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
+            created_at=todo.created_at,
+            updated_at=todo.updated_at,
+        )
+    }
 
 
 @router.put("/{todo_id}")
@@ -278,6 +310,6 @@ async def complete_todo(
         raise errors.todo_not_found()
 
     todo.status = Status.completed
-    todo.completed_date = datetime.now(timezone.utc)
+    todo.completed_date = datetime.now(UTC)
 
     return {"data": {"completed": True}}

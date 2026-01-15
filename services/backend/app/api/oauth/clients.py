@@ -1,14 +1,15 @@
 """OAuth client management API."""
 
+import json
 from datetime import datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.dependencies import DbSession, CurrentUser
 from app.core.errors import errors
 from app.core.security import generate_token, hash_password
+from app.dependencies import CurrentUser, DbSession
 from app.models.oauth import OAuthClient
 
 router = APIRouter(prefix="/api/oauth/clients", tags=["oauth"])
@@ -84,7 +85,20 @@ async def list_clients(
     clients = result.scalars().all()
 
     return {
-        "data": [ClientResponse.model_validate(c) for c in clients],
+        "data": [
+            ClientResponse(
+                id=c.id,
+                client_id=c.client_id,
+                name=c.name,
+                redirect_uris=json.loads(c.redirect_uris),
+                grant_types=json.loads(c.grant_types),
+                scopes=json.loads(c.scopes),
+                is_active=c.is_active,
+                is_public=c.is_public,
+                created_at=c.created_at,
+            )
+            for c in clients
+        ],
         "meta": {"count": len(clients)},
     }
 
@@ -111,9 +125,9 @@ async def create_client(
         client_id=client_id,
         client_secret_hash=client_secret_hash,
         name=request.name,
-        redirect_uris=request.redirect_uris,
-        grant_types=request.grant_types,
-        scopes=request.scopes,
+        redirect_uris=json.dumps(request.redirect_uris),
+        grant_types=json.dumps(request.grant_types),
+        scopes=json.dumps(request.scopes),
         is_public=request.is_public,
     )
     db.add(client)
@@ -149,9 +163,26 @@ async def update_client(
 
     update_data = request.model_dump(exclude_unset=True, by_alias=False)
     for field, value in update_data.items():
+        # Serialize list fields to JSON
+        if field in ("redirect_uris", "grant_types", "scopes") and isinstance(
+            value, list
+        ):
+            value = json.dumps(value)
         setattr(client, field, value)
 
-    return {"data": ClientResponse.model_validate(client)}
+    return {
+        "data": ClientResponse(
+            id=client.id,
+            client_id=client.client_id,
+            name=client.name,
+            redirect_uris=json.loads(client.redirect_uris),
+            grant_types=json.loads(client.grant_types),
+            scopes=json.loads(client.scopes),
+            is_active=client.is_active,
+            is_public=client.is_public,
+            created_at=client.created_at,
+        )
+    }
 
 
 @router.delete("/{client_id}")
