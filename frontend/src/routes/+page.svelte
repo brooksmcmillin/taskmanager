@@ -14,8 +14,8 @@
 	onMount(async () => {
 		// Load todos and projects
 		await Promise.all([
-			todos.loadTodos({ status: 'pending' }),
-			projects.loadProjects()
+			todos.load({ status: 'pending' }),
+			projects.load()
 		]);
 
 		// Load minimized state from localStorage
@@ -47,9 +47,9 @@
 
 	async function handleCompleteTodo(todoId: number) {
 		try {
-			await todos.completeTodo(todoId);
+			await todos.complete(todoId);
 			// Reload todos after completion
-			await todos.loadTodos({ status: 'pending' });
+			await todos.load({ status: 'pending' });
 		} catch (error) {
 			console.error('Failed to complete todo:', error);
 			alert('Failed to complete todo');
