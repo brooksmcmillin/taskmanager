@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, createEventDispatcher } from 'svelte';
+	import { get } from 'svelte/store';
 	import { dndzone } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { todos, pendingTodos } from '$lib/stores/todos';
@@ -81,25 +82,35 @@
 	}
 
 	async function handleFinalize(dateStr: string, event: CustomEvent<DndEvent>) {
+		// Update local state first - this is what svelte-dnd-action expects
+		todosByDate = { ...todosByDate, [dateStr]: event.detail.items };
+
 		// Only make API call if item was actually moved to a different date
 		if (draggedTodoId !== null && originalDate !== null && originalDate !== dateStr) {
 			const todoId = draggedTodoId;
 
 			try {
+				// Make API call while still blocking store subscriptions
 				await todos.updateTodo(todoId, { due_date: dateStr });
-				// Store update will trigger subscription which rebuilds todosByDate
+
+				// After API succeeds, manually rebuild from store to get authoritative data
+				const currentTodos = get(pendingTodos);
+				todosByDate = groupTodosByDate(currentTodos);
 			} catch (error) {
 				console.error('Failed to update todo date:', error);
 				// Reload all todos to revert the change
 				await todos.load({ status: 'pending' });
+				const currentTodos = get(pendingTodos);
+				todosByDate = groupTodosByDate(currentTodos);
 			} finally {
-				// Clear drag tracking AFTER API call completes (success or error)
+				// Clear drag tracking after everything is done
 				isDragging = false;
 				draggedTodoId = null;
 				originalDate = null;
 			}
 		} else {
-			// No actual move, just clear drag state
+			// Item was dropped in same column or drag cancelled
+			// Just clear drag state - local state already updated above
 			isDragging = false;
 			draggedTodoId = null;
 			originalDate = null;
