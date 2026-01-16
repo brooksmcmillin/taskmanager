@@ -26,7 +26,7 @@ services:
   # ========== NEW FASTAPI BACKEND (Migration) ==========
   backend:
     build:
-      context: ./backend
+      context: ./services/backend
       dockerfile: Dockerfile
     container_name: taskmanager-backend
     restart: unless-stopped
@@ -52,7 +52,7 @@ services:
   # ========== NEW SVELTEKIT FRONTEND (Migration) ==========
   frontend:
     build:
-      context: ./frontend
+      context: ./services/frontend
       dockerfile: Dockerfile
     container_name: taskmanager-frontend
     restart: unless-stopped
