@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.core.errors import errors
 from app.core.security import generate_token, hash_password
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.oauth import OAuthClient
 
 router = APIRouter(prefix="/api/oauth/clients", tags=["oauth"])
@@ -73,7 +73,7 @@ class ClientCreateResponse(BaseModel):
 
 @router.get("")
 async def list_clients(
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """List OAuth clients for the user."""
@@ -106,7 +106,7 @@ async def list_clients(
 @router.post("", status_code=201)
 async def create_client(
     request: ClientCreate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Create a new OAuth client."""
@@ -146,7 +146,7 @@ async def create_client(
 async def update_client(
     client_id: str,
     request: ClientUpdate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Update an OAuth client."""
@@ -188,7 +188,7 @@ async def update_client(
 @router.delete("/{client_id}")
 async def delete_client(
     client_id: str,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Delete an OAuth client."""

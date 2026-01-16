@@ -76,3 +76,66 @@ async def get_optional_user(
 
 
 OptionalUser = Annotated[User | None, Depends(get_optional_user)]
+
+
+async def get_current_user_oauth(
+    request: Request,
+    db: DbSession,
+) -> User:
+    """Get current authenticated user from OAuth Bearer token."""
+    from datetime import datetime
+
+    from sqlalchemy import select
+
+    from app.models.oauth import AccessToken
+
+    # Extract Bearer token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise errors.auth_required()
+
+    token = auth_header.replace("Bearer ", "")
+
+    # Validate access token
+    result = await db.execute(
+        select(AccessToken)
+        .where(AccessToken.token == token)
+        .where(AccessToken.expires_at > datetime.now(UTC))
+    )
+    access_token = result.scalar_one_or_none()
+
+    if not access_token:
+        raise errors.invalid_token()
+
+    # Client credentials grants don't have a user_id
+    if not access_token.user_id:
+        raise errors.auth_required()
+
+    # Get user
+    result = await db.execute(select(User).where(User.id == access_token.user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise errors.auth_required()
+
+    return user
+
+
+CurrentUserOAuth = Annotated[User, Depends(get_current_user_oauth)]
+
+
+async def get_current_user_flexible(
+    request: Request,
+    db: DbSession,
+) -> User:
+    """Get current user from either session cookie or OAuth Bearer token."""
+    # Try OAuth Bearer token first
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return await get_current_user_oauth(request, db)
+
+    # Fall back to session cookie
+    return await get_current_user(request, db)
+
+
+CurrentUserFlexible = Annotated[User, Depends(get_current_user_flexible)]
