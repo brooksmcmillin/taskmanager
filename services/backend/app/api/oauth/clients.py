@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.core.errors import errors
 from app.core.security import generate_token, hash_password
-from app.dependencies import CurrentUserFlexible, DbSession
+from app.dependencies import ClientCredentialsToken, CurrentUserFlexible, DbSession
 from app.models.oauth import OAuthClient
 
 router = APIRouter(prefix="/api/oauth/clients", tags=["oauth"])
@@ -100,6 +100,44 @@ async def list_clients(
             for c in clients
         ],
         "meta": {"count": len(clients)},
+    }
+
+
+@router.get("/{client_id}/info")
+async def get_client_info(
+    client_id: str,
+    _authenticated_client: ClientCredentialsToken,
+    db: DbSession,
+) -> dict:
+    """
+    Get OAuth client information by client_id.
+
+    This endpoint is for machine-to-machine (M2M) services that need to look up
+    OAuth client metadata. It requires authentication with a client credentials token.
+
+    This endpoint does NOT check user ownership - any authenticated M2M service
+    can look up any client's metadata (similar to OAuth discovery endpoints).
+    """
+    result = await db.execute(
+        select(OAuthClient).where(OAuthClient.client_id == client_id)
+    )
+    client = result.scalar_one_or_none()
+
+    if not client:
+        raise errors.oauth_client_not_found()
+
+    return {
+        "data": ClientResponse(
+            id=client.id,
+            client_id=client.client_id,
+            name=client.name,
+            redirect_uris=json.loads(client.redirect_uris),
+            grant_types=json.loads(client.grant_types),
+            scopes=json.loads(client.scopes),
+            is_active=client.is_active,
+            is_public=client.is_public,
+            created_at=client.created_at,
+        )
     }
 
 

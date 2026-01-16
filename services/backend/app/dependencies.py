@@ -124,6 +124,52 @@ async def get_current_user_oauth(
 CurrentUserOAuth = Annotated[User, Depends(get_current_user_oauth)]
 
 
+async def validate_client_credentials_token(
+    request: Request,
+    db: DbSession,
+) -> str:
+    """Validate OAuth Bearer token from client credentials grant.
+
+    This validates machine-to-machine tokens that don't have a user_id.
+    Returns the client_id associated with the token.
+    """
+    from datetime import datetime
+
+    from sqlalchemy import select
+
+    from app.models.oauth import AccessToken
+
+    # Extract Bearer token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise errors.auth_required()
+
+    token = auth_header.replace("Bearer ", "")
+
+    # Validate access token
+    result = await db.execute(
+        select(AccessToken)
+        .where(AccessToken.token == token)
+        .where(AccessToken.expires_at > datetime.now(UTC))
+    )
+    access_token = result.scalar_one_or_none()
+
+    if not access_token:
+        raise errors.invalid_token()
+
+    # Client credentials grants have client_id but no user_id
+    if access_token.user_id is not None:
+        raise errors.auth_required()
+
+    if not access_token.client_id:
+        raise errors.invalid_token()
+
+    return access_token.client_id
+
+
+ClientCredentialsToken = Annotated[str, Depends(validate_client_credentials_token)]
+
+
 async def get_current_user_flexible(
     request: Request,
     db: DbSession,

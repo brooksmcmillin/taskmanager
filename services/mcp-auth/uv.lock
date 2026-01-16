@@ -1308,7 +1308,7 @@ wheels = [
 
 [[package]]
 name = "taskmanager-sdk"
-version = "0.1.4"
+version = "0.2.0"
 source = { directory = "../../packages/taskmanager-sdk" }
 dependencies = [
     { name = "python-dotenv" },

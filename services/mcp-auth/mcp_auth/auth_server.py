@@ -106,8 +106,11 @@ class TaskManagerAuthProvider(
         auth_settings: TaskManagerAuthSettings,
         server_url: str,
         token_storage: TokenStorage | None = None,
+        api_client: TaskManagerClient | None = None,
     ):
-        super().__init__(auth_settings, server_url, token_storage=token_storage)
+        super().__init__(
+            auth_settings, server_url, token_storage=token_storage, api_client=api_client
+        )
         self.registered_clients: dict[str, Any] = {}
 
 
@@ -271,19 +274,6 @@ def load_registered_clients() -> dict[str, Any]:
     # Skip loading - clients will be discovered during auth flows
     logger.info("Skipping pre-load of registered clients (requires user auth)")
     return {}
-
-    for client_data in response.data:
-        logger.debug(f"Processing client data: {client_data}")
-        processed = transform_client_data(client_data)
-        if processed:
-            client_id = processed["client_id"]
-            logger.info(
-                f"Processed client {client_id} with scope: '{processed['scope']}', "
-                f"auth_method: '{processed['token_endpoint_auth_method']}'"
-            )
-            clients[client_id] = processed
-
-    return clients
 
 
 # Load persisted client storage
@@ -610,8 +600,15 @@ def create_authorization_server(
     token_storage: TokenStorage | None = None,
 ) -> Starlette:
     """Create the Authorization Server application."""
+    # Get the global API client for loading OAuth clients from backend
+    global api_client
+    valid_api_client = ensure_valid_api_client()
+
     oauth_provider = TaskManagerAuthProvider(  # type: ignore[var-annotated]
-        auth_settings, str(server_url), token_storage=token_storage
+        auth_settings,
+        str(server_url),
+        token_storage=token_storage,
+        api_client=valid_api_client,
     )
 
     # Load and share registered clients with OAuth provider

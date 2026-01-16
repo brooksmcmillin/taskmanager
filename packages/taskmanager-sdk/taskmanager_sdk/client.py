@@ -504,6 +504,22 @@ class TaskManagerClient:
         """
         return self._make_request("GET", "/oauth/clients")
 
+    def get_oauth_client_info(self, client_id: str) -> ApiResponse:
+        """
+        Get OAuth client information by client ID.
+
+        This endpoint requires client credentials authentication and can fetch
+        any client's metadata (not restricted to the authenticated user's clients).
+        Designed for machine-to-machine services like MCP auth servers.
+
+        Args:
+            client_id: The OAuth client ID to look up
+
+        Returns:
+            ApiResponse with client information
+        """
+        return self._make_request("GET", f"/oauth/clients/{client_id}/info")
+
     def create_oauth_client(
         self,
         name: str,
