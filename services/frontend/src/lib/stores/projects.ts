@@ -9,7 +9,9 @@ function createProjectStore() {
 		subscribe,
 		load: async () => {
 			try {
-				const response = await api.get<{ data: Project[]; meta: { count: number } }>('/api/projects');
+				const response = await api.get<{ data: Project[]; meta: { count: number } }>(
+					'/api/projects'
+				);
 				set(response.data || []);
 			} catch (error) {
 				console.error('Failed to load projects:', error);

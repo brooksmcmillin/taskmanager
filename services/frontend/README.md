@@ -75,6 +75,7 @@ docker run -p 3000:3000 taskmanager-frontend
 The frontend connects to the FastAPI backend at `VITE_API_URL`. All API calls use cookie-based session authentication.
 
 Example:
+
 ```typescript
 import { api } from '$lib/api/client';
 

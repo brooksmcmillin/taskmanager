@@ -48,14 +48,18 @@ npx playwright show-report playwright-report
 ## Test Structure
 
 ### `auth-flow.spec.ts`
+
 Tests user authentication flows:
+
 - User registration with validation
 - Login with valid/invalid credentials
 - Logout and session cleanup
 - Protected route redirection
 
 ### `todo-flow.spec.ts`
+
 Tests todo management:
+
 - Create new todos with all fields
 - Edit existing todos
 - Complete and delete todos
@@ -64,7 +68,9 @@ Tests todo management:
 - Form validation
 
 ### `calendar-drag-drop.spec.ts`
+
 Tests drag-and-drop calendar:
+
 - 3-week calendar view rendering
 - Week navigation (previous/next)
 - Display todos on calendar
@@ -78,6 +84,7 @@ Tests drag-and-drop calendar:
 ## Test Configuration
 
 Configuration is in `playwright.config.ts`:
+
 - Tests run against `http://localhost:4173` (preview server)
 - Automatic server startup before tests
 - Screenshots and videos on failure
@@ -89,6 +96,7 @@ Configuration is in `playwright.config.ts`:
 ⚠️ **Setup Required Before Tests Can Run**
 
 ### Database Seeding
+
 Tests require a test database with seeded data. Create a test database setup script with:
 
 ```sql
@@ -98,17 +106,20 @@ VALUES ('testuser', 'test@example.com', '$2a$12$...');
 ```
 
 **Note**: Use unique test data per test run to avoid conflicts. Consider:
+
 - Dynamic usernames: `testuser-${timestamp}`
 - Test data cleanup in `afterEach` hooks
 - Isolated test database instance
 
 ### Required Test Environment
+
 - ✅ Backend API running and accessible
 - ✅ Test database with clean state before each run
 - ✅ Proper CORS configuration for test origin
 - ⏳ Test user seeded (see above)
 
 ### Test Credentials
+
 - Username: `testuser` (or dynamic per test)
 - Password: `TestPass123!` # pragma: allowlist secret
 
@@ -117,6 +128,7 @@ VALUES ('testuser', 'test@example.com', '$2a$12$...');
 ## CI/CD Integration
 
 Tests are designed to run in CI environments:
+
 - Set `CI=true` environment variable
 - Tests run sequentially in CI (1 worker)
 - 2 retries on failure
@@ -130,20 +142,20 @@ Follow these patterns:
 import { test, expect } from '@playwright/test';
 
 test.describe('Feature Name', () => {
-    test.beforeEach(async ({ page }) => {
-        // Login or setup common state
-    });
+	test.beforeEach(async ({ page }) => {
+		// Login or setup common state
+	});
 
-    test('should do something', async ({ page }) => {
-        // 1. Navigate
-        await page.goto('/path');
+	test('should do something', async ({ page }) => {
+		// 1. Navigate
+		await page.goto('/path');
 
-        // 2. Interact
-        await page.click('[data-testid=button]');
+		// 2. Interact
+		await page.click('[data-testid=button]');
 
-        // 3. Assert
-        await expect(page.locator('.result')).toBeVisible();
-    });
+		// 3. Assert
+		await expect(page.locator('.result')).toBeVisible();
+	});
 });
 ```
 
@@ -159,6 +171,7 @@ test.describe('Feature Name', () => {
 ## Debugging
 
 ### Debug Mode
+
 ```bash
 npm run test:debug
 ```
@@ -166,6 +179,7 @@ npm run test:debug
 Opens Playwright Inspector for step-by-step debugging.
 
 ### Trace Viewer
+
 ```bash
 npx playwright show-trace trace.zip
 ```
@@ -173,7 +187,9 @@ npx playwright show-trace trace.zip
 View traces from failed tests.
 
 ### Console Logs
+
 Add `console.log()` in tests or use:
+
 ```typescript
 await page.evaluate(() => console.log('Browser console'));
 ```
@@ -181,16 +197,19 @@ await page.evaluate(() => console.log('Browser console'));
 ## Troubleshooting
 
 **Tests fail with "Timeout"**
+
 - Increase timeout in config
 - Check if server is running
 - Verify network connectivity
 
 **Elements not found**
+
 - Check selectors match actual HTML
 - Use `page.locator().all()` to debug
 - Wait for dynamic content with `waitForSelector()`
 
 **Drag-and-drop not working**
+
 - Verify `svelte-dnd-action` is installed
 - Check that elements have proper drag handlers
 - Use Playwright's `dragTo()` method
@@ -198,6 +217,7 @@ await page.evaluate(() => console.log('Browser console'));
 ## Coverage
 
 Target coverage goals:
+
 - User flows: 100%
 - Component interactions: 90%+
 - Error handling: 80%+

@@ -1,36 +1,36 @@
 {
-  "name": "taskmanager-frontend",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "format": "prettier --write .",
-    "lint": "prettier --check .",
-    "test": "playwright test",
-    "test:ui": "playwright test --ui",
-    "test:debug": "playwright test --debug"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.40.1",
-    "@sveltejs/adapter-node": "^5.0.1",
-    "@sveltejs/kit": "^2.0.0",
-    "@sveltejs/vite-plugin-svelte": "^4.0.0",
-    "@types/node": "^25.0.9",
-    "prettier": "^3.1.1",
-    "prettier-plugin-svelte": "^3.1.2",
-    "sass": "^1.69.7",
-    "svelte": "^5.0.0",
-    "svelte-check": "^4.0.0",
-    "tslib": "^2.7.0",
-    "typescript": "^5.0.0",
-    "vite": "^5.0.0"
-  },
-  "dependencies": {
-    "svelte-dnd-action": "^0.9.50"
-  }
+	"name": "taskmanager-frontend",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"format": "prettier --write .",
+		"lint": "prettier --check .",
+		"test": "playwright test",
+		"test:ui": "playwright test --ui",
+		"test:debug": "playwright test --debug"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.40.1",
+		"@sveltejs/adapter-node": "^5.0.1",
+		"@sveltejs/kit": "^2.0.0",
+		"@sveltejs/vite-plugin-svelte": "^4.0.0",
+		"@types/node": "^25.0.9",
+		"prettier": "^3.1.1",
+		"prettier-plugin-svelte": "^3.1.2",
+		"sass": "^1.69.7",
+		"svelte": "^5.0.0",
+		"svelte-check": "^4.0.0",
+		"tslib": "^2.7.0",
+		"typescript": "^5.0.0",
+		"vite": "^5.0.0"
+	},
+	"dependencies": {
+		"svelte-dnd-action": "^0.9.50"
+	}
 }

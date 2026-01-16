@@ -41,9 +41,12 @@
 
 	async function lookupDeviceAuth(code: string) {
 		try {
-			const response = await fetch(`/api/oauth/device/lookup?user_code=${encodeURIComponent(code)}`, {
-				credentials: 'include'
-			});
+			const response = await fetch(
+				`/api/oauth/device/lookup?user_code=${encodeURIComponent(code)}`,
+				{
+					credentials: 'include'
+				}
+			);
 
 			if (!response.ok) {
 				error = 'Invalid or expired code. Please check the code and try again.';
@@ -155,9 +158,7 @@
 				<div class="authorization-content">
 					<div class="client-info">
 						<h2>{deviceAuth.client_name}</h2>
-						<p>
-							This application is requesting access to your TaskManager account via a device.
-						</p>
+						<p>This application is requesting access to your TaskManager account via a device.</p>
 					</div>
 
 					<div class="code-display">
@@ -197,8 +198,8 @@
 					<div class="security-note">
 						<p>
 							<small>
-								⚠️ Only authorize devices you trust. The device will have access to your
-								account until you revoke it.
+								⚠️ Only authorize devices you trust. The device will have access to your account
+								until you revoke it.
 							</small>
 						</p>
 					</div>

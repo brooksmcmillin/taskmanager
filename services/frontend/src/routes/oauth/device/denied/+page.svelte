@@ -8,8 +8,7 @@
 			<div class="denied-icon">❌</div>
 			<h1>Device Authorization Denied</h1>
 			<p class="denied-message">
-				You have denied access to the device. The device will not be able to access your
-				account.
+				You have denied access to the device. The device will not be able to access your account.
 			</p>
 			<div class="actions">
 				<a href="/" class="btn btn-primary">Return to Dashboard</a>

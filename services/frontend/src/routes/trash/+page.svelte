@@ -34,9 +34,7 @@
 
 	async function loadDeletedTasks(query: string = '') {
 		try {
-			const url = query
-				? `/api/trash?query=${encodeURIComponent(query)}`
-				: '/api/trash';
+			const url = query ? `/api/trash?query=${encodeURIComponent(query)}` : '/api/trash';
 			const response = await fetch(url, {
 				credentials: 'include'
 			});

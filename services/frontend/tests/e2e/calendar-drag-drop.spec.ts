@@ -65,7 +65,9 @@ test.describe('Calendar Drag and Drop', () => {
 		// Verify the date changed by 7 days
 		const dateBefore = new Date(firstDayBefore!);
 		const dateAfter = new Date(firstDayAfter!);
-		const daysDiff = Math.floor((dateAfter.getTime() - dateBefore.getTime()) / (1000 * 60 * 60 * 24));
+		const daysDiff = Math.floor(
+			(dateAfter.getTime() - dateBefore.getTime()) / (1000 * 60 * 60 * 24)
+		);
 		expect(daysDiff).toBe(7);
 
 		// Click previous week button
@@ -105,9 +107,7 @@ test.describe('Calendar Drag and Drop', () => {
 
 		// Find the todo on the calendar
 		const sourceDayCell = page.locator(`.calendar-day[data-date="${sourceDate}"]`);
-		const todoItem = sourceDayCell
-			.locator('.calendar-task')
-			.filter({ hasText: 'Draggable Task' });
+		const todoItem = sourceDayCell.locator('.calendar-task').filter({ hasText: 'Draggable Task' });
 
 		// Verify it's in the source date
 		await expect(todoItem).toBeVisible({ timeout: 5000 });
@@ -122,9 +122,7 @@ test.describe('Calendar Drag and Drop', () => {
 		await waitForApiResponse(page, '/api/todos/', 'PUT');
 
 		// Verify todo moved to new date
-		const movedTodo = targetDayCell
-			.locator('.calendar-task')
-			.filter({ hasText: 'Draggable Task' });
+		const movedTodo = targetDayCell.locator('.calendar-task').filter({ hasText: 'Draggable Task' });
 		await expect(movedTodo).toBeVisible({ timeout: 5000 });
 
 		// Verify it's no longer in the source date

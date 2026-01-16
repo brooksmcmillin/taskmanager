@@ -6,16 +6,17 @@ This document provides an overview of the E2E test specifications for the TaskMa
 
 ## Test Files Overview
 
-| Test File | Test Count | Coverage Area | Status |
-|-----------|------------|---------------|--------|
-| `auth-flow.spec.ts` | 6 tests | Authentication | ⏳ Specification |
-| `todo-flow.spec.ts` | 10 tests | Todo Management | ⏳ Specification |
-| `calendar-drag-drop.spec.ts` | 11 tests | Calendar & DnD | ⏳ Specification |
-| **Total** | **27 tests** | **All core flows** | ⏳ Pending Implementation |
+| Test File                    | Test Count   | Coverage Area      | Status                    |
+| ---------------------------- | ------------ | ------------------ | ------------------------- |
+| `auth-flow.spec.ts`          | 6 tests      | Authentication     | ⏳ Specification          |
+| `todo-flow.spec.ts`          | 10 tests     | Todo Management    | ⏳ Specification          |
+| `calendar-drag-drop.spec.ts` | 11 tests     | Calendar & DnD     | ⏳ Specification          |
+| **Total**                    | **27 tests** | **All core flows** | ⏳ Pending Implementation |
 
 ## Prerequisites for Execution
 
 Before these tests can run:
+
 - [ ] Implement login/register pages (`/login`, `/register`)
 - [ ] Implement dashboard page (`/`) with todo list
 - [ ] Add required `data-testid` attributes to components (see `REQUIRED_TEST_IDS.md`)
@@ -27,6 +28,7 @@ Before these tests can run:
 ### 1. Authentication Flow (6 tests)
 
 **Covered Scenarios:**
+
 - ✅ New user registration with field validation
 - ✅ Successful login with valid credentials
 - ✅ Failed login with invalid credentials and error display
@@ -35,6 +37,7 @@ Before these tests can run:
 - ✅ Protected route redirection to login
 
 **API Endpoints Tested:**
+
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
@@ -42,6 +45,7 @@ Before these tests can run:
 ### 2. Todo Management Flow (10 tests)
 
 **Covered Scenarios:**
+
 - ✅ Create new todo with modal form
 - ✅ Edit existing todo
 - ✅ Complete todo (status change)
@@ -54,6 +58,7 @@ Before these tests can run:
 - ✅ Todo detail view
 
 **API Endpoints Tested:**
+
 - `GET /api/todos` (with filters)
 - `POST /api/todos`
 - `PUT /api/todos/{id}`
@@ -64,6 +69,7 @@ Before these tests can run:
 ### 3. Calendar Drag-Drop Flow (11 tests)
 
 **Covered Scenarios:**
+
 - ✅ Display 3-week calendar (21 days)
 - ✅ Show day headers (Sunday-Saturday)
 - ✅ Highlight current day
@@ -78,12 +84,14 @@ Before these tests can run:
 - ✅ Show only pending todos (filter out completed)
 
 **Component Integration:**
+
 - `DragDropCalendar.svelte`
 - `TodoModal.svelte`
 - `TodoForm.svelte`
 - Svelte stores: `todos`, `pendingTodos`
 
 **Technical Validation:**
+
 - svelte-dnd-action library integration
 - Optimistic UI updates
 - API call on drag finalize
@@ -93,53 +101,56 @@ Before these tests can run:
 
 ### Core Features
 
-| Feature | Test Coverage | Notes |
-|---------|---------------|-------|
-| User registration | 100% | All validation rules tested |
-| User login/logout | 100% | Success and error cases |
-| Todo CRUD | 100% | All operations covered |
-| Todo filtering | 100% | Status and project filters |
-| Todo search | 100% | Full-text search |
-| Calendar view | 100% | 3-week grid, navigation |
-| Drag-and-drop | 100% | All DnD scenarios |
-| Project colors | 100% | Color display on calendar |
-| Priority styling | 100% | All priority levels |
-| Accessibility | 80% | Keyboard nav, ARIA attributes |
+| Feature           | Test Coverage | Notes                         |
+| ----------------- | ------------- | ----------------------------- |
+| User registration | 100%          | All validation rules tested   |
+| User login/logout | 100%          | Success and error cases       |
+| Todo CRUD         | 100%          | All operations covered        |
+| Todo filtering    | 100%          | Status and project filters    |
+| Todo search       | 100%          | Full-text search              |
+| Calendar view     | 100%          | 3-week grid, navigation       |
+| Drag-and-drop     | 100%          | All DnD scenarios             |
+| Project colors    | 100%          | Color display on calendar     |
+| Priority styling  | 100%          | All priority levels           |
+| Accessibility     | 80%           | Keyboard nav, ARIA attributes |
 
 ### Component Coverage
 
-| Component | Tests | Status |
-|-----------|-------|--------|
-| TodoModal | 5 tests | ✅ Covered |
-| TodoForm | 7 tests | ✅ Covered |
-| DragDropCalendar | 11 tests | ✅ Covered |
-| Navigation | Implicit | ✅ Covered in auth tests |
-| Modal | Implicit | ✅ Covered in form tests |
+| Component        | Tests    | Status                   |
+| ---------------- | -------- | ------------------------ |
+| TodoModal        | 5 tests  | ✅ Covered               |
+| TodoForm         | 7 tests  | ✅ Covered               |
+| DragDropCalendar | 11 tests | ✅ Covered               |
+| Navigation       | Implicit | ✅ Covered in auth tests |
+| Modal            | Implicit | ✅ Covered in form tests |
 
 ### Store Coverage
 
-| Store | Operations Tested | Status |
-|-------|-------------------|--------|
-| `todos` | load, add, updateTodo, complete, remove | ✅ All covered |
-| `pendingTodos` | Derived store filtering | ✅ Covered |
-| `completedTodos` | Derived store filtering | ✅ Covered |
-| `todosByProject` | Derived store grouping | ✅ Covered |
+| Store            | Operations Tested                       | Status         |
+| ---------------- | --------------------------------------- | -------------- |
+| `todos`          | load, add, updateTodo, complete, remove | ✅ All covered |
+| `pendingTodos`   | Derived store filtering                 | ✅ Covered     |
+| `completedTodos` | Derived store filtering                 | ✅ Covered     |
+| `todosByProject` | Derived store grouping                  | ✅ Covered     |
 
 ## Test Quality Metrics
 
 ### Reliability
+
 - **Independent tests**: Each test can run standalone
 - **Clean state**: `beforeEach` hooks ensure consistent state
 - **No race conditions**: Proper waits and timeouts
 - **Cross-browser**: Tests run on Chromium, Firefox, WebKit
 
 ### Maintainability
+
 - **Data attributes**: Uses `data-testid` for stable selectors
 - **Page objects**: Ready for refactoring to page object pattern
 - **Clear naming**: Descriptive test names follow "should..." pattern
 - **Documentation**: Inline comments for complex interactions
 
 ### Performance
+
 - **Parallel execution**: Tests run in parallel (except CI)
 - **Timeout handling**: Appropriate timeouts for async operations
 - **Retry logic**: 2 retries in CI for flaky tests
@@ -148,6 +159,7 @@ Before these tests can run:
 ## Edge Cases Covered
 
 ### Authentication
+
 - ✅ Empty form submission
 - ✅ Weak password validation
 - ✅ Invalid email format
@@ -155,6 +167,7 @@ Before these tests can run:
 - ✅ Unauthorized access redirect
 
 ### Todo Management
+
 - ✅ Required field validation
 - ✅ Long text handling (title, description)
 - ✅ Invalid date formats
@@ -162,6 +175,7 @@ Before these tests can run:
 - ✅ Filter combinations
 
 ### Calendar Drag-Drop
+
 - ✅ Drag to same date (no-op)
 - ✅ Drag across week boundaries
 - ✅ Multiple todos on same date
@@ -171,6 +185,7 @@ Before these tests can run:
 ## Known Limitations
 
 ### Not Yet Covered
+
 - [ ] Project management pages (create, edit, delete projects)
 - [ ] OAuth client management
 - [ ] OAuth authorization flows
@@ -181,6 +196,7 @@ Before these tests can run:
 - [ ] Performance benchmarks
 
 ### Blocked by Implementation
+
 - [ ] Full page integration (pages not yet built)
 - [ ] Backend API availability
 - [ ] Test user seeding
@@ -188,6 +204,7 @@ Before these tests can run:
 ## Running Tests
 
 ### Prerequisites
+
 ```bash
 # Install dependencies
 npm install
@@ -197,6 +214,7 @@ npx playwright install
 ```
 
 ### Execution
+
 ```bash
 # Run all tests
 npm test
@@ -209,6 +227,7 @@ npx playwright test tests/e2e/calendar-drag-drop.spec.ts
 ```
 
 ### CI/CD
+
 ```bash
 # CI mode
 CI=true npm test

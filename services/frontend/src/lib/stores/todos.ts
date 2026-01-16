@@ -18,10 +18,9 @@ function createTodoStore() {
 						) as Record<string, string>)
 					: undefined;
 
-				const response = await api.get<{ data: Todo[]; meta: { count: number } }>(
-					'/api/todos',
-					{ params }
-				);
+				const response = await api.get<{ data: Todo[]; meta: { count: number } }>('/api/todos', {
+					params
+				});
 				set(response.data || []);
 			} catch (error) {
 				console.error('Failed to load todos:', error);

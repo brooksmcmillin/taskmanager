@@ -68,7 +68,7 @@
 			// Find the todo being dragged across all dates
 			for (const [date, todosInDate] of Object.entries(todosByDate)) {
 				if (todosInDate) {
-					const todo = todosInDate.find(t => t && t.id === draggedIdNum);
+					const todo = todosInDate.find((t) => t && t.id === draggedIdNum);
 					if (todo && todo.due_date) {
 						draggedTodoId = draggedIdNum;
 						originalDate = todo.due_date.split('T')[0];
