@@ -4,7 +4,7 @@ import base64
 import hashlib
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Form, Request
 from sqlalchemy import select
 
 from app.config import settings
@@ -268,4 +268,52 @@ async def _handle_device_code(db, client: OAuthClient, device_code: str | None) 
         "expires_in": settings.access_token_expiry,
         "refresh_token": access_token.refresh_token,
         "scope": " ".join(dc.scopes),
+    }
+
+
+@router.get("/verify")
+async def verify_token(
+    request: Request,
+    db: DbSession,
+) -> dict:
+    """
+    Verify OAuth access token.
+
+    Works for both user tokens and client credentials tokens.
+    Returns token information without requiring a user context.
+    Useful for health checks and token validation.
+    """
+    # Extract Bearer token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise errors.auth_required()
+
+    token = auth_header.replace("Bearer ", "")
+
+    # Validate access token
+    result = await db.execute(
+        select(AccessToken)
+        .where(AccessToken.token == token)
+        .where(AccessToken.revoked.is_(False))
+    )
+    access_token = result.scalar_one_or_none()
+
+    if not access_token:
+        raise errors.invalid_token()
+
+    # Check if token is expired
+    now = datetime.now(UTC)
+    if access_token.expires_at <= now:
+        raise errors.invalid_token()
+
+    # Calculate seconds until expiration
+    expires_in = int((access_token.expires_at - now).total_seconds())
+
+    return {
+        "valid": True,
+        "client_id": access_token.client_id,
+        "user_id": access_token.user_id,
+        "scopes": access_token.scopes,
+        "expires_in": expires_in,
+        "token_type": "Bearer",
     }

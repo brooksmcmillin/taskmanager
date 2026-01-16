@@ -585,6 +585,26 @@ class TaskManagerClient:
         """
         return self._make_request("GET", "/oauth/jwks")
 
+    def verify_token(self) -> ApiResponse:
+        """
+        Verify OAuth access token.
+
+        Works for both user tokens and client credentials tokens.
+        Returns token information including validity, scopes, and expiration.
+
+        Returns:
+            ApiResponse with token verification data:
+            {
+                "valid": bool,
+                "client_id": str,
+                "user_id": int | None,
+                "scopes": list[str],
+                "expires_in": int,
+                "token_type": str
+            }
+        """
+        return self._make_request("GET", "/oauth/verify")
+
     def request_device_code(
         self, client_id: str, scope: str | None = None
     ) -> ApiResponse:
