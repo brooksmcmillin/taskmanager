@@ -58,17 +58,19 @@
 		return grouped;
 	}
 
-	function handleConsider(dateStr: string, event: CustomEvent<DndEvent>) {
+	function handleConsider(dateStr: string, event: CustomEvent<DndEvent<Todo>>) {
 		// Track what's being dragged when drag starts
 		if (event.detail.info.trigger === 'dragStarted') {
 			isDragging = true;
 			const draggedId = event.detail.info.id;
+			// Convert draggedId to number for comparison with todo.id
+			const draggedIdNum = typeof draggedId === 'string' ? parseInt(draggedId, 10) : draggedId;
 			// Find the todo being dragged across all dates
 			for (const [date, todosInDate] of Object.entries(todosByDate)) {
 				if (todosInDate) {
-					const todo = todosInDate.find(t => t && t.id === draggedId);
+					const todo = todosInDate.find(t => t && t.id === draggedIdNum);
 					if (todo && todo.due_date) {
-						draggedTodoId = draggedId as number;
+						draggedTodoId = draggedIdNum;
 						originalDate = todo.due_date.split('T')[0];
 						break;
 					}
@@ -78,12 +80,12 @@
 
 		// Update local state - svelte-dnd-action gives us the new items array for this date
 		// This is what the date WILL look like if the drag completes
-		todosByDate = { ...todosByDate, [dateStr]: event.detail.items };
+		todosByDate = { ...todosByDate, [dateStr]: event.detail.items as Todo[] };
 	}
 
-	async function handleFinalize(dateStr: string, event: CustomEvent<DndEvent>) {
+	async function handleFinalize(dateStr: string, event: CustomEvent<DndEvent<Todo>>) {
 		// Update local state first - this is what svelte-dnd-action expects
-		todosByDate = { ...todosByDate, [dateStr]: event.detail.items };
+		todosByDate = { ...todosByDate, [dateStr]: event.detail.items as Todo[] };
 
 		// Only make API call if item was actually moved to a different date
 		if (draggedTodoId !== null && originalDate !== null && originalDate !== dateStr) {
