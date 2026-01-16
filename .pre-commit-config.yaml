@@ -107,6 +107,13 @@ repos:
         files: ^frontend/(package\.json|package-lock\.json)$
         pass_filenames: false
 
+      - id: npm-lint
+        name: npm lint (frontend)
+        entry: bash -c 'cd frontend && npm run format'
+        language: system
+        files: ^frontend/.*\.(js|ts|astro)$
+        pass_filenames: false
+
   # =============================================================================
   # Docker linting
   # =============================================================================
