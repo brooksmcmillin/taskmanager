@@ -12,6 +12,8 @@ help:  ## Show this help message
 
 install:  ## Install all dependencies
 	cd services/web-app && npm install
+	cd services/frontend && npm install
+	cd services/backend && uv sync
 	cd services/mcp-auth && uv sync
 	cd services/mcp-resource && uv sync
 	cd packages/taskmanager-sdk && uv sync
@@ -27,12 +29,20 @@ install-dev:  ## Install development dependencies including pre-commit
 
 test:  ## Run all tests
 	cd services/web-app && npm test -- --run
+	cd services/frontend && npm test
+	cd services/backend && uv run pytest tests/ -v
 	cd services/mcp-auth && uv run pytest tests/ -v
 	cd services/mcp-resource && uv run pytest tests/ -v
 	cd packages/taskmanager-sdk && uv run pytest tests/ -v
 
-test-web:  ## Run web-app tests
+test-web:  ## Run web-app tests (legacy Astro)
 	cd services/web-app && npm test
+
+test-frontend:  ## Run frontend tests (SvelteKit)
+	cd services/frontend && npm test
+
+test-backend:  ## Run backend tests (FastAPI)
+	cd services/backend && uv run pytest tests/ -v
 
 test-mcp-auth:  ## Run mcp-auth tests
 	cd services/mcp-auth && uv run pytest tests/ -v
@@ -53,18 +63,24 @@ test-cov:  ## Run tests with coverage
 lint:  ## Run all linting checks
 	@echo "Linting web-app..."
 	cd services/web-app && npm run lint
+	@echo "Linting frontend..."
+	cd services/frontend && npm run lint
 	@echo "Linting Python services..."
+	cd services/backend && uv run ruff check .
 	cd services/mcp-auth && uv run ruff check .
 	cd services/mcp-resource && uv run ruff check .
 	cd packages/taskmanager-sdk && uv run ruff check .
 
 format:  ## Auto-format code
 	cd services/web-app && npm run format
+	cd services/frontend && npm run format
+	cd services/backend && uv run ruff format . && uv run ruff check --fix .
 	cd services/mcp-auth && uv run ruff format . && uv run ruff check --fix .
 	cd services/mcp-resource && uv run ruff format . && uv run ruff check --fix .
 	cd packages/taskmanager-sdk && uv run ruff format . && uv run ruff check --fix .
 
 typecheck:  ## Run type checking
+	cd services/backend && uv run pyright
 	cd services/mcp-auth && uv run pyright
 	cd services/mcp-resource && uv run pyright
 	cd packages/taskmanager-sdk && uv run pyright
@@ -76,11 +92,14 @@ typecheck:  ## Run type checking
 security:  ## Run security checks
 	@echo "Running npm audit..."
 	cd services/web-app && npm audit || true
+	cd services/frontend && npm audit || true
 	@echo "Running pip-audit on Python services..."
+	cd services/backend && uv run pip-audit || true
 	cd services/mcp-auth && uv run pip-audit || true
 	cd services/mcp-resource && uv run pip-audit || true
 	cd packages/taskmanager-sdk && uv run pip-audit || true
 	@echo "Running bandit..."
+	cd services/backend && uv run bandit -r app/ || true
 	cd services/mcp-auth && uv run bandit -r mcp_auth/ || true
 	cd services/mcp-resource && uv run bandit -r mcp_resource/ || true
 
