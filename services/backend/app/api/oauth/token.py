@@ -29,6 +29,7 @@ def verify_pkce(code_verifier: str, code_challenge: str, method: str) -> bool:
 
 @router.post("/token")
 async def token_endpoint(
+    db: DbSession,
     grant_type: str = Form(...),
     client_id: str = Form(...),
     client_secret: str | None = Form(None),
@@ -38,7 +39,6 @@ async def token_endpoint(
     refresh_token: str | None = Form(None),
     device_code: str | None = Form(None),
     scope: str | None = Form(None),
-    db: DbSession = None,
 ) -> dict:
     """Token endpoint for all grant types."""
     # Validate client

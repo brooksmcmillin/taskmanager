@@ -24,8 +24,8 @@ async def test_list_trash_empty(authenticated_client: AsyncClient):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["tasks"] == []
-    assert data["count"] == 0
+    assert data["data"] == []
+    assert data["meta"]["count"] == 0
 
 
 @pytest.mark.asyncio
@@ -53,11 +53,11 @@ async def test_list_trash_with_deleted_todos(
 
     assert response.status_code == 200
     data = response.json()
-    assert data["count"] == 1
-    assert len(data["tasks"]) == 1
-    assert data["tasks"][0]["id"] == todo.id
-    assert data["tasks"][0]["title"] == "Deleted Todo"
-    assert data["tasks"][0]["deleted_at"] is not None
+    assert data["meta"]["count"] == 1
+    assert len(data["data"]) == 1
+    assert data["data"][0]["id"] == todo.id
+    assert data["data"][0]["title"] == "Deleted Todo"
+    assert data["data"][0]["deleted_at"] is not None
 
 
 @pytest.mark.asyncio
@@ -82,8 +82,8 @@ async def test_list_trash_with_search_query(
 
     assert response.status_code == 200
     data = response.json()
-    assert data["count"] == 1
-    assert data["tasks"][0]["title"] == "Find me in trash"
+    assert data["meta"]["count"] == 1
+    assert data["data"][0]["title"] == "Find me in trash"
 
 
 @pytest.mark.asyncio
@@ -103,7 +103,7 @@ async def test_restore_todo(
 
     # Verify it's in trash
     trash_response = await authenticated_client.get("/api/trash")
-    assert trash_response.json()["count"] == 1
+    assert trash_response.json()["meta"]["count"] == 1
 
     # Restore it
     response = await authenticated_client.post(f"/api/trash/{todo.id}/restore")
@@ -115,7 +115,7 @@ async def test_restore_todo(
 
     # Verify it's no longer in trash
     trash_response = await authenticated_client.get("/api/trash")
-    assert trash_response.json()["count"] == 0
+    assert trash_response.json()["meta"]["count"] == 0
 
     # Verify it's back in regular todos
     todos_response = await authenticated_client.get("/api/todos")

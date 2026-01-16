@@ -12,10 +12,10 @@ router = APIRouter(prefix="/api/tasks", tags=["search"])
 
 @router.get("/search")
 async def search_tasks(
+    user: CurrentUser,
+    db: DbSession,
     q: str = Query(..., min_length=1),
     category: str | None = Query(None),
-    user: CurrentUser = None,
-    db: DbSession = None,
 ) -> dict:
     """Full-text search for tasks.
 
