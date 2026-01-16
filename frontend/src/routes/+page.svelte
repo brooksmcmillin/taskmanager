@@ -8,8 +8,7 @@
 
 	let currentView: 'list' | 'calendar' = 'calendar';
 	let minimizedProjects: Record<string, boolean> = {};
-	let editingTodo: Todo | null = null;
-	let showModal = false;
+	let todoModal: TodoModal;
 
 	onMount(async () => {
 		// Load todos and projects
@@ -41,8 +40,7 @@
 	}
 
 	function openEditModal(todo: Todo) {
-		editingTodo = todo;
-		showModal = true;
+		todoModal.openEdit(todo);
 	}
 
 	async function handleCompleteTodo(todoId: number) {
@@ -101,7 +99,7 @@
 	</div>
 
 	<!-- Todo Modal -->
-	<TodoModal bind:show={showModal} todo={editingTodo} on:save={() => todos.load({ status: 'pending' })} />
+	<TodoModal bind:this={todoModal} />
 
 	<!-- List View -->
 	{#if currentView === 'list'}

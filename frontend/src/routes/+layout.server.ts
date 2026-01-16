@@ -1,6 +1,5 @@
 import type { LayoutServerLoad } from './$types';
-
-const BACKEND_URL = 'http://backend:8000';
+import { BACKEND_URL } from '$env/static/private';
 
 export const load: LayoutServerLoad = async ({ cookies, url }) => {
 	const sessionId = cookies.get('session');
