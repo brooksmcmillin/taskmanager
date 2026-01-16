@@ -1,5 +1,7 @@
 import type { LayoutServerLoad } from './$types';
-import { BACKEND_URL } from '$env/static/private';
+import { env } from '$env/dynamic/private';
+
+const BACKEND_URL = env.BACKEND_URL || 'http://localhost:8000';
 
 export const load: LayoutServerLoad = async ({ cookies, url }) => {
 	const sessionId = cookies.get('session');

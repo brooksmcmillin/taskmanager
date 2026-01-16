@@ -17,9 +17,9 @@ router = APIRouter(prefix="/api/oauth/device", tags=["oauth"])
 
 @router.post("/code")
 async def device_authorization(
+    db: DbSession,
     client_id: str = Form(...),
     scope: str = Form("read"),
-    db: DbSession = None,
 ) -> dict:
     """Device authorization endpoint.
 
@@ -72,10 +72,10 @@ async def device_authorization(
 
 @router.post("/authorize")
 async def authorize_device(
+    user: CurrentUser,
+    db: DbSession,
     user_code: str = Form(...),
     action: str = Form(...),
-    user: CurrentUser = None,
-    db: DbSession = None,
 ) -> RedirectResponse:
     """Authorize or deny device.
 

@@ -7,7 +7,15 @@ on:
     branches: [main]
 
 jobs:
-  ci:
+  backend:
+    uses: ./.github/workflows/backend-ci.yml
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  frontend:
+    uses: ./.github/workflows/frontend-ci.yml
+
+  web-app:
     uses: ./.github/workflows/node-ci.yml
     with:
       node-version: '22'

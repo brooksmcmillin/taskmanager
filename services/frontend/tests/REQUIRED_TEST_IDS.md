@@ -9,9 +9,11 @@ These test IDs are required for tests to run at all:
 ### Authentication Pages
 
 **Login Page (`/login`)**
+
 - None required (uses name attributes on form fields)
 
 **Register Page (`/register`)**
+
 - None required (uses name attributes on form fields)
 
 ### Navigation Component
@@ -24,14 +26,15 @@ These test IDs are required for tests to run at all:
 ### Todo Management
 
 **Dashboard / Todo List**
+
 ```svelte
 <!-- Dashboard page or TodoList component -->
 <button data-testid="add-todo-button" on:click={openAddModal}>Add Todo</button>
 
 <!-- For each todo item -->
 <div class="task-item" data-testid="todo-item-{todo.id}">
-  <button data-testid="complete-todo" on:click={() => completeTodo(todo.id)}>Complete</button>
-  <button data-testid="delete-todo" on:click={() => deleteTodo(todo.id)}>Delete</button>
+	<button data-testid="complete-todo" on:click={() => completeTodo(todo.id)}>Complete</button>
+	<button data-testid="delete-todo" on:click={() => deleteTodo(todo.id)}>Delete</button>
 </div>
 
 <!-- Confirmation dialog -->
@@ -39,32 +42,35 @@ These test IDs are required for tests to run at all:
 ```
 
 **TodoModal Component**
+
 ```svelte
 <!-- TodoModal.svelte -->
 <Modal>
-  <TodoForm>
-    <button type="submit" data-testid="save-todo">Save</button>
-  </TodoForm>
+	<TodoForm>
+		<button type="submit" data-testid="save-todo">Save</button>
+	</TodoForm>
 </Modal>
 ```
 
 ### Calendar Component
 
 **DragDropCalendar.svelte**
+
 ```svelte
 <div class="flex gap-4">
-  <button class="btn btn-secondary btn-sm" data-testid="prev-week" on:click={prevWeek}>
-    ← Previous
-  </button>
-  <button class="btn btn-secondary btn-sm" data-testid="next-week" on:click={nextWeek}>
-    Next →
-  </button>
+	<button class="btn btn-secondary btn-sm" data-testid="prev-week" on:click={prevWeek}>
+		← Previous
+	</button>
+	<button class="btn btn-secondary btn-sm" data-testid="next-week" on:click={nextWeek}>
+		Next →
+	</button>
 </div>
 ```
 
 ### Project Management
 
 **Projects Page**
+
 ```svelte
 <button data-testid="add-project-button" on:click={openAddModal}>Add Project</button>
 ```
@@ -103,21 +109,16 @@ While tests currently use `[name=fieldname]` selectors, adding test IDs would be
 
 ```svelte
 <select name="status-filter" data-testid="status-filter">
-  <option value="all">All</option>
-  <option value="pending">Pending</option>
-  <option value="completed">Completed</option>
+	<option value="all">All</option>
+	<option value="pending">Pending</option>
+	<option value="completed">Completed</option>
 </select>
 
 <select name="project-filter" data-testid="project-filter">
-  <!-- project options -->
+	<!-- project options -->
 </select>
 
-<input
-  type="search"
-  name="search"
-  data-testid="todo-search-input"
-  placeholder="Search todos..."
-/>
+<input type="search" name="search" data-testid="todo-search-input" placeholder="Search todos..." />
 ```
 
 ## Priority: Medium (Better Test Semantics)
@@ -128,7 +129,7 @@ These would make tests more semantic but aren't strictly required:
 
 ```svelte
 <p class="error-message" data-testid="error-{fieldName}">
-  {errorMessage}
+	{errorMessage}
 </p>
 
 <!-- Specific examples -->
@@ -153,6 +154,7 @@ These would make tests more semantic but aren't strictly required:
 When implementing pages, ensure these attributes are added:
 
 ### Phase 1: Critical Path (Authentication & Basic CRUD)
+
 - [ ] Navigation logout button
 - [ ] Add todo button
 - [ ] Save todo button (in modal)
@@ -161,10 +163,12 @@ When implementing pages, ensure these attributes are added:
 - [ ] Delete confirmation button
 
 ### Phase 2: Calendar & Navigation
+
 - [ ] Calendar previous week button
 - [ ] Calendar next week button
 
 ### Phase 3: Enhanced Reliability
+
 - [ ] Form field test IDs
 - [ ] Filter control test IDs
 - [ ] Error message test IDs
@@ -202,12 +206,12 @@ Consider creating a script to validate all required test IDs exist:
 ```typescript
 // validate-test-ids.ts
 const requiredTestIds = [
-  'logout-button',
-  'add-todo-button',
-  'save-todo',
-  'complete-todo',
-  'delete-todo',
-  // ... etc
+	'logout-button',
+	'add-todo-button',
+	'save-todo',
+	'complete-todo',
+	'delete-todo'
+	// ... etc
 ];
 
 // Scan components and verify each ID exists

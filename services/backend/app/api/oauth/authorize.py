@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/oauth", tags=["oauth"])
 
 @router.get("/authorize")
 async def authorize_get(
+    db: DbSession,
     response_type: str = Query(...),
     client_id: str = Query(...),
     redirect_uri: str = Query(...),
@@ -24,7 +25,6 @@ async def authorize_get(
     state: str | None = Query(None),
     code_challenge: str | None = Query(None),
     code_challenge_method: str | None = Query(None),
-    db: DbSession = None,
 ) -> RedirectResponse:
     """Authorization endpoint - redirects to consent page or login."""
     # Validate client
@@ -64,6 +64,8 @@ async def authorize_get(
 
 @router.post("/authorize")
 async def authorize_post(
+    user: CurrentUser,
+    db: DbSession,
     action: str = Form(...),
     client_id: str = Form(...),
     redirect_uri: str = Form(...),
@@ -71,8 +73,6 @@ async def authorize_post(
     state: str = Form(""),
     code_challenge: str = Form(""),
     code_challenge_method: str = Form(""),
-    user: CurrentUser = None,
-    db: DbSession = None,
 ) -> RedirectResponse:
     """Process authorization consent."""
     if action == "deny":

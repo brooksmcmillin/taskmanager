@@ -66,9 +66,7 @@
 				description: formData.description || undefined,
 				priority: formData.priority,
 				due_date: formData.due_date || undefined,
-				tags: formData.tags
-					? formData.tags.split(',').map((t) => t.trim())
-					: undefined,
+				tags: formData.tags ? formData.tags.split(',').map((t) => t.trim()) : undefined,
 				context: 'work'
 			};
 
@@ -146,7 +144,12 @@
 
 			<div>
 				<label for="project_id" class="block text-sm font-medium text-gray-700">Project</label>
-				<select id="project_id" name="project_id" class="form-select mt-1" bind:value={formData.project_id}>
+				<select
+					id="project_id"
+					name="project_id"
+					class="form-select mt-1"
+					bind:value={formData.project_id}
+				>
 					<option value="">Select a project...</option>
 					{#each projectList as project}
 						<option value={project.id.toString()}>{project.name}</option>
@@ -183,7 +186,12 @@
 
 			<div>
 				<label for="priority" class="block text-sm font-medium text-gray-700">Priority</label>
-				<select id="priority" name="priority" class="form-select mt-1" bind:value={formData.priority}>
+				<select
+					id="priority"
+					name="priority"
+					class="form-select mt-1"
+					bind:value={formData.priority}
+				>
 					<option value="low">Low</option>
 					<option value="medium">Medium</option>
 					<option value="high">High</option>
@@ -192,9 +200,7 @@
 			</div>
 
 			<div class="form-full-width">
-				<label for="description" class="block text-sm font-medium text-gray-700"
-					>Description</label
-				>
+				<label for="description" class="block text-sm font-medium text-gray-700">Description</label>
 				<textarea
 					id="description"
 					name="description"

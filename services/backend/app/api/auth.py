@@ -4,7 +4,7 @@ import re
 
 from fastapi import APIRouter, Response
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.config import settings
 from app.core.errors import errors
@@ -152,7 +152,7 @@ async def logout(
 ) -> dict[str, str]:
     """Logout and clear session."""
     # Delete user's sessions
-    await db.execute(Session.__table__.delete().where(Session.user_id == user.id))
+    await db.execute(delete(Session).where(Session.user_id == user.id))
 
     # Clear cookie
     response.delete_cookie("session")

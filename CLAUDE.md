@@ -239,9 +239,9 @@ $: filteredTodos = $todos.filter(t => t.status === 'pending');
 
 **Success responses:**
 ```json
-// List: { "tasks": [...], "meta": { "count": 10 } }
-// Single: { "id": 1, "title": "...", ... }
-// Created: 201 status with resource
+// List/Collection: { "data": [...], "meta": { "count": 10 } }
+// Single resource: { "data": { "id": 1, "title": "...", ... } }
+// Actions (delete/complete): { "data": { "deleted": true, "id": 1 } }
 ```
 
 **Error responses:**

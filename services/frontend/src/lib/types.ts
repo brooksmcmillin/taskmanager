@@ -23,6 +23,7 @@ export interface Todo {
 	context: string | null;
 	created_at: string;
 	updated_at: string;
+	deleted_at?: string | null;
 	project_name?: string;
 	project_color?: string;
 }
@@ -69,6 +70,18 @@ export interface ProjectCreate {
 }
 
 export interface ProjectUpdate extends Partial<ProjectCreate> {}
+
+export interface OAuthClient {
+	id: number;
+	client_id: string;
+	name: string;
+	redirect_uris: string[];
+	grant_types: string[];
+	scopes: string[];
+	is_active: boolean;
+	is_public: boolean;
+	created_at: string;
+}
 
 export interface ApiResponse<T> {
 	data?: T;

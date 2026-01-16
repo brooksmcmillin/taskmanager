@@ -39,7 +39,8 @@
 				throw new Error('Failed to load OAuth clients');
 			}
 
-			clients = await response.json();
+			const result = await response.json();
+			clients = result.data || [];
 		} catch (error) {
 			console.error('Failed to load OAuth clients:', error);
 		}
@@ -65,9 +66,9 @@
 		isEditMode = true;
 		editingClientId = clientId;
 		clientName = client.name;
-		redirectUris = JSON.parse(client.redirect_uris).join('\n');
-		scopes = JSON.parse(client.scopes).join(', ');
-		grantTypes = JSON.parse(client.grant_types).join(', ');
+		redirectUris = client.redirect_uris.join('\n');
+		scopes = client.scopes.join(', ');
+		grantTypes = client.grant_types.join(', ');
 		useCustomCredential = false;
 		clientCredential = '';
 		showCredentials = false;
@@ -95,7 +96,10 @@
 				window.location.href = '/login';
 			} else {
 				const error = await response.json();
-				alert('Failed to delete client: ' + (error.message || 'Unknown error'));
+				alert(
+					'Failed to delete client: ' +
+						(error.detail?.message || error.error?.message || 'Unknown error')
+				);
 			}
 		} catch (error) {
 			alert('Error: ' + (error as Error).message);
@@ -173,10 +177,10 @@
 			if (response.ok) {
 				const result = await response.json();
 
-				if (!isEditMode && result.client_secret) {
+				if (!isEditMode && result.data?.client_secret) {
 					// Show credentials for new client
-					displayClientId = result.client_id;
-					displayClientSecret = result.client_secret;
+					displayClientId = result.data.client_id;
+					displayClientSecret = result.data.client_secret;
 					showCredentials = true;
 				} else {
 					// Just close and reload for edits
@@ -187,7 +191,10 @@
 				window.location.href = '/login';
 			} else {
 				const error = await response.json();
-				alert('Failed to save client: ' + (error.message || 'Unknown error'));
+				alert(
+					'Failed to save client: ' +
+						(error.detail?.message || error.error?.message || 'Unknown error')
+				);
 			}
 		} catch (error) {
 			alert('Error: ' + (error as Error).message);
@@ -227,9 +234,9 @@
 				</div>
 			{:else}
 				{#each clients as client}
-					{@const redirectUris = JSON.parse(client.redirect_uris)}
-					{@const scopesList = JSON.parse(client.scopes)}
-					{@const grantTypesList = JSON.parse(client.grant_types)}
+					{@const redirectUris = client.redirect_uris}
+					{@const scopesList = client.scopes}
+					{@const grantTypesList = client.grant_types}
 					<div class="client-card">
 						<div class="flex justify-between items-start mb-4">
 							<div>
@@ -237,10 +244,16 @@
 								<p class="text-xs text-gray-500 font-mono mt-1">Client ID: {client.client_id}</p>
 							</div>
 							<div class="flex space-x-2">
-								<button on:click={() => openEditModal(client.client_id)} class="btn btn-secondary btn-sm">
+								<button
+									on:click={() => openEditModal(client.client_id)}
+									class="btn btn-secondary btn-sm"
+								>
 									Edit
 								</button>
-								<button on:click={() => deleteClient(client.client_id, client.name)} class="btn btn-sm bg-red-600 hover:bg-red-700 text-white">
+								<button
+									on:click={() => deleteClient(client.client_id, client.name)}
+									class="btn btn-sm bg-red-600 hover:bg-red-700 text-white"
+								>
 									Delete
 								</button>
 							</div>
@@ -266,7 +279,11 @@
 						<div class="mt-4 pt-4 border-t border-gray-200">
 							<div class="flex justify-between items-center text-xs text-gray-500">
 								<span>Created: {new Date(client.created_at).toLocaleDateString()}</span>
-								<span class="px-2 py-1 rounded {client.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+								<span
+									class="px-2 py-1 rounded {client.is_active
+										? 'bg-green-100 text-green-800'
+										: 'bg-red-100 text-red-800'}"
+								>
 									{client.is_active ? 'Active' : 'Inactive'}
 								</span>
 							</div>
@@ -430,7 +447,11 @@
 				</div>
 			</div>
 
-			<button type="button" on:click={closeCredentialsAndReload} class="mt-4 btn btn-primary w-full">
+			<button
+				type="button"
+				on:click={closeCredentialsAndReload}
+				class="mt-4 btn btn-primary w-full"
+			>
 				Done
 			</button>
 		</div>

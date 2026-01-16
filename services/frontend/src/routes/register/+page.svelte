@@ -31,8 +31,7 @@
 				}, 2000);
 			} else {
 				// Handle both old format (data.error = string) and new format (data.error = {code, message})
-				const errorMessage =
-					typeof data.error === 'object' ? data.error.message : data.error;
+				const errorMessage = typeof data.error === 'object' ? data.error.message : data.error;
 				error = errorMessage || 'Registration failed';
 			}
 		} catch (err) {

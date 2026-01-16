@@ -168,8 +168,8 @@
 					<div class="security-note">
 						<p>
 							<small>
-								By authorizing, you allow this application to access your data with the
-								permissions listed above.
+								By authorizing, you allow this application to access your data with the permissions
+								listed above.
 							</small>
 						</p>
 					</div>

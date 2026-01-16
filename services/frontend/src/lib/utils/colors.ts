@@ -30,7 +30,12 @@ export function hexTo50Shade(hex: string): string {
  * @returns Random hex color string
  */
 export function randomHexColor(): string {
-	return '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+	return (
+		'#' +
+		Math.floor(Math.random() * 16777215)
+			.toString(16)
+			.padStart(6, '0')
+	);
 }
 
 /**

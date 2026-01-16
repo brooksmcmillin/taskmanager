@@ -8,8 +8,7 @@
 			<div class="success-icon">✅</div>
 			<h1>Device Authorized Successfully</h1>
 			<p class="success-message">
-				Your device has been authorized. You can now close this window and return to your
-				device.
+				Your device has been authorized. You can now close this window and return to your device.
 			</p>
 			<div class="actions">
 				<a href="/" class="btn btn-primary">Return to Dashboard</a>

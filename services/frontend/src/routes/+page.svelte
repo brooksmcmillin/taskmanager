@@ -12,10 +12,7 @@
 
 	onMount(async () => {
 		// Load todos and projects
-		await Promise.all([
-			todos.load({ status: 'pending' }),
-			projects.load()
-		]);
+		await Promise.all([todos.load({ status: 'pending' }), projects.load()]);
 
 		// Load minimized state from localStorage
 		const stored = localStorage.getItem('minimized-projects');
@@ -62,12 +59,15 @@
 	}
 
 	// Group todos by project for list view
-	$: groupedTodos = $pendingTodos.reduce((acc, todo) => {
-		const projectName = todo.project_name || 'No Project';
-		if (!acc[projectName]) acc[projectName] = [];
-		acc[projectName].push(todo);
-		return acc;
-	}, {} as Record<string, Todo[]>);
+	$: groupedTodos = $pendingTodos.reduce(
+		(acc, todo) => {
+			const projectName = todo.project_name || 'No Project';
+			if (!acc[projectName]) acc[projectName] = [];
+			acc[projectName].push(todo);
+			return acc;
+		},
+		{} as Record<string, Todo[]>
+	);
 
 	// Sort project names
 	$: sortedProjectNames = Object.keys(groupedTodos).sort();
