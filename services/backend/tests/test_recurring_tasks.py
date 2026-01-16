@@ -27,7 +27,7 @@ async def test_list_recurring_tasks_empty(authenticated_client: AsyncClient):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["recurring_tasks"] == []
+    assert data["data"] == []
 
 
 @pytest.mark.asyncio
@@ -342,14 +342,14 @@ async def test_delete_recurring_task(
     list_response = await authenticated_client.get(
         "/api/recurring-tasks?active_only=true"
     )
-    assert all(t["id"] != task.id for t in list_response.json()["recurring_tasks"])
+    assert all(t["id"] != task.id for t in list_response.json()["data"])
 
     # Verify it's still accessible when active_only=false
     list_response = await authenticated_client.get(
         "/api/recurring-tasks?active_only=false"
     )
     inactive_tasks = [
-        t for t in list_response.json()["recurring_tasks"] if t["id"] == task.id
+        t for t in list_response.json()["data"] if t["id"] == task.id
     ]
     assert len(inactive_tasks) == 1
     assert inactive_tasks[0]["is_active"] is False
@@ -387,14 +387,14 @@ async def test_list_recurring_tasks_active_only(
     # List active only (default)
     response = await authenticated_client.get("/api/recurring-tasks")
     assert response.status_code == 200
-    tasks = response.json()["recurring_tasks"]
+    tasks = response.json()["data"]
     assert len(tasks) == 1
     assert tasks[0]["title"] == "Active Task"
 
     # List all including inactive
     response = await authenticated_client.get("/api/recurring-tasks?active_only=false")
     assert response.status_code == 200
-    tasks = response.json()["recurring_tasks"]
+    tasks = response.json()["data"]
     assert len(tasks) == 2
 
 

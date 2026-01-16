@@ -20,7 +20,7 @@ async def test_list_todos_empty(authenticated_client: AsyncClient):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["tasks"] == []
+    assert data["data"] == []
     assert data["meta"]["count"] == 0
 
 
@@ -116,7 +116,7 @@ async def test_delete_todo(authenticated_client: AsyncClient):
 
     # Verify it's no longer in the list
     list_response = await authenticated_client.get("/api/todos")
-    assert all(t["id"] != todo_id for t in list_response.json()["tasks"])
+    assert all(t["id"] != todo_id for t in list_response.json()["data"])
 
 
 @pytest.mark.asyncio
