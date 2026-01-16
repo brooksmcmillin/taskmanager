@@ -4,21 +4,18 @@
 	import ProjectModal from '$lib/components/ProjectModal.svelte';
 	import type { Project } from '$lib/types';
 
-	let showModal = false;
-	let editingProject: Project | null = null;
+	let projectModal: ProjectModal;
 
 	onMount(async () => {
 		await projects.load();
 	});
 
 	function openEditModal(project: Project) {
-		editingProject = project;
-		showModal = true;
+		projectModal.openEdit(project);
 	}
 
 	function openAddModal() {
-		editingProject = null;
-		showModal = true;
+		projectModal.open();
 	}
 </script>
 
@@ -29,7 +26,7 @@
 <main class="container py-8">
 	<h1 class="text-3xl font-bold text-gray-900 mb-8">Manage Projects</h1>
 
-	<ProjectModal bind:show={showModal} project={editingProject} on:save={() => projects.load()} />
+	<ProjectModal bind:this={projectModal} on:save={() => projects.load()} />
 
 	<!-- Existing Projects -->
 	<div class="max-w-4xl mx-auto">

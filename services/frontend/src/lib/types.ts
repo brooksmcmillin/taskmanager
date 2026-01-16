@@ -23,6 +23,7 @@ export interface Todo {
 	context: string | null;
 	created_at: string;
 	updated_at: string;
+	deleted_at?: string | null;
 	project_name?: string;
 	project_color?: string;
 }

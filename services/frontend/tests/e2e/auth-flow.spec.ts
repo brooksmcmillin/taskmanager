@@ -97,7 +97,7 @@ test.describe('Authentication Flow', () => {
 
 		// Test password strength validation
 		await page.fill('[name=password]', 'weak');
-		await page.blur('[name=password]');
+		await page.locator('[name=password]').blur();
 		await expect(page.locator('[data-error=password]')).toContainText(
 			'Password must contain at least 2 of: lowercase, uppercase, numbers, special chars'
 		);
