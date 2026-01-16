@@ -887,10 +887,10 @@ def create_authorization_server(
 
         client_name = f"claude-code-{secrets.token_hex(4)}"
 
-        # Create client in backend database
+        # Create system client in backend database (for dynamic client registration)
         # Include device_code grant for headless/CLI clients
         # Note: Public client auth method (RFC 6749 Section 2.1) is handled by backend
-        api_response = valid_client.create_oauth_client(
+        api_response = valid_client.create_system_oauth_client(  # type: ignore[attr-defined]
             name=client_name,
             redirect_uris=redirect_uris,
             grant_types=["authorization_code", "refresh_token", "device_code"],
