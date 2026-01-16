@@ -1,6 +1,6 @@
 """Trash API routes for managing deleted todos."""
 
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -27,8 +27,8 @@ class DeletedTodoResponse(BaseModel):
     project_color: str | None
     priority: str
     tags: list[str]
-    deleted_at: date | None
-    created_at: str
+    deleted_at: datetime | None
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -37,8 +37,8 @@ class DeletedTodoResponse(BaseModel):
 class TrashListResponse(BaseModel):
     """Trash list response."""
 
-    tasks: list[DeletedTodoResponse]
-    count: int
+    data: list[DeletedTodoResponse]
+    meta: dict
 
 
 @router.get("")
@@ -91,11 +91,11 @@ async def list_deleted_todos(
                 ),
                 tags=todo.tags or [],
                 deleted_at=todo.deleted_at,
-                created_at=todo.created_at.isoformat() if todo.created_at else "",
+                created_at=todo.created_at,
             )
         )
 
-    return TrashListResponse(tasks=tasks, count=len(tasks))
+    return TrashListResponse(data=tasks, meta={"count": len(tasks)})
 
 
 @router.post("/{todo_id}/restore")

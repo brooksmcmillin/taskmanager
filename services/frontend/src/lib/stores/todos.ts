@@ -18,11 +18,11 @@ function createTodoStore() {
 						) as Record<string, string>)
 					: undefined;
 
-				const response = await api.get<{ tasks: Todo[]; meta: { count: number } }>(
+				const response = await api.get<{ data: Todo[]; meta: { count: number } }>(
 					'/api/todos',
 					{ params }
 				);
-				set(response.tasks || []);
+				set(response.data || []);
 			} catch (error) {
 				console.error('Failed to load todos:', error);
 				throw error;
@@ -70,8 +70,8 @@ function createTodoStore() {
 		},
 		getById: async (id: number): Promise<Todo> => {
 			try {
-				const todo = await api.get<Todo>(`/api/todos/${id}`);
-				return todo;
+				const response = await api.get<{ data: Todo }>(`/api/todos/${id}`);
+				return response.data;
 			} catch (error) {
 				console.error('Failed to get todo:', error);
 				throw error;

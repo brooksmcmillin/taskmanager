@@ -39,7 +39,8 @@
 				throw new Error('Failed to load OAuth clients');
 			}
 
-			clients = await response.json();
+			const result = await response.json();
+		clients = result.data || [];
 		} catch (error) {
 			console.error('Failed to load OAuth clients:', error);
 		}
@@ -65,9 +66,9 @@
 		isEditMode = true;
 		editingClientId = clientId;
 		clientName = client.name;
-		redirectUris = JSON.parse(client.redirect_uris).join('\n');
-		scopes = JSON.parse(client.scopes).join(', ');
-		grantTypes = JSON.parse(client.grant_types).join(', ');
+		redirectUris = client.redirect_uris.join('\n');
+		scopes = client.scopes.join(', ');
+		grantTypes = client.grant_types.join(', ');
 		useCustomCredential = false;
 		clientCredential = '';
 		showCredentials = false;
@@ -95,7 +96,7 @@
 				window.location.href = '/login';
 			} else {
 				const error = await response.json();
-				alert('Failed to delete client: ' + (error.message || 'Unknown error'));
+				alert('Failed to delete client: ' + (error.detail?.message || error.error?.message || 'Unknown error'));
 			}
 		} catch (error) {
 			alert('Error: ' + (error as Error).message);
@@ -173,10 +174,10 @@
 			if (response.ok) {
 				const result = await response.json();
 
-				if (!isEditMode && result.client_secret) {
+				if (!isEditMode && result.data?.client_secret) {
 					// Show credentials for new client
-					displayClientId = result.client_id;
-					displayClientSecret = result.client_secret;
+					displayClientId = result.data.client_id;
+					displayClientSecret = result.data.client_secret;
 					showCredentials = true;
 				} else {
 					// Just close and reload for edits
@@ -187,7 +188,7 @@
 				window.location.href = '/login';
 			} else {
 				const error = await response.json();
-				alert('Failed to save client: ' + (error.message || 'Unknown error'));
+				alert('Failed to save client: ' + (error.detail?.message || error.error?.message || 'Unknown error'));
 			}
 		} catch (error) {
 			alert('Error: ' + (error as Error).message);
@@ -227,9 +228,9 @@
 				</div>
 			{:else}
 				{#each clients as client}
-					{@const redirectUris = JSON.parse(client.redirect_uris)}
-					{@const scopesList = JSON.parse(client.scopes)}
-					{@const grantTypesList = JSON.parse(client.grant_types)}
+					{@const redirectUris = client.redirect_uris}
+					{@const scopesList = client.scopes}
+					{@const grantTypesList = client.grant_types}
 					<div class="client-card">
 						<div class="flex justify-between items-start mb-4">
 							<div>

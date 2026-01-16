@@ -70,6 +70,18 @@ export interface ProjectCreate {
 
 export interface ProjectUpdate extends Partial<ProjectCreate> {}
 
+export interface OAuthClient {
+	id: number;
+	client_id: string;
+	name: string;
+	redirect_uris: string[];
+	grant_types: string[];
+	scopes: string[];
+	is_active: boolean;
+	is_public: boolean;
+	created_at: string;
+}
+
 export interface ApiResponse<T> {
 	data?: T;
 	tasks?: T;

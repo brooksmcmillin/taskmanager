@@ -145,9 +145,9 @@ async def test_restore_todo_wrong_user(
     await db_session.refresh(todo)
 
     # Delete it
-    from datetime import date
+    from datetime import UTC, datetime
 
-    todo.deleted_at = date.today()
+    todo.deleted_at = datetime.now(UTC)
     await db_session.commit()
 
     # Create another user

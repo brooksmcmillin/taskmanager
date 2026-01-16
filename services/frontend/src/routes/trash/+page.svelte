@@ -50,7 +50,7 @@
 			}
 
 			const data = await response.json();
-			tasks = data.tasks || [];
+			tasks = data.data || [];
 		} catch (error) {
 			console.error('Failed to load deleted tasks:', error);
 		}
@@ -71,7 +71,7 @@
 				window.location.href = '/login';
 			} else {
 				const data = await response.json();
-				alert(data.error?.message || 'Failed to restore task');
+				alert(data.detail?.message || data.error?.message || 'Failed to restore task');
 			}
 		} catch (error) {
 			alert('Error: ' + (error as Error).message);

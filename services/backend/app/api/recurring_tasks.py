@@ -144,7 +144,8 @@ class RecurringTaskResponse(BaseModel):
 class RecurringTaskListResponse(BaseModel):
     """Recurring tasks list response."""
 
-    recurring_tasks: list[RecurringTaskResponse]
+    data: list[RecurringTaskResponse]
+    meta: dict
 
 
 @router.get("")
@@ -164,33 +165,35 @@ async def list_recurring_tasks(
     result = await db.execute(query)
     tasks = result.scalars().all()
 
+    task_responses = [
+        RecurringTaskResponse(
+            id=task.id,
+            title=task.title,
+            frequency=task.frequency,
+            interval_value=task.interval_value,
+            weekdays=task.weekdays,
+            day_of_month=task.day_of_month,
+            start_date=task.start_date,
+            end_date=task.end_date,
+            next_due_date=task.next_due_date,
+            project_id=task.project_id,
+            description=task.description,
+            priority=task.priority,
+            estimated_hours=float(task.estimated_hours)
+            if task.estimated_hours
+            else None,
+            tags=task.tags or [],
+            context=task.context,
+            skip_missed=task.skip_missed,
+            is_active=task.is_active,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+        for task in tasks
+    ]
+
     return RecurringTaskListResponse(
-        recurring_tasks=[
-            RecurringTaskResponse(
-                id=task.id,
-                title=task.title,
-                frequency=task.frequency,
-                interval_value=task.interval_value,
-                weekdays=task.weekdays,
-                day_of_month=task.day_of_month,
-                start_date=task.start_date,
-                end_date=task.end_date,
-                next_due_date=task.next_due_date,
-                project_id=task.project_id,
-                description=task.description,
-                priority=task.priority,
-                estimated_hours=float(task.estimated_hours)
-                if task.estimated_hours
-                else None,
-                tags=task.tags or [],
-                context=task.context,
-                skip_missed=task.skip_missed,
-                is_active=task.is_active,
-                created_at=task.created_at,
-                updated_at=task.updated_at,
-            )
-            for task in tasks
-        ]
+        data=task_responses, meta={"count": len(task_responses)}
     )
 
 

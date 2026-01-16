@@ -77,7 +77,7 @@ class TodoResponse(BaseModel):
 class TodoListResponse(BaseModel):
     """Todo list response."""
 
-    tasks: list[TodoResponse]
+    data: list[TodoResponse]
     meta: dict
 
 
@@ -157,7 +157,7 @@ async def list_todos(
             )
         )
 
-    return TodoListResponse(tasks=tasks, meta={"count": len(tasks)})
+    return TodoListResponse(data=tasks, meta={"count": len(tasks)})
 
 
 @router.post("", status_code=201)
@@ -181,8 +181,43 @@ async def create_todo(
     )
     db.add(todo)
     await db.flush()
+    await db.refresh(todo)
 
-    return {"data": {"id": todo.id, "title": todo.title}}
+    # Fetch project info if todo has a project
+    project_name = None
+    project_color = None
+    if todo.project_id:
+        project_result = await db.execute(
+            select(Project).where(
+                Project.id == todo.project_id, Project.user_id == user.id
+            )
+        )
+        project = project_result.scalar_one_or_none()
+        if project:
+            project_name = project.name
+            project_color = project.color
+
+    return {
+        "data": TodoResponse(
+            id=todo.id,
+            title=todo.title,
+            description=todo.description,
+            priority=todo.priority,
+            status=todo.status,
+            due_date=todo.due_date,
+            project_id=todo.project_id,
+            project_name=project_name,
+            project_color=project_color,
+            tags=todo.tags or [],
+            context=todo.context,
+            estimated_hours=(
+                float(todo.estimated_hours) if todo.estimated_hours else None
+            ),
+            actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
+            created_at=todo.created_at,
+            updated_at=todo.updated_at,
+        )
+    }
 
 
 @router.get("/{todo_id}")
@@ -330,7 +365,7 @@ async def delete_todo(
     if not todo:
         raise errors.todo_not_found()
 
-    todo.deleted_at = date.today()
+    todo.deleted_at = datetime.now(UTC)
 
     return {"data": {"deleted": True}}
 
