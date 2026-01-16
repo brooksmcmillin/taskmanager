@@ -260,21 +260,17 @@ def transform_client_data(client_data: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def load_registered_clients() -> dict[str, Any]:
-    """Load registered clients from backend database."""
-    client = ensure_valid_api_client()
-    if not client:
-        return {}
+    """
+    Load registered clients from backend database.
 
-    response = client.get_oauth_clients()
-    if not response.success:
-        logging.warning(f"Could not load clients from backend: {response.error}")
-        return {}
-
-    if not response.data:
-        return {}
-
-    logger.info(f"Loaded {len(response.data)} clients from backend database")
-    clients = {}
+    Note: This function requires user authentication and client credentials
+    tokens cannot access user-specific endpoints. Returns empty dict to allow
+    server startup. Clients will be loaded dynamically when users authenticate.
+    """
+    # Client credentials tokens can't access /api/oauth/clients
+    # Skip loading - clients will be discovered during auth flows
+    logger.info("Skipping pre-load of registered clients (requires user auth)")
+    return {}
 
     for client_data in response.data:
         logger.debug(f"Processing client data: {client_data}")

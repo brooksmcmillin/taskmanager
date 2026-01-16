@@ -303,11 +303,17 @@ async def verify_token(
 
     # Check if token is expired
     now = datetime.now(UTC)
-    if access_token.expires_at <= now:
+    # Convert expires_at to UTC if it's naive (database may not store timezone)
+    token_expires = (
+        access_token.expires_at.replace(tzinfo=UTC)
+        if access_token.expires_at.tzinfo is None
+        else access_token.expires_at
+    )
+    if token_expires <= now:
         raise errors.invalid_token()
 
     # Calculate seconds until expiration
-    expires_in = int((access_token.expires_at - now).total_seconds())
+    expires_in = int((token_expires - now).total_seconds())
 
     return {
         "valid": True,
