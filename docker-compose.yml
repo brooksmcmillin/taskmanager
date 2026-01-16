@@ -97,20 +97,20 @@ services:
       context: .
       dockerfile: services/mcp-auth/Dockerfile
     container_name: taskmanager-mcp-auth
-    command: uv run python -m mcp_auth.auth_server --port 9000 --taskmanager-url ${TASKMANAGER_OAUTH_HOST:-http://app:4321}
+    command: uv run python -m mcp_auth.auth_server --port 9000 --taskmanager-url http://backend:8000
     ports:
       - '9000:9000'
     environment:
       - TASKMANAGER_CLIENT_ID=${TASKMANAGER_CLIENT_ID}
       - TASKMANAGER_CLIENT_SECRET=${TASKMANAGER_CLIENT_SECRET}
-      - TASKMANAGER_OAUTH_HOST=${TASKMANAGER_OAUTH_HOST:-http://app:4321}
+      - TASKMANAGER_OAUTH_HOST=http://backend:8000
       - MCP_SERVER=http://mcp-resource:8001
       - MCP_AUTH_SERVER_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
       - DATABASE_URL=${DATABASE_URL:-postgresql://taskmanager:password@postgres:5432/taskmanager}
     env_file:
       - .env
     depends_on:
-      - app
+      - backend
       - postgres
     networks:
       - taskmanager_network
@@ -127,7 +127,7 @@ services:
     environment:
       - TASKMANAGER_CLIENT_ID=${TASKMANAGER_CLIENT_ID}
       - TASKMANAGER_CLIENT_SECRET=${TASKMANAGER_CLIENT_SECRET}
-      - TASKMANAGER_OAUTH_HOST=${TASKMANAGER_OAUTH_HOST:-http://app:4321}
+      - TASKMANAGER_OAUTH_HOST=http://backend:8000
       - MCP_AUTH_SERVER=http://mcp-auth:9000
       - MCP_SERVER_URL=${MCP_SERVER_URL:-http://localhost:8001}
       - MCP_AUTH_SERVER_PUBLIC_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}

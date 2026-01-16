@@ -24,7 +24,7 @@ class TaskManagerClient:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:4321/api",
+        base_url: str = "http://localhost:8000/api",
         session: requests.Session | None = None,
         access_token: str | None = None,
     ) -> None:
@@ -112,9 +112,18 @@ class TaskManagerClient:
             if response.status_code >= 400:
                 try:
                     error_data = response.json()
-                    error_message = error_data.get(
-                        "error", f"HTTP {response.status_code}"
-                    )
+                    # FastAPI format: {"detail": {"code": "...", "message": "...", "details": {...}}}
+                    # Legacy format: {"error": "..."}
+                    if "detail" in error_data and isinstance(
+                        error_data["detail"], dict
+                    ):
+                        error_message = error_data["detail"].get(
+                            "message", f"HTTP {response.status_code}"
+                        )
+                    else:
+                        error_message = error_data.get(
+                            "error", f"HTTP {response.status_code}"
+                        )
                 except (ValueError, requests.exceptions.JSONDecodeError):
                     error_message = f"HTTP {response.status_code}: {response.text}"
 
@@ -141,6 +150,10 @@ class TaskManagerClient:
             # Parse JSON response
             try:
                 json_data = response.json()
+                # FastAPI wraps responses in {"data": ..., "meta": {...}}
+                # Extract the data field if present, otherwise return as-is
+                if isinstance(json_data, dict) and "data" in json_data:
+                    json_data = json_data["data"]
             except (ValueError, requests.exceptions.JSONDecodeError):
                 json_data = None
 
@@ -572,6 +585,26 @@ class TaskManagerClient:
         """
         return self._make_request("GET", "/oauth/jwks")
 
+    def verify_token(self) -> ApiResponse:
+        """
+        Verify OAuth access token.
+
+        Works for both user tokens and client credentials tokens.
+        Returns token information including validity, scopes, and expiration.
+
+        Returns:
+            ApiResponse with token verification data:
+            {
+                "valid": bool,
+                "client_id": str,
+                "user_id": int | None,
+                "scopes": list[str],
+                "expires_in": int,
+                "token_type": str
+            }
+        """
+        return self._make_request("GET", "/oauth/verify")
+
     def request_device_code(
         self, client_id: str, scope: str | None = None
     ) -> ApiResponse:
@@ -882,7 +915,7 @@ class TaskManagerClient:
 
 
 def create_authenticated_client(
-    username: str, password: str, base_url: str = "http://localhost:4321/api"
+    username: str, password: str, base_url: str = "http://localhost:8000/api"
 ) -> TaskManagerClient:
     """
     Create and authenticate a TaskManager client using session-based login.
@@ -908,7 +941,7 @@ def create_authenticated_client(
 
 
 def create_client_credentials_client(
-    client_id: str, client_secret: str, base_url: str = "http://localhost:4321/api"
+    client_id: str, client_secret: str, base_url: str = "http://localhost:8000/api"
 ) -> TaskManagerClient:
     """
     Create and authenticate a TaskManager client using OAuth2 Client Credentials.

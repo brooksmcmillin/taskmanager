@@ -22,7 +22,7 @@ class TestClientInitialization:
     def test_init_with_defaults(self) -> None:
         """Test client initialization with default parameters."""
         client = TaskManagerClient()
-        assert client.base_url == "http://localhost:4321/api"
+        assert client.base_url == "http://localhost:8000/api"
         assert isinstance(client.session, requests.Session)
 
     def test_init_with_custom_url(self) -> None:
@@ -544,7 +544,7 @@ class TestOAuth:
         mock_response.headers = {}
         mock_response.json.return_value = {
             **sample_oauth_client,
-            "client_secret": "test_secret",
+            "client_secret": "test_secret",  # pragma: allowlist secret
         }
         mock_session.post.return_value = mock_response
 
@@ -621,7 +621,7 @@ class TestOAuth:
         result = client.oauth_token(
             grant_type="authorization_code",
             client_id="test_client",
-            client_secret="test_secret",
+            client_secret="test_secret",  # pragma: allowlist secret
             code="test_code",
             redirect_uri="http://localhost:3000/callback",
         )

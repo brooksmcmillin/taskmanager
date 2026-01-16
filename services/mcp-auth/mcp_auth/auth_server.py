@@ -260,21 +260,17 @@ def transform_client_data(client_data: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def load_registered_clients() -> dict[str, Any]:
-    """Load registered clients from backend database."""
-    client = ensure_valid_api_client()
-    if not client:
-        return {}
+    """
+    Load registered clients from backend database.
 
-    response = client.get_oauth_clients()
-    if not response.success:
-        logging.warning(f"Could not load clients from backend: {response.error}")
-        return {}
-
-    if not response.data:
-        return {}
-
-    logger.info(f"Loaded {len(response.data)} clients from backend database")
-    clients = {}
+    Note: This function requires user authentication and client credentials
+    tokens cannot access user-specific endpoints. Returns empty dict to allow
+    server startup. Clients will be loaded dynamically when users authenticate.
+    """
+    # Client credentials tokens can't access /api/oauth/clients
+    # Skip loading - clients will be discovered during auth flows
+    logger.info("Skipping pre-load of registered clients (requires user auth)")
+    return {}
 
     for client_data in response.data:
         logger.debug(f"Processing client data: {client_data}")
@@ -1283,11 +1279,17 @@ def main(port: int, taskmanager_url: str, server_url: str | None = None) -> int:
         logger.error("Ensure the OAuth client has 'client_credentials' in its grant_types")
         return 1
 
-    # Verify the API client can make authenticated requests
-    logger.info("Verifying API client can access protected endpoints...")
-    test_response = api_client.get_oauth_clients()
-    if test_response.success:
-        logger.info("API client verified - able to access protected endpoints")
+    # Verify the API client token is valid
+    logger.info("Verifying API client token...")
+    test_response = api_client.verify_token()
+    if test_response.success and test_response.data:
+        token_info = test_response.data
+        logger.info(
+            f"API client verified - token valid for client_id: {token_info.get('client_id')}"
+        )
+        logger.info(
+            f"Token scopes: {token_info.get('scopes')}, expires in: {token_info.get('expires_in')}s"
+        )
     else:
         logger.warning(f"API client verification failed: {test_response.error}")
         logger.warning("Will attempt to continue, but API calls may not work properly")

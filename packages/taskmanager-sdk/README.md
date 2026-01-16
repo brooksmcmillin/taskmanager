@@ -21,7 +21,7 @@ uv sync
 from taskmanager_sdk import TaskManagerClient, create_authenticated_client
 
 # Method 1: Manual authentication
-client = TaskManagerClient("http://localhost:4321/api")
+client = TaskManagerClient("http://localhost:8000/api")
 response = client.login("your_username", "your_password")
 
 if response.success:
@@ -43,8 +43,8 @@ from taskmanager_sdk import create_client_credentials_client
 
 client = create_client_credentials_client(
     client_id="your_client_id",
-    client_secret="your_client_secret",
-    base_url="http://localhost:4321/api"
+    client_secret="your_client_secret",  # pragma: allowlist secret
+    base_url="http://localhost:8000/api"
 )
 
 # Client is now authenticated with Bearer token
@@ -124,7 +124,7 @@ except NetworkError:
 The main client class for interacting with the TaskManager API.
 
 ```python
-TaskManagerClient(base_url="http://localhost:4321/api", session=None, access_token=None)
+TaskManagerClient(base_url="http://localhost:8000/api", session=None, access_token=None)
 ```
 
 #### Authentication Methods

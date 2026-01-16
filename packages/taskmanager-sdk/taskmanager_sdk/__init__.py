@@ -8,7 +8,7 @@ Basic usage:
     >>> from taskmanager_sdk import TaskManagerClient, create_authenticated_client
     >>>
     >>> # Method 1: Create client and authenticate manually
-    >>> client = TaskManagerClient("http://localhost:4321/api")
+    >>> client = TaskManagerClient("http://localhost:8000/api")
     >>> response = client.login("username", "password")
     >>>
     >>> # Method 2: Create pre-authenticated client (session-based)
@@ -23,7 +23,7 @@ Basic usage:
     >>> todos = client.get_todos()
 """
 
-__version__ = "0.1.3"
+__version__ = "0.2.0"
 __author__ = "TaskManager SDK"
 
 from .client import (
