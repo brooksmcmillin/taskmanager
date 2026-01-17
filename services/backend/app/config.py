@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     device_code_expiry: int = 1800  # 30 minutes in seconds
     device_poll_interval: int = 5  # seconds
 
+    # Frontend URL (for OAuth consent page redirects)
+    frontend_url: str = "http://localhost:3000"
+
     # CORS
     allowed_origins: str = ""
 

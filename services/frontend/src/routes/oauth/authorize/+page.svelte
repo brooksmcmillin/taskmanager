@@ -10,11 +10,13 @@
 	let codeChallengeMethod = '';
 	let error = '';
 	let user: any = null;
+	let clientId = '';
+	let loading = true;
 
 	onMount(async () => {
 		if (browser) {
 			const params = new URLSearchParams(window.location.search);
-			const clientId = params.get('client_id');
+			clientId = params.get('client_id') || '';
 			redirectUri = params.get('redirect_uri') || '';
 			const scopeParam = params.get('scope') || '';
 			state = params.get('state') || '';
@@ -36,35 +38,43 @@
 					return;
 				}
 
-				user = await response.json();
+				const authData = await response.json();
+				user = authData.data || authData;
 
 				// Look up client information
 				if (clientId) {
 					await loadClient(clientId);
 				} else {
 					error = 'Missing client_id parameter';
+					loading = false;
 				}
 			} catch (err) {
 				console.error('Auth check failed:', err);
+				error = 'Authentication failed. Please try again.';
+				loading = false;
 			}
 		}
 	});
 
-	async function loadClient(clientId: string) {
+	async function loadClient(clientIdParam: string) {
 		try {
-			const response = await fetch(`/api/oauth/clients/${clientId}`, {
+			const response = await fetch(`/api/oauth/clients/${clientIdParam}`, {
 				credentials: 'include'
 			});
 
 			if (!response.ok) {
 				error = 'Invalid client_id';
+				loading = false;
 				return;
 			}
 
-			client = await response.json();
+			const clientData = await response.json();
+			client = clientData.data || clientData;
+			loading = false;
 		} catch (err) {
 			console.error('Error loading client:', err);
 			error = 'Failed to load client information';
+			loading = false;
 		}
 	}
 
@@ -72,35 +82,43 @@
 		if (!client) return;
 
 		try {
-			const requestBody: any = {
-				client_id: client.client_id,
-				redirect_uri: redirectUri,
-				scope: scopes.join(' '),
-				state,
-				action
-			};
+			// Use FormData for backend compatibility
+			const formData = new FormData();
+			formData.append('client_id', clientId);
+			formData.append('redirect_uri', redirectUri);
+			formData.append('scope', scopes.join(' '));
+			formData.append('state', state);
+			formData.append('action', action);
 
 			if (codeChallenge) {
-				requestBody.code_challenge = codeChallenge;
-				requestBody.code_challenge_method = codeChallengeMethod || 'S256';
+				formData.append('code_challenge', codeChallenge);
+				formData.append('code_challenge_method', codeChallengeMethod || 'S256');
 			}
 
 			const response = await fetch('/api/oauth/authorize', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
-				body: JSON.stringify(requestBody)
+				body: formData
 			});
 
-			if (response.ok) {
-				const result = await response.json();
-				// Redirect to the redirect_uri with the authorization code or error
-				window.location.href = result.redirect_uri;
+			// Backend returns a redirect response, so we follow it
+			if (response.redirected) {
+				window.location.href = response.url;
+			} else if (response.ok) {
+				// If not redirected, try to get redirect URL from body
+				const contentType = response.headers.get('content-type');
+				if (contentType && contentType.includes('application/json')) {
+					const result = await response.json();
+					if (result.redirect_uri) {
+						window.location.href = result.redirect_uri;
+					}
+				}
 			} else {
-				const data = await response.json();
-				error = data.error?.message || 'Authorization failed';
+				const data = await response.json().catch(() => ({}));
+				error = data.error?.message || data.detail?.message || 'Authorization failed';
 			}
 		} catch (err) {
+			console.error('Authorization error:', err);
 			error = 'An error occurred. Please try again.';
 		}
 	}
@@ -120,16 +138,20 @@
 </script>
 
 <svelte:head>
-	<title>Authorize Application</title>
+	<title>Authorize Application - TaskManager</title>
 </svelte:head>
 
-<div class="container">
+<div class="page-container">
 	<div class="auth-container">
 		<div class="card">
 			<h1>Authorize Application</h1>
 
 			{#if error}
 				<div class="error-message">{error}</div>
+			{:else if loading}
+				<div class="loading">
+					<p>Loading...</p>
+				</div>
 			{:else if client}
 				<div class="authorization-content">
 					<div class="client-info">
@@ -168,47 +190,96 @@
 					<div class="security-note">
 						<p>
 							<small>
-								By authorizing, you allow this application to access your data with the permissions
-								listed above.
+								⚠️ Only authorize applications you trust. You can revoke access at any time in your
+								account settings.
 							</small>
 						</p>
 					</div>
 				</div>
-			{:else}
-				<p>Loading...</p>
 			{/if}
 		</div>
 	</div>
 </div>
 
 <style>
-	.error-message {
-		background-color: #fef2f2;
-		border: 1px solid #fecaca;
-		color: #dc2626;
-		padding: 0.75rem 1rem;
-		border-radius: 0.5rem;
-		margin-bottom: 1rem;
+	.page-container {
+		min-height: 100vh;
+		background-color: var(--bg-page, #f9fafb);
+		padding: 2rem 1rem;
 	}
 
-	.client-info {
+	.auth-container {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		min-height: calc(100vh - 4rem);
+	}
+
+	.card {
+		max-width: 480px;
+		width: 100%;
+		padding: 2rem;
+		background: var(--bg-card, white);
+		border-radius: var(--radius-xl, 1rem);
+		box-shadow: var(--shadow-lg);
+		border: 1px solid var(--border-light, #f3f4f6);
+	}
+
+	.card h1 {
+		text-align: center;
 		margin-bottom: 1.5rem;
+		font-size: 1.75rem;
+		font-weight: 700;
+		color: var(--text-primary, #111827);
+	}
+
+	.loading {
+		text-align: center;
+		padding: 2rem;
+		color: var(--text-secondary, #6b7280);
+	}
+
+	.error-message {
+		background-color: var(--error-50, #fef2f2);
+		border: 1px solid var(--error-100, #fecaca);
+		color: var(--error-600, #dc2626);
+		padding: 0.75rem 1rem;
+		border-radius: var(--radius-md, 0.5rem);
+		margin-bottom: 1rem;
+		font-size: 0.875rem;
+	}
+
+	.authorization-content {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
 	}
 
 	.client-info h2 {
-		margin-bottom: 0.5rem;
+		margin: 0 0 0.5rem 0;
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: var(--text-primary, #111827);
+	}
+
+	.client-info p {
+		margin: 0;
+		color: var(--text-secondary, #6b7280);
+		font-size: 0.9375rem;
 	}
 
 	.permissions {
-		margin-bottom: 1.5rem;
 		padding: 1rem;
 		background-color: var(--bg-secondary, #f8fafc);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-md, 0.5rem);
+		border: 1px solid var(--border-light, #f3f4f6);
 	}
 
 	.permissions h3 {
-		margin-bottom: 0.75rem;
-		font-size: 1rem;
+		margin: 0 0 0.75rem 0;
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: var(--text-primary, #111827);
 	}
 
 	.scope-list {
@@ -218,55 +289,89 @@
 	}
 
 	.scope-item {
-		padding: 0.5rem 0;
-		border-bottom: 1px solid var(--border-color, #e2e8f0);
+		padding: 0.625rem 0;
+		border-bottom: 1px solid var(--border-light, #e5e7eb);
+		color: var(--text-secondary, #4b5563);
+		font-size: 0.9375rem;
 	}
 
 	.scope-item:last-child {
 		border-bottom: none;
+		padding-bottom: 0;
 	}
 
 	.user-info {
-		margin-bottom: 1.5rem;
-		padding: 0.75rem 1rem;
-		background-color: var(--bg-secondary, #f8fafc);
-		border-radius: 0.5rem;
+		padding: 0.875rem 1rem;
+		background-color: var(--primary-50, #eff6ff);
+		border-radius: var(--radius-md, 0.5rem);
 		text-align: center;
+		border: 1px solid var(--primary-100, #dbeafe);
+	}
+
+	.user-info p {
+		margin: 0;
+		color: var(--text-secondary, #4b5563);
+		font-size: 0.9375rem;
+	}
+
+	.user-info strong {
+		color: var(--primary-700, #1d4ed8);
+		font-weight: 600;
 	}
 
 	.button-group {
 		display: flex;
-		gap: 1rem;
+		gap: 0.75rem;
 		justify-content: center;
+		margin-top: 0.5rem;
+	}
+
+	.btn {
+		padding: 0.625rem 1.5rem;
+		border-radius: var(--radius-md, 0.5rem);
+		font-size: 0.9375rem;
+		font-weight: 600;
+		border: none;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: inherit;
+	}
+
+	.btn-primary {
+		background-color: var(--primary-600, #2563eb);
+		color: white;
+	}
+
+	.btn-primary:hover {
+		background-color: var(--primary-700, #1d4ed8);
+		transform: translateY(-1px);
+		box-shadow: var(--shadow-md);
+	}
+
+	.btn-primary:active {
+		transform: translateY(0);
+	}
+
+	.btn-secondary {
+		background-color: var(--gray-200, #e5e7eb);
+		color: var(--gray-700, #374151);
+	}
+
+	.btn-secondary:hover {
+		background-color: var(--gray-300, #d1d5db);
 	}
 
 	.security-note {
-		margin-top: 1.5rem;
 		text-align: center;
-		color: var(--text-muted, #64748b);
+		color: var(--text-muted, #6b7280);
 	}
 
-	.auth-container {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		min-height: 60vh;
-		padding: 2rem;
+	.security-note p {
+		margin: 0;
 	}
 
-	.card {
-		max-width: 480px;
-		width: 100%;
-		padding: 2rem;
-		background: var(--card-bg, white);
-		border-radius: 1rem;
-		box-shadow:
-			0 4px 6px -1px rgba(0, 0, 0, 0.1),
-			0 2px 4px -1px rgba(0, 0, 0, 0.06);
-	}
-
-	.card h1 {
-		text-align: center;
-		margin-bottom: 1.5rem;
+	.security-note small {
+		font-size: 0.8125rem;
+		line-height: 1.4;
 	}
 </style>

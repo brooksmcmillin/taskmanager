@@ -2,7 +2,8 @@
 
 import re
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import delete, select
 
@@ -99,26 +100,58 @@ async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
     )
 
 
-@router.post("/login")
+@router.post("/login", response_model=None)
 async def login(
-    request: LoginRequest,
+    request: Request,
     response: Response,
     db: DbSession,
-) -> AuthResponse:
-    """Login and create session."""
+):
+    """Login and create session.
+
+    Supports both JSON (for API clients) and form data (for OAuth flows).
+    """
+    # Determine content type and parse accordingly
+    content_type = request.headers.get("content-type", "")
+
+    username: str
+    password: str
+    return_to: str | None
+
+    if "application/json" in content_type:
+        # JSON request
+        body = await request.json()
+        username = str(body.get("username", ""))
+        password = str(body.get("password", ""))
+        return_to = None
+    elif (
+        "application/x-www-form-urlencoded" in content_type
+        or "multipart/form-data" in content_type
+    ):
+        # Form request
+        form = await request.form()
+        username = str(form.get("username", ""))
+        password = str(form.get("password", ""))
+        return_to_val = form.get("return_to")
+        return_to = str(return_to_val) if return_to_val else None
+    else:
+        raise errors.invalid_credentials()
+
+    if not username or not password:
+        raise errors.invalid_credentials()
+
     # Rate limiting by username
-    login_rate_limiter.check(request.username)
+    login_rate_limiter.check(username)
 
     # Find user
-    result = await db.execute(select(User).where(User.username == request.username))
+    result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
 
-    if not user or not verify_password(request.password, user.password_hash):
-        login_rate_limiter.record(request.username)
+    if not user or not verify_password(password, user.password_hash):
+        login_rate_limiter.record(username)
         raise errors.invalid_credentials()
 
     # Reset rate limit on success
-    login_rate_limiter.reset(request.username)
+    login_rate_limiter.reset(username)
 
     # Create session
     session = Session(
@@ -138,6 +171,21 @@ async def login(
         secure=settings.is_production,
     )
 
+    # For form submissions with return_to, redirect
+    if return_to:
+        redirect_response = RedirectResponse(url=return_to, status_code=302)
+        # Copy the session cookie to the redirect response
+        redirect_response.set_cookie(
+            key="session",
+            value=session.id,
+            httponly=True,
+            samesite="lax",
+            max_age=settings.session_duration_days * 24 * 60 * 60,
+            secure=settings.is_production,
+        )
+        return redirect_response
+
+    # For JSON requests, return user info
     return AuthResponse(
         message="Login successful",
         user=UserResponse(id=user.id, username=user.username, email=user.email),

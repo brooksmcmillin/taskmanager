@@ -66,6 +66,8 @@ class TaskManagerAuthSettings(BaseSettings):
 
     # TaskManager OAuth endpoints
     base_url: str = "http://localhost:4321"
+    # Public URL for user-facing OAuth redirects (defaults to base_url if not set)
+    public_base_url: str | None = None
     authorize_endpoint: str = "/api/oauth/authorize"
     token_endpoint: str = "/api/oauth/token"
     clients_endpoint: str = "/api/oauth/clients"
@@ -80,6 +82,10 @@ class TaskManagerAuthSettings(BaseSettings):
 
     # Session settings for admin operations (if needed)
     admin_session_cookie: str | None = None  # For auto-registering clients
+
+    def get_public_url(self) -> str:
+        """Get the public base URL for user-facing redirects."""
+        return self.public_base_url or self.base_url
 
 
 class TaskManagerOAuthProvider(
@@ -409,9 +415,8 @@ class TaskManagerOAuthProvider(
         # because we're acting as a proxy. The MCP client's PKCE verification
         # will be handled by the MCP auth server directly.
 
-        auth_url = (
-            f"{self.settings.base_url}{self.settings.authorize_endpoint}?{urlencode(auth_params)}"
-        )
+        # Use public URL for user-facing authorization redirect
+        auth_url = f"{self.settings.get_public_url()}{self.settings.authorize_endpoint}?{urlencode(auth_params)}"
 
         logger.info(f"Generated authorization URL: {auth_url}")
         logger.info(f"Using TaskManager client_id: {self.settings.client_id}")

@@ -16,7 +16,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 		// Build fetch options
 		const fetchOptions: RequestInit = {
 			method: event.request.method,
-			headers
+			headers,
+			redirect: 'manual' // Don't follow redirects automatically
 		};
 
 		// Add body for POST/PUT/PATCH requests
@@ -26,16 +27,34 @@ export const handle: Handle = async ({ event, resolve }) => {
 			(fetchOptions as any).duplex = 'half';
 		}
 
-		const response = await fetch(backendUrl, fetchOptions);
+		try {
+			const response = await fetch(backendUrl, fetchOptions);
 
-		// Forward all headers from backend (including set-cookie)
-		const responseHeaders = new Headers(response.headers);
+			// Handle redirects properly
+			if (response.status >= 300 && response.status < 400) {
+				const location = response.headers.get('location');
+				if (location) {
+					// Return redirect response with all headers (including set-cookie)
+					const responseHeaders = new Headers(response.headers);
+					return new Response(null, {
+						status: response.status,
+						headers: responseHeaders
+					});
+				}
+			}
 
-		return new Response(response.body, {
-			status: response.status,
-			statusText: response.statusText,
-			headers: responseHeaders
-		});
+			return new Response(response.body, {
+				status: response.status,
+				statusText: response.statusText,
+				headers: response.headers
+			});
+		} catch (error) {
+			console.error('Proxy error:', error);
+			return new Response(JSON.stringify({ error: 'Backend request failed' }), {
+				status: 502,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
 	}
 
 	return resolve(event);

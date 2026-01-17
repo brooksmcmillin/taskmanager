@@ -1292,8 +1292,12 @@ def main(port: int, taskmanager_url: str, server_url: str | None = None) -> int:
         logger.warning("Will attempt to continue, but API calls may not work properly")
 
     # Load TaskManager auth settings with OAuth client credentials
+    # Use TASKMANAGER_OAUTH_HOST for public-facing URLs, or fall back to taskmanager_url
+    public_url = os.environ.get("TASKMANAGER_OAUTH_HOST", taskmanager_url)
+
     auth_settings = TaskManagerAuthSettings(
         base_url=taskmanager_url,
+        public_base_url=public_url,
         client_id=oauth_client_id,
         client_secret=oauth_client_secret,
     )

@@ -43,6 +43,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - ENVIRONMENT=production
       - DEBUG=false
+      - FRONTEND_URL=${FRONTEND_URL:-https://todo.brooksmcmillin.com}
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,9 +60,10 @@ services:
     ports:
       - '3000:3000'
     environment:
+      - BACKEND_URL=http://backend:8000
       - VITE_API_URL=http://backend:8000
       - PUBLIC_APP_NAME=TaskManager
-      - ORIGIN=http://localhost:3000
+      - ORIGIN=${FRONTEND_URL:-https://todo.brooksmcmillin.com}
     depends_on:
       - backend
     networks:
@@ -103,7 +105,7 @@ services:
     environment:
       - TASKMANAGER_CLIENT_ID=${TASKMANAGER_CLIENT_ID}
       - TASKMANAGER_CLIENT_SECRET=${TASKMANAGER_CLIENT_SECRET}
-      - TASKMANAGER_OAUTH_HOST=http://backend:8000
+      - TASKMANAGER_OAUTH_HOST=${TASKMANAGER_OAUTH_HOST}
       - MCP_SERVER=http://mcp-resource:8001
       - MCP_AUTH_SERVER_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
       - DATABASE_URL=${DATABASE_URL:-postgresql://taskmanager:password@postgres:5432/taskmanager}
@@ -127,7 +129,7 @@ services:
     environment:
       - TASKMANAGER_CLIENT_ID=${TASKMANAGER_CLIENT_ID}
       - TASKMANAGER_CLIENT_SECRET=${TASKMANAGER_CLIENT_SECRET}
-      - TASKMANAGER_OAUTH_HOST=http://backend:8000
+      - TASKMANAGER_OAUTH_HOST=${TASKMANAGER_OAUTH_HOST}
       - MCP_AUTH_SERVER=http://mcp-auth:9000
       - MCP_SERVER_URL=${MCP_SERVER_URL:-http://localhost:8001}
       - MCP_AUTH_SERVER_PUBLIC_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
