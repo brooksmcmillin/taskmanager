@@ -504,6 +504,22 @@ class TaskManagerClient:
         """
         return self._make_request("GET", "/oauth/clients")
 
+    def get_oauth_client_info(self, client_id: str) -> ApiResponse:
+        """
+        Get OAuth client information by client ID.
+
+        This endpoint requires client credentials authentication and can fetch
+        any client's metadata (not restricted to the authenticated user's clients).
+        Designed for machine-to-machine services like MCP auth servers.
+
+        Args:
+            client_id: The OAuth client ID to look up
+
+        Returns:
+            ApiResponse with client information
+        """
+        return self._make_request("GET", f"/oauth/clients/{client_id}/info")
+
     def create_oauth_client(
         self,
         name: str,
@@ -535,6 +551,42 @@ class TaskManagerClient:
         if token_endpoint_auth_method is not None:
             data["token_endpoint_auth_method"] = token_endpoint_auth_method
         return self._make_request("POST", "/oauth/clients", data)
+
+    def create_system_oauth_client(
+        self,
+        name: str,
+        redirect_uris: list[str],
+        grant_types: list[str] | None = None,
+        scopes: list[str] | None = None,
+        token_endpoint_auth_method: str | None = None,
+    ) -> ApiResponse:
+        """
+        Create a system OAuth client (for dynamic client registration).
+
+        This endpoint requires client credentials authentication and creates
+        OAuth clients that are not owned by a specific user. Designed for
+        machine-to-machine services like MCP auth servers.
+
+        Args:
+            name: Client name
+            redirect_uris: list of redirect URIs
+            grant_types: list of grant types
+            scopes: list of scopes
+            token_endpoint_auth_method: Authentication method for token endpoint.
+                Use "none" for public clients (native apps, SPAs, device flow).
+                Use "client_secret_post" for confidential clients (default).
+
+        Returns:
+            ApiResponse with created OAuth client data
+        """
+        data: dict[str, str | list[str]] = {"name": name, "redirectUris": redirect_uris}
+        if grant_types is not None:
+            data["grantTypes"] = grant_types
+        if scopes is not None:
+            data["scopes"] = scopes
+        if token_endpoint_auth_method is not None:
+            data["token_endpoint_auth_method"] = token_endpoint_auth_method
+        return self._make_request("POST", "/oauth/clients/system", data)
 
     def update_oauth_client(
         self,

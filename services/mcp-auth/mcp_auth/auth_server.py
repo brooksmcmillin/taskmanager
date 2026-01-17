@@ -106,8 +106,11 @@ class TaskManagerAuthProvider(
         auth_settings: TaskManagerAuthSettings,
         server_url: str,
         token_storage: TokenStorage | None = None,
+        api_client: TaskManagerClient | None = None,
     ):
-        super().__init__(auth_settings, server_url, token_storage=token_storage)
+        super().__init__(
+            auth_settings, server_url, token_storage=token_storage, api_client=api_client
+        )
         self.registered_clients: dict[str, Any] = {}
 
 
@@ -271,19 +274,6 @@ def load_registered_clients() -> dict[str, Any]:
     # Skip loading - clients will be discovered during auth flows
     logger.info("Skipping pre-load of registered clients (requires user auth)")
     return {}
-
-    for client_data in response.data:
-        logger.debug(f"Processing client data: {client_data}")
-        processed = transform_client_data(client_data)
-        if processed:
-            client_id = processed["client_id"]
-            logger.info(
-                f"Processed client {client_id} with scope: '{processed['scope']}', "
-                f"auth_method: '{processed['token_endpoint_auth_method']}'"
-            )
-            clients[client_id] = processed
-
-    return clients
 
 
 # Load persisted client storage
@@ -610,8 +600,15 @@ def create_authorization_server(
     token_storage: TokenStorage | None = None,
 ) -> Starlette:
     """Create the Authorization Server application."""
+    # Get the global API client for loading OAuth clients from backend
+    global api_client
+    valid_api_client = ensure_valid_api_client()
+
     oauth_provider = TaskManagerAuthProvider(  # type: ignore[var-annotated]
-        auth_settings, str(server_url), token_storage=token_storage
+        auth_settings,
+        str(server_url),
+        token_storage=token_storage,
+        api_client=valid_api_client,
     )
 
     # Load and share registered clients with OAuth provider
@@ -890,10 +887,10 @@ def create_authorization_server(
 
         client_name = f"claude-code-{secrets.token_hex(4)}"
 
-        # Create client in backend database
+        # Create system client in backend database (for dynamic client registration)
         # Include device_code grant for headless/CLI clients
         # Note: Public client auth method (RFC 6749 Section 2.1) is handled by backend
-        api_response = valid_client.create_oauth_client(
+        api_response = valid_client.create_system_oauth_client(  # type: ignore[attr-defined]
             name=client_name,
             redirect_uris=redirect_uris,
             grant_types=["authorization_code", "refresh_token", "device_code"],
@@ -1295,8 +1292,12 @@ def main(port: int, taskmanager_url: str, server_url: str | None = None) -> int:
         logger.warning("Will attempt to continue, but API calls may not work properly")
 
     # Load TaskManager auth settings with OAuth client credentials
+    # Use TASKMANAGER_OAUTH_HOST for public-facing URLs, or fall back to taskmanager_url
+    public_url = os.environ.get("TASKMANAGER_OAUTH_HOST", taskmanager_url)
+
     auth_settings = TaskManagerAuthSettings(
         base_url=taskmanager_url,
+        public_base_url=public_url,
         client_id=oauth_client_id,
         client_secret=oauth_client_secret,
     )

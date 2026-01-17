@@ -66,6 +66,8 @@ class TaskManagerAuthSettings(BaseSettings):
 
     # TaskManager OAuth endpoints
     base_url: str = "http://localhost:4321"
+    # Public URL for user-facing OAuth redirects (defaults to base_url if not set)
+    public_base_url: str | None = None
     authorize_endpoint: str = "/api/oauth/authorize"
     token_endpoint: str = "/api/oauth/token"
     clients_endpoint: str = "/api/oauth/clients"
@@ -80,6 +82,10 @@ class TaskManagerAuthSettings(BaseSettings):
 
     # Session settings for admin operations (if needed)
     admin_session_cookie: str | None = None  # For auto-registering clients
+
+    def get_public_url(self) -> str:
+        """Get the public base URL for user-facing redirects."""
+        return self.public_base_url or self.base_url
 
 
 class TaskManagerOAuthProvider(
@@ -105,6 +111,7 @@ class TaskManagerOAuthProvider(
         settings: TaskManagerAuthSettings,
         server_url: str,
         token_storage: "TokenStorage | None" = None,
+        api_client: Any = None,
     ):
         """
         Initialize the TaskManager OAuth provider.
@@ -114,10 +121,12 @@ class TaskManagerOAuthProvider(
             server_url: The URL of this MCP server (for redirect URIs)
             token_storage: Optional persistent token storage. If not provided,
                           tokens are stored in memory (not recommended for production).
+            api_client: Optional TaskManager API client for loading client data
         """
         self.settings = settings
         self.server_url = server_url
         self.token_storage = token_storage
+        self.api_client = api_client
 
         # In-memory storage (used as fallback or for auth codes/state)
         self.clients: dict[str, OAuthClientInformationFull] = {}
@@ -160,8 +169,8 @@ class TaskManagerOAuthProvider(
         """
         Get OAuth client information.
 
-        This first checks our local cache, then attempts to retrieve from
-        taskmanager if not found locally.
+        This first checks our local cache, then the registered_clients dict,
+        and finally attempts to load from the backend API.
         """
         logger.info("=== GET CLIENT ===")
         logger.info(f"Looking for client: {client_id}")
@@ -208,12 +217,138 @@ class TaskManagerOAuthProvider(
                 logger.info(f"Final client auth method: {client_info.token_endpoint_auth_method}")
                 return client_info
         else:
-            logger.warning("No registered_clients attribute found on provider")
+            logger.warning("registered_clients dict is empty")
 
-        # TODO: Add endpoint to taskmanager to retrieve client info by ID
-        # For now, return None if not found locally
-        logger.error(f"Client {client_id} not found in local cache or registered clients")
+        # If not found in cache or registered_clients, try loading from backend
+        logger.info(f"Client {client_id} not found in cache, attempting to load from backend...")
+        client_info = await self._load_client_from_backend(client_id)
+        if client_info:
+            # Cache it for future use
+            self.clients[client_id] = client_info
+            # Also add to registered_clients for consistency
+            self.registered_clients[client_id] = {
+                "client_id": client_info.client_id,
+                "client_secret": client_info.client_secret,
+                "redirect_uris": client_info.redirect_uris,
+                "response_types": client_info.response_types,
+                "grant_types": client_info.grant_types,
+                "token_endpoint_auth_method": client_info.token_endpoint_auth_method,
+                "scope": client_info.scope,
+            }
+            logger.info(f"Successfully loaded and cached client {client_id} from backend")
+            return client_info
+
+        logger.error(f"Client {client_id} not found in cache, registered_clients, or backend API")
         return None
+
+    def _ensure_valid_api_client(self) -> Any:
+        """
+        Ensure the API client has a valid (non-expired) token.
+
+        Returns:
+            Valid API client or None
+        """
+        if not self.api_client:
+            return None
+
+        # Import here to avoid circular dependency
+        import time
+
+        from taskmanager_sdk import TokenConfig
+
+        # Check if token is expired or will expire within 5 minutes
+        if (
+            self.api_client.token_expires_at
+            and time.time()
+            < self.api_client.token_expires_at - TokenConfig.TOKEN_REFRESH_BUFFER_SECONDS
+        ):
+            return self.api_client
+
+        # Token expired or about to expire, try to re-authenticate
+        logger.info("API client token expired, attempting to re-authenticate...")
+        try:
+            # Get credentials from environment or stored config
+            import os
+
+            from taskmanager_sdk import create_client_credentials_client
+
+            client_id = os.environ.get("TASKMANAGER_CLIENT_ID")
+            client_secret = os.environ.get("TASKMANAGER_CLIENT_SECRET")
+            base_url = self.settings.base_url + "/api"
+
+            if not client_id or not client_secret:
+                logger.error("Missing TASKMANAGER_CLIENT_ID or TASKMANAGER_CLIENT_SECRET")
+                return None
+
+            self.api_client = create_client_credentials_client(client_id, client_secret, base_url)
+            logger.info("API client re-authenticated successfully")
+            return self.api_client
+        except Exception as e:
+            logger.error(f"Failed to re-authenticate API client: {e}")
+            return None
+
+    async def _load_client_from_backend(self, client_id: str) -> OAuthClientInformationFull | None:
+        """
+        Load client information from the backend API.
+
+        Args:
+            client_id: The OAuth client ID to load
+
+        Returns:
+            OAuthClientInformationFull if found, None otherwise
+        """
+        # Ensure we have a valid API client
+        valid_client = self._ensure_valid_api_client()
+        if not valid_client:
+            logger.error("No valid API client available to load clients from backend")
+            return None
+
+        try:
+            # Use the new endpoint to fetch a specific client by ID
+            logger.info(f"Fetching OAuth client {client_id} from backend")
+            response = valid_client.get_oauth_client_info(client_id)
+
+            if not response.success:
+                logger.error(f"Failed to fetch client from backend: {response.error}")
+                return None
+
+            if not response.data:
+                logger.warning(f"Client {client_id} not found in backend")
+                return None
+
+            client_data = response.data
+            logger.info(f"Found client {client_id} in backend API")
+
+            # Import transform function to convert backend format to OAuth format
+            from .auth_server import transform_client_data
+
+            processed = transform_client_data(client_data)
+            if not processed:
+                logger.error(f"Failed to transform client data for {client_id}")
+                return None
+
+            # Convert to OAuthClientInformationFull
+            client_secret = (
+                None
+                if processed["token_endpoint_auth_method"] == "none"
+                else processed["client_secret"]
+            )
+
+            client_info = OAuthClientInformationFull(
+                client_id=processed["client_id"],
+                client_secret=client_secret,
+                redirect_uris=processed["redirect_uris"],
+                response_types=processed["response_types"],
+                grant_types=processed["grant_types"],
+                token_endpoint_auth_method=processed["token_endpoint_auth_method"],
+                scope=processed["scope"],
+            )
+            logger.info(f"Successfully loaded client {client_id} from backend")
+            return client_info
+
+        except Exception as e:
+            logger.error(f"Error loading client from backend: {e}", exc_info=True)
+            return None
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """
@@ -280,9 +415,8 @@ class TaskManagerOAuthProvider(
         # because we're acting as a proxy. The MCP client's PKCE verification
         # will be handled by the MCP auth server directly.
 
-        auth_url = (
-            f"{self.settings.base_url}{self.settings.authorize_endpoint}?{urlencode(auth_params)}"
-        )
+        # Use public URL for user-facing authorization redirect
+        auth_url = f"{self.settings.get_public_url()}{self.settings.authorize_endpoint}?{urlencode(auth_params)}"
 
         logger.info(f"Generated authorization URL: {auth_url}")
         logger.info(f"Using TaskManager client_id: {self.settings.client_id}")

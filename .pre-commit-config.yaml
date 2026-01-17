@@ -102,16 +102,16 @@ repos:
 
       - id: npm-audit
         name: npm audit (frontend)
-        entry: bash -c 'cd frontend && npm audit --production --audit-level=high'
+        entry: bash -c 'cd services/frontend && npm audit --production --audit-level=high'
         language: system
-        files: ^frontend/(package\.json|package-lock\.json)$
+        files: ^services/frontend/(package\.json|package-lock\.json)$
         pass_filenames: false
 
       - id: npm-lint
         name: npm lint (frontend)
-        entry: bash -c 'cd frontend && npm run format'
+        entry: bash -c 'cd services/frontend && npm run format'
         language: system
-        files: ^frontend/.*\.(js|ts|astro)$
+        files: ^services/frontend/.*\.(js|ts|svelte)$
         pass_filenames: false
 
   # =============================================================================
