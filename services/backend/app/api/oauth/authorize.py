@@ -70,7 +70,8 @@ async def authorize_get(
         raise errors.oauth_invalid_client()
 
     # Validate redirect URI
-    if redirect_uri not in client.redirect_uris:
+    redirect_uris_list = json.loads(client.redirect_uris)
+    if redirect_uri not in redirect_uris_list:
         raise errors.oauth_invalid_redirect()
 
     # Validate response type

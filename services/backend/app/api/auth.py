@@ -1,6 +1,7 @@
 """Authentication API routes."""
 
 import re
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import RedirectResponse
@@ -173,6 +174,11 @@ async def login(
 
     # For form submissions with return_to, redirect
     if return_to:
+        # Validate return_to to prevent open redirect vulnerability
+        parsed = urlparse(return_to)
+        if parsed.scheme and not return_to.startswith(settings.frontend_url):
+            raise errors.validation("Invalid redirect URL")
+
         redirect_response = RedirectResponse(url=return_to, status_code=302)
         # Copy the session cookie to the redirect response
         redirect_response.set_cookie(
