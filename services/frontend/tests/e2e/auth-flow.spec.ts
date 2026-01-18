@@ -19,17 +19,21 @@ test.describe('Authentication Flow', () => {
 	test('should register a new user', async ({ page }) => {
 		await page.goto('/register');
 
-		// Fill registration form
-		await page.fill('[name=username]', 'testuser');
-		await page.fill('[name=email]', 'test@example.com');
+		// Fill registration form with unique username to avoid conflicts
+		const timestamp = Date.now();
+		await page.fill('[name=username]', `testuser${timestamp}`);
+		await page.fill('[name=email]', `test${timestamp}@example.com`);
 		await page.fill('[name=password]', 'TestPass123!');
 
 		// Submit form
 		await page.click('button[type=submit]');
 
-		// Should redirect to dashboard after successful registration
-		await expect(page).toHaveURL('/');
-		await expect(page.locator('h1')).toContainText('TaskManager');
+		// Wait for navigation
+		await page.waitForURL('/login', { timeout: 10000 });
+
+		// Should redirect to login page after successful registration
+		await expect(page).toHaveURL('/login');
+		await expect(page.locator('main h1')).toContainText('Login');
 	});
 
 	test('should login with valid credentials', async ({ page }) => {

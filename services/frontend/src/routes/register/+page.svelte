@@ -5,12 +5,10 @@
 	let email = '';
 	let password = '';
 	let error = '';
-	let success = '';
 
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		error = '';
-		success = '';
 
 		try {
 			const response = await fetch('/api/auth/register', {
@@ -23,18 +21,24 @@
 			});
 
 			const data = await response.json();
+			console.log('Registration response:', { status: response.status, data });
 
 			if (response.ok) {
-				success = 'Registration successful! Redirecting to login...';
-				setTimeout(() => {
-					goto('/login');
-				}, 2000);
+				// Redirect immediately to login page
+				await goto('/login');
 			} else {
 				// Handle both old format (data.error = string) and new format (data.error = {code, message})
 				const errorMessage = typeof data.error === 'object' ? data.error.message : data.error;
-				error = errorMessage || 'Registration failed';
+				// Also check for detail field (FastAPI validation errors)
+				const detailMessage = data.detail
+					? typeof data.detail === 'string'
+						? data.detail
+						: JSON.stringify(data.detail)
+					: null;
+				error = errorMessage || detailMessage || 'Registration failed';
 			}
 		} catch (err) {
+			console.error('Registration error:', err);
 			error = 'Network error. Please try again.';
 		}
 	}
@@ -93,12 +97,6 @@
 		{#if error}
 			<div class="error-message" style="margin-top: 1rem;">
 				{error}
-			</div>
-		{/if}
-
-		{#if success}
-			<div class="success-message" style="margin-top: 1rem;">
-				{success}
 			</div>
 		{/if}
 

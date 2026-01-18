@@ -8,9 +8,9 @@ This directory contains end-to-end test specifications for the TaskManager Svelt
 
 - ✅ Test infrastructure configured (Playwright, cross-browser testing)
 - ✅ 27 test specifications written covering all user flows
-- ⏳ **Pending**: Page implementations (login, register, dashboard)
-- ⏳ **Pending**: Backend API integration
-- ⏳ **Pending**: Test database seeding scripts
+- ✅ Isolated test database setup (automatic reset before tests)
+- ✅ Backend API integration via test environment
+- ⏳ **Pending**: Complete page implementations
 
 ## Setup
 
@@ -91,36 +91,49 @@ Configuration is in `playwright.config.ts`:
 - HTML report generation
 - Cross-browser testing (Chromium, Firefox, WebKit)
 
-## Test Data Requirements
+## Test Database Setup
 
-⚠️ **Setup Required Before Tests Can Run**
+### Automatic Isolated Environment
 
-### Database Seeding
+Tests run in a completely isolated environment:
 
-Tests require a test database with seeded data. Create a test database setup script with:
+- **Test Backend**: Port 8010 (separate from dev backend on 8000)
+- **Test Database**: `taskmanager_test` (separate from dev database)
+- **Frontend Preview**: Port 4173
 
-```sql
--- Create test user (password: TestPass123!)
-INSERT INTO users (username, email, password_hash)
-VALUES ('testuser', 'test@example.com', '$2a$12$...');
+### How It Works
+
+1. **Database Reset**: Before tests start, the test database is automatically dropped and recreated
+2. **Migrations**: Fresh migrations are applied to the test database
+3. **Backend Start**: Test backend starts on port 8010 with `.env.test` config
+4. **Frontend Build**: Frontend is built and previewed with proxy to test backend
+5. **Test Execution**: Tests run against the isolated environment
+
+This all happens automatically when you run `npm test` - no manual setup required!
+
+### Test Database Configuration
+
+Located in `/services/backend/.env.test`:
+
+- Database name: `taskmanager_test`
+- Backend port: 8010
+- Faster bcrypt rounds for speed (4 vs 12 in development)
+
+### Manual Database Reset
+
+If you need to manually reset the test database:
+
+```bash
+cd ../backend
+PYDANTIC_ENV_FILE=.env.test uv run python scripts/reset_test_db.py
 ```
-
-**Note**: Use unique test data per test run to avoid conflicts. Consider:
-
-- Dynamic usernames: `testuser-${timestamp}`
-- Test data cleanup in `afterEach` hooks
-- Isolated test database instance
-
-### Required Test Environment
-
-- ✅ Backend API running and accessible
-- ✅ Test database with clean state before each run
-- ✅ Proper CORS configuration for test origin
-- ⏳ Test user seeded (see above)
 
 ### Test Credentials
 
-- Username: `testuser` (or dynamic per test)
+Tests create users dynamically during registration tests:
+
+- Username: `testuser`
+- Email: `test@example.com`
 - Password: `TestPass123!` # pragma: allowlist secret
 
 **Security Note**: These credentials are for local testing only. Never use in production.
@@ -199,8 +212,27 @@ await page.evaluate(() => console.log('Browser console'));
 **Tests fail with "Timeout"**
 
 - Increase timeout in config
-- Check if server is running
+- Check if backend server started (port 8010)
+- Check if PostgreSQL is running: `pg_isready`
 - Verify network connectivity
+
+**Database errors**
+
+- **Error: Database already exists**: The reset script should handle this automatically
+- **Error: Permission denied**: Ensure PostgreSQL user has CREATE DATABASE permission
+- **Manual cleanup**: `dropdb taskmanager_test`
+
+**Port conflicts**
+
+- **Error: Port 8010 already in use**: A previous test backend may still be running
+- **Fix**: `lsof -ti:8010 | xargs kill -9`
+- **Error: Port 4173 already in use**: Kill existing preview server
+
+**Backend connection failed**
+
+- Ensure PostgreSQL is running: `pg_isready`
+- Check backend logs in test output
+- Verify `.env.test` configuration in backend directory
 
 **Elements not found**
 

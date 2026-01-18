@@ -3,11 +3,13 @@ import { env } from '$env/dynamic/private';
 
 // Use environment variable with fallback to Docker service name
 const BACKEND_URL = env.BACKEND_URL || env.VITE_API_URL || 'http://backend:8000';
+console.log(`[Hooks] BACKEND_URL configured as: ${BACKEND_URL}`);
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Proxy API requests to backend
 	if (event.url.pathname.startsWith('/api/')) {
 		const backendUrl = `${BACKEND_URL}${event.url.pathname}${event.url.search}`;
+		console.log(`[Proxy] ${event.request.method} ${event.url.pathname} -> ${backendUrl}`);
 
 		const headers = new Headers(event.request.headers);
 		headers.delete('host');
@@ -49,7 +51,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				headers: response.headers
 			});
 		} catch (error) {
-			console.error('Proxy error:', error);
+			console.error(`[Proxy] Error proxying to ${backendUrl}:`, error);
 			return new Response(JSON.stringify({ error: 'Backend request failed' }), {
 				status: 502,
 				headers: { 'Content-Type': 'application/json' }
