@@ -3,20 +3,19 @@
 OAuth-protected MCP resource server for TaskManager integration.
 """
 
-from taskmanager_sdk import (
-    ApiResponse,
-    TaskManagerClient,
-    create_authenticated_client,
-)
-
-from .lakera_guard import (
+from mcp_resource_framework.auth import IntrospectionTokenVerifier
+from mcp_resource_framework.security import (
     LakeraGuardError,
     guard_content,
     guard_tool,
     is_content_flagged,
     screen_content,
 )
-from .token_verifier import IntrospectionTokenVerifier
+from taskmanager_sdk import (
+    ApiResponse,
+    TaskManagerClient,
+    create_authenticated_client,
+)
 
 # Backwards compatibility alias
 TaskManagerAPI = TaskManagerClient

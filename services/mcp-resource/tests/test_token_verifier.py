@@ -5,8 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
-
-from mcp_resource.token_verifier import IntrospectionTokenVerifier
+from mcp_resource_framework.auth import IntrospectionTokenVerifier
 
 
 class TestIntrospectionTokenVerifier:
@@ -279,7 +278,7 @@ class TestIntrospectionTokenVerifier:
         )
 
         with patch(
-            "mcp_resource.token_verifier.check_resource_allowed", return_value=True
+            "mcp_resource_framework.auth.token_verifier.check_resource_allowed", return_value=True
         ) as mock_check:
             result = verifier._is_valid_resource("https://api.example.com")
 

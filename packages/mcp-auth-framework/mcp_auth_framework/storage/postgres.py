@@ -1,9 +1,4 @@
-"""
-Database-backed token storage for MCP access tokens.
-
-This module provides persistent storage for MCP access tokens using PostgreSQL,
-ensuring tokens survive server restarts.
-"""
+"""PostgreSQL-backed token storage implementation."""
 
 import logging
 import os
@@ -12,15 +7,16 @@ from typing import Any
 
 import asyncpg
 
+from mcp_auth_framework.storage.base import TokenStorage
+
 logger = logging.getLogger(__name__)
 
 
-class TokenStorage:
-    """Database-backed storage for MCP access tokens."""
+class PostgresTokenStorage(TokenStorage):
+    """Database-backed storage for MCP access tokens using PostgreSQL."""
 
     def __init__(self, database_url: str | None = None):
-        """
-        Initialize token storage.
+        """Initialize token storage.
 
         Args:
             database_url: PostgreSQL connection URL. If not provided,
@@ -58,8 +54,7 @@ class TokenStorage:
         expires_at: int,
         resource: str | None = None,
     ) -> None:
-        """
-        Store an access token in the database.
+        """Store an access token in the database.
 
         Args:
             token: The access token string
@@ -95,8 +90,7 @@ class TokenStorage:
         logger.debug(f"Stored token {token[:20]}... for client {client_id}")
 
     async def load_token(self, token: str) -> dict[str, Any] | None:
-        """
-        Load an access token from the database.
+        """Load an access token from the database.
 
         Args:
             token: The access token string to look up
@@ -140,8 +134,7 @@ class TokenStorage:
         }
 
     async def delete_token(self, token: str) -> None:
-        """
-        Delete a token from the database.
+        """Delete a token from the database.
 
         Args:
             token: The access token string to delete
@@ -157,8 +150,7 @@ class TokenStorage:
         logger.debug(f"Deleted token {token[:20]}...")
 
     async def cleanup_expired_tokens(self) -> int:
-        """
-        Remove all expired tokens from the database.
+        """Remove all expired tokens from the database.
 
         Returns:
             Number of tokens removed
@@ -180,8 +172,7 @@ class TokenStorage:
         return count
 
     async def get_token_count(self) -> int:
-        """
-        Get the total number of tokens in storage.
+        """Get the total number of tokens in storage.
 
         Returns:
             Number of tokens stored
@@ -201,8 +192,7 @@ class TokenStorage:
         expires_at: int,
         resource: str | None = None,
     ) -> None:
-        """
-        Store a refresh token in the database.
+        """Store a refresh token in the database.
 
         Args:
             refresh_token: The refresh token string
@@ -237,8 +227,7 @@ class TokenStorage:
         logger.debug(f"Stored refresh token {refresh_token[:20]}... for client {client_id}")
 
     async def load_refresh_token(self, refresh_token: str) -> dict[str, Any] | None:
-        """
-        Load a refresh token from the database.
+        """Load a refresh token from the database.
 
         Args:
             refresh_token: The refresh token string to look up
@@ -281,8 +270,7 @@ class TokenStorage:
         }
 
     async def delete_refresh_token(self, refresh_token: str) -> None:
-        """
-        Delete a refresh token from the database.
+        """Delete a refresh token from the database.
 
         Args:
             refresh_token: The refresh token string to delete
@@ -298,8 +286,7 @@ class TokenStorage:
         logger.debug(f"Deleted refresh token {refresh_token[:20]}...")
 
     async def cleanup_expired_refresh_tokens(self) -> int:
-        """
-        Remove all expired refresh tokens from the database.
+        """Remove all expired refresh tokens from the database.
 
         Returns:
             Number of tokens removed
@@ -317,29 +304,3 @@ class TokenStorage:
         if count > 0:
             logger.info(f"Cleaned up {count} expired refresh tokens")
         return count
-
-
-# Global token storage instance
-_token_storage: TokenStorage | None = None
-
-
-async def get_token_storage() -> TokenStorage:
-    """
-    Get the global token storage instance, initializing if needed.
-
-    Returns:
-        Initialized TokenStorage instance
-    """
-    global _token_storage
-    if _token_storage is None:
-        _token_storage = TokenStorage()
-        await _token_storage.initialize()
-    return _token_storage
-
-
-async def close_token_storage() -> None:
-    """Close the global token storage instance."""
-    global _token_storage
-    if _token_storage:
-        await _token_storage.close()
-        _token_storage = None

@@ -4,8 +4,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from mcp_resource.server import NormalizePathMiddleware
+from mcp_resource_framework.middleware import NormalizePathMiddleware
 
 
 class TestNormalizePathMiddleware:

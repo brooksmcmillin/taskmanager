@@ -584,7 +584,7 @@ class TestRateLimiter:
 
     def test_rate_limiter_allows_requests_within_limit(self) -> None:
         """Test that rate limiter allows requests within the limit."""
-        from mcp_auth.auth_server import RateLimiter
+        from mcp_auth_framework.rate_limiting import SlidingWindowRateLimiter as RateLimiter
 
         limiter = RateLimiter(requests_per_window=3, window_seconds=60)
 
@@ -595,7 +595,7 @@ class TestRateLimiter:
 
     def test_rate_limiter_tracks_clients_separately(self) -> None:
         """Test that rate limiter tracks different clients separately."""
-        from mcp_auth.auth_server import RateLimiter
+        from mcp_auth_framework.rate_limiting import SlidingWindowRateLimiter as RateLimiter
 
         limiter = RateLimiter(requests_per_window=2, window_seconds=60)
 
@@ -610,7 +610,7 @@ class TestRateLimiter:
 
     def test_rate_limiter_retry_after(self) -> None:
         """Test that get_retry_after returns reasonable value."""
-        from mcp_auth.auth_server import RateLimiter
+        from mcp_auth_framework.rate_limiting import SlidingWindowRateLimiter as RateLimiter
 
         limiter = RateLimiter(requests_per_window=1, window_seconds=60)
 

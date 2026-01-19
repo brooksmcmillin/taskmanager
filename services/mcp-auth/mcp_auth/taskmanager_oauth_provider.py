@@ -44,7 +44,7 @@ from starlette.responses import RedirectResponse, Response
 from taskmanager_sdk import TokenConfig
 
 if TYPE_CHECKING:
-    from .token_storage import TokenStorage
+    from mcp_auth_framework.storage import TokenStorage
 
 logger = logging.getLogger(__name__)
 

@@ -6,6 +6,8 @@ from typing import Any
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.shared.auth_utils import check_resource_allowed, resource_url_from_server_url
 
+from mcp_resource_framework.auth.ssrf_protection import is_safe_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,10 +38,7 @@ class IntrospectionTokenVerifier(TokenVerifier):
         import httpx
 
         # Validate URL to prevent SSRF attacks
-        # Allow HTTPS, localhost, or Docker internal hostnames
-        if not self.introspection_endpoint.startswith(
-            ("https://", "http://localhost", "http://127.0.0.1", "http://mcp-auth:")
-        ):
+        if not is_safe_url(self.introspection_endpoint, allow_localhost=True):
             logger.warning(
                 f"Rejecting introspection endpoint with unsafe scheme: {self.introspection_endpoint}"
             )
