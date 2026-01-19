@@ -6,7 +6,8 @@ A modern task management platform with OAuth 2.0 API access and MCP (Model Conte
 
 TaskManager is a full-stack application consisting of:
 
-- **Web Application** - Astro-based task management UI with REST API
+- **Frontend** - SvelteKit-based task management UI
+- **Backend** - FastAPI REST API with PostgreSQL
 - **MCP Authorization Server** - OAuth 2.0 server for MCP client authentication
 - **MCP Resource Server** - MCP tools for AI assistants to manage tasks
 - **Python SDK** - Client library for programmatic API access
