@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api/client';
@@ -62,8 +61,9 @@
 			const data = await response.json();
 
 			if (response.ok) {
-				// Redirect to return_to if present AND safe, otherwise go to homepage
-				goto(returnTo, { replaceState: true });
+				// Use full page reload to ensure layout re-runs and fetches user data
+				// This is necessary because session cookie is set by the backend
+				window.location.href = returnTo;
 			} else {
 				// Handle FastAPI error format: data.detail.message
 				// Also support legacy formats for compatibility

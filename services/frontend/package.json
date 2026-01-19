@@ -13,7 +13,8 @@
 		"lint": "prettier --check .",
 		"test": "playwright test",
 		"test:ui": "playwright test --ui",
-		"test:debug": "playwright test --debug"
+		"test:debug": "playwright test --debug",
+		"test:fail-fast": "playwright test --max-failures=1 --reporter=line"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.40.1",

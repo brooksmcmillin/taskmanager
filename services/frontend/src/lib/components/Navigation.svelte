@@ -44,7 +44,11 @@
 			<div class="flex items-center space-x-4">
 				{#if user}
 					<span class="text-sm text-gray-600">Welcome, {user.username}</span>
-					<button class="btn btn-outline text-sm" on:click={handleLogout}>Logout</button>
+					<button
+						class="btn btn-outline text-sm"
+						on:click={handleLogout}
+						data-testid="logout-button">Logout</button
+					>
 				{/if}
 				<ThemeToggle />
 			</div>
