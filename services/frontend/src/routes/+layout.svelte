@@ -21,6 +21,10 @@
 	$: showNav = !$page.url.pathname.startsWith('/oauth/');
 </script>
 
+<svelte:head>
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+</svelte:head>
+
 {#if showNav}
 	<Navigation user={data.user} />
 {/if}

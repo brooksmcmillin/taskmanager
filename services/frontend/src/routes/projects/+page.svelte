@@ -24,8 +24,6 @@
 </svelte:head>
 
 <main class="container py-8">
-	<h1 class="text-3xl font-bold text-gray-900 mb-8">Manage Projects</h1>
-
 	<ProjectModal bind:this={projectModal} on:save={() => projects.load()} />
 
 	<!-- Existing Projects -->
