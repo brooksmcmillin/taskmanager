@@ -2,8 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "command": "./node_modules/.bin/astro dev",
-      "name": "Development server",
+      "command": "cd services/frontend && npm run dev",
+      "name": "Frontend (SvelteKit)",
+      "request": "launch",
+      "type": "node-terminal"
+    },
+    {
+      "command": "cd services/backend && uv run uvicorn app.main:app --reload",
+      "name": "Backend (FastAPI)",
       "request": "launch",
       "type": "node-terminal"
     }

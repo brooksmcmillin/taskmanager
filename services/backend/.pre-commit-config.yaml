@@ -74,25 +74,6 @@ repos:
         pass_filenames: false
 
   # =============================================================================
-  # Node.js hooks (web-app)
-  # =============================================================================
-  - repo: local
-    hooks:
-      - id: eslint
-        name: eslint (web-app)
-        entry: bash -c 'cd services/web-app && npm run lint'
-        language: system
-        files: ^services/web-app/.*\.(js|ts|astro)$
-        pass_filenames: false
-
-      - id: prettier-check
-        name: prettier (web-app)
-        entry: bash -c 'cd services/web-app && npm run format:check'
-        language: system
-        files: ^services/web-app/
-        pass_filenames: false
-
-  # =============================================================================
   # Docker linting
   # =============================================================================
   - repo: https://github.com/hadolint/hadolint
