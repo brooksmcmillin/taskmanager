@@ -106,6 +106,33 @@ export async function login(
 }
 
 /**
+ * Register and login helper - creates a new user and logs them in
+ * Useful when test database is reset between runs
+ * @param page - Playwright page object
+ * @param username - Username (defaults to unique testuser with timestamp)
+ * @param password - Password (defaults to test password)
+ */
+export async function registerAndLogin(
+	page: Page,
+	username?: string,
+	password: string = 'TestPass123!' // pragma: allowlist secret
+) {
+	// Use unique username if not provided to avoid conflicts between tests
+	const actualUsername = username ?? getUniqueUsername();
+
+	// Register the user
+	await page.goto('/register');
+	await page.fill('[name=username]', actualUsername);
+	await page.fill('[name=email]', `${actualUsername}@example.com`);
+	await page.fill('[name=password]', password);
+	await page.click('button[type=submit]');
+	await page.waitForURL('/login', { timeout: 10000 });
+
+	// Login
+	await login(page, actualUsername, password);
+}
+
+/**
  * Create a todo via UI
  * @param page - Playwright page object
  * @param title - Todo title

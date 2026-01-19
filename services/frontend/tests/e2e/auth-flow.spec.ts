@@ -37,17 +37,23 @@ test.describe('Authentication Flow', () => {
 	});
 
 	test('should login with valid credentials', async ({ page }) => {
-		await page.goto('/login');
+		// Register a test user first
+		await page.goto('/register');
+		await page.fill('[name=username]', 'loginuser');
+		await page.fill('[name=email]', 'loginuser@example.com');
+		await page.fill('[name=password]', 'TestPass123!');
+		await page.click('button[type=submit]');
+		await page.waitForURL('/login', { timeout: 10000 });
 
 		// Fill login form
-		await page.fill('[name=username]', 'testuser');
+		await page.fill('[name=username]', 'loginuser');
 		await page.fill('[name=password]', 'TestPass123!');
 
 		// Submit form
 		await page.click('button[type=submit]');
 
 		// Should redirect to dashboard
-		await expect(page).toHaveURL('/');
+		await page.waitForURL('/', { timeout: 10000 });
 
 		// Should see navigation bar with user info
 		await expect(page.locator('.nav-bar')).toBeVisible();
@@ -69,12 +75,21 @@ test.describe('Authentication Flow', () => {
 	});
 
 	test('should logout successfully', async ({ page }) => {
-		// Login first
-		await page.goto('/login');
-		await page.fill('[name=username]', 'testuser');
+		// Register a test user first
+		await page.goto('/register');
+		await page.fill('[name=username]', 'logoutuser');
+		await page.fill('[name=email]', 'logout@example.com');
 		await page.fill('[name=password]', 'TestPass123!');
 		await page.click('button[type=submit]');
-		await expect(page).toHaveURL('/');
+		await page.waitForURL('/login', { timeout: 10000 });
+
+		// Login
+		await page.fill('[name=username]', 'logoutuser');
+		await page.fill('[name=password]', 'TestPass123!');
+		await page.click('button[type=submit]');
+
+		// Wait for navigation to load with user data and logout button to appear
+		await page.waitForSelector('[data-testid=logout-button]', { timeout: 10000 });
 
 		// Click logout button
 		await page.click('[data-testid=logout-button]');
@@ -84,7 +99,7 @@ test.describe('Authentication Flow', () => {
 
 		// Verify session cookie is cleared
 		const cookies = await page.context().cookies();
-		const sessionCookie = cookies.find((c) => c.name === 'session_id');
+		const sessionCookie = cookies.find((c) => c.name === 'session');
 		expect(sessionCookie).toBeUndefined();
 	});
 
