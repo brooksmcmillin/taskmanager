@@ -219,7 +219,6 @@
 <main class="container py-8">
 	<div class="max-w-6xl mx-auto">
 		<div class="flex justify-between items-center mb-8">
-			<h1 class="text-3xl font-bold text-gray-900">OAuth Clients</h1>
 			<button on:click={openAddModal} class="btn btn-primary"> + Add Client </button>
 		</div>
 

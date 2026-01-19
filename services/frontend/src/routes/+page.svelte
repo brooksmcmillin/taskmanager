@@ -2,13 +2,19 @@
 	import { onMount } from 'svelte';
 	import { todos, pendingTodos, todosByProject } from '$lib/stores/todos';
 	import { projects } from '$lib/stores/projects';
-	import TodoModal from '$lib/components/TodoModal.svelte';
+	import TaskDetailPanel from '$lib/components/TaskDetailPanel.svelte';
 	import DragDropCalendar from '$lib/components/DragDropCalendar.svelte';
+	import { getPriorityColor } from '$lib/utils/priority';
+	import { formatDateDisplay } from '$lib/utils/dates';
 	import type { Todo } from '$lib/types';
 
 	let currentView: 'list' | 'calendar' = 'calendar';
 	let minimizedProjects: Record<string, boolean> = {};
-	let todoModal: TodoModal;
+	let taskDetailPanel: TaskDetailPanel;
+
+	function getProjectId(projectName: string): string {
+		return `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
+	}
 
 	onMount(async () => {
 		// Load todos and projects
@@ -26,18 +32,21 @@
 	});
 
 	function toggleProject(projectName: string) {
-		const projectId = `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
+		const projectId = getProjectId(projectName);
 		minimizedProjects[projectId] = !minimizedProjects[projectId];
 		localStorage.setItem('minimized-projects', JSON.stringify(minimizedProjects));
 	}
 
 	function isProjectMinimized(projectName: string): boolean {
-		const projectId = `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
-		return minimizedProjects[projectId] || false;
+		return minimizedProjects[getProjectId(projectName)] || false;
 	}
 
-	function openEditModal(todo: Todo) {
-		todoModal.openEdit(todo);
+	function openTaskDetail(todo: Todo) {
+		taskDetailPanel.open(todo);
+	}
+
+	function openEditPanel(todo: Todo) {
+		taskDetailPanel.openEdit(todo);
 	}
 
 	async function handleCompleteTodo(todoId: number) {
@@ -51,11 +60,8 @@
 		}
 	}
 
-	function formatDateForDisplay(dateStr: string | null): string {
-		if (!dateStr) return '';
-		const [year, month, day] = dateStr.split('-').map(Number);
-		const date = new Date(year, month - 1, day);
-		return date.toLocaleDateString();
+	async function handleFormSuccess() {
+		await todos.load({ status: 'pending' });
 	}
 
 	// Group todos by project for list view
@@ -78,8 +84,6 @@
 </svelte:head>
 
 <main class="container py-8">
-	<h1 class="text-3xl font-bold text-gray-900 mb-8">Todo Manager</h1>
-
 	<!-- View Toggle -->
 	<div class="flex justify-center mb-6">
 		<div class="flex gap-4">
@@ -98,8 +102,17 @@
 		</div>
 	</div>
 
-	<!-- Todo Modal -->
-	<TodoModal bind:this={todoModal} />
+	<!-- Task Detail Panel -->
+	<TaskDetailPanel
+		bind:this={taskDetailPanel}
+		on:complete={(e) => handleCompleteTodo(e.detail)}
+		on:formSuccess={handleFormSuccess}
+	/>
+
+	<!-- Add Todo Button -->
+	<button class="add-todo-btn" on:click={() => taskDetailPanel.openCreate()}>
+		<span class="plus-icon">+</span>
+	</button>
 
 	<!-- List View -->
 	{#if currentView === 'list'}
@@ -107,42 +120,46 @@
 			<div id="todo-lists" class="grid grid-cols-1 md:grid-cols-2 gap-6">
 				{#each sortedProjectNames as projectName}
 					{@const projectTodos = groupedTodos[projectName]}
-					{@const projectId = `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`}
-					{@const isMinimized = isProjectMinimized(projectName)}
 					<div class="card">
-						<div class="flex items-center justify-between mb-3">
+						<div class="mb-3">
 							<h3 class="font-semibold text-lg text-gray-800">{projectName}</h3>
-							<button
-								on:click={() => toggleProject(projectName)}
-								class="btn btn-sm btn-secondary project-toggle"
-								title={isMinimized ? 'Expand' : 'Minimize' + ' project'}
-							>
-								{isMinimized ? '▲' : '▼'}
-							</button>
 						</div>
-						<div class="space-y-2 {isMinimized ? 'hidden' : ''}">
+						<div class="space-y-3">
 							{#each projectTodos as todo}
-								<div class="flex items-center justify-between p-3 border rounded">
+								<div
+									class="flex items-center justify-between p-4 border rounded border-l-4 hover:shadow-md transition-shadow cursor-pointer"
+									style="border-left-color: {todo.project_color || '#6b7280'}"
+									on:click={() => openTaskDetail(todo)}
+									role="button"
+									tabindex="0"
+									on:keydown={(e) => e.key === 'Enter' && openTaskDetail(todo)}
+								>
 									<div class="flex-1">
-										<div class="font-medium">{todo.title}</div>
-										<div class="text-sm text-gray-600">{todo.description || ''}</div>
-										<div class="text-xs text-gray-500 mt-1">
-											Priority: {todo.priority}
+										<div class="flex items-center gap-2">
+											<span
+												class="w-2 h-2 rounded-full flex-shrink-0"
+												style="background-color: {getPriorityColor(todo.priority)}"
+												title="{todo.priority} priority"
+											></span>
+											<div class="text-base font-medium text-gray-900">{todo.title}</div>
+										</div>
+										<div class="text-xs text-gray-500 mt-1.5 ml-4">
+											{todo.priority.charAt(0).toUpperCase() + todo.priority.slice(1)}
 											{#if todo.due_date}
-												| Due: {formatDateForDisplay(todo.due_date)}
+												• Due: {formatDateDisplay(todo.due_date)}
 											{/if}
 										</div>
 									</div>
-									<div class="flex gap-3 ml-4">
+									<div class="flex gap-2 ml-4">
 										<button
-											on:click={() => openEditModal(todo)}
+											on:click|stopPropagation={() => openEditPanel(todo)}
 											class="btn btn-secondary btn-sm"
 											title="Edit todo"
 										>
 											✏️
 										</button>
 										<button
-											on:click={() => handleCompleteTodo(todo.id)}
+											on:click|stopPropagation={() => handleCompleteTodo(todo.id)}
 											class="btn btn-success btn-sm"
 											title="Mark as complete"
 										>
@@ -161,7 +178,7 @@
 	<!-- Calendar View -->
 	{#if currentView === 'calendar'}
 		<div id="calendar-view">
-			<DragDropCalendar on:editTodo={(e) => openEditModal(e.detail)} />
+			<DragDropCalendar on:editTodo={(e) => openTaskDetail(e.detail)} />
 		</div>
 	{/if}
 </main>

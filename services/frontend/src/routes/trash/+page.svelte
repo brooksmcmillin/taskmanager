@@ -104,8 +104,6 @@
 </svelte:head>
 
 <main class="container py-8">
-	<h1 class="text-3xl font-bold text-gray-900 mb-8">Deleted Tasks</h1>
-
 	<!-- Search Bar -->
 	<div class="max-w-4xl mx-auto mb-6">
 		<div class="flex gap-4">

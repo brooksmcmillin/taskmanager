@@ -15,6 +15,19 @@ export function formatDate(dateStr: string | null): string {
 }
 
 /**
+ * Format a date string for display using locale default
+ * @param dateStr - Date string in YYYY-MM-DD format or null
+ * @param fallback - Optional fallback string when date is null
+ * @returns Formatted date string or fallback
+ */
+export function formatDateDisplay(dateStr: string | null, fallback = ''): string {
+	if (!dateStr) return fallback;
+	const [year, month, day] = dateStr.split('-').map(Number);
+	const date = new Date(year, month - 1, day);
+	return date.toLocaleDateString();
+}
+
+/**
  * Format a date for input fields (YYYY-MM-DD)
  * @param date - Date object or ISO string
  * @returns Formatted date string for input
