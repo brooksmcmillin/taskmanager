@@ -1,6 +1,9 @@
 # Use Python 3.13 slim image
 FROM python:3.13-slim
 
+# Set shell options for better error handling
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Set working directory
 WORKDIR /app
 
@@ -13,14 +16,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl \
 # Add uv to PATH
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy SDK package first (needed for local dependency)
+# Copy SDK and framework packages first (needed for local dependencies)
 COPY packages/taskmanager-sdk /packages/taskmanager-sdk
+COPY packages/mcp-resource-framework /packages/mcp-resource-framework
 
 # Copy dependency files
 COPY services/mcp-resource/pyproject.toml ./
 
-# Update pyproject.toml to use absolute path for Docker build, then install dependencies
+# Update pyproject.toml to use absolute paths for Docker build, then install dependencies
 RUN sed -i 's|path = "../../packages/taskmanager-sdk"|path = "/packages/taskmanager-sdk"|' pyproject.toml \
+    && sed -i 's|path = "../../packages/mcp-resource-framework"|path = "/packages/mcp-resource-framework"|' pyproject.toml \
     && uv sync --no-dev
 
 # Copy application code

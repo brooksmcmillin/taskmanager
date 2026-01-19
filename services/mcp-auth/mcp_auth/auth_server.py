@@ -2,12 +2,10 @@ import asyncio
 import json
 import logging
 import os
-import re
 import secrets
 import time
-from collections import defaultdict
 from collections.abc import Awaitable, Callable, MutableMapping
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
 import click
@@ -15,15 +13,8 @@ from dotenv import load_dotenv
 from mcp.server.auth.provider import AccessTokenT, AuthorizationCodeT, RefreshTokenT
 from mcp.server.auth.routes import cors_middleware, create_auth_routes
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
-from pydantic import AnyHttpUrl
-from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
-from taskmanager_sdk import AuthenticationError, TaskManagerClient, TokenConfig
-from uvicorn import Config, Server
-
-from .responses import (
+from mcp_auth_framework.rate_limiting import SlidingWindowRateLimiter
+from mcp_auth_framework.responses import (
     backend_connection_error,
     backend_invalid_response,
     backend_timeout,
@@ -33,8 +24,20 @@ from .responses import (
     server_error,
     slow_down,
 )
+from mcp_auth_framework.storage import PostgresTokenStorage
+from mcp_auth_framework.validation import parse_json_field, parse_scope_field, validate_client_id
+from pydantic import AnyHttpUrl
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Route
+from taskmanager_sdk import AuthenticationError, TaskManagerClient, TokenConfig
+from uvicorn import Config, Server
+
+if TYPE_CHECKING:
+    from mcp_auth_framework.storage import TokenStorage
+
 from .taskmanager_oauth_provider import TaskManagerAuthSettings, TaskManagerOAuthProvider
-from .token_storage import TokenStorage
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -42,51 +45,11 @@ logger = logging.getLogger(__name__)
 # Constants for device flow
 DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 
-# Input validation patterns (alphanumeric, hyphens, underscores)
-VALID_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,256}$")
-
-
-class RateLimiter:
-    """
-    Simple in-memory rate limiter for OAuth endpoints.
-
-    Tracks requests per client within a sliding time window.
-    Thread-safe for async usage within a single process.
-    """
-
-    def __init__(self, requests_per_window: int, window_seconds: int):
-        self.requests_per_window = requests_per_window
-        self.window_seconds = window_seconds
-        self.clients: dict[str, list[float]] = defaultdict(list)
-
-    def is_allowed(self, client_id: str) -> bool:
-        """Check if the client is allowed to make a request."""
-        now = time.time()
-        # Clean old requests outside the window
-        self.clients[client_id] = [
-            req_time for req_time in self.clients[client_id] if now - req_time < self.window_seconds
-        ]
-
-        if len(self.clients[client_id]) >= self.requests_per_window:
-            return False
-
-        self.clients[client_id].append(now)
-        return True
-
-    def get_retry_after(self, client_id: str) -> int:
-        """Get the number of seconds until the client can retry."""
-        if not self.clients[client_id]:
-            return 0
-        oldest_request = min(self.clients[client_id])
-        retry_after = int(self.window_seconds - (time.time() - oldest_request)) + 1
-        return max(retry_after, 1)
-
-
 # Rate limiters for device flow endpoints
 # Device code requests: 10 requests per hour per client
-device_code_limiter = RateLimiter(requests_per_window=10, window_seconds=3600)
+device_code_limiter = SlidingWindowRateLimiter(requests_per_window=10, window_seconds=3600)
 # Token polling: 60 requests per 5 minutes per client (allows ~5 second intervals)
-token_poll_limiter = RateLimiter(requests_per_window=60, window_seconds=300)
+token_poll_limiter = SlidingWindowRateLimiter(requests_per_window=60, window_seconds=300)
 
 
 class TaskManagerAuthProvider(
@@ -105,7 +68,7 @@ class TaskManagerAuthProvider(
         self,
         auth_settings: TaskManagerAuthSettings,
         server_url: str,
-        token_storage: TokenStorage | None = None,
+        token_storage: "TokenStorage | None" = None,
         api_client: TaskManagerClient | None = None,
     ):
         super().__init__(
@@ -159,53 +122,6 @@ def ensure_valid_api_client() -> TaskManagerClient | None:
         return None
 
     return api_client
-
-
-def parse_json_field(value: Any, default: Any) -> Any:
-    """Parse a JSON string field, returning the value as-is if not a string.
-
-    Args:
-        value: The value to parse (may be a JSON string, list, or other type)
-        default: Default value to return if parsing fails or value is falsy
-
-    Returns:
-        Parsed value or default
-    """
-    if not value:
-        return default
-    if isinstance(value, str):
-        try:
-            return json.loads(value)
-        except json.JSONDecodeError:
-            return default
-    return value
-
-
-def parse_scope_field(scopes: Any) -> str:
-    """Parse OAuth scope field into a space-separated string.
-
-    Handles multiple formats:
-    - List of strings: ["read", "write"] -> "read write"
-    - JSON string array: '["read", "write"]' -> "read write"
-    - Space-separated string: "read write" -> "read write"
-
-    Args:
-        scopes: Scope value in any supported format
-
-    Returns:
-        Space-separated scope string
-    """
-    if not scopes:
-        return "read"
-    if isinstance(scopes, list):
-        return " ".join(scopes)
-    if isinstance(scopes, str) and scopes.startswith("["):
-        try:
-            parsed = json.loads(scopes)
-            return " ".join(parsed) if isinstance(parsed, list) else scopes
-        except json.JSONDecodeError:
-            return scopes
-    return scopes
 
 
 def transform_client_data(client_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -320,7 +236,7 @@ async def handle_refresh_token_exchange(
         )
 
     # Validate client_id format
-    if not VALID_ID_PATTERN.match(client_id):
+    if not validate_client_id(client_id):
         logger.warning("Invalid client_id format in refresh token exchange")
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Invalid client_id format"},
@@ -434,11 +350,11 @@ async def handle_device_code_token_exchange(
         return invalid_request("client_id is required")
 
     # Validate input format to prevent injection attacks
-    if not VALID_ID_PATTERN.match(client_id):
+    if not validate_client_id(client_id):
         logger.warning("Invalid client_id format in device token exchange")
         return invalid_request("Invalid client_id format")
 
-    if not VALID_ID_PATTERN.match(device_code):
+    if not validate_client_id(device_code):
         logger.warning(f"Invalid device_code format from client: {client_id}")
         return invalid_request("Invalid device_code format")
 
@@ -597,7 +513,7 @@ def create_authorization_server(
     port: int,
     server_url: AnyHttpUrl,
     auth_settings: TaskManagerAuthSettings,
-    token_storage: TokenStorage | None = None,
+    token_storage: "TokenStorage | None" = None,
 ) -> Starlette:
     """Create the Authorization Server application."""
     # Get the global API client for loading OAuth clients from backend
@@ -1011,7 +927,7 @@ def create_authorization_server(
         client_id_str = str(client_id)
 
         # Validate client_id format to prevent injection attacks
-        if not VALID_ID_PATTERN.match(client_id_str):
+        if not validate_client_id(client_id_str):
             logger.warning("Invalid client_id format in device code request")
             return invalid_request("Invalid client_id format")
 
@@ -1170,7 +1086,7 @@ async def run_server(
 
     if database_url:
         logger.info("Initializing database token storage...")
-        token_storage = TokenStorage(database_url)
+        token_storage = PostgresTokenStorage(database_url)
         try:
             await token_storage.initialize()
             logger.info("Database token storage initialized successfully")

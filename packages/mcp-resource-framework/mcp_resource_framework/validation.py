@@ -1,5 +1,4 @@
-"""
-Response validation helpers for MCP Resource server tools.
+"""Response validation helpers for MCP Resource server tools.
 
 This module provides utilities for validating API responses and
 generating consistent error responses in MCP tools.
@@ -7,11 +6,21 @@ generating consistent error responses in MCP tools.
 
 import json
 import logging
-from typing import Any
-
-from taskmanager_sdk import ApiResponse
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
+
+
+class ApiResponse(Protocol):
+    """Protocol for API response types.
+
+    This allows the validation utilities to work with any API client
+    that returns responses with success, error, and data attributes.
+    """
+
+    success: bool
+    error: str | None
+    data: Any
 
 
 def json_error(message: str) -> str:

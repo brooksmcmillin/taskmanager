@@ -1,0 +1,39 @@
+[project]
+name = "mcp-auth-framework"
+version = "0.1.0"
+description = "Reusable OAuth Authorization Server framework for MCP servers"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.13.0",
+    "asyncpg>=0.31.0",
+    "mcp>=1.24.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "starlette>=0.40.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.2.0",
+    "pyright>=1.1.400",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = []
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"

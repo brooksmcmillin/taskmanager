@@ -3,9 +3,8 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from mcp_resource_framework.validation import validate_dict_response, validate_list_response
 from taskmanager_sdk import ApiResponse
-
-from mcp_resource.server import validate_dict_response, validate_list_response
 
 
 class TestValidateListResponse:
