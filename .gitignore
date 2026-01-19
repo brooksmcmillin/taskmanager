@@ -10,8 +10,6 @@ __pycache__/
 build/
 .venv/
 .pytest_cache/
-# generated types
-.astro/
 
 # dependencies
 node_modules/

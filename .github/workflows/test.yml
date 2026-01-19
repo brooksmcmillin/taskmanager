@@ -14,26 +14,3 @@ jobs:
 
   frontend:
     uses: ./.github/workflows/frontend-ci.yml
-
-  web-app:
-    uses: ./.github/workflows/node-ci.yml
-    with:
-      node-version: '22'
-      run-lint: false  # Lint is covered by pre-commit hooks
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  openapi-check:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: services/web-app
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: services/web-app/package-lock.json
-      - run: npm ci
-      - run: npm run check:openapi

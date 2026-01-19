@@ -88,8 +88,7 @@ taskmanager/
 │   │   └── app.scss          # 1,221 lines of styles
 │   └── package.json
 │
-├── services/                  # Legacy services
-│   ├── web-app/              # Original Astro app (port 4321)
+├── services/                  # Additional services
 │   ├── mcp-auth/             # OAuth server (port 9000)
 │   └── mcp-resource/         # MCP resource server (port 8001)
 │
@@ -275,7 +274,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 
 1. Check PostgreSQL is running: `docker compose ps postgres`
 2. Verify database credentials in `.env`
-3. Check database URL format: `postgresql+asyncpg://user:pass@host:port/db`
+3. Check database URL format: `postgresql+asyncpg://user:pass@host:port/db` <!-- pragma: allowlist secret -->
 
 ## 🎊 Success!
 

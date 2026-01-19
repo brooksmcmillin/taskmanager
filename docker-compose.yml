@@ -1,29 +1,5 @@
 services:
-  # ========== ORIGINAL ASTRO APP (Legacy) ==========
-  app:
-    build:
-      context: ./services/web-app
-      dockerfile: Dockerfile
-    container_name: taskmanager-app
-    restart: unless-stopped
-    ports:
-      - '4321:4321'
-    env_file:
-      - .env
-    environment:
-      - NODE_ENV=production
-      - HOST=0.0.0.0
-      - PORT=4321
-      - POSTGRES_HOST=postgres
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-    depends_on:
-      - postgres
-    networks:
-      - taskmanager_network
-
-  # ========== NEW FASTAPI BACKEND (Migration) ==========
+  # ========== FASTAPI BACKEND ==========
   backend:
     build:
       context: ./services/backend
@@ -50,7 +26,7 @@ services:
     networks:
       - taskmanager_network
 
-  # ========== NEW SVELTEKIT FRONTEND (Migration) ==========
+  # ========== SVELTEKIT FRONTEND ==========
   frontend:
     build:
       context: ./services/frontend
