@@ -82,24 +82,10 @@ repos:
         pass_filenames: false
 
   # =============================================================================
-  # Node.js hooks (web-app)
+  # Node.js hooks (frontend)
   # =============================================================================
   - repo: local
     hooks:
-      - id: eslint
-        name: eslint (web-app)
-        entry: bash -c 'cd services/web-app && npm run lint'
-        language: system
-        files: ^services/web-app/.*\.(js|ts|astro)$
-        pass_filenames: false
-
-      - id: prettier-check
-        name: prettier (web-app)
-        entry: bash -c 'cd services/web-app && npm run format:check'
-        language: system
-        files: ^services/web-app/
-        pass_filenames: false
-
       - id: npm-audit
         name: npm audit (frontend)
         entry: bash -c 'cd services/frontend && npm audit --production --audit-level=high'

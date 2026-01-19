@@ -67,20 +67,21 @@ docker compose up -d
 
 3. Run database migrations:
 ```bash
-cd services/web-app
-npm install
-npm run migrate:up
+cd services/backend
+uv sync
+uv run alembic upgrade head
 ```
 
 4. Access the application:
-   - Web UI: http://localhost:4321
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
    - MCP Resource Server: http://localhost:8001
    - MCP Auth Server: http://localhost:9000
 
 ### Initial Setup
 
-1. Register a user account at http://localhost:4321/register
-2. Create an OAuth client for MCP authentication at http://localhost:4321/settings
+1. Register a user account at http://localhost:3000/register
+2. Create an OAuth client for MCP authentication at http://localhost:3000/settings
 3. Configure your MCP client (Claude, etc.) to connect to the resource server
 
 ## Project Structure
@@ -88,7 +89,8 @@ npm run migrate:up
 ```
 taskmanager/
 ├── services/
-│   ├── web-app/              # Astro web application & REST API
+│   ├── frontend/             # SvelteKit task management UI
+│   ├── backend/              # FastAPI REST API
 │   ├── mcp-auth/             # OAuth 2.0 authorization server for MCP
 │   ├── mcp-resource/         # MCP resource server with tools
 │   └── db/                   # Database configuration & SSL certs
@@ -100,15 +102,24 @@ taskmanager/
 
 ## Services
 
-### Web Application
+### Frontend (SvelteKit)
 
-The main TaskManager application built with Astro, featuring:
+The task management UI built with SvelteKit, featuring:
 - User authentication with session management
-- Project and task management UI
-- Full REST API with OpenAPI specification
-- OAuth 2.0 authorization server
+- Project and task management interface
+- Real-time updates and responsive design
 
-**[View Web App Documentation](services/web-app/README.md)**
+**[View Frontend Documentation](services/frontend/README.md)**
+
+### Backend (FastAPI)
+
+The REST API built with FastAPI, featuring:
+- Async SQLAlchemy ORM with PostgreSQL
+- Full API with Pydantic validation
+- Session-based authentication
+- Rate limiting and security features
+
+**[View Backend Documentation](services/backend/README.md)**
 
 ### MCP Authorization Server
 
@@ -157,11 +168,18 @@ Key configuration options (see `.env.example` for full list):
 
 ### Running Services Locally
 
-**Web App:**
+**Frontend:**
 ```bash
-cd services/web-app
+cd services/frontend
 npm install
 npm run dev
+```
+
+**Backend:**
+```bash
+cd services/backend
+uv sync
+uv run uvicorn app.main:app --reload
 ```
 
 **MCP Servers:**
@@ -178,8 +196,11 @@ uv run python -m mcp_resource.server --port 8001
 ### Running Tests
 
 ```bash
-# Web app tests
-cd services/web-app && npm test
+# Frontend tests (Playwright)
+cd services/frontend && npm test
+
+# Backend tests
+cd services/backend && uv run pytest
 
 # SDK tests
 cd packages/taskmanager-sdk && uv run pytest

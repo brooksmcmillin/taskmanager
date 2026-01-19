@@ -108,10 +108,11 @@ GitHub Actions runs security scans on every PR and weekly to detect vulnerable d
 Check for updates regularly:
 
 ```bash
-# Node.js (web-app)
-cd services/web-app && npm audit
+# Node.js (frontend)
+cd services/frontend && npm audit
 
-# Python (MCP services, SDK)
+# Python (backend, MCP services, SDK)
+cd services/backend && uv run pip-audit
 cd services/mcp-auth && uv run pip-audit
 cd services/mcp-resource && uv run pip-audit
 ```
