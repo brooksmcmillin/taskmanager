@@ -200,6 +200,11 @@ class Errors:
         """NOT_FOUND_006: Recurring task not found."""
         return ApiError("NOT_FOUND_006", 404, "Recurring task not found")
 
+    @staticmethod
+    def registration_code_not_found() -> ApiError:
+        """NOT_FOUND_007: Registration code not found."""
+        return ApiError("NOT_FOUND_007", 404, "Registration code not found")
+
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
     # =========================================================================
@@ -213,6 +218,30 @@ class Errors:
     def email_exists() -> ApiError:
         """CONFLICT_002: Email already exists."""
         return ApiError("CONFLICT_002", 409, "Email already exists")
+
+    @staticmethod
+    def registration_code_exists() -> ApiError:
+        """CONFLICT_003: Registration code already exists."""
+        return ApiError("CONFLICT_003", 409, "Registration code already exists")
+
+    # =========================================================================
+    # Registration Code Errors (REG_001 - REG_003)
+    # =========================================================================
+
+    @staticmethod
+    def invalid_registration_code() -> ApiError:
+        """REG_001: Invalid or expired registration code."""
+        return ApiError("REG_001", 400, "Invalid or expired registration code")
+
+    @staticmethod
+    def registration_code_exhausted() -> ApiError:
+        """REG_002: Registration code has reached maximum uses."""
+        return ApiError("REG_002", 400, "Registration code has reached maximum uses")
+
+    @staticmethod
+    def registration_code_required() -> ApiError:
+        """REG_003: Registration code is required."""
+        return ApiError("REG_003", 400, "Registration code is required")
 
     # =========================================================================
     # Rate Limiting (RATE_001)

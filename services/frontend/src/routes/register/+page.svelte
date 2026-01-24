@@ -4,16 +4,19 @@
 	let username = '';
 	let email = '';
 	let password = '';
+	let registrationCode = '';
 	let error = '';
 	let fieldErrors = {
 		username: '',
 		email: '',
-		password: ''
+		password: '',
+		registrationCode: ''
 	};
 	let touched = {
 		username: false,
 		email: false,
-		password: false
+		password: false,
+		registrationCode: false
 	};
 
 	function validateUsername(): string {
@@ -60,7 +63,14 @@
 		return '';
 	}
 
-	function validateField(field: 'username' | 'email' | 'password') {
+	function validateRegistrationCode(): string {
+		if (!registrationCode.trim()) {
+			return 'Registration code is required';
+		}
+		return '';
+	}
+
+	function validateField(field: 'username' | 'email' | 'password' | 'registrationCode') {
 		touched[field] = true;
 		if (field === 'username') {
 			fieldErrors.username = validateUsername();
@@ -68,6 +78,8 @@
 			fieldErrors.email = validateEmail();
 		} else if (field === 'password') {
 			fieldErrors.password = validatePassword();
+		} else if (field === 'registrationCode') {
+			fieldErrors.registrationCode = validateRegistrationCode();
 		}
 	}
 
@@ -75,11 +87,18 @@
 		fieldErrors.username = validateUsername();
 		fieldErrors.email = validateEmail();
 		fieldErrors.password = validatePassword();
+		fieldErrors.registrationCode = validateRegistrationCode();
 		touched.username = true;
 		touched.email = true;
 		touched.password = true;
+		touched.registrationCode = true;
 
-		return !fieldErrors.username && !fieldErrors.email && !fieldErrors.password;
+		return (
+			!fieldErrors.username &&
+			!fieldErrors.email &&
+			!fieldErrors.password &&
+			!fieldErrors.registrationCode
+		);
 	}
 
 	async function handleSubmit(e: Event) {
@@ -98,7 +117,7 @@
 					'Content-Type': 'application/json'
 				},
 				credentials: 'include',
-				body: JSON.stringify({ username, email, password })
+				body: JSON.stringify({ username, email, password, registration_code: registrationCode })
 			});
 
 			const data = await response.json();
@@ -134,6 +153,29 @@
 		<h1>Register</h1>
 
 		<form on:submit={handleSubmit} novalidate>
+			<div class="form-group">
+				<label for="registration-code">Registration Code:</label>
+				<input
+					type="text"
+					id="registration-code"
+					name="registration_code"
+					class="form-input"
+					bind:value={registrationCode}
+					on:blur={() => validateField('registrationCode')}
+					required
+					placeholder="Enter your registration code"
+				/>
+				{#if touched.registrationCode && fieldErrors.registrationCode}
+					<div
+						data-error="registrationCode"
+						class="field-error"
+						style="color: var(--error-color, #e53e3e); font-size: 0.875rem; margin-top: 0.25rem;"
+					>
+						{fieldErrors.registrationCode}
+					</div>
+				{/if}
+			</div>
+
 			<div class="form-group">
 				<label for="username">Username:</label>
 				<input

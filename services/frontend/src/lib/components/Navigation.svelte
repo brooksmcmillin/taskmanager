@@ -37,6 +37,13 @@
 							class:active={currentPath === '/oauth-clients'}>OAuth Clients</a
 						>
 						<a href="/trash" class="nav-link" class:active={currentPath === '/trash'}>Trash</a>
+						{#if user.is_admin}
+							<a
+								href="/admin/registration-codes"
+								class="nav-link"
+								class:active={currentPath === '/admin/registration-codes'}>Registration Codes</a
+							>
+						{/if}
 					</div>
 				{/if}
 			</div>

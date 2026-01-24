@@ -32,6 +32,7 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(..., min_length=8)
+    registration_code: str = Field(..., min_length=1)
 
     @field_validator("username")
     @classmethod
@@ -64,6 +65,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+    is_admin: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -76,6 +78,14 @@ class AuthResponse(BaseModel):
 @router.post("/register", status_code=201)
 async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
     """Register a new user."""
+    from app.api.registration_codes import (
+        use_registration_code,
+        validate_registration_code,
+    )
+
+    # Validate registration code first
+    await validate_registration_code(db, request.registration_code)
+
     # Check if username exists
     result = await db.execute(select(User).where(User.username == request.username))
     if result.scalar_one_or_none():
@@ -95,9 +105,14 @@ async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
     db.add(user)
     await db.flush()
 
+    # Mark registration code as used
+    await use_registration_code(db, request.registration_code)
+
     return AuthResponse(
         message="Registration successful",
-        user=UserResponse(id=user.id, username=user.username, email=user.email),
+        user=UserResponse(
+            id=user.id, username=user.username, email=user.email, is_admin=user.is_admin
+        ),
     )
 
 
@@ -194,7 +209,9 @@ async def login(
     # For JSON requests, return user info
     return AuthResponse(
         message="Login successful",
-        user=UserResponse(id=user.id, username=user.username, email=user.email),
+        user=UserResponse(
+            id=user.id, username=user.username, email=user.email, is_admin=user.is_admin
+        ),
     )
 
 
@@ -222,5 +239,6 @@ async def get_session(user: CurrentUser) -> dict:
             "id": user.id,
             "username": user.username,
             "email": user.email,
+            "is_admin": user.is_admin,
         }
     }

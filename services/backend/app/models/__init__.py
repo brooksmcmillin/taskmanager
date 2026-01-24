@@ -3,6 +3,7 @@
 from app.models.oauth import AccessToken, AuthorizationCode, DeviceCode, OAuthClient
 from app.models.project import Project
 from app.models.recurring_task import Frequency, RecurringTask
+from app.models.registration_code import RegistrationCode
 from app.models.session import Session
 from app.models.todo import Priority, Status, TimeHorizon, Todo
 from app.models.user import User
@@ -21,4 +22,5 @@ __all__ = [
     "DeviceCode",
     "RecurringTask",
     "Frequency",
+    "RegistrationCode",
 ]
