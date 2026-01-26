@@ -11,7 +11,8 @@
 	onMount(async () => {
 		if (browser) {
 			const params = new URLSearchParams(window.location.search);
-			userCodeParam = params.get('user_code') || '';
+			// Accept both 'code' and 'user_code' parameters for compatibility
+			userCodeParam = params.get('code') || params.get('user_code') || '';
 			userCode = userCodeParam;
 
 			// Check if user is authenticated

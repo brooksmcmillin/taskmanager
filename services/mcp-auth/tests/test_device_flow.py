@@ -619,3 +619,135 @@ class TestRateLimiter:
 
         # Should be between 1 and 61 seconds
         assert 1 <= retry_after <= 61
+
+
+class TestErrorTransformation:
+    """Test backend error to OAuth error transformation."""
+
+    def test_transform_backend_error_with_oauth_001(self) -> None:
+        """Test transformation of OAUTH_001 backend error to invalid_client."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        backend_error = {
+            "detail": {"code": "OAUTH_001", "message": "Invalid client_id or client_secret"}
+        }
+
+        oauth_error = transform_backend_error_to_oauth(backend_error)
+
+        assert oauth_error == {
+            "error": "invalid_client",
+            "error_description": "Invalid client_id or client_secret",
+        }
+
+    def test_transform_backend_error_with_auth_001(self) -> None:
+        """Test transformation of AUTH_001 backend error to invalid_client."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        backend_error = {"detail": {"code": "AUTH_001", "message": "Authentication failed"}}
+
+        oauth_error = transform_backend_error_to_oauth(backend_error)
+
+        assert oauth_error == {
+            "error": "invalid_client",
+            "error_description": "Authentication failed",
+        }
+
+    def test_transform_already_oauth_format(self) -> None:
+        """Test that already-formatted OAuth errors pass through unchanged."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        oauth_error_input = {
+            "error": "authorization_pending",
+            "error_description": "User has not yet authorized",
+        }
+
+        oauth_error = transform_backend_error_to_oauth(oauth_error_input)
+
+        assert oauth_error == oauth_error_input
+
+    def test_transform_unknown_error_code(self) -> None:
+        """Test transformation of unknown error code falls back to server_error."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        backend_error = {"detail": {"code": "UNKNOWN_CODE", "message": "Some error"}}
+
+        oauth_error = transform_backend_error_to_oauth(backend_error)
+
+        assert oauth_error == {"error": "server_error", "error_description": "Some error"}
+
+    def test_transform_string_detail(self) -> None:
+        """Test transformation when detail is a simple string."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        backend_error = {"detail": "Something went wrong"}
+
+        oauth_error = transform_backend_error_to_oauth(backend_error)
+
+        assert oauth_error == {
+            "error": "server_error",
+            "error_description": "Something went wrong",
+        }
+
+    def test_transform_malformed_response(self) -> None:
+        """Test transformation of malformed response falls back to generic error."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        malformed_error = {"something": "unexpected"}
+
+        oauth_error = transform_backend_error_to_oauth(malformed_error)
+
+        assert oauth_error == {
+            "error": "server_error",
+            "error_description": "An error occurred",
+        }
+
+    def test_transform_authorization_pending(self) -> None:
+        """Test transformation of OAUTH_008 to authorization_pending (RFC 8628)."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        backend_error = {"detail": {"code": "OAUTH_008", "message": "Authorization pending"}}
+
+        oauth_error = transform_backend_error_to_oauth(backend_error)
+
+        assert oauth_error == {
+            "error": "authorization_pending",
+            "error_description": "Authorization pending",
+        }
+
+    def test_transform_slow_down(self) -> None:
+        """Test transformation of OAUTH_009 to slow_down (RFC 8628)."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        backend_error = {"detail": {"code": "OAUTH_009", "message": "Slow down"}}
+
+        oauth_error = transform_backend_error_to_oauth(backend_error)
+
+        assert oauth_error == {"error": "slow_down", "error_description": "Slow down"}
+
+    def test_transform_expired_token(self) -> None:
+        """Test transformation of OAUTH_010 to expired_token (RFC 8628)."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        backend_error = {"detail": {"code": "OAUTH_010", "message": "Device code has expired"}}
+
+        oauth_error = transform_backend_error_to_oauth(backend_error)
+
+        assert oauth_error == {
+            "error": "expired_token",
+            "error_description": "Device code has expired",
+        }
+
+    def test_transform_access_denied(self) -> None:
+        """Test transformation of OAUTH_006 to access_denied (RFC 8628)."""
+        from mcp_auth.auth_server import transform_backend_error_to_oauth
+
+        backend_error = {
+            "detail": {"code": "OAUTH_006", "message": "Access denied by resource owner"}
+        }
+
+        oauth_error = transform_backend_error_to_oauth(backend_error)
+
+        assert oauth_error == {
+            "error": "access_denied",
+            "error_description": "Access denied by resource owner",
+        }

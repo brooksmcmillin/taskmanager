@@ -45,6 +45,65 @@ logger = logging.getLogger(__name__)
 # Constants for device flow
 DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 
+
+def transform_backend_error_to_oauth(backend_response: dict[str, Any]) -> dict[str, str]:
+    """
+    Transform backend error response to RFC 6749 OAuth error format.
+
+    OAuth 2.0 clients expect errors in RFC 6749 format:
+        {"error": "error_code", "error_description": "Human readable description"}
+
+    But the TaskManager backend returns errors in REST API format:
+        {"detail": {"code": "ERROR_CODE", "message": "Error message"}}
+
+    This transformation is REQUIRED for OAuth endpoints (/token, /device/code) to maintain
+    compatibility with OAuth clients. Regular REST API endpoints can use the detail format,
+    but OAuth endpoints MUST follow RFC 6749.
+
+    Args:
+        backend_response: Response dict from TaskManager backend
+
+    Returns:
+        OAuth-formatted error dict with "error" and "error_description" fields
+    """
+    # If already in OAuth format, return as-is
+    if "error" in backend_response:
+        return backend_response
+
+    # If in backend REST API format, transform it
+    if "detail" in backend_response:
+        detail = backend_response["detail"]
+        if isinstance(detail, dict):
+            code = detail.get("code", "server_error")
+            message = detail.get("message", "An error occurred")
+
+            # Map backend error codes to OAuth error codes
+            error_mapping = {
+                "OAUTH_001": "invalid_client",  # Invalid client credentials
+                "OAUTH_002": "invalid_redirect_uri",  # Invalid redirect URI
+                "OAUTH_003": "invalid_scope",  # Invalid scope
+                "OAUTH_004": "invalid_grant",  # Invalid authorization code/token
+                "OAUTH_005": "invalid_token",  # Invalid or expired access token
+                "OAUTH_006": "access_denied",  # Access denied by resource owner
+                "OAUTH_007": "unsupported_grant_type",  # Unsupported grant type
+                # RFC 8628 Device Authorization Grant error codes
+                "OAUTH_008": "authorization_pending",  # Device code not yet authorized
+                "OAUTH_009": "slow_down",  # Polling too frequently
+                "OAUTH_010": "expired_token",  # Device code has expired
+                "AUTH_001": "invalid_client",  # Authentication failed
+                "AUTH_002": "access_denied",  # Access denied
+            }
+
+            oauth_error = error_mapping.get(code, "server_error")
+            return {"error": oauth_error, "error_description": message}
+        elif isinstance(detail, str):
+            # Simple string detail
+            return {"error": "server_error", "error_description": detail}
+
+    # Fallback for unknown formats
+    return {"error": "server_error", "error_description": "An error occurred"}
+
+
 # Rate limiters for device flow endpoints
 # Device code requests: 10 requests per hour per client
 device_code_limiter = SlidingWindowRateLimiter(requests_per_window=10, window_seconds=3600)
@@ -418,11 +477,13 @@ async def handle_device_code_token_exchange(
 
                 logger.debug(f"TaskManager device token response status: {resp.status}")
 
-                # If not successful, forward the error response
+                # If not successful, transform backend error to OAuth format and return
                 # This includes authorization_pending, slow_down, expired_token, access_denied
+                # IMPORTANT: Must transform to RFC 6749 format for OAuth client compatibility
                 if resp.status != 200:
+                    oauth_error = transform_backend_error_to_oauth(response_data)
                     return JSONResponse(
-                        response_data,
+                        oauth_error,
                         status_code=resp.status,
                         headers={"Cache-Control": "no-store"},
                     )
@@ -967,8 +1028,10 @@ def create_authorization_server(
 
                     if resp.status != 200:
                         logger.warning(f"Device code request failed with status: {resp.status}")
+                        # Transform backend error to OAuth format for client compatibility
+                        oauth_error = transform_backend_error_to_oauth(response_data)
                         return JSONResponse(
-                            response_data,
+                            oauth_error,
                             status_code=resp.status,
                             headers={"Cache-Control": "no-store"},
                         )
