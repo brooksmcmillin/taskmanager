@@ -27,6 +27,8 @@ install-dev:  ## Install development dependencies including pre-commit
 # =============================================================================
 
 test-db-setup:  ## Set up test database (start postgres and create test DB)
+	@echo "Checking for Docker volume..."
+	@docker volume inspect db_postgres_data > /dev/null 2>&1 || (echo "Creating db_postgres_data volume..." && docker volume create db_postgres_data)
 	@echo "Starting PostgreSQL..."
 	@docker compose up -d postgres
 	@echo "Waiting for PostgreSQL to be ready..."
