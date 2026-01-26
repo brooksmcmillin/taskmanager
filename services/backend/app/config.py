@@ -1,17 +1,27 @@
 """Application configuration using pydantic-settings."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Project root is three levels up from this file
+# __file__ = services/backend/app/config.py
+# .parent = services/backend/app
+# .parent.parent = services/backend
+# .parent.parent.parent = services
+# .parent.parent.parent.parent = project root
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",  # Ignore extra fields from shared .env file
     )
 
     # Database
@@ -75,6 +85,9 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if running in production."""
         return self.environment == "production"
+
+    # Registration
+    registration_code_required: bool = True
 
     # Validation constants
     min_password_length: int = 8

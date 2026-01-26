@@ -4,6 +4,7 @@ export interface User {
 	id: number;
 	username: string;
 	email: string;
+	is_admin: boolean;
 	created_at: string;
 }
 
@@ -81,6 +82,17 @@ export interface OAuthClient {
 	is_active: boolean;
 	is_public: boolean;
 	created_at: string;
+}
+
+export interface RegistrationCode {
+	id: number;
+	code: string;
+	max_uses: number;
+	current_uses: number;
+	is_active: boolean;
+	expires_at: string | null;
+	created_at: string;
+	created_by_username: string | null;
 }
 
 export interface ApiResponse<T> {

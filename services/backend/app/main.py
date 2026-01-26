@@ -6,7 +6,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, categories, projects, recurring_tasks, search, todos, trash
+from app.api import (
+    auth,
+    categories,
+    projects,
+    recurring_tasks,
+    registration_codes,
+    search,
+    todos,
+    trash,
+)
 from app.api.oauth import authorize, clients, device, token
 from app.config import settings
 from app.db.database import init_db
@@ -43,6 +52,7 @@ app.include_router(categories.router)
 app.include_router(search.router)
 app.include_router(trash.router)
 app.include_router(recurring_tasks.router)
+app.include_router(registration_codes.router)
 app.include_router(authorize.router)
 app.include_router(token.router)
 app.include_router(clients.router)

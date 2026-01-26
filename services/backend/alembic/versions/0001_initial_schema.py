@@ -52,7 +52,9 @@ def upgrade() -> None:
         sa.Column("username", sa.String(length=255), nullable=False),
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
+        sa.Column(
+            "is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -95,7 +97,9 @@ def upgrade() -> None:
         sa.Column(
             "color", sa.String(length=7), server_default="#3b82f6", nullable=False
         ),
-        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
+        sa.Column(
+            "is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -130,8 +134,12 @@ def upgrade() -> None:
         sa.Column("estimated_hours", sa.Numeric(precision=5, scale=2), nullable=True),
         sa.Column("tags", postgresql.JSONB(), server_default="[]", nullable=False),
         sa.Column("context", sa.String(length=50), nullable=True),
-        sa.Column("skip_missed", sa.Boolean(), server_default="true", nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
+        sa.Column(
+            "skip_missed", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
+        sa.Column(
+            "is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -266,8 +274,12 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("scopes", sa.Text(), server_default='["read"]', nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
-        sa.Column("is_public", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column(
+            "is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
+        sa.Column(
+            "is_public", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -294,7 +306,9 @@ def upgrade() -> None:
         sa.Column("scopes", sa.Text(), nullable=False),
         sa.Column("code_challenge", sa.String(length=255), nullable=True),
         sa.Column("code_challenge_method", sa.String(length=10), nullable=True),
-        sa.Column("used", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column(
+            "used", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "created_at",
@@ -325,7 +339,9 @@ def upgrade() -> None:
         sa.Column("client_id", sa.String(length=255), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=True),
         sa.Column("scopes", sa.Text(), nullable=False),
-        sa.Column("revoked", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column(
+            "revoked", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "created_at",

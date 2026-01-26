@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.oauth import OAuthClient
     from app.models.project import Project
     from app.models.recurring_task import RecurringTask
+    from app.models.registration_code import RegistrationCode
     from app.models.session import Session
     from app.models.todo import Todo
 
@@ -28,6 +29,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -47,4 +49,7 @@ class User(Base):
     )
     recurring_tasks: Mapped[list[RecurringTask]] = relationship(
         "RecurringTask", back_populates="user", cascade="all, delete-orphan"
+    )
+    registration_codes: Mapped[list[RegistrationCode]] = relationship(
+        "RegistrationCode", back_populates="created_by"
     )

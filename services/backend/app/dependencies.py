@@ -185,3 +185,17 @@ async def get_current_user_flexible(
 
 
 CurrentUserFlexible = Annotated[User, Depends(get_current_user_flexible)]
+
+
+async def get_admin_user(
+    request: Request,
+    db: DbSession,
+) -> User:
+    """Get current authenticated admin user."""
+    user = await get_current_user(request, db)
+    if not user.is_admin:
+        raise errors.permission_denied()
+    return user
+
+
+AdminUser = Annotated[User, Depends(get_admin_user)]
