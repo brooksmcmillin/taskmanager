@@ -1,6 +1,20 @@
 name: Python CI
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/mcp-auth/**'
+      - 'services/mcp-resource/**'
+      - 'packages/taskmanager-sdk/**'
+      - '.github/workflows/python-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/mcp-auth/**'
+      - 'services/mcp-resource/**'
+      - 'packages/taskmanager-sdk/**'
+      - '.github/workflows/python-ci.yml'
   workflow_dispatch:
     inputs:
       run-mcp-auth:
@@ -18,7 +32,7 @@ on:
 
 jobs:
   mcp-auth:
-    if: ${{ inputs.run-mcp-auth }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-mcp-auth }}
     uses: brooksmcmillin/workflows/.github/workflows/python-ci.yml@main
     with:
       package-name: mcp_auth
@@ -29,7 +43,7 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   mcp-resource:
-    if: ${{ inputs.run-mcp-resource }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-mcp-resource }}
     uses: brooksmcmillin/workflows/.github/workflows/python-ci.yml@main
     with:
       package-name: mcp_resource
@@ -40,7 +54,7 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   sdk:
-    if: ${{ inputs.run-sdk }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-sdk }}
     uses: brooksmcmillin/workflows/.github/workflows/python-ci.yml@main
     with:
       package-name: taskmanager_sdk

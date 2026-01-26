@@ -26,6 +26,16 @@ install-dev:  ## Install development dependencies including pre-commit
 # Testing
 # =============================================================================
 
+test-db-setup:  ## Set up test database (start postgres and create test DB)
+	@echo "Starting PostgreSQL..."
+	@docker compose up -d postgres
+	@echo "Waiting for PostgreSQL to be ready..."
+	@sleep 3
+	@docker exec postgres_db psql -U taskmanager -d taskmanager -c "SELECT 1;" > /dev/null 2>&1 || (echo "Waiting longer for postgres..." && sleep 3)
+	@echo "Creating test database..."
+	@docker exec postgres_db psql -U taskmanager -d taskmanager -c "CREATE DATABASE taskmanager_test;" 2>/dev/null || echo "Test database already exists (this is fine)"
+	@echo "Test database ready!"
+
 test:  ## Run all tests
 	cd services/frontend && npm test
 	cd services/backend && uv run pytest tests/ -v
@@ -33,10 +43,22 @@ test:  ## Run all tests
 	cd services/mcp-resource && uv run pytest tests/ -v
 	cd packages/taskmanager-sdk && uv run pytest tests/ -v
 
+test-local:  ## Run all tests with local database setup
+	$(MAKE) test-db-setup
+	$(MAKE) test-frontend
+	$(MAKE) test-backend
+	$(MAKE) test-mcp-auth
+	$(MAKE) test-mcp-resource
+	$(MAKE) test-sdk
+
 test-frontend:  ## Run frontend tests (SvelteKit)
 	cd services/frontend && npm test
 
 test-backend:  ## Run backend tests (FastAPI)
+	cd services/backend && uv run pytest tests/ -v
+
+test-backend-local:  ## Run backend tests with local database setup
+	$(MAKE) test-db-setup
 	cd services/backend && uv run pytest tests/ -v
 
 test-mcp-auth:  ## Run mcp-auth tests
