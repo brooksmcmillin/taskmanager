@@ -157,6 +157,31 @@ migrate-create:  ## Create a new migration (usage: make migrate-create msg="mess
 migrate-rollback:  ## Rollback one migration
 	cd services/backend && uv run alembic downgrade -1
 
+backup-db:  ## Backup production database
+	@mkdir -p backups
+	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
+	echo "📦 Creating database backup: backups/db_backup_$$TIMESTAMP.sql"; \
+	docker exec postgres_db pg_dump -U taskmanager -d taskmanager > backups/db_backup_$$TIMESTAMP.sql && \
+	echo "✅ Backup created successfully" || echo "❌ Backup failed"
+
+restore-db:  ## Restore database from latest backup (usage: make restore-db or make restore-db file=backups/db_backup_20240126_120000.sql)
+	@if [ -z "$(file)" ]; then \
+		LATEST=$$(ls -t backups/db_backup_*.sql 2>/dev/null | head -1); \
+		if [ -z "$$LATEST" ]; then \
+			echo "❌ No backup files found in backups/"; \
+			exit 1; \
+		fi; \
+		echo "📥 Restoring from latest backup: $$LATEST"; \
+		docker exec -i postgres_db psql -U taskmanager -d taskmanager < "$$LATEST"; \
+	else \
+		echo "📥 Restoring from: $(file)"; \
+		docker exec -i postgres_db psql -U taskmanager -d taskmanager < "$(file)"; \
+	fi && echo "✅ Database restored successfully" || echo "❌ Restore failed"
+
+list-backups:  ## List available database backups
+	@echo "Available database backups:"
+	@ls -lh backups/db_backup_*.sql 2>/dev/null || echo "No backups found"
+
 # =============================================================================
 # Cleanup
 # =============================================================================
