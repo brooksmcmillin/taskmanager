@@ -176,8 +176,44 @@ async def deactivate_registration_code(
     }
 
 
+async def validate_and_use_registration_code(db: DbSession, code: str) -> None:
+    """Atomically validate and increment registration code usage.
+
+    Uses SELECT FOR UPDATE to prevent race conditions where multiple
+    concurrent registrations could use the same code beyond max_uses.
+    """
+    # Lock the row for update to prevent race conditions
+    result = await db.execute(
+        select(RegistrationCode).where(RegistrationCode.code == code).with_for_update()
+    )
+    registration_code = result.scalar_one_or_none()
+
+    # Validate the code
+    if not registration_code:
+        raise errors.invalid_registration_code()
+
+    if not registration_code.is_active:
+        raise errors.invalid_registration_code()
+
+    if registration_code.current_uses >= registration_code.max_uses:
+        raise errors.registration_code_exhausted()
+
+    if registration_code.expires_at and registration_code.expires_at < datetime.now(
+        UTC
+    ):
+        raise errors.invalid_registration_code()
+
+    # Atomically increment usage count while row is locked
+    registration_code.current_uses += 1
+
+
 async def validate_registration_code(db: DbSession, code: str) -> RegistrationCode:
-    """Validate and return a registration code, or raise an error."""
+    """Validate and return a registration code, or raise an error.
+
+    WARNING: This function is NOT race-condition safe for registration.
+    Use validate_and_use_registration_code() instead for registration flows.
+    This function is kept for read-only validation purposes only.
+    """
     result = await db.execute(
         select(RegistrationCode).where(RegistrationCode.code == code)
     )
@@ -192,9 +228,8 @@ async def validate_registration_code(db: DbSession, code: str) -> RegistrationCo
     if registration_code.current_uses >= registration_code.max_uses:
         raise errors.registration_code_exhausted()
 
-    if (
-        registration_code.expires_at
-        and registration_code.expires_at < datetime.now(UTC)
+    if registration_code.expires_at and registration_code.expires_at < datetime.now(
+        UTC
     ):
         raise errors.invalid_registration_code()
 
@@ -202,7 +237,12 @@ async def validate_registration_code(db: DbSession, code: str) -> RegistrationCo
 
 
 async def use_registration_code(db: DbSession, code: str) -> None:
-    """Increment the use count for a registration code."""
+    """Increment the use count for a registration code.
+
+    WARNING: This function is NOT race-condition safe when used separately
+    from validate_registration_code(). Use validate_and_use_registration_code()
+    instead for atomic validation and usage.
+    """
     result = await db.execute(
         select(RegistrationCode).where(RegistrationCode.code == code)
     )

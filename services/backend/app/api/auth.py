@@ -32,7 +32,7 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(..., min_length=8)
-    registration_code: str = Field(..., min_length=1)
+    registration_code: str | None = Field(None, min_length=1)
 
     @field_validator("username")
     @classmethod
@@ -78,13 +78,19 @@ class AuthResponse(BaseModel):
 @router.post("/register", status_code=201)
 async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
     """Register a new user."""
-    from app.api.registration_codes import (
-        use_registration_code,
-        validate_registration_code,
-    )
+    from app.api.registration_codes import validate_and_use_registration_code
 
-    # Validate registration code first
-    await validate_registration_code(db, request.registration_code)
+    # Atomically validate and use registration code if required
+    # IMPORTANT: This MUST happen first before username/email checks to:
+    # 1. Prevent race conditions via SELECT FOR UPDATE row locking
+    # 2. Prevent using registration codes to enumerate existing accounts
+    # Note: If username/email check fails after this, the code usage is still
+    # incremented. This is intentional to prevent enumeration attacks.
+    if settings.registration_code_required:
+        if not request.registration_code:
+            raise errors.validation("Registration code is required")
+        # Lock the registration code row and atomically check + increment usage
+        await validate_and_use_registration_code(db, request.registration_code)
 
     # Check if username exists
     result = await db.execute(select(User).where(User.username == request.username))
@@ -104,9 +110,6 @@ async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
     )
     db.add(user)
     await db.flush()
-
-    # Mark registration code as used
-    await use_registration_code(db, request.registration_code)
 
     return AuthResponse(
         message="Registration successful",

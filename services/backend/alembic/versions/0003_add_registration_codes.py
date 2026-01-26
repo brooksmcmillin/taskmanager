@@ -28,7 +28,9 @@ def upgrade() -> None:
     # Add is_admin column to users table
     op.add_column(
         "users",
-        sa.Column("is_admin", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column(
+            "is_admin", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
     )
 
     # Create registration_codes table
@@ -38,7 +40,9 @@ def upgrade() -> None:
         sa.Column("code", sa.String(length=64), nullable=False),
         sa.Column("max_uses", sa.Integer(), server_default="1", nullable=False),
         sa.Column("current_uses", sa.Integer(), server_default="0", nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
+        sa.Column(
+            "is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
         sa.Column("created_by_id", sa.Integer(), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
@@ -47,9 +51,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["created_by_id"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["created_by_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("code"),
     )
