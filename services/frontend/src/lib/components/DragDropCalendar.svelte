@@ -30,10 +30,11 @@
 		return Array.from({ length: count }, (_, i) => {
 			const date = new Date(start);
 			date.setDate(date.getDate() + i);
+			const dateStr = formatDateForInput(date);
 			return {
 				date,
-				dateStr: formatDateForInput(date),
-				isToday: isToday(date.toISOString())
+				dateStr,
+				isToday: isToday(dateStr)
 			};
 		});
 	}

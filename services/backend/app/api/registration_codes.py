@@ -4,7 +4,7 @@ import secrets
 from datetime import UTC, datetime
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.core.errors import errors
@@ -31,6 +31,8 @@ class RegistrationCodeCreate(BaseModel):
 class RegistrationCodeResponse(BaseModel):
     """Registration code response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     code: str
     max_uses: int
@@ -39,9 +41,6 @@ class RegistrationCodeResponse(BaseModel):
     expires_at: datetime | None
     created_at: datetime
     created_by_username: str | None = None
-
-    class Config:
-        from_attributes = True
 
 
 class RegistrationCodeListResponse(BaseModel):

@@ -3,7 +3,7 @@
 from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, select
 
 from app.core.errors import errors
@@ -54,6 +54,8 @@ class BulkUpdateRequest(BaseModel):
 class TodoResponse(BaseModel):
     """Todo response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     description: str | None
@@ -69,9 +71,6 @@ class TodoResponse(BaseModel):
     actual_hours: float | None
     created_at: datetime
     updated_at: datetime | None
-
-    class Config:
-        from_attributes = True
 
 
 class TodoListResponse(BaseModel):

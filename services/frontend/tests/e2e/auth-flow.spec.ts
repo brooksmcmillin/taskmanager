@@ -37,16 +37,18 @@ test.describe('Authentication Flow', () => {
 	});
 
 	test('should login with valid credentials', async ({ page }) => {
-		// Register a test user first
+		// Register a test user first with unique username to avoid conflicts
+		const timestamp = Date.now();
+		const username = `loginuser${timestamp}`;
 		await page.goto('/register');
-		await page.fill('[name=username]', 'loginuser');
-		await page.fill('[name=email]', 'loginuser@example.com');
+		await page.fill('[name=username]', username);
+		await page.fill('[name=email]', `${username}@example.com`);
 		await page.fill('[name=password]', 'TestPass123!');
 		await page.click('button[type=submit]');
 		await page.waitForURL('/login', { timeout: 10000 });
 
 		// Fill login form
-		await page.fill('[name=username]', 'loginuser');
+		await page.fill('[name=username]', username);
 		await page.fill('[name=password]', 'TestPass123!');
 
 		// Submit form
@@ -75,16 +77,18 @@ test.describe('Authentication Flow', () => {
 	});
 
 	test('should logout successfully', async ({ page }) => {
-		// Register a test user first
+		// Register a test user first with unique username to avoid conflicts
+		const timestamp = Date.now();
+		const username = `logoutuser${timestamp}`;
 		await page.goto('/register');
-		await page.fill('[name=username]', 'logoutuser');
-		await page.fill('[name=email]', 'logout@example.com');
+		await page.fill('[name=username]', username);
+		await page.fill('[name=email]', `${username}@example.com`);
 		await page.fill('[name=password]', 'TestPass123!');
 		await page.click('button[type=submit]');
 		await page.waitForURL('/login', { timeout: 10000 });
 
 		// Login
-		await page.fill('[name=username]', 'logoutuser');
+		await page.fill('[name=username]', username);
 		await page.fill('[name=password]', 'TestPass123!');
 		await page.click('button[type=submit]');
 
