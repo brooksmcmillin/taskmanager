@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { todos, pendingTodos, todosByProject } from '$lib/stores/todos';
 	import { projects } from '$lib/stores/projects';
 	import TaskDetailPanel from '$lib/components/TaskDetailPanel.svelte';
 	import DragDropCalendar from '$lib/components/DragDropCalendar.svelte';
+	import ProjectFilter from '$lib/components/ProjectFilter.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import type { Todo } from '$lib/types';
@@ -11,14 +15,26 @@
 	let currentView: 'list' | 'calendar' = 'calendar';
 	let minimizedProjects: Record<string, boolean> = {};
 	let taskDetailPanel: TaskDetailPanel;
+	let initialLoadComplete = false;
+
+	// Extract filter from URL
+	$: selectedProjectId = $page.url.searchParams.get('project_id')
+		? parseInt($page.url.searchParams.get('project_id')!)
+		: null;
 
 	function getProjectId(projectName: string): string {
 		return `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
 	}
 
 	onMount(async () => {
-		// Load todos and projects
-		await Promise.all([todos.load({ status: 'pending' }), projects.load()]);
+		// Load projects first
+		await projects.load();
+
+		// Load todos with filter if present
+		await todos.load({
+			status: 'pending',
+			...(selectedProjectId && { project_id: selectedProjectId })
+		});
 
 		// Load minimized state from localStorage
 		const stored = localStorage.getItem('minimized-projects');
@@ -29,6 +45,9 @@
 				minimizedProjects = {};
 			}
 		}
+
+		// Mark initial load as complete
+		initialLoadComplete = true;
 	});
 
 	function toggleProject(projectName: string) {
@@ -39,6 +58,19 @@
 
 	function isProjectMinimized(projectName: string): boolean {
 		return minimizedProjects[getProjectId(projectName)] || false;
+	}
+
+	function handleFilterChange(event: CustomEvent<{ projectId: number | null }>) {
+		const { projectId } = event.detail;
+		const url = new URL($page.url);
+
+		if (projectId) {
+			url.searchParams.set('project_id', String(projectId));
+		} else {
+			url.searchParams.delete('project_id');
+		}
+
+		goto(url, { replaceState: true, keepFocus: true });
 	}
 
 	function openTaskDetail(todo: Todo) {
@@ -52,8 +84,11 @@
 	async function handleCompleteTodo(todoId: number) {
 		try {
 			await todos.complete(todoId);
-			// Reload todos after completion
-			await todos.load({ status: 'pending' });
+			// Reload todos after completion with current filter
+			await todos.load({
+				status: 'pending',
+				...(selectedProjectId && { project_id: selectedProjectId })
+			});
 		} catch (error) {
 			console.error('Failed to complete todo:', error);
 			alert('Failed to complete todo');
@@ -61,7 +96,18 @@
 	}
 
 	async function handleFormSuccess() {
-		await todos.load({ status: 'pending' });
+		await todos.load({
+			status: 'pending',
+			...(selectedProjectId && { project_id: selectedProjectId })
+		});
+	}
+
+	// Reload todos when filter changes (only in browser, after initial load)
+	$: if (browser && initialLoadComplete && selectedProjectId !== undefined) {
+		todos.load({
+			status: 'pending',
+			...(selectedProjectId && { project_id: selectedProjectId })
+		});
 	}
 
 	// Group todos by project for list view
@@ -84,8 +130,9 @@
 </svelte:head>
 
 <main class="container py-8">
-	<!-- View Toggle -->
-	<div class="flex justify-center mb-6">
+	<!-- View Toggle and Project Filter -->
+	<div class="flex justify-between items-center mb-6">
+		<!-- View Toggle (Left) -->
 		<div class="flex gap-4">
 			<button
 				class="btn {currentView === 'list' ? 'btn-primary' : 'btn-secondary'} btn-med"
@@ -100,6 +147,9 @@
 				Calendar View
 			</button>
 		</div>
+
+		<!-- Project Filter (Right) -->
+		<ProjectFilter {selectedProjectId} on:change={handleFilterChange} />
 	</div>
 
 	<!-- Task Detail Panel -->

@@ -157,6 +157,14 @@ migrate-create:  ## Create a new migration (usage: make migrate-create msg="mess
 migrate-rollback:  ## Rollback one migration
 	cd services/backend && uv run alembic downgrade -1
 
+seed-data:  ## Seed test data for development (creates test user and sample tasks)
+	@echo "🌱 Seeding test data..."
+	cd services/backend && uv run python scripts/seed_test_data.py
+
+seed-data-quick:  ## Seed test data without confirmation prompt
+	@echo "🌱 Seeding test data (no confirmation)..."
+	cd services/backend && uv run python scripts/seed_test_data.py --skip-confirm
+
 backup-db:  ## Backup production database
 	@mkdir -p backups
 	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
