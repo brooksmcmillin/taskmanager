@@ -41,9 +41,12 @@ test.describe('Calendar Drag and Drop', () => {
 	});
 
 	test('should highlight today', async ({ page }) => {
-		// Find today's date cell
+		// Find today's date cell using local date (not UTC)
 		const today = new Date();
-		const todayStr = today.toISOString().split('T')[0];
+		const year = today.getFullYear();
+		const month = String(today.getMonth() + 1).padStart(2, '0');
+		const day = String(today.getDate()).padStart(2, '0');
+		const todayStr = `${year}-${month}-${day}`;
 
 		const todayCell = page.locator(`.calendar-day.today[data-date="${todayStr}"]`);
 		await expect(todayCell).toBeVisible();

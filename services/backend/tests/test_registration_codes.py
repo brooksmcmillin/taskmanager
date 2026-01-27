@@ -115,7 +115,7 @@ async def test_registration_code_required_when_enabled(
             },
         )
 
-        assert response.status_code == 422  # Validation error
+        assert response.status_code == 400  # Registration code required error
 
     finally:
         settings.registration_code_required = original_value

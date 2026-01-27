@@ -1,0 +1,181 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm production deployment'
+        required: true
+        type: string
+      skip_backup:
+        description: 'Skip database backup (not recommended)'
+        required: false
+        type: boolean
+        default: false
+      skip_migrations:
+        description: 'Skip database migrations'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://todo.brooksmcmillin.com
+
+    steps:
+      - name: Validate confirmation
+        if: ${{ inputs.confirm != 'deploy' }}
+        run: |
+          echo "❌ Deployment cancelled: confirmation not provided"
+          echo "You must type 'deploy' to confirm production deployment"
+          exit 1
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PRODUCTION_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Check server connectivity
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} \
+            "echo '✅ Connected to production server'"
+
+      - name: Backup database
+        if: ${{ !inputs.skip_backup }}
+        run: |
+          echo "📦 Creating database backup..."
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} \
+            "cd ${{ secrets.PRODUCTION_DEPLOY_PATH }} && make backup-db"
+
+      - name: Pull latest code
+        run: |
+          echo "📥 Pulling latest code from main branch..."
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+            cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+
+            # Stash any local changes (shouldn't be any)
+            git stash
+
+            # Fetch and pull latest
+            git fetch origin
+            git checkout main
+            git pull origin main
+
+            # Show current commit
+            echo "📌 Deployed commit:"
+            git log -1 --oneline
+          EOF
+
+      - name: Install dependencies
+        run: |
+          echo "📦 Installing dependencies..."
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+            cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+
+            # Backend dependencies
+            cd services/backend && uv sync --no-dev && cd ../..
+
+            # Frontend dependencies
+            cd services/frontend && npm ci --production && cd ../..
+
+            # MCP services (if needed)
+            cd services/mcp-auth && uv sync --no-dev && cd ../..
+            cd services/mcp-resource && uv sync --no-dev && cd ../..
+          EOF
+
+      - name: Run database migrations
+        if: ${{ !inputs.skip_migrations }}
+        run: |
+          echo "🗄️ Running database migrations..."
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+            cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+            make migrate
+          EOF
+
+      - name: Rebuild and restart services
+        run: |
+          echo "🔄 Rebuilding and restarting Docker services..."
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+            cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+
+            # Rebuild images with latest code
+            docker compose build
+
+            # Restart services with zero downtime
+            docker compose up -d --no-deps --build backend frontend mcp-auth mcp-resource
+
+            # Show running services
+            docker compose ps
+          EOF
+
+      - name: Health check
+        run: |
+          echo "🏥 Running health checks..."
+
+          # Wait a moment for services to start
+          sleep 10
+
+          ssh -i ~/.ssh/deploy_key \
+            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+            cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+
+            # Check if containers are running
+            if ! docker compose ps | grep -q "Up"; then
+              echo "❌ Some services are not running!"
+              docker compose ps
+              exit 1
+            fi
+
+            # Check backend health
+            if ! curl -f http://localhost:8000/health > /dev/null 2>&1; then
+              echo "❌ Backend health check failed!"
+              exit 1
+            fi
+
+            echo "✅ All health checks passed"
+          EOF
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo ""
+          echo "🚀 Production is now running the latest code"
+          echo "🌐 URL: https://todo.brooksmcmillin.com"
+          echo ""
+          echo "Next steps:"
+          echo "  - Monitor logs: docker compose logs -f"
+          echo "  - Check services: docker compose ps"
+
+      - name: Rollback instructions
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo ""
+          echo "To rollback manually:"
+          echo "  1. SSH to server"
+          echo "  2. cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}"
+          echo "  3. git log --oneline (find previous commit)"
+          echo "  4. git reset --hard <previous-commit>"
+          echo "  5. docker compose up -d --build"
+          echo ""
+          echo "To restore database backup:"
+          echo "  1. cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}"
+          echo "  2. make restore-db"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key

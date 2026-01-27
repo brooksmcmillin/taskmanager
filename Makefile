@@ -26,6 +26,18 @@ install-dev:  ## Install development dependencies including pre-commit
 # Testing
 # =============================================================================
 
+test-db-setup:  ## Set up test database (start postgres and create test DB)
+	@echo "Checking for Docker volume..."
+	@docker volume inspect db_postgres_data > /dev/null 2>&1 || (echo "Creating db_postgres_data volume..." && docker volume create db_postgres_data)
+	@echo "Starting PostgreSQL..."
+	@docker compose up -d postgres
+	@echo "Waiting for PostgreSQL to be ready..."
+	@sleep 3
+	@docker exec postgres_db psql -U taskmanager -d taskmanager -c "SELECT 1;" > /dev/null 2>&1 || (echo "Waiting longer for postgres..." && sleep 3)
+	@echo "Creating test database..."
+	@docker exec postgres_db psql -U taskmanager -d taskmanager -c "CREATE DATABASE taskmanager_test;" 2>/dev/null || echo "Test database already exists (this is fine)"
+	@echo "Test database ready!"
+
 test:  ## Run all tests
 	cd services/frontend && npm test
 	cd services/backend && uv run pytest tests/ -v
@@ -33,10 +45,22 @@ test:  ## Run all tests
 	cd services/mcp-resource && uv run pytest tests/ -v
 	cd packages/taskmanager-sdk && uv run pytest tests/ -v
 
+test-local:  ## Run all tests with local database setup
+	$(MAKE) test-db-setup
+	$(MAKE) test-frontend
+	$(MAKE) test-backend
+	$(MAKE) test-mcp-auth
+	$(MAKE) test-mcp-resource
+	$(MAKE) test-sdk
+
 test-frontend:  ## Run frontend tests (SvelteKit)
 	cd services/frontend && npm test
 
 test-backend:  ## Run backend tests (FastAPI)
+	cd services/backend && uv run pytest tests/ -v
+
+test-backend-local:  ## Run backend tests with local database setup
+	$(MAKE) test-db-setup
 	cd services/backend && uv run pytest tests/ -v
 
 test-mcp-auth:  ## Run mcp-auth tests
@@ -132,6 +156,31 @@ migrate-create:  ## Create a new migration (usage: make migrate-create msg="mess
 
 migrate-rollback:  ## Rollback one migration
 	cd services/backend && uv run alembic downgrade -1
+
+backup-db:  ## Backup production database
+	@mkdir -p backups
+	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
+	echo "📦 Creating database backup: backups/db_backup_$$TIMESTAMP.sql"; \
+	docker exec postgres_db pg_dump -U taskmanager -d taskmanager > backups/db_backup_$$TIMESTAMP.sql && \
+	echo "✅ Backup created successfully" || echo "❌ Backup failed"
+
+restore-db:  ## Restore database from latest backup (usage: make restore-db or make restore-db file=backups/db_backup_20240126_120000.sql)
+	@if [ -z "$(file)" ]; then \
+		LATEST=$$(ls -t backups/db_backup_*.sql 2>/dev/null | head -1); \
+		if [ -z "$$LATEST" ]; then \
+			echo "❌ No backup files found in backups/"; \
+			exit 1; \
+		fi; \
+		echo "📥 Restoring from latest backup: $$LATEST"; \
+		docker exec -i postgres_db psql -U taskmanager -d taskmanager < "$$LATEST"; \
+	else \
+		echo "📥 Restoring from: $(file)"; \
+		docker exec -i postgres_db psql -U taskmanager -d taskmanager < "$(file)"; \
+	fi && echo "✅ Database restored successfully" || echo "❌ Restore failed"
+
+list-backups:  ## List available database backups
+	@echo "Available database backups:"
+	@ls -lh backups/db_backup_*.sql 2>/dev/null || echo "No backups found"
 
 # =============================================================================
 # Cleanup

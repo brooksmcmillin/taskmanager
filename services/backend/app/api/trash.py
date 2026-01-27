@@ -3,7 +3,7 @@
 from datetime import date, datetime
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 
 from app.core.errors import errors
@@ -18,6 +18,8 @@ router = APIRouter(prefix="/api/trash", tags=["trash"])
 class DeletedTodoResponse(BaseModel):
     """Deleted todo response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     description: str | None
@@ -29,9 +31,6 @@ class DeletedTodoResponse(BaseModel):
     tags: list[str]
     deleted_at: datetime | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class TrashListResponse(BaseModel):

@@ -3,7 +3,7 @@
 from datetime import date, datetime
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
 from app.core.errors import errors
@@ -117,6 +117,8 @@ class RecurringTaskUpdate(BaseModel):
 class RecurringTaskResponse(BaseModel):
     """Recurring task response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     frequency: Frequency
@@ -136,9 +138,6 @@ class RecurringTaskResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime | None
-
-    class Config:
-        from_attributes = True
 
 
 class RecurringTaskListResponse(BaseModel):

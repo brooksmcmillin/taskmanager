@@ -35,6 +35,12 @@ pnpm-debug.log*
 # Generated database
 todos.db
 
+# Database backups
+backups/
+
+# Test output
+test_output.txt
+
 # Security
 .env*
 !.env.example

@@ -1,5 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { PUBLIC_REGISTRATION_CODE_REQUIRED } from '$env/static/public';
+
+	// Check if registration code is required (default to true if not set)
+	const registrationCodeRequired = PUBLIC_REGISTRATION_CODE_REQUIRED !== 'false';
 
 	let username = '';
 	let email = '';
@@ -64,7 +68,7 @@
 	}
 
 	function validateRegistrationCode(): string {
-		if (!registrationCode.trim()) {
+		if (registrationCodeRequired && !registrationCode.trim()) {
 			return 'Registration code is required';
 		}
 		return '';
@@ -111,13 +115,19 @@
 		}
 
 		try {
+			// Build request body - only include registration_code if required or provided
+			const requestBody: any = { username, email, password };
+			if (registrationCodeRequired || registrationCode.trim()) {
+				requestBody.registration_code = registrationCode;
+			}
+
 			const response = await fetch('/api/auth/register', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
 				},
 				credentials: 'include',
-				body: JSON.stringify({ username, email, password, registration_code: registrationCode })
+				body: JSON.stringify(requestBody)
 			});
 
 			const data = await response.json();
@@ -153,28 +163,30 @@
 		<h1>Register</h1>
 
 		<form on:submit={handleSubmit} novalidate>
-			<div class="form-group">
-				<label for="registration-code">Registration Code:</label>
-				<input
-					type="text"
-					id="registration-code"
-					name="registration_code"
-					class="form-input"
-					bind:value={registrationCode}
-					on:blur={() => validateField('registrationCode')}
-					required
-					placeholder="Enter your registration code"
-				/>
-				{#if touched.registrationCode && fieldErrors.registrationCode}
-					<div
-						data-error="registrationCode"
-						class="field-error"
-						style="color: var(--error-color, #e53e3e); font-size: 0.875rem; margin-top: 0.25rem;"
-					>
-						{fieldErrors.registrationCode}
-					</div>
-				{/if}
-			</div>
+			{#if registrationCodeRequired}
+				<div class="form-group">
+					<label for="registration-code">Registration Code:</label>
+					<input
+						type="text"
+						id="registration-code"
+						name="registration_code"
+						class="form-input"
+						bind:value={registrationCode}
+						on:blur={() => validateField('registrationCode')}
+						required
+						placeholder="Enter your registration code"
+					/>
+					{#if touched.registrationCode && fieldErrors.registrationCode}
+						<div
+							data-error="registrationCode"
+							class="field-error"
+							style="color: var(--error-color, #e53e3e); font-size: 0.875rem; margin-top: 0.25rem;"
+						>
+							{fieldErrors.registrationCode}
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			<div class="form-group">
 				<label for="username">Username:</label>

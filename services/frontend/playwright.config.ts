@@ -16,7 +16,7 @@ const config: PlaywrightTestConfig = {
 			// Build and start frontend connected to test backend
 			// Build with test mode, then run the Node adapter server with BACKEND_URL env var
 			command:
-				'npm run build -- --mode test && PORT=4173 BACKEND_URL=http://localhost:8010 node build',
+				'./node_modules/.bin/vite build --mode test && PORT=4173 BACKEND_URL=http://localhost:8010 node build',
 			port: 4173,
 			timeout: 120000,
 			reuseExistingServer: false,

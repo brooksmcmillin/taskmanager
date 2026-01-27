@@ -245,3 +245,16 @@ async def get_session(user: CurrentUser) -> dict:
             "is_admin": user.is_admin,
         }
     }
+
+
+@router.get("/me")
+async def get_me(user: CurrentUser) -> dict:
+    """Get current user information (alias for /session)."""
+    return {
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "is_admin": user.is_admin,
+        }
+    }

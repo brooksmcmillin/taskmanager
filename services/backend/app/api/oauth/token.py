@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, Request
@@ -132,12 +133,14 @@ async def _handle_authorization_code(
     )
     db.add(access_token)
 
+    # Deserialize scopes from JSON for response
+    scopes_list = json.loads(auth_code.scopes)
     return {
         "access_token": access_token.token,
         "token_type": "Bearer",
         "expires_in": settings.access_token_expiry,
         "refresh_token": access_token.refresh_token,
-        "scope": " ".join(auth_code.scopes),
+        "scope": " ".join(scopes_list),
     }
 
 
@@ -175,12 +178,14 @@ async def _handle_refresh_token(
     # Delete old token
     await db.delete(old_token)
 
+    # Deserialize scopes from JSON for response
+    scopes_list = json.loads(old_token.scopes)
     return {
         "access_token": new_token.token,
         "token_type": "Bearer",
         "expires_in": settings.access_token_expiry,
         "refresh_token": new_token.refresh_token,
-        "scope": " ".join(old_token.scopes),
+        "scope": " ".join(scopes_list),
     }
 
 
@@ -191,13 +196,19 @@ async def _handle_client_credentials(
     if "client_credentials" not in client.grant_types:
         raise errors.oauth_unsupported_grant_type()
 
-    scopes = scope.split() if scope else client.scopes
+    # Convert scope string to JSON for storage, or use client's default scopes
+    if scope:
+        scopes_list = scope.split()
+        scopes_json = json.dumps(scopes_list)
+    else:
+        scopes_json = client.scopes
+        scopes_list = json.loads(client.scopes)
 
     access_token = AccessToken(
         token=generate_token(32),
         client_id=client.client_id,
         user_id=None,  # No user for client credentials
-        scopes=scopes,
+        scopes=scopes_json,
         expires_at=get_token_expiry(settings.access_token_expiry),
     )
     db.add(access_token)
@@ -206,42 +217,62 @@ async def _handle_client_credentials(
         "access_token": access_token.token,
         "token_type": "Bearer",
         "expires_in": settings.access_token_expiry,
-        "scope": " ".join(scopes),
+        "scope": " ".join(scopes_list),
     }
 
 
 async def _handle_device_code(db, client: OAuthClient, device_code: str | None) -> dict:
-    """Handle device code grant."""
+    """Handle device code grant (RFC 8628)."""
     if not device_code:
         raise errors.oauth_invalid_grant()
 
+    # First, check if the device code exists at all
     result = await db.execute(
-        select(DeviceCode).where(
-            DeviceCode.device_code == device_code,
-            DeviceCode.client_id == client.client_id,
-        )
+        select(DeviceCode).where(DeviceCode.device_code == device_code)
     )
     dc = result.scalar_one_or_none()
 
     if not dc:
+        # Device code not found - either invalid or expired and cleaned up
         raise errors.oauth_invalid_grant()
 
-    # Check expiry
-    if dc.expires_at < datetime.now(UTC):
+    # Verify the device code belongs to this client
+    if dc.client_id != client.client_id:
+        # Wrong client - this shouldn't happen in normal flow
+        raise errors.oauth_invalid_grant()
+
+    # Check expiry - ensure timezone-aware comparison
+    now = datetime.now(UTC)
+    expires_at = (
+        dc.expires_at.replace(tzinfo=UTC)
+        if dc.expires_at.tzinfo is None
+        else dc.expires_at
+    )
+    if expires_at < now:
         raise errors.oauth_expired_token()
 
     # Check polling rate
-    if dc.last_poll:
-        elapsed = (datetime.now(UTC) - dc.last_poll).total_seconds()
+    if dc.last_poll_at:
+        last_poll = (
+            dc.last_poll_at.replace(tzinfo=UTC)
+            if dc.last_poll_at.tzinfo is None
+            else dc.last_poll_at
+        )
+        elapsed = (now - last_poll).total_seconds()
         if elapsed < dc.interval:
             raise errors.oauth_slow_down()
 
-    dc.last_poll = datetime.now(UTC)
+    # Update last poll time
+    # Note: This will only be saved if the request succeeds (status="approved")
+    # Rate limiting for pending/denied states is handled by the MCP auth server
+    dc.last_poll_at = datetime.now(UTC)
 
-    # Check status
+    # Check status and handle accordingly
     if dc.status == "pending":
+        # RFC 8628: Return authorization_pending when user hasn't authorized yet
         raise errors.oauth_authorization_pending()
     elif dc.status == "denied":
+        # RFC 8628: Return access_denied when user denied the request
         await db.delete(dc)
         raise errors.oauth_access_denied()
     elif dc.status != "approved":
@@ -262,12 +293,14 @@ async def _handle_device_code(db, client: OAuthClient, device_code: str | None) 
     # Delete device code
     await db.delete(dc)
 
+    # Deserialize scopes from JSON for response
+    scopes_list = json.loads(dc.scopes)
     return {
         "access_token": access_token.token,
         "token_type": "Bearer",
         "expires_in": settings.access_token_expiry,
         "refresh_token": access_token.refresh_token,
-        "scope": " ".join(dc.scopes),
+        "scope": " ".join(scopes_list),
     }
 
 

@@ -1,7 +1,18 @@
 """Pytest fixtures for testing."""
 
-import asyncio
+# IMPORTANT: Set environment variables BEFORE importing any app modules
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file from project root (two directories up from tests/)
+env_path = Path(__file__).parent.parent.parent.parent / ".env"
+load_dotenv(env_path)
+
+# Disable registration codes for testing
+os.environ["REGISTRATION_CODE_REQUIRED"] = "false"
+
+import asyncio
 from collections.abc import AsyncGenerator
 from urllib.parse import quote_plus
 

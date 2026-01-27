@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.core.errors import errors
@@ -34,6 +34,8 @@ class ProjectUpdate(BaseModel):
 class ProjectResponse(BaseModel):
     """Project response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: str | None
@@ -41,9 +43,6 @@ class ProjectResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime | None
-
-    class Config:
-        from_attributes = True
 
 
 class ProjectListResponse(BaseModel):

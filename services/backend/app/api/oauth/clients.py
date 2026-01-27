@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.core.errors import errors
@@ -19,6 +19,8 @@ router = APIRouter(prefix="/api/oauth/clients", tags=["oauth"])
 class ClientCreate(BaseModel):
     """Create OAuth client request."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str = Field(..., min_length=1, max_length=100)
     redirect_uris: list[str] = Field(alias="redirectUris")
     grant_types: list[str] = Field(
@@ -29,12 +31,11 @@ class ClientCreate(BaseModel):
     is_public: bool = Field(default=False, alias="isPublic")
     client_secret: str | None = Field(default=None, alias="clientSecret")
 
-    class Config:
-        populate_by_name = True
-
 
 class ClientUpdate(BaseModel):
     """Update OAuth client request."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     name: str | None = None
     redirect_uris: list[str] | None = Field(default=None, alias="redirectUris")
@@ -42,12 +43,11 @@ class ClientUpdate(BaseModel):
     scopes: list[str] | None = None
     is_active: bool | None = Field(default=None, alias="isActive")
 
-    class Config:
-        populate_by_name = True
-
 
 class ClientResponse(BaseModel):
     """OAuth client response."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     client_id: str
@@ -58,9 +58,6 @@ class ClientResponse(BaseModel):
     is_active: bool
     is_public: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ClientCreateResponse(BaseModel):

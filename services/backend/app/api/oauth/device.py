@@ -1,8 +1,9 @@
 """OAuth 2.0 device authorization flow (RFC 8628)."""
 
+import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
@@ -46,15 +47,22 @@ async def device_authorization(
     user_code = generate_user_code()
 
     # Store device authorization
+    # Serialize scopes list to JSON for database storage
+    scopes_list = scope.split() if scope else []
+    scopes_json = json.dumps(scopes_list)
+
     dc = DeviceCode(
         device_code=device_code,
         user_code=user_code,
         client_id=client_id,
-        scopes=scope.split(),
+        scopes=scopes_json,
         interval=settings.device_poll_interval,
         expires_at=get_token_expiry(settings.device_code_expiry),
     )
     db.add(dc)
+    # Commit immediately so the device code is available for polling
+    # The client will start polling right after receiving this response
+    await db.commit()
 
     # Build verification URI
     base_url = "https://todo.brooksmcmillin.com"  # TODO: Get from settings
@@ -70,33 +78,133 @@ async def device_authorization(
     }
 
 
-@router.post("/authorize")
-async def authorize_device(
+@router.get("/lookup")
+async def lookup_device_code(
     user: CurrentUser,
     db: DbSession,
-    user_code: str = Form(...),
-    action: str = Form(...),
-) -> RedirectResponse:
+    user_code: str = Query(...),
+) -> dict:
+    """Look up device authorization by user code.
+
+    Returns device authorization details for display to the user.
+    Requires authentication.
+    """
+    # Normalize user code (uppercase, with dash)
+    normalized_code = user_code.upper().replace(" ", "-")
+
+    # Look up device code
+    result = await db.execute(
+        select(DeviceCode, OAuthClient)
+        .join(OAuthClient, DeviceCode.client_id == OAuthClient.client_id)
+        .where(
+            DeviceCode.user_code == normalized_code,
+            DeviceCode.status == "pending",
+        )
+    )
+    row = result.first()
+
+    if not row:
+        raise errors.not_found("Device authorization")
+
+    dc, client = row
+
+    # Check expiry with timezone handling
+    now = datetime.now(UTC)
+    expires_at = (
+        dc.expires_at.replace(tzinfo=UTC)
+        if dc.expires_at.tzinfo is None
+        else dc.expires_at
+    )
+    if expires_at < now:
+        raise errors.not_found("Device authorization")
+
+    return {
+        "user_code": dc.user_code,
+        "client_id": dc.client_id,
+        "client_name": client.name,
+        "scopes": dc.scopes,
+        "expires_at": dc.expires_at.isoformat(),
+    }
+
+
+@router.post("/authorize", response_model=None)
+async def authorize_device(
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+):
     """Authorize or deny device.
 
-    Called when user submits the device authorization form.
+    Supports both JSON (for API clients) and form data (for web forms).
     """
+    # Determine content type and parse accordingly
+    content_type = request.headers.get("content-type", "")
+
+    user_code: str
+    action: str
+
+    if "application/json" in content_type:
+        # JSON request
+        body = await request.json()
+        user_code = str(body.get("user_code", ""))
+        action = str(body.get("action", ""))
+    elif (
+        "application/x-www-form-urlencoded" in content_type
+        or "multipart/form-data" in content_type
+    ):
+        # Form request
+        form = await request.form()
+        user_code = str(form.get("user_code", ""))
+        action = str(form.get("action", ""))
+    else:
+        raise errors.validation("Invalid content type")
+
+    if not user_code or not action:
+        raise errors.validation("user_code and action are required")
+
+    # Normalize user code
+    normalized_code = user_code.upper().replace(" ", "-")
+
+    # Look up device code
     result = await db.execute(
         select(DeviceCode).where(
-            DeviceCode.user_code == user_code.upper().replace(" ", "-"),
-            DeviceCode.expires_at > datetime.now(UTC),
+            DeviceCode.user_code == normalized_code,
             DeviceCode.status == "pending",
         )
     )
     dc = result.scalar_one_or_none()
 
     if not dc:
+        # For JSON requests, raise error; for form requests, redirect
+        if "application/json" in content_type:
+            raise errors.not_found("Device authorization")
         return RedirectResponse("/oauth/device?error=invalid_code")
 
-    if action == "approve":
+    # Check expiry with timezone handling
+    now = datetime.now(UTC)
+    expires_at = (
+        dc.expires_at.replace(tzinfo=UTC)
+        if dc.expires_at.tzinfo is None
+        else dc.expires_at
+    )
+    if expires_at < now:
+        # For JSON requests, raise error; for form requests, redirect
+        if "application/json" in content_type:
+            raise errors.not_found("Device authorization")
+        return RedirectResponse("/oauth/device?error=invalid_code")
+
+    # Update device code status
+    if action == "allow":
         dc.status = "approved"
         dc.user_id = user.id
-        return RedirectResponse("/oauth/device/success")
+        redirect_path = "/oauth/device/success"
+        message = "Device authorized successfully"
     else:
         dc.status = "denied"
-        return RedirectResponse("/oauth/device/denied")
+        redirect_path = "/oauth/device/denied"
+        message = "Device authorization denied"
+
+    # For JSON requests, return JSON; for form requests, redirect
+    if "application/json" in content_type:
+        return {"message": message, "status": dc.status}
+    return RedirectResponse(redirect_path)
