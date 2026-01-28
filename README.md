@@ -28,19 +28,28 @@ TaskManager is a full-stack application consisting of:
           │                         │                        │
           ▼                         ▼                        ▼
 ┌─────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
-│    Web App      │   │  MCP Auth Server    │   │ MCP Resource Server │
-│   (Port 4321)   │   │    (Port 9000)      │   │    (Port 8001)      │
+│   Frontend      │   │  MCP Auth Server    │   │ MCP Resource Server │
+│  (Port 3000)    │   │    (Port 9000)      │   │    (Port 8001)      │
 │                 │   │                     │   │                     │
-│  - UI & REST API│   │  - OAuth 2.0 flows  │   │  - MCP tools        │
-│  - User auth    │◄──│  - Token issuance   │◄──│  - Token validation │
-│  - OAuth server │   │  - Client registry  │   │  - Task operations  │
-└────────┬────────┘   └─────────────────────┘   └─────────────────────┘
-         │                                                │
-         ▼                                                │
-┌─────────────────┐                                       │
-│   PostgreSQL    │◄──────────────────────────────────────┘
-│   (Port 5432)   │        (via TaskManager SDK)
-└─────────────────┘
+│  - SvelteKit UI │   │  - OAuth 2.0 flows  │   │  - MCP tools        │
+│  - API proxy    │   │  - Token issuance   │   │  - Token validation │
+└────────┬────────┘   │  - Client registry  │   │  - Task operations  │
+         │            └─────────────────────┘   └──────────┬──────────┘
+         │                                                  │
+         │            ┌─────────────────┐                  │
+         └───────────►│    Backend      │◄─────────────────┘
+                      │   (Port 8000)   │
+                      │                 │
+                      │  - FastAPI REST │
+                      │  - User auth    │
+                      │  - OAuth server │
+                      └────────┬────────┘
+                               │
+                               ▼
+                      ┌─────────────────┐
+                      │   PostgreSQL    │
+                      │   (Port 5432)   │
+                      └─────────────────┘
 ```
 
 ## Quick Start
@@ -49,7 +58,8 @@ TaskManager is a full-stack application consisting of:
 
 - Docker and Docker Compose
 - Node.js 22+ (for local development)
-- Python 3.13+ (for MCP servers and SDK)
+- Python 3.12+ (backend and SDK)
+- Python 3.13+ (for MCP servers)
 
 ### Running with Docker Compose
 

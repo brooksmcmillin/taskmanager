@@ -86,11 +86,12 @@ const response = await api.get<ApiResponse<Todo[]>>('/api/todos');
 const todo = await api.post<Todo>('/api/todos', { title: 'New task' });
 ```
 
-## Migration Status
+## Features
 
-- [x] Phase 2.1: SvelteKit Project Setup
-- [x] Phase 2.2: SCSS Styles Ported
-- [ ] Phase 2.3: Authentication Pages
-- [ ] Phase 2.4: Task Management UI
-- [ ] Phase 2.5: Calendar Component
-- [ ] Phase 2.6: OAuth Client Management
+- ✅ Authentication (login, register, session management)
+- ✅ Task Management UI (dashboard, calendar view, drag-and-drop)
+- ✅ Project Management
+- ✅ OAuth Client Management
+- ✅ Trash/Restore functionality
+- ✅ Admin panel
+- ✅ Responsive design with SCSS

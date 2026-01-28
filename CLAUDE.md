@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TaskManager is a monorepo containing:
 
-- **Frontend** (`services/frontend/`) - SvelteKit 5.0 task management UI with TypeScript
+- **Frontend** (`services/frontend/`) - SvelteKit 2.0 (with Svelte 5) task management UI with TypeScript
 - **Backend** (`services/backend/`) - FastAPI REST API with SQLAlchemy (async) + PostgreSQL
 - **MCP Auth Server** (`services/mcp-auth/`) - OAuth 2.0 authorization server for MCP
 - **MCP Resource Server** (`services/mcp-resource/`) - MCP tools for AI assistants
@@ -67,8 +67,8 @@ uv run pyright           # Type checking
 
 ## Architecture Overview
 
-- Frontend: SvelteKit 5.0 + TypeScript + Vite
-- Backend: FastAPI + SQLAlchemy (async) + Python 3.12+
+- Frontend: SvelteKit 2.0 + Svelte 5 + TypeScript + Vite
+- Backend: FastAPI + SQLAlchemy (async) + Python 3.12+ (MCP servers require 3.13+)
 - Database: PostgreSQL 15 (pgvector)
 - MCP Servers: Python 3.13 + FastAPI/Starlette
 - Package Manager: npm (Node.js), uv (Python)
