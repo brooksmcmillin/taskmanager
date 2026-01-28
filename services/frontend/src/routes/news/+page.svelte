@@ -50,7 +50,7 @@
 
 			if (response.data) {
 				articles = reset ? response.data : [...articles, ...response.data];
-				total = response.meta?.total || 0;
+				total = response.meta?.count || 0;
 				hasMore = articles.length < total;
 			}
 		} catch (error) {
