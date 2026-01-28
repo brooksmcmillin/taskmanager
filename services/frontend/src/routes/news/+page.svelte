@@ -81,7 +81,9 @@
 
 			// Update local state
 			articles = articles.map((a) =>
-				a.id === articleId ? { ...a, is_read: isRead, read_at: isRead ? new Date().toISOString() : null } : a
+				a.id === articleId
+					? { ...a, is_read: isRead, read_at: isRead ? new Date().toISOString() : null }
+					: a
 			);
 
 			toasts.show(isRead ? 'Marked as read' : 'Marked as unread', 'success');
@@ -158,7 +160,13 @@
 		</div>
 
 		<div class="flex-1 min-w-[300px]">
-			<form onsubmit={(e) => { e.preventDefault(); handleSearch(); }} class="flex gap-2">
+			<form
+				onsubmit={(e) => {
+					e.preventDefault();
+					handleSearch();
+				}}
+				class="flex gap-2"
+			>
 				<input
 					type="text"
 					bind:value={searchQuery}
@@ -170,7 +178,8 @@
 		</div>
 
 		<div class="text-sm text-gray-600">
-			{total} {total === 1 ? 'article' : 'articles'}
+			{total}
+			{total === 1 ? 'article' : 'articles'}
 		</div>
 	</div>
 
@@ -218,10 +227,7 @@
 	{:else}
 		<div class="space-y-4">
 			{#each articles as article (article.id)}
-				<div
-					class="card p-5 hover:shadow-md transition-shadow"
-					class:opacity-60={article.is_read}
-				>
+				<div class="card p-5 hover:shadow-md transition-shadow" class:opacity-60={article.is_read}>
 					<div class="flex justify-between items-start gap-4">
 						<div class="flex-1">
 							<div class="flex items-center gap-2 mb-2">

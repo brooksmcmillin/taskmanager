@@ -93,9 +93,23 @@ repos:
         files: ^services/frontend/(package\.json|package-lock\.json)$
         pass_filenames: false
 
+      - id: npm-format
+        name: npm format (frontend)
+        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm run format'
+        language: system
+        files: ^services/frontend/.*\.(js|ts|svelte)$
+        pass_filenames: false
+
       - id: npm-lint
         name: npm lint (frontend)
-        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm run format'
+        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm run lint'
+        language: system
+        files: ^services/frontend/.*\.(js|ts|svelte)$
+        pass_filenames: false
+
+      - id: npm-check
+        name: npm check (frontend)
+        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm run check'
         language: system
         files: ^services/frontend/.*\.(js|ts|svelte)$
         pass_filenames: false

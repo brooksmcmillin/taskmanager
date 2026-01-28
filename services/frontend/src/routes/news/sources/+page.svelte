@@ -37,10 +37,7 @@
 			// Update local state
 			sources = sources.map((s) => (s.id === sourceId ? { ...s, is_active: !isActive } : s));
 
-			toasts.show(
-				!isActive ? 'Feed source activated' : 'Feed source deactivated',
-				'success'
-			);
+			toasts.show(!isActive ? 'Feed source activated' : 'Feed source deactivated', 'success');
 		} catch (error) {
 			toasts.show('Failed to toggle feed source: ' + (error as Error).message, 'error');
 		}
