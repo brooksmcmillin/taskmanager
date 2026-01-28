@@ -88,14 +88,14 @@ repos:
     hooks:
       - id: npm-audit
         name: npm audit (frontend)
-        entry: bash -c 'cd services/frontend && npm audit --production --audit-level=high'
+        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm audit --production --audit-level=high'
         language: system
         files: ^services/frontend/(package\.json|package-lock\.json)$
         pass_filenames: false
 
       - id: npm-lint
         name: npm lint (frontend)
-        entry: bash -c 'cd services/frontend && npm run format'
+        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm run format'
         language: system
         files: ^services/frontend/.*\.(js|ts|svelte)$
         pass_filenames: false
