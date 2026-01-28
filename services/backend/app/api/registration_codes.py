@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.core.errors import errors
 from app.dependencies import AdminUser, DbSession
 from app.models.registration_code import RegistrationCode
+from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/registration-codes", tags=["registration-codes"])
 
@@ -43,18 +44,11 @@ class RegistrationCodeResponse(BaseModel):
     created_by_username: str | None = None
 
 
-class RegistrationCodeListResponse(BaseModel):
-    """List of registration codes."""
-
-    data: list[RegistrationCodeResponse]
-    meta: dict
-
-
 @router.get("")
 async def list_registration_codes(
     admin: AdminUser,
     db: DbSession,
-) -> RegistrationCodeListResponse:
+) -> ListResponse[RegistrationCodeResponse]:
     """List all registration codes (admin only)."""
     from app.models.user import User
 
@@ -79,7 +73,7 @@ async def list_registration_codes(
         for code, username in rows
     ]
 
-    return RegistrationCodeListResponse(
+    return ListResponse(
         data=codes,
         meta={"count": len(codes)},
     )

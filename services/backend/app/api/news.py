@@ -11,6 +11,7 @@ from app.dependencies import CurrentUser, DbSession
 from app.models.article import Article
 from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.feed_source import FeedSource, FeedType
+from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -32,13 +33,6 @@ class ArticleResponse(BaseModel):
     is_read: bool = False
     rating: ArticleRating | None = None
     read_at: datetime | None = None
-
-
-class ArticleListResponse(BaseModel):
-    """Article list response."""
-
-    data: list[ArticleResponse]
-    meta: dict
 
 
 class MarkReadRequest(BaseModel):
@@ -70,12 +64,6 @@ class FeedSourceResponse(BaseModel):
     created_at: datetime
 
 
-class FeedSourceListResponse(BaseModel):
-    """Feed source list response."""
-
-    data: list[FeedSourceResponse]
-
-
 class ToggleFeedSourceRequest(BaseModel):
     """Toggle feed source active status."""
 
@@ -89,7 +77,7 @@ class ToggleFeedSourceRequest(BaseModel):
 async def list_feed_sources(
     user: CurrentUser,
     db: DbSession,
-):
+) -> ListResponse[FeedSourceResponse]:
     """List all feed sources."""
     try:
         stmt = select(FeedSource).order_by(FeedSource.name)
@@ -99,7 +87,7 @@ async def list_feed_sources(
         response_data = [
             FeedSourceResponse.model_validate(source) for source in sources
         ]
-        return FeedSourceListResponse(data=response_data)
+        return ListResponse(data=response_data, meta={})
     except Exception:
         import traceback
 
@@ -137,7 +125,7 @@ async def list_articles(
     feed_type: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-) -> ArticleListResponse:
+) -> ListResponse[ArticleResponse]:
     """List news articles with optional filters."""
     # Base query with feed source
     query = (
@@ -213,7 +201,7 @@ async def list_articles(
             )
         )
 
-    return ArticleListResponse(
+    return ListResponse(
         data=articles,
         meta={"total": total, "limit": limit, "offset": offset},
     )

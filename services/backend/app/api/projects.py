@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.core.errors import errors
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
+from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -45,25 +46,18 @@ class ProjectResponse(BaseModel):
     updated_at: datetime | None
 
 
-class ProjectListResponse(BaseModel):
-    """Project list response."""
-
-    data: list[ProjectResponse]
-    meta: dict
-
-
 @router.get("")
 async def list_projects(
     user: CurrentUser,
     db: DbSession,
-) -> ProjectListResponse:
+) -> ListResponse[ProjectResponse]:
     """List all projects for the user."""
     result = await db.execute(
         select(Project).where(Project.user_id == user.id).order_by(Project.name)
     )
     projects = result.scalars().all()
 
-    return ProjectListResponse(
+    return ListResponse(
         data=[ProjectResponse.model_validate(p) for p in projects],
         meta={"count": len(projects)},
     )

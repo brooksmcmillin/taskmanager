@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import type { Project, ProjectCreate, ProjectUpdate } from '$lib/types';
 import { api } from '$lib/api/client';
+import { logger } from '$lib/utils/logger';
 
 function createProjectStore() {
 	const { subscribe, set, update } = writable<Project[]>([]);
@@ -14,7 +15,7 @@ function createProjectStore() {
 				);
 				set(response.data || []);
 			} catch (error) {
-				console.error('Failed to load projects:', error);
+				logger.error('Failed to load projects:', error);
 				throw error;
 			}
 		},
@@ -24,7 +25,7 @@ function createProjectStore() {
 				update((projects) => [...projects, created.data]);
 				return created.data;
 			} catch (error) {
-				console.error('Failed to add project:', error);
+				logger.error('Failed to add project:', error);
 				throw error;
 			}
 		},
@@ -34,7 +35,7 @@ function createProjectStore() {
 				update((projects) => projects.map((p) => (p.id === id ? updated.data : p)));
 				return updated.data;
 			} catch (error) {
-				console.error('Failed to update project:', error);
+				logger.error('Failed to update project:', error);
 				throw error;
 			}
 		},
@@ -43,7 +44,7 @@ function createProjectStore() {
 				await api.delete(`/api/projects/${id}`);
 				update((projects) => projects.filter((p) => p.id !== id));
 			} catch (error) {
-				console.error('Failed to remove project:', error);
+				logger.error('Failed to remove project:', error);
 				throw error;
 			}
 		}

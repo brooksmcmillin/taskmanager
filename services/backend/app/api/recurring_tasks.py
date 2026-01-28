@@ -10,8 +10,36 @@ from app.core.errors import errors
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
 from app.models.recurring_task import Frequency, RecurringTask
+from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/recurring-tasks", tags=["recurring-tasks"])
+
+
+# Validation constants and helpers
+VALID_PRIORITIES = ["low", "medium", "high", "urgent"]
+
+
+def _validate_weekdays_list(v: list[int] | None) -> list[int] | None:
+    """Validate weekdays are 0-6 (Sunday-Saturday)."""
+    if v is not None:
+        for day in v:
+            if not isinstance(day, int) or day < 0 or day > 6:
+                raise ValueError("Weekdays must contain integers 0-6 (Sunday-Saturday)")
+    return v
+
+
+def _validate_day_of_month_value(v: int | None) -> int | None:
+    """Validate day of month is 1-31."""
+    if v is not None and (not isinstance(v, int) or v < 1 or v > 31):
+        raise ValueError("Day of month must be an integer 1-31")
+    return v
+
+
+def _validate_priority_value(v: str | None) -> str | None:
+    """Validate priority is a valid value."""
+    if v is not None and v not in VALID_PRIORITIES:
+        raise ValueError(f"Priority must be one of: {', '.join(VALID_PRIORITIES)}")
+    return v
 
 
 # Schemas
@@ -36,31 +64,21 @@ class RecurringTaskCreate(BaseModel):
     @field_validator("weekdays")
     @classmethod
     def validate_weekdays(cls, v: list[int] | None) -> list[int] | None:
-        """Validate weekdays are 0-6."""
-        if v is not None:
-            for day in v:
-                if not isinstance(day, int) or day < 0 or day > 6:
-                    raise ValueError(
-                        "Weekdays must contain integers 0-6 (Sunday-Saturday)"
-                    )
-        return v
+        return _validate_weekdays_list(v)
 
     @field_validator("day_of_month")
     @classmethod
     def validate_day_of_month(cls, v: int | None) -> int | None:
-        """Validate day of month is 1-31."""
-        if v is not None and (not isinstance(v, int) or v < 1 or v > 31):
-            raise ValueError("Day of month must be an integer 1-31")
-        return v
+        return _validate_day_of_month_value(v)
 
     @field_validator("priority")
     @classmethod
     def validate_priority(cls, v: str) -> str:
-        """Validate priority value."""
-        valid = ["low", "medium", "high", "urgent"]
-        if v not in valid:
-            raise ValueError(f"Priority must be one of: {', '.join(valid)}")
-        return v
+        result = _validate_priority_value(v)
+        # For required fields, ensure we don't return None
+        if result is None:
+            raise ValueError(f"Priority must be one of: {', '.join(VALID_PRIORITIES)}")
+        return result
 
 
 class RecurringTaskUpdate(BaseModel):
@@ -86,32 +104,17 @@ class RecurringTaskUpdate(BaseModel):
     @field_validator("weekdays")
     @classmethod
     def validate_weekdays(cls, v: list[int] | None) -> list[int] | None:
-        """Validate weekdays are 0-6."""
-        if v is not None:
-            for day in v:
-                if not isinstance(day, int) or day < 0 or day > 6:
-                    raise ValueError(
-                        "Weekdays must contain integers 0-6 (Sunday-Saturday)"
-                    )
-        return v
+        return _validate_weekdays_list(v)
 
     @field_validator("day_of_month")
     @classmethod
     def validate_day_of_month(cls, v: int | None) -> int | None:
-        """Validate day of month is 1-31."""
-        if v is not None and (not isinstance(v, int) or v < 1 or v > 31):
-            raise ValueError("Day of month must be an integer 1-31")
-        return v
+        return _validate_day_of_month_value(v)
 
     @field_validator("priority")
     @classmethod
     def validate_priority(cls, v: str | None) -> str | None:
-        """Validate priority value."""
-        if v is not None:
-            valid = ["low", "medium", "high", "urgent"]
-            if v not in valid:
-                raise ValueError(f"Priority must be one of: {', '.join(valid)}")
-        return v
+        return _validate_priority_value(v)
 
 
 class RecurringTaskResponse(BaseModel):
@@ -140,11 +143,37 @@ class RecurringTaskResponse(BaseModel):
     updated_at: datetime | None
 
 
-class RecurringTaskListResponse(BaseModel):
-    """Recurring tasks list response."""
+# Helper functions
+def _build_recurring_task_response(task: RecurringTask) -> RecurringTaskResponse:
+    """Build RecurringTaskResponse from RecurringTask model.
 
-    data: list[RecurringTaskResponse]
-    meta: dict
+    Args:
+        task: RecurringTask model instance
+
+    Returns:
+        RecurringTaskResponse with all fields populated
+    """
+    return RecurringTaskResponse(
+        id=task.id,
+        title=task.title,
+        frequency=task.frequency,
+        interval_value=task.interval_value,
+        weekdays=task.weekdays,
+        day_of_month=task.day_of_month,
+        start_date=task.start_date,
+        end_date=task.end_date,
+        next_due_date=task.next_due_date,
+        project_id=task.project_id,
+        description=task.description,
+        priority=task.priority,
+        estimated_hours=float(task.estimated_hours) if task.estimated_hours else None,
+        tags=task.tags or [],
+        context=task.context,
+        skip_missed=task.skip_missed,
+        is_active=task.is_active,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )
 
 
 @router.get("")
@@ -152,7 +181,7 @@ async def list_recurring_tasks(
     user: CurrentUser,
     db: DbSession,
     active_only: bool = Query(True),
-) -> RecurringTaskListResponse:
+) -> ListResponse[RecurringTaskResponse]:
     """List all recurring tasks for the authenticated user."""
     query = select(RecurringTask).where(RecurringTask.user_id == user.id)
 
@@ -164,36 +193,9 @@ async def list_recurring_tasks(
     result = await db.execute(query)
     tasks = result.scalars().all()
 
-    task_responses = [
-        RecurringTaskResponse(
-            id=task.id,
-            title=task.title,
-            frequency=task.frequency,
-            interval_value=task.interval_value,
-            weekdays=task.weekdays,
-            day_of_month=task.day_of_month,
-            start_date=task.start_date,
-            end_date=task.end_date,
-            next_due_date=task.next_due_date,
-            project_id=task.project_id,
-            description=task.description,
-            priority=task.priority,
-            estimated_hours=float(task.estimated_hours)
-            if task.estimated_hours
-            else None,
-            tags=task.tags or [],
-            context=task.context,
-            skip_missed=task.skip_missed,
-            is_active=task.is_active,
-            created_at=task.created_at,
-            updated_at=task.updated_at,
-        )
-        for task in tasks
-    ]
+    task_responses = [_build_recurring_task_response(task) for task in tasks]
 
-    return RecurringTaskListResponse(
-        data=task_responses, meta={"count": len(task_responses)}
-    )
+    return ListResponse(data=task_responses, meta={"count": len(task_responses)})
 
 
 @router.post("", status_code=201)
@@ -239,31 +241,7 @@ async def create_recurring_task(
     db.add(task)
     await db.flush()
 
-    return {
-        "data": RecurringTaskResponse(
-            id=task.id,
-            title=task.title,
-            frequency=task.frequency,
-            interval_value=task.interval_value,
-            weekdays=task.weekdays,
-            day_of_month=task.day_of_month,
-            start_date=task.start_date,
-            end_date=task.end_date,
-            next_due_date=task.next_due_date,
-            project_id=task.project_id,
-            description=task.description,
-            priority=task.priority,
-            estimated_hours=float(task.estimated_hours)
-            if task.estimated_hours
-            else None,
-            tags=task.tags or [],
-            context=task.context,
-            skip_missed=task.skip_missed,
-            is_active=task.is_active,
-            created_at=task.created_at,
-            updated_at=task.updated_at,
-        )
-    }
+    return {"data": _build_recurring_task_response(task)}
 
 
 @router.get("/{task_id}")
@@ -284,31 +262,7 @@ async def get_recurring_task(
     if not task:
         raise errors.recurring_task_not_found()
 
-    return {
-        "data": RecurringTaskResponse(
-            id=task.id,
-            title=task.title,
-            frequency=task.frequency,
-            interval_value=task.interval_value,
-            weekdays=task.weekdays,
-            day_of_month=task.day_of_month,
-            start_date=task.start_date,
-            end_date=task.end_date,
-            next_due_date=task.next_due_date,
-            project_id=task.project_id,
-            description=task.description,
-            priority=task.priority,
-            estimated_hours=float(task.estimated_hours)
-            if task.estimated_hours
-            else None,
-            tags=task.tags or [],
-            context=task.context,
-            skip_missed=task.skip_missed,
-            is_active=task.is_active,
-            created_at=task.created_at,
-            updated_at=task.updated_at,
-        )
-    }
+    return {"data": _build_recurring_task_response(task)}
 
 
 @router.put("/{task_id}")
@@ -350,31 +304,7 @@ async def update_recurring_task(
     for field, value in update_data.items():
         setattr(task, field, value)
 
-    return {
-        "data": RecurringTaskResponse(
-            id=task.id,
-            title=task.title,
-            frequency=task.frequency,
-            interval_value=task.interval_value,
-            weekdays=task.weekdays,
-            day_of_month=task.day_of_month,
-            start_date=task.start_date,
-            end_date=task.end_date,
-            next_due_date=task.next_due_date,
-            project_id=task.project_id,
-            description=task.description,
-            priority=task.priority,
-            estimated_hours=float(task.estimated_hours)
-            if task.estimated_hours
-            else None,
-            tags=task.tags or [],
-            context=task.context,
-            skip_missed=task.skip_missed,
-            is_active=task.is_active,
-            created_at=task.created_at,
-            updated_at=task.updated_at,
-        )
-    }
+    return {"data": _build_recurring_task_response(task)}
 
 
 @router.delete("/{task_id}")

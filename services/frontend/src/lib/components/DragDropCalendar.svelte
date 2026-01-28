@@ -6,6 +6,7 @@
 	import { todos, pendingTodos } from '$lib/stores/todos';
 	import { hexTo50Shade } from '$lib/utils/colors';
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
+	import { logger } from '$lib/utils/logger';
 	import type { Todo } from '$lib/types';
 
 	const DEFAULT_PROJECT_COLOR = '#6b7280';
@@ -105,7 +106,7 @@
 				draggedTodoId = null;
 				originalDate = null;
 			} catch (error) {
-				console.error('Failed to update todo date:', error);
+				logger.error('Failed to update todo date:', error);
 				// Reload all todos to revert the change
 				await todos.load({ status: 'pending' });
 				const currentTodos = get(pendingTodos);

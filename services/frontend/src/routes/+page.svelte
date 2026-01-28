@@ -10,6 +10,7 @@
 	import ProjectFilter from '$lib/components/ProjectFilter.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
 	import { formatDateDisplay } from '$lib/utils/dates';
+	import { logger } from '$lib/utils/logger';
 	import type { Todo } from '$lib/types';
 
 	let currentView: 'list' | 'calendar' = 'calendar';
@@ -90,7 +91,7 @@
 				...(selectedProjectId && { project_id: selectedProjectId })
 			});
 		} catch (error) {
-			console.error('Failed to complete todo:', error);
+			logger.error('Failed to complete todo:', error);
 			alert('Failed to complete todo');
 		}
 	}

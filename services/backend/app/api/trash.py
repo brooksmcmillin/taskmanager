@@ -10,6 +10,7 @@ from app.core.errors import errors
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
 from app.models.todo import Todo
+from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/trash", tags=["trash"])
 
@@ -33,19 +34,12 @@ class DeletedTodoResponse(BaseModel):
     created_at: datetime
 
 
-class TrashListResponse(BaseModel):
-    """Trash list response."""
-
-    data: list[DeletedTodoResponse]
-    meta: dict
-
-
 @router.get("")
 async def list_deleted_todos(
     user: CurrentUser,
     db: DbSession,
     query: str | None = Query(None),
-) -> TrashListResponse:
+) -> ListResponse[DeletedTodoResponse]:
     """List all deleted todos for the current user."""
     stmt = (
         select(
@@ -94,7 +88,7 @@ async def list_deleted_todos(
             )
         )
 
-    return TrashListResponse(data=tasks, meta={"count": len(tasks)})
+    return ListResponse(data=tasks, meta={"count": len(tasks)})
 
 
 @router.post("/{todo_id}/restore")

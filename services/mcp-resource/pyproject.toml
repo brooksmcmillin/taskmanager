@@ -14,6 +14,7 @@ dependencies = [
     "starlette>=0.40.0",
     "taskmanager-sdk",
     "uvicorn>=0.30.0",
+    "cryptography==46.0.4",
 ]
 
 [project.scripts]
