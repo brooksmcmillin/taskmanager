@@ -54,10 +54,6 @@ jobs:
         working-directory: services/backend
         run: uv sync --all-extras
 
-      - name: Setup backend environment
-        working-directory: services/backend
-        run: cp .env.test .env.test
-
       - name: Run backend database migrations
         working-directory: services/backend
         env:
