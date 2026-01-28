@@ -51,7 +51,7 @@ repos:
     hooks:
       - id: pyright-backend
         name: pyright (backend)
-        entry: bash -c 'cd services/backend && uv run pyright'
+        entry: bash -c 'cd services/backend && uv sync --all-extras --quiet && uv run pyright'
         language: system
         files: ^services/backend/
         types: [python]
@@ -59,7 +59,7 @@ repos:
 
       - id: pyright-mcp-auth
         name: pyright (mcp-auth)
-        entry: bash -c 'cd services/mcp-auth && uv run pyright'
+        entry: bash -c 'cd services/mcp-auth && uv sync --all-extras --quiet && uv run pyright'
         language: system
         files: ^services/mcp-auth/
         types: [python]
@@ -67,7 +67,7 @@ repos:
 
       - id: pyright-mcp-resource
         name: pyright (mcp-resource)
-        entry: bash -c 'cd services/mcp-resource && uv run pyright'
+        entry: bash -c 'cd services/mcp-resource && uv sync --all-extras --quiet && uv run pyright'
         language: system
         files: ^services/mcp-resource/
         types: [python]
@@ -75,7 +75,7 @@ repos:
 
       - id: pyright-sdk
         name: pyright (taskmanager-sdk)
-        entry: bash -c 'cd packages/taskmanager-sdk && uv run pyright'
+        entry: bash -c 'cd packages/taskmanager-sdk && uv sync --all-extras --quiet && uv run pyright'
         language: system
         files: ^packages/taskmanager-sdk/
         types: [python]
@@ -93,9 +93,23 @@ repos:
         files: ^services/frontend/(package\.json|package-lock\.json)$
         pass_filenames: false
 
+      - id: npm-format
+        name: npm format (frontend)
+        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm run format'
+        language: system
+        files: ^services/frontend/.*\.(js|ts|svelte)$
+        pass_filenames: false
+
       - id: npm-lint
         name: npm lint (frontend)
-        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm run format'
+        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && npm run lint'
+        language: system
+        files: ^services/frontend/.*\.(js|ts|svelte)$
+        pass_filenames: false
+
+      - id: npm-check
+        name: npm check (frontend)
+        entry: bash -c 'source $HOME/.nvm/nvm.sh && cd services/frontend && [ -f .env ] || cp .env.example .env && npm run check'
         language: system
         files: ^services/frontend/.*\.(js|ts|svelte)$
         pass_filenames: false

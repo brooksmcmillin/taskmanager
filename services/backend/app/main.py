@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     auth,
     categories,
+    news,
     projects,
     recurring_tasks,
     registration_codes,
@@ -19,13 +20,16 @@ from app.api import (
 from app.api.oauth import authorize, clients, device, token
 from app.config import settings
 from app.db.database import init_db
+from app.services.scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler."""
     await init_db()
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 app = FastAPI(
@@ -53,6 +57,7 @@ app.include_router(search.router)
 app.include_router(trash.router)
 app.include_router(recurring_tasks.router)
 app.include_router(registration_codes.router)
+app.include_router(news.router)
 app.include_router(authorize.router)
 app.include_router(token.router)
 app.include_router(clients.router)

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 
 if TYPE_CHECKING:
+    from app.models.article_interaction import ArticleInteraction
     from app.models.oauth import OAuthClient
     from app.models.project import Project
     from app.models.recurring_task import RecurringTask
@@ -52,4 +53,7 @@ class User(Base):
     )
     registration_codes: Mapped[list[RegistrationCode]] = relationship(
         "RegistrationCode", back_populates="created_by"
+    )
+    article_interactions: Mapped[list[ArticleInteraction]] = relationship(
+        "ArticleInteraction", back_populates="user", cascade="all, delete-orphan"
     )

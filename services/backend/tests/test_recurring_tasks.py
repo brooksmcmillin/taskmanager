@@ -348,9 +348,7 @@ async def test_delete_recurring_task(
     list_response = await authenticated_client.get(
         "/api/recurring-tasks?active_only=false"
     )
-    inactive_tasks = [
-        t for t in list_response.json()["data"] if t["id"] == task.id
-    ]
+    inactive_tasks = [t for t in list_response.json()["data"] if t["id"] == task.id]
     assert len(inactive_tasks) == 1
     assert inactive_tasks[0]["is_active"] is False
 

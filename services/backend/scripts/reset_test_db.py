@@ -26,14 +26,55 @@ def reset_test_database():
 
     print(f"Resetting test database: {settings.postgres_db}")
 
-    # Check if we should use Docker (postgres user doesn't exist locally)
-    use_docker = subprocess.run(
-        ["id", "-u", "postgres"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    ).returncode != 0
+    # Check if we're in CI environment (GitHub Actions)
+    in_ci = os.getenv("CI") == "true"
 
-    if use_docker:
+    # Check if we should use Docker (postgres user doesn't exist locally)
+    use_docker = (
+        subprocess.run(
+            ["id", "-u", "postgres"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        != 0
+    )
+
+    if in_ci:
+        # In CI, connect directly to PostgreSQL service
+        # Drop database
+        drop_cmd = [
+            "psql",
+            "-h",
+            settings.postgres_host,
+            "-p",
+            str(settings.postgres_port),
+            "-U",
+            settings.postgres_user,
+            "-d",
+            "postgres",
+            "-c",
+            f"DROP DATABASE IF EXISTS {settings.postgres_db}",
+        ]
+
+        # Create database
+        create_cmd = [
+            "psql",
+            "-h",
+            settings.postgres_host,
+            "-p",
+            str(settings.postgres_port),
+            "-U",
+            settings.postgres_user,
+            "-d",
+            "postgres",
+            "-c",
+            f"CREATE DATABASE {settings.postgres_db}",
+        ]
+
+        # No need for permission grants in CI (same user)
+        grant_db_cmd = None
+        grant_schema_cmd = None
+    elif use_docker:
         # Use Docker exec to run psql commands
         container_name = "postgres_db"
 

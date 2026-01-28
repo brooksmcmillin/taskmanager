@@ -1,7 +1,8 @@
 """Seed test data for TaskManager.
 
-This script creates a test user, projects, and tasks for testing the filtering feature.
-It validates that it's running against a development/test database before making changes.
+This script creates a test user, projects, and tasks for testing the filtering
+feature. It validates that it's running against a development/test database
+before making changes.
 
 Usage:
     uv run python scripts/seed_test_data.py [--user-email EMAIL] [--skip-confirm]
@@ -30,13 +31,21 @@ from app.models.user import User
 # Test data configuration
 DEFAULT_TEST_EMAIL = "test@example.com"
 DEFAULT_TEST_USERNAME = "testuser"
-DEFAULT_TEST_PASSWORD = "TestPass123!"
+DEFAULT_TEST_PASSWORD = "TestPass123!"  # pragma: allowlist secret
 
 # Project names and colors
 PROJECTS = [
     {"name": "Work", "color": "#3b82f6", "description": "Work-related tasks"},
-    {"name": "Personal", "color": "#10b981", "description": "Personal tasks and errands"},
-    {"name": "Learning", "color": "#f59e0b", "description": "Learning and skill development"},
+    {
+        "name": "Personal",
+        "color": "#10b981",
+        "description": "Personal tasks and errands",
+    },
+    {
+        "name": "Learning",
+        "color": "#f59e0b",
+        "description": "Learning and skill development",
+    },
     {"name": "Health", "color": "#ef4444", "description": "Health and fitness goals"},
     {"name": "Home", "color": "#8b5cf6", "description": "Home improvement and chores"},
 ]
@@ -61,10 +70,29 @@ TASK_TEMPLATES = [
 ]
 
 TOPICS = [
-    "API", "database", "frontend", "backend", "security", "performance",
-    "documentation", "testing", "deployment", "monitoring", "analytics",
-    "kitchen", "bedroom", "garage", "garden", "office", "gym",
-    "budget", "schedule", "diet", "exercise", "meditation", "reading",
+    "API",
+    "database",
+    "frontend",
+    "backend",
+    "security",
+    "performance",
+    "documentation",
+    "testing",
+    "deployment",
+    "monitoring",
+    "analytics",
+    "kitchen",
+    "bedroom",
+    "garage",
+    "garden",
+    "office",
+    "gym",
+    "budget",
+    "schedule",
+    "diet",
+    "exercise",
+    "meditation",
+    "reading",
 ]
 
 
@@ -79,14 +107,20 @@ def validate_database_safe() -> bool:
     # Reject if database name contains production indicators
     dangerous_names = ["prod", "production", "live", "main"]
     if any(name in db_name for name in dangerous_names):
-        print(f"❌ ERROR: Database '{settings.postgres_db}' appears to be a production database!")
+        print(
+            f"❌ ERROR: Database '{settings.postgres_db}' appears to be a "
+            "production database!"
+        )
         print("   This script should only run against development or test databases.")
         return False
 
     # Warn if not clearly a dev/test database
     safe_names = ["dev", "test", "development", "local", "taskmanager"]
     if not any(name in db_name for name in safe_names):
-        print(f"⚠️  WARNING: Database name '{settings.postgres_db}' doesn't clearly indicate dev/test.")
+        print(
+            f"⚠️  WARNING: Database name '{settings.postgres_db}' doesn't "
+            "clearly indicate dev/test."
+        )
         return False
 
     return True
@@ -113,7 +147,9 @@ async def cleanup_test_data(session: AsyncSession, user_email: str) -> None:
     todos_result = await session.execute(select(Todo).where(Todo.user_id == user.id))
     todos_count = len(todos_result.scalars().all())
 
-    projects_result = await session.execute(select(Project).where(Project.user_id == user.id))
+    projects_result = await session.execute(
+        select(Project).where(Project.user_id == user.id)
+    )
     projects_count = len(projects_result.scalars().all())
 
     print(f"   Found {todos_count} tasks and {projects_count} projects")
@@ -242,7 +278,7 @@ async def create_tasks(
     for project in projects:
         project_tasks = []
 
-        for i in range(tasks_per_project):
+        for _i in range(tasks_per_project):
             due_date = generate_due_date()
             if due_date is None:
                 tasks_without_due_date += 1
@@ -254,12 +290,21 @@ async def create_tasks(
             )[0]
 
             # Random estimated hours (1-8 hours)
-            estimated_hours = random.choice([1, 2, 3, 4, 5, 6, 8]) if random.random() > 0.3 else None
+            estimated_hours = (
+                random.choice([1, 2, 3, 4, 5, 6, 8]) if random.random() > 0.3 else None
+            )
 
             # Some tasks have tags
             tags = []
             if random.random() > 0.5:
-                tag_options = ["urgent", "blocked", "review", "documentation", "bug", "feature"]
+                tag_options = [
+                    "urgent",
+                    "blocked",
+                    "review",
+                    "documentation",
+                    "bug",
+                    "feature",
+                ]
                 tags = random.sample(tag_options, k=random.randint(1, 2))
 
             todo = Todo(
@@ -282,10 +327,11 @@ async def create_tasks(
 
     await session.flush()
 
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     print(f"   Total tasks: {total_tasks}")
     print(f"   Tasks with due dates: {total_tasks - tasks_without_due_date}")
-    print(f"   Tasks without due dates: {tasks_without_due_date} ({tasks_without_due_date/total_tasks*100:.1f}%)")
+    pct = tasks_without_due_date / total_tasks * 100
+    print(f"   Tasks without due dates: {tasks_without_due_date} ({pct:.1f}%)")
 
     return todos
 
@@ -311,9 +357,12 @@ async def seed_data(user_email: str, skip_confirm: bool = False) -> None:
 
     # Confirm before proceeding
     if not skip_confirm:
-        print("\n⚠️  This will DELETE all existing data for the test user and create new data.")
+        print(
+            "\n⚠️  This will DELETE all existing data for the test user "
+            "and create new data."
+        )
         response = input("   Continue? [y/N]: ")
-        if response.lower() != 'y':
+        if response.lower() != "y":
             print("❌ Aborted")
             sys.exit(0)
 
@@ -338,7 +387,7 @@ async def seed_data(user_email: str, skip_confirm: bool = False) -> None:
             print("\n" + "=" * 70)
             print("✅ Test data seeded successfully!")
             print("=" * 70)
-            print(f"\n🔑 Login credentials:")
+            print("\n🔑 Login credentials:")
             print(f"   Username: {user.username}")
             print(f"   Password: {DEFAULT_TEST_PASSWORD}")
             print(f"   (Email: {user.email})")
