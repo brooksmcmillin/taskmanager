@@ -200,3 +200,30 @@ export function generateTodoData(overrides: Partial<any> = {}) {
 		...overrides
 	};
 }
+
+/**
+ * Take a screenshot and save to docs/screenshots directory (at project root)
+ * @param page - Playwright page object
+ * @param name - Screenshot filename (without extension)
+ * @param options - Screenshot options
+ */
+export async function takeScreenshot(
+	page: Page,
+	name: string,
+	options: {
+		fullPage?: boolean;
+		clip?: { x: number; y: number; width: number; height: number };
+	} = {}
+) {
+	// Path relative to services/frontend where tests run
+	const screenshotsDir = '../../docs/screenshots';
+	const path = `${screenshotsDir}/${name}.png`;
+
+	await page.screenshot({
+		path,
+		fullPage: options.fullPage ?? false,
+		clip: options.clip
+	});
+
+	return path;
+}
