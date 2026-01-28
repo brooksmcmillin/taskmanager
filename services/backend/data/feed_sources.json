@@ -1,0 +1,110 @@
+[
+  {
+    "name": "Anthropic Blog",
+    "url": "https://www.anthropic.com/news/rss.xml",
+    "description": "Research and safety updates from Anthropic",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "ArXiv CS.AI (Artificial Intelligence)",
+    "url": "http://export.arxiv.org/rss/cs.AI",
+    "description": "Latest AI research papers from ArXiv",
+    "type": "paper",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "ArXiv CS.CR (Cryptography and Security)",
+    "url": "http://export.arxiv.org/rss/cs.CR",
+    "description": "Latest research papers on cryptography and security from ArXiv",
+    "type": "paper",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "ArXiv CS.LG (Machine Learning)",
+    "url": "http://export.arxiv.org/rss/cs.LG",
+    "description": "Latest machine learning research papers from ArXiv",
+    "type": "paper",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "DeepMind Blog",
+    "url": "https://deepmind.google/blog/rss.xml",
+    "description": "AI research from Google DeepMind",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "Google AI Blog",
+    "url": "https://blog.research.google/atom.xml",
+    "description": "Research and insights from Google AI",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "NIST Cybersecurity Insights",
+    "url": "https://www.nist.gov/blogs/cybersecurity-insights/rss.xml",
+    "description": "NIST cybersecurity research and standards",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "OpenAI Blog",
+    "url": "https://openai.com/blog/rss.xml",
+    "description": "Latest updates and research from OpenAI",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "OWASP Blog",
+    "url": "https://owasp.org/www-community/rss.xml",
+    "description": "OWASP security community updates",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "Schneier on Security",
+    "url": "https://www.schneier.com/feed/",
+    "description": "Security expert Bruce Schneier's blog",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "The Gradient",
+    "url": "https://thegradient.pub/rss/",
+    "description": "ML research news and perspectives",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  },
+  {
+    "name": "Trail of Bits Blog",
+    "url": "https://blog.trailofbits.com/feed/",
+    "description": "Security research and engineering insights",
+    "type": "article",
+    "is_active": true,
+    "fetch_interval_hours": 6,
+    "quality_score": 1.0
+  }
+]
