@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import joinedload
 
 from app.core.errors import errors
 from app.dependencies import CurrentUser, DbSession
@@ -97,10 +96,13 @@ async def list_feed_sources(
         result = await db.execute(stmt)
         sources = result.scalars().all()
 
-        response_data = [FeedSourceResponse.model_validate(source) for source in sources]
+        response_data = [
+            FeedSourceResponse.model_validate(source) for source in sources
+        ]
         return FeedSourceListResponse(data=response_data)
-    except Exception as e:
+    except Exception:
         import traceback
+
         traceback.print_exc()
         raise
 

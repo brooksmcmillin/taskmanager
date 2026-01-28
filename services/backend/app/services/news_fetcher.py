@@ -44,7 +44,9 @@ SECURITY_KEYWORDS = [
 ]
 
 
-def article_matches_keywords(title: str, summary: str, content: str) -> tuple[bool, list[str]]:
+def article_matches_keywords(
+    title: str, summary: str, content: str
+) -> tuple[bool, list[str]]:
     """Check if article matches AI/LLM security keywords."""
     text = f"{title} {summary} {content}".lower()
     matched_keywords = []
@@ -65,24 +67,54 @@ async def fetch_feed(feed_source: FeedSource, db: AsyncSession) -> int:
         feed = feedparser.parse(feed_source.url)
 
         if feed.bozo:
-            logger.warning(f"Feed parsing error for {feed_source.name}: {feed.bozo_exception}")
+            logger.warning(
+                f"Feed parsing error for {feed_source.name}: {feed.bozo_exception}"
+            )
 
         new_articles = 0
 
         for entry in feed.entries:
             # Extract article data
-            title = entry.get("title", "")
-            url = entry.get("link", "")
-            summary = entry.get("summary", "") or entry.get("description", "")
-            content = entry.get("content", [{}])[0].get("value", "") if entry.get("content") else ""
-            author = entry.get("author", None)
+            title: str = entry.get("title", "")  # type: ignore
+            url: str = entry.get("link", "")  # type: ignore
+            summary: str = entry.get("summary", "") or entry.get("description", "")  # type: ignore
+
+            # Extract content from nested structure
+            content: str = ""
+            content_list = entry.get("content")  # type: ignore
+            if (
+                content_list
+                and isinstance(content_list, list)
+                and len(content_list) > 0
+            ):
+                content = content_list[0].get("value", "")  # type: ignore
+
+            author: str | None = entry.get("author", None)  # type: ignore
 
             # Parse published date
             published_at = None
             if hasattr(entry, "published_parsed") and entry.published_parsed:
-                published_at = datetime(*entry.published_parsed[:6], tzinfo=UTC)
+                time_tuple = entry.published_parsed  # type: ignore
+                published_at = datetime(
+                    int(time_tuple[0]),  # year  # type: ignore
+                    int(time_tuple[1]),  # month  # type: ignore
+                    int(time_tuple[2]),  # day  # type: ignore
+                    int(time_tuple[3]),  # hour  # type: ignore
+                    int(time_tuple[4]),  # minute  # type: ignore
+                    int(time_tuple[5]),  # second  # type: ignore
+                    tzinfo=UTC,
+                )
             elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                published_at = datetime(*entry.updated_parsed[:6], tzinfo=UTC)
+                time_tuple = entry.updated_parsed  # type: ignore
+                published_at = datetime(
+                    int(time_tuple[0]),  # year  # type: ignore
+                    int(time_tuple[1]),  # month  # type: ignore
+                    int(time_tuple[2]),  # day  # type: ignore
+                    int(time_tuple[3]),  # hour  # type: ignore
+                    int(time_tuple[4]),  # minute  # type: ignore
+                    int(time_tuple[5]),  # second  # type: ignore
+                    tzinfo=UTC,
+                )
 
             # Check if article already exists
             stmt = select(Article).where(Article.url == url)

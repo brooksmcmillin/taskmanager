@@ -50,9 +50,20 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
       - name: Install backend dependencies
         working-directory: services/backend
         run: uv sync --all-extras
+
+      - name: Update backend test config for CI  # pragma: allowlist secret
+        working-directory: services/backend
+        run: |  # pragma: allowlist secret
+          sed -i 's/POSTGRES_PORT=5432/POSTGRES_PORT=5434/' .env.test
+          sed -i 's/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=taskmanager/' .env.test  # pragma: allowlist secret
 
       - name: Run backend database migrations
         working-directory: services/backend
@@ -86,6 +97,8 @@ jobs:
 
       - name: Run tests
         working-directory: services/frontend
+        env:
+          PGPASSWORD: taskmanager  # pragma: allowlist secret
         run: npm test
 
       - name: Upload test results
