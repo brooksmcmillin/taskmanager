@@ -24,6 +24,9 @@ dependencies = [
     # Rate limiting
     "slowapi>=0.1.9",
     "httpx>=0.28.1",
+    # News aggregation
+    "feedparser>=6.0.11",
+    "apscheduler>=3.10.4",
 ]
 
 [project.optional-dependencies]

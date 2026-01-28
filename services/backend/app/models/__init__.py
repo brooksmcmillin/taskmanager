@@ -1,5 +1,8 @@
 """SQLAlchemy models."""
 
+from app.models.article import Article
+from app.models.article_interaction import ArticleInteraction, ArticleRating
+from app.models.feed_source import FeedSource, FeedType
 from app.models.oauth import AccessToken, AuthorizationCode, DeviceCode, OAuthClient
 from app.models.project import Project
 from app.models.recurring_task import Frequency, RecurringTask
@@ -23,4 +26,9 @@ __all__ = [
     "RecurringTask",
     "Frequency",
     "RegistrationCode",
+    "Article",
+    "FeedSource",
+    "FeedType",
+    "ArticleInteraction",
+    "ArticleRating",
 ]

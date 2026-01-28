@@ -95,6 +95,37 @@ export interface RegistrationCode {
 	created_by_username: string | null;
 }
 
+export type ArticleRating = 'good' | 'bad' | 'not_interested';
+
+export interface Article {
+	id: number;
+	title: string;
+	url: string;
+	summary: string | null;
+	author: string | null;
+	published_at: string | null;
+	keywords: string[];
+	feed_source_name: string;
+	is_read: boolean;
+	rating: ArticleRating | null;
+	read_at: string | null;
+}
+
+export type FeedType = 'paper' | 'article';
+
+export interface FeedSource {
+	id: number;
+	name: string;
+	url: string;
+	description: string | null;
+	type: FeedType;
+	is_active: boolean;
+	fetch_interval_hours: number;
+	last_fetched_at: string | null;
+	quality_score: number;
+	created_at: string;
+}
+
 export interface ApiResponse<T> {
 	data?: T;
 	tasks?: T;
