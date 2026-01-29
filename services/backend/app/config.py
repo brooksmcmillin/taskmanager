@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Project root is three levels up from this file
@@ -96,6 +97,20 @@ class Settings(BaseSettings):
     max_email_length: int = 255
     max_project_name_length: int = 100
     max_todo_title_length: int = 255
+
+    @model_validator(mode="after")
+    def validate_secret_key(self) -> "Settings":
+        """Validate that secret key is not the default value in production."""
+        if (
+            self.is_production
+            and self.secret_key == "change-me-in-production"  # pragma: allowlist secret
+        ):
+            raise ValueError(
+                "SECRET_KEY must be changed in production. "
+                "Generate a secure secret key and set it via the "
+                "SECRET_KEY environment variable."
+            )
+        return self
 
 
 @lru_cache

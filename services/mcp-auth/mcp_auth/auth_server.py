@@ -45,6 +45,35 @@ logger = logging.getLogger(__name__)
 # Constants for device flow
 DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 
+# CORS allowed origins for OAuth discovery endpoints
+# Parse from comma-separated environment variable, or use empty list to block all origins
+ALLOWED_MCP_ORIGINS = (
+    os.getenv("ALLOWED_MCP_ORIGINS", "").split(",") if os.getenv("ALLOWED_MCP_ORIGINS") else []
+)
+# Remove empty strings and strip whitespace
+ALLOWED_MCP_ORIGINS = [origin.strip() for origin in ALLOWED_MCP_ORIGINS if origin.strip()]
+
+
+def get_cors_origin(request: Request) -> str:
+    """
+    Get CORS origin header value based on request origin.
+
+    Only returns the origin if it's in the allowed list, otherwise returns empty string
+    to deny CORS access.
+
+    Args:
+        request: The incoming request
+
+    Returns:
+        Origin value for Access-Control-Allow-Origin header
+    """
+    request_origin = request.headers.get("origin", "")
+    if request_origin in ALLOWED_MCP_ORIGINS:
+        return request_origin
+    # If no allowed origins configured, deny all CORS (return empty string)
+    # If origin not in allowed list, deny (return empty string)
+    return ""
+
 
 def transform_backend_error_to_oauth(backend_response: dict[str, Any]) -> dict[str, str]:
     """
@@ -1084,7 +1113,7 @@ def create_authorization_server(
                 "scopes_supported": [auth_settings.mcp_scope],
             },
             headers={
-                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Origin": get_cors_origin(request),
                 "Access-Control-Allow-Methods": "GET, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
             },
