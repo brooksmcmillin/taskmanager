@@ -75,24 +75,6 @@ jobs:
             git log -1 --oneline
           EOF
 
-      - name: Install dependencies
-        run: |
-          echo "📦 Installing dependencies..."
-          ssh -i ~/.ssh/deploy_key \
-            ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
-            cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
-
-            # Backend dependencies
-            cd services/backend && uv sync --no-dev && cd ../..
-
-            # Frontend dependencies
-            cd services/frontend && npm ci --production && cd ../..
-
-            # MCP services (if needed)
-            cd services/mcp-auth && uv sync --no-dev && cd ../..
-            cd services/mcp-resource && uv sync --no-dev && cd ../..
-          EOF
-
       - name: Run database migrations
         if: ${{ !inputs.skip_migrations }}
         run: |
@@ -100,7 +82,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
             cd ${{ secrets.PRODUCTION_DEPLOY_PATH }}
-            make migrate
+            docker compose run --rm backend alembic upgrade head
           EOF
 
       - name: Rebuild and restart services
