@@ -1,16 +1,15 @@
 <script lang="ts">
-	import { onMount, createEventDispatcher } from 'svelte';
+	import { createEventDispatcher } from 'svelte';
 	import { recurringTasks } from '$lib/stores/recurringTasks';
 	import { projects } from '$lib/stores/projects';
 	import { toasts } from '$lib/stores/ui';
 	import { formatDateForInput } from '$lib/utils/dates';
-	import type { RecurringTask, Project, Frequency } from '$lib/types';
+	import type { RecurringTask, Frequency } from '$lib/types';
 
 	export let editingTask: RecurringTask | null = null;
 
 	const dispatch = createEventDispatcher();
 
-	let projectList: Project[] = [];
 	let formData = {
 		project_id: '',
 		title: '',
@@ -28,14 +27,11 @@
 
 	const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+	// Use auto-subscription to avoid memory leaks
+	$: projectList = $projects;
+
 	$: isEditing = editingTask !== null;
 	$: submitButtonText = isEditing ? 'Update Recurring Task' : 'Create Recurring Task';
-
-	onMount(() => {
-		projects.subscribe((p) => {
-			projectList = p;
-		});
-	});
 
 	$: if (editingTask) {
 		formData = {
@@ -81,6 +77,12 @@
 	}
 
 	async function handleSubmit() {
+		// Validate weekly tasks require at least one weekday
+		if (formData.frequency === 'weekly' && formData.weekdays.length === 0) {
+			toasts.show('Please select at least one day for weekly tasks', 'error');
+			return;
+		}
+
 		try {
 			const taskData = {
 				project_id: formData.project_id ? parseInt(formData.project_id) : undefined,

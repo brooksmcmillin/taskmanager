@@ -7,16 +7,15 @@
 
 	let taskModal: RecurringTaskModal;
 	let showInactive = false;
-	let projectMap: Record<number, Project> = {};
 
-	$: {
-		projects.subscribe((p) => {
-			projectMap = {};
-			p.forEach((project) => {
-				projectMap[project.id] = project;
-			});
-		});
-	}
+	// Use auto-subscription with derived value to avoid memory leaks
+	$: projectMap = $projects.reduce(
+		(acc, project) => {
+			acc[project.id] = project;
+			return acc;
+		},
+		{} as Record<number, Project>
+	);
 
 	onMount(async () => {
 		await Promise.all([recurringTasks.load(!showInactive), projects.load()]);

@@ -94,6 +94,12 @@
 	 * Handles form submission for creating or updating a todo
 	 */
 	async function handleSubmit() {
+		// Validate weekly tasks require at least one weekday
+		if (enableRepeat && repeatData.frequency === 'weekly' && repeatData.weekdays.length === 0) {
+			toasts.show('Please select at least one day for weekly tasks', 'error');
+			return;
+		}
+
 		try {
 			const baseData = {
 				project_id: formData.project_id ? parseInt(formData.project_id) : undefined,
