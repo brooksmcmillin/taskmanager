@@ -12,6 +12,8 @@ TaskManager is a full-stack application consisting of:
 - **MCP Resource Server** - MCP tools for AI assistants to manage tasks
 - **Python SDK** - Client library for programmatic API access
 
+![TaskManager Dashboard](docs/screenshots/dashboard-full.png)
+
 ## Architecture
 
 ```
