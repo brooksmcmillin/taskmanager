@@ -378,8 +378,28 @@ async def update_todo(
     if not todo:
         raise errors.todo_not_found()
 
-    # Update fields
+    # Verify parent_id authorization if being updated
     update_data = request.model_dump(exclude_unset=True)
+    if "parent_id" in update_data and update_data["parent_id"] is not None:
+        parent_result = await db.execute(
+            select(Todo).where(
+                Todo.id == update_data["parent_id"],
+                Todo.user_id == user.id,
+                Todo.deleted_at.is_(None),
+            )
+        )
+        parent = parent_result.scalar_one_or_none()
+        if not parent:
+            raise errors.todo_not_found()
+
+        # Prevent nested subtasks (subtasks of subtasks)
+        if parent.parent_id is not None:
+            raise errors.validation(
+                "Cannot create subtasks of subtasks. "
+                "Only one level of nesting is allowed."
+            )
+
+    # Update fields
     for field, value in update_data.items():
         setattr(todo, field, value)
 
@@ -419,7 +439,27 @@ async def bulk_update_todos(
     )
     todos = result.scalars().all()
 
+    # Verify parent_id authorization if being updated
     update_data = request.updates.model_dump(exclude_unset=True)
+    if "parent_id" in update_data and update_data["parent_id"] is not None:
+        parent_result = await db.execute(
+            select(Todo).where(
+                Todo.id == update_data["parent_id"],
+                Todo.user_id == user.id,
+                Todo.deleted_at.is_(None),
+            )
+        )
+        parent = parent_result.scalar_one_or_none()
+        if not parent:
+            raise errors.todo_not_found()
+
+        # Prevent nested subtasks (subtasks of subtasks)
+        if parent.parent_id is not None:
+            raise errors.validation(
+                "Cannot create subtasks of subtasks. "
+                "Only one level of nesting is allowed."
+            )
+
     for todo in todos:
         for field, value in update_data.items():
             setattr(todo, field, value)
