@@ -28,6 +28,7 @@ class TodoCreate(BaseModel):
     tags: list[str] = Field(default_factory=list)
     context: str | None = None
     estimated_hours: float | None = None
+    parent_id: int | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -43,6 +44,7 @@ class TodoUpdate(BaseModel):
     context: str | None = None
     estimated_hours: float | None = None
     actual_hours: float | None = None
+    parent_id: int | None = None
 
 
 class BulkUpdateRequest(BaseModel):
@@ -50,6 +52,23 @@ class BulkUpdateRequest(BaseModel):
 
     ids: list[int]
     updates: TodoUpdate
+
+
+class SubtaskResponse(BaseModel):
+    """Subtask response (simplified todo for nested display)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: str | None
+    priority: Priority
+    status: Status
+    due_date: date | None
+    estimated_hours: float | None
+    actual_hours: float | None
+    created_at: datetime
+    updated_at: datetime | None
 
 
 class TodoResponse(BaseModel):
@@ -70,15 +89,43 @@ class TodoResponse(BaseModel):
     context: str | None
     estimated_hours: float | None
     actual_hours: float | None
+    parent_id: int | None = None
+    subtasks: list[SubtaskResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime | None
 
 
 # Helper functions
+def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
+    """Build SubtaskResponse from Todo model.
+
+    Args:
+        subtask: Todo model instance (child task)
+
+    Returns:
+        SubtaskResponse with all fields populated
+    """
+    return SubtaskResponse(
+        id=subtask.id,
+        title=subtask.title,
+        description=subtask.description,
+        priority=subtask.priority,
+        status=subtask.status,
+        due_date=subtask.due_date,
+        estimated_hours=float(subtask.estimated_hours)
+        if subtask.estimated_hours
+        else None,
+        actual_hours=float(subtask.actual_hours) if subtask.actual_hours else None,
+        created_at=subtask.created_at,
+        updated_at=subtask.updated_at,
+    )
+
+
 def _build_todo_response(
     todo: Todo,
     project_name: str | None = None,
     project_color: str | None = None,
+    subtasks: list[Todo] | None = None,
 ) -> TodoResponse:
     """Build TodoResponse from Todo model with optional project info.
 
@@ -86,10 +133,17 @@ def _build_todo_response(
         todo: Todo model instance
         project_name: Optional project name
         project_color: Optional project color
+        subtasks: Optional list of subtask Todo instances
 
     Returns:
         TodoResponse with all fields populated
     """
+    subtask_responses = []
+    if subtasks:
+        subtask_responses = [
+            _build_subtask_response(s) for s in subtasks if s.deleted_at is None
+        ]
+
     return TodoResponse(
         id=todo.id,
         title=todo.title,
@@ -104,6 +158,8 @@ def _build_todo_response(
         context=todo.context,
         estimated_hours=float(todo.estimated_hours) if todo.estimated_hours else None,
         actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
+        parent_id=todo.parent_id,
+        subtasks=subtask_responses,
         created_at=todo.created_at,
         updated_at=todo.updated_at,
     )
@@ -118,8 +174,15 @@ async def list_todos(
     category: str | None = Query(None),
     start_date: date | None = Query(None),  # noqa: B008
     end_date: date | None = Query(None),  # noqa: B008
+    parent_id: int | None = Query(None),
+    include_subtasks: bool = Query(False),
 ) -> ListResponse[TodoResponse]:
-    """List todos with optional filters."""
+    """List todos with optional filters.
+
+    By default, only returns root-level todos (no parent).
+    Use parent_id to get subtasks of a specific todo.
+    Use include_subtasks=true to include subtasks in the response.
+    """
     query = (
         select(
             Todo,
@@ -130,6 +193,12 @@ async def list_todos(
         .where(Todo.user_id == user.id)
         .where(Todo.deleted_at.is_(None))
     )
+
+    # Filter by parent_id - if not specified, only show root-level todos
+    if parent_id is not None:
+        query = query.where(Todo.parent_id == parent_id)
+    else:
+        query = query.where(Todo.parent_id.is_(None))
 
     # Apply filters
     if status and status != "all":
@@ -160,12 +229,35 @@ async def list_todos(
     result = await db.execute(query)
     rows = result.all()
 
+    # Fetch subtasks for each todo if requested
+    subtasks_map: dict[int, list[Todo]] = {}
+    if include_subtasks:
+        todo_ids = [row[0].id for row in rows]
+        if todo_ids:
+            subtasks_query = (
+                select(Todo)
+                .where(Todo.parent_id.in_(todo_ids))
+                .where(Todo.deleted_at.is_(None))
+                .order_by(Todo.created_at.asc())
+            )
+            subtasks_result = await db.execute(subtasks_query)
+            for subtask in subtasks_result.scalars().all():
+                parent_id = subtask.parent_id
+                if parent_id is not None:
+                    if parent_id not in subtasks_map:
+                        subtasks_map[parent_id] = []
+                    subtasks_map[parent_id].append(subtask)
+
     tasks = []
     for row in rows:
         todo = row[0]
+        subtasks = subtasks_map.get(todo.id, []) if include_subtasks else []
         tasks.append(
             _build_todo_response(
-                todo, project_name=row.project_name, project_color=row.project_color
+                todo,
+                project_name=row.project_name,
+                project_color=row.project_color,
+                subtasks=subtasks,
             )
         )
 
@@ -178,7 +270,23 @@ async def create_todo(
     user: CurrentUser,
     db: DbSession,
 ) -> dict:
-    """Create a new todo."""
+    """Create a new todo or subtask.
+
+    To create a subtask, provide the parent_id of the parent todo.
+    """
+    # Verify parent todo exists and belongs to user if parent_id is provided
+    if request.parent_id:
+        parent_result = await db.execute(
+            select(Todo).where(
+                Todo.id == request.parent_id,
+                Todo.user_id == user.id,
+                Todo.deleted_at.is_(None),
+            )
+        )
+        parent = parent_result.scalar_one_or_none()
+        if not parent:
+            raise errors.todo_not_found()
+
     todo = Todo(
         user_id=user.id,
         title=request.title,
@@ -190,6 +298,7 @@ async def create_todo(
         tags=request.tags,
         context=request.context,
         estimated_hours=request.estimated_hours,
+        parent_id=request.parent_id,
     )
     db.add(todo)
     await db.flush()
@@ -218,7 +327,7 @@ async def get_todo(
     user: CurrentUser,
     db: DbSession,
 ) -> dict:
-    """Get a todo by ID."""
+    """Get a todo by ID with its subtasks."""
     result = await db.execute(
         select(
             Todo,
@@ -234,9 +343,21 @@ async def get_todo(
         raise errors.todo_not_found()
 
     todo = row[0]
+
+    # Fetch subtasks
+    subtasks_result = await db.execute(
+        select(Todo)
+        .where(Todo.parent_id == todo_id, Todo.deleted_at.is_(None))
+        .order_by(Todo.created_at.asc())
+    )
+    subtasks = list(subtasks_result.scalars().all())
+
     return {
         "data": _build_todo_response(
-            todo, project_name=row.project_name, project_color=row.project_color
+            todo,
+            project_name=row.project_name,
+            project_color=row.project_color,
+            subtasks=subtasks,
         )
     }
 
@@ -345,3 +466,92 @@ async def complete_todo(
     todo.completed_date = datetime.now(UTC)
 
     return {"data": {"completed": True}}
+
+
+# Subtask endpoints
+class SubtaskCreate(BaseModel):
+    """Create subtask request (simplified todo creation)."""
+
+    title: str = Field(..., min_length=1, max_length=255)
+    description: str | None = None
+    priority: Priority = Priority.medium
+    due_date: date | None = None
+    estimated_hours: float | None = None
+
+
+@router.get("/{todo_id}/subtasks")
+async def list_subtasks(
+    todo_id: int,
+    user: CurrentUser,
+    db: DbSession,
+) -> ListResponse[SubtaskResponse]:
+    """List all subtasks for a todo."""
+    # Verify parent todo exists and belongs to user
+    parent_result = await db.execute(
+        select(Todo).where(
+            Todo.id == todo_id,
+            Todo.user_id == user.id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    parent = parent_result.scalar_one_or_none()
+    if not parent:
+        raise errors.todo_not_found()
+
+    # Fetch subtasks
+    result = await db.execute(
+        select(Todo)
+        .where(Todo.parent_id == todo_id, Todo.deleted_at.is_(None))
+        .order_by(Todo.created_at.asc())
+    )
+    subtasks = result.scalars().all()
+
+    return ListResponse(
+        data=[_build_subtask_response(s) for s in subtasks],
+        meta={"count": len(subtasks)},
+    )
+
+
+@router.post("/{todo_id}/subtasks", status_code=201)
+async def create_subtask(
+    todo_id: int,
+    request: SubtaskCreate,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Create a subtask for a todo."""
+    # Verify parent todo exists and belongs to user
+    parent_result = await db.execute(
+        select(Todo).where(
+            Todo.id == todo_id,
+            Todo.user_id == user.id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    parent = parent_result.scalar_one_or_none()
+    if not parent:
+        raise errors.todo_not_found()
+
+    # Prevent nested subtasks (subtasks of subtasks)
+    if parent.parent_id is not None:
+        raise errors.validation(
+            "Cannot create subtasks of subtasks. Only one level of nesting is allowed."
+        )
+
+    subtask = Todo(
+        user_id=user.id,
+        title=request.title,
+        description=request.description,
+        priority=request.priority,
+        status=Status.pending,
+        due_date=request.due_date,
+        estimated_hours=request.estimated_hours,
+        parent_id=todo_id,
+        project_id=parent.project_id,  # Inherit project from parent
+        tags=[],
+    )
+    db.add(subtask)
+    await db.flush()
+    await db.refresh(subtask)
+
+    return {"data": _build_subtask_response(subtask)}
