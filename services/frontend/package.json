@@ -18,7 +18,8 @@
 		"test": "playwright test",
 		"test:ui": "playwright test --ui",
 		"test:debug": "playwright test --debug",
-		"test:fail-fast": "playwright test --max-failures=1 --reporter=line"
+		"test:fail-fast": "playwright test --max-failures=1 --reporter=line",
+		"test:screenshots": "playwright test readme-screenshots.spec.ts --config=playwright.screenshots.config.ts --project=chromium"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.40.1",
