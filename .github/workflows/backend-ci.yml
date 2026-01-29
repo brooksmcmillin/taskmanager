@@ -11,6 +11,10 @@ on:
     paths:
       - 'services/backend/**'
       - '.github/workflows/backend-ci.yml'
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: false
 
 jobs:
   test:

@@ -11,6 +11,7 @@ on:
     paths:
       - 'services/frontend/**'
       - '.github/workflows/frontend-ci.yml'
+  workflow_call:
 
 jobs:
   test:
