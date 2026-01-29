@@ -8,6 +8,19 @@ export interface User {
 	created_at: string;
 }
 
+export interface Subtask {
+	id: number;
+	title: string;
+	description: string | null;
+	priority: 'low' | 'medium' | 'high' | 'urgent';
+	status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+	due_date: string | null;
+	estimated_hours: number | null;
+	actual_hours: number | null;
+	created_at: string;
+	updated_at: string | null;
+}
+
 export interface Todo {
 	id: number;
 	project_id: number | null;
@@ -23,6 +36,8 @@ export interface Todo {
 	tags: string[];
 	context: string | null;
 	recurring_task_id: number | null;
+	parent_id: number | null;
+	subtasks: Subtask[];
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;
@@ -58,6 +73,15 @@ export interface TodoCreate {
 	tags?: string[];
 	context?: string;
 	project_id?: number;
+	parent_id?: number;
+}
+
+export interface SubtaskCreate {
+	title: string;
+	description?: string;
+	priority?: string;
+	due_date?: string;
+	estimated_hours?: number;
 }
 
 export interface TodoUpdate extends Partial<TodoCreate> {

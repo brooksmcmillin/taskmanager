@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import type { Todo, TodoFilters, TodoCreate, TodoUpdate } from '$lib/types';
+import type { Todo, TodoFilters, TodoCreate, TodoUpdate, Subtask, SubtaskCreate } from '$lib/types';
 import { api } from '$lib/api/client';
 import { logger } from '$lib/utils/logger';
 
@@ -8,7 +8,7 @@ function createTodoStore() {
 
 	return {
 		subscribe,
-		load: async (filters?: TodoFilters) => {
+		load: async (filters?: TodoFilters & { include_subtasks?: boolean }) => {
 			try {
 				// Convert filter values to strings properly
 				const params = filters
@@ -74,6 +74,75 @@ function createTodoStore() {
 				return response.data;
 			} catch (error) {
 				logger.error('Failed to get todo:', error);
+				throw error;
+			}
+		},
+		// Subtask methods
+		addSubtask: async (todoId: number, subtask: SubtaskCreate): Promise<Subtask> => {
+			try {
+				const response = await api.post<{ data: Subtask }>(
+					`/api/todos/${todoId}/subtasks`,
+					subtask
+				);
+				// Update the parent todo's subtasks in the store
+				update((todos) =>
+					todos.map((t) =>
+						t.id === todoId ? { ...t, subtasks: [...(t.subtasks || []), response.data] } : t
+					)
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to add subtask:', error);
+				throw error;
+			}
+		},
+		completeSubtask: async (todoId: number, subtaskId: number) => {
+			try {
+				await api.post(`/api/todos/${subtaskId}/complete`, {});
+				// Update the subtask status in the store
+				update((todos) =>
+					todos.map((t) =>
+						t.id === todoId
+							? {
+									...t,
+									subtasks: (t.subtasks || []).map((s) =>
+										s.id === subtaskId ? { ...s, status: 'completed' as const } : s
+									)
+								}
+							: t
+					)
+				);
+			} catch (error) {
+				logger.error('Failed to complete subtask:', error);
+				throw error;
+			}
+		},
+		removeSubtask: async (todoId: number, subtaskId: number) => {
+			try {
+				await api.delete(`/api/todos/${subtaskId}`);
+				// Remove the subtask from the store
+				update((todos) =>
+					todos.map((t) =>
+						t.id === todoId
+							? { ...t, subtasks: (t.subtasks || []).filter((s) => s.id !== subtaskId) }
+							: t
+					)
+				);
+			} catch (error) {
+				logger.error('Failed to remove subtask:', error);
+				throw error;
+			}
+		},
+		loadSubtasks: async (todoId: number): Promise<Subtask[]> => {
+			try {
+				const response = await api.get<{ data: Subtask[] }>(`/api/todos/${todoId}/subtasks`);
+				// Update the todo's subtasks in the store
+				update((todos) =>
+					todos.map((t) => (t.id === todoId ? { ...t, subtasks: response.data } : t))
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to load subtasks:', error);
 				throw error;
 			}
 		}

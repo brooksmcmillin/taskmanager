@@ -72,6 +72,9 @@ class Todo(Base):
     recurring_task_id: Mapped[int | None] = mapped_column(
         ForeignKey("recurring_tasks.id", ondelete="SET NULL")
     )
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("todos.id", ondelete="CASCADE")
+    )
     title: Mapped[str] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text)
     priority: Mapped[Priority] = mapped_column(
@@ -102,4 +105,10 @@ class Todo(Base):
     project: Mapped[Project | None] = relationship("Project", back_populates="todos")
     recurring_task: Mapped[RecurringTask | None] = relationship(
         "RecurringTask", back_populates="generated_todos"
+    )
+    parent: Mapped[Todo | None] = relationship(
+        "Todo", remote_side=[id], back_populates="subtasks"
+    )
+    subtasks: Mapped[list[Todo]] = relationship(
+        "Todo", back_populates="parent", cascade="all, delete-orphan"
     )

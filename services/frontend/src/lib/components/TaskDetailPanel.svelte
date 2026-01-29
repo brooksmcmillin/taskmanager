@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import TodoForm from './TodoForm.svelte';
+	import SubtaskList from './SubtaskList.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
 	import { formatDateDisplay } from '$lib/utils/dates';
+	import { todos } from '$lib/stores/todos';
 	import type { Todo } from '$lib/types';
 
 	export let show = false;
@@ -67,6 +69,19 @@
 
 	function switchToView() {
 		mode = 'view';
+	}
+
+	async function handleSubtaskChange() {
+		// Refresh the todo to get updated subtasks
+		if (todo) {
+			try {
+				const updatedTodo = await todos.getById(todo.id);
+				todo = updatedTodo;
+				dispatch('formSuccess');
+			} catch (error) {
+				console.error('Failed to refresh todo:', error);
+			}
+		}
 	}
 
 	$: panelTitle =
@@ -210,6 +225,17 @@
 								>{new Date(todo.completed_date).toLocaleString()}</span
 							>
 						</div>
+					{/if}
+
+					<!-- Subtasks (only show for non-subtask todos) -->
+					{#if !todo.parent_id}
+						<SubtaskList
+							todoId={todo.id}
+							subtasks={todo.subtasks || []}
+							on:subtaskAdded={handleSubtaskChange}
+							on:subtaskCompleted={handleSubtaskChange}
+							on:subtaskDeleted={handleSubtaskChange}
+						/>
 					{/if}
 				</div>
 
