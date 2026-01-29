@@ -2,9 +2,10 @@
 	import { onMount, createEventDispatcher } from 'svelte';
 	import { todos } from '$lib/stores/todos';
 	import { projects } from '$lib/stores/projects';
+	import { recurringTasks } from '$lib/stores/recurringTasks';
 	import { toasts } from '$lib/stores/ui';
 	import { formatDateForInput } from '$lib/utils/dates';
-	import type { Todo, Project } from '$lib/types';
+	import type { Todo, Project, Frequency } from '$lib/types';
 
 	export let editingTodo: Todo | null = null;
 
@@ -20,8 +21,33 @@
 		tags: ''
 	};
 
+	// Repeat/recurring task options
+	let enableRepeat = false;
+	let repeatData = {
+		frequency: 'daily' as Frequency,
+		interval_value: 1,
+		weekdays: [] as number[],
+		day_of_month: 1,
+		end_date: '',
+		skip_missed: true
+	};
+
+	const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+	function toggleWeekday(day: number) {
+		if (repeatData.weekdays.includes(day)) {
+			repeatData.weekdays = repeatData.weekdays.filter((d) => d !== day);
+		} else {
+			repeatData.weekdays = [...repeatData.weekdays, day];
+		}
+	}
+
 	$: isEditing = editingTodo !== null;
-	$: submitButtonText = isEditing ? 'Update Todo' : 'Add Todo';
+	$: submitButtonText = isEditing
+		? 'Update Todo'
+		: enableRepeat
+			? 'Create Recurring Task'
+			: 'Add Todo';
 
 	onMount(() => {
 		projects.subscribe((p) => {
@@ -52,6 +78,15 @@
 			due_date: '',
 			tags: ''
 		};
+		enableRepeat = false;
+		repeatData = {
+			frequency: 'daily' as Frequency,
+			interval_value: 1,
+			weekdays: [],
+			day_of_month: 1,
+			end_date: '',
+			skip_missed: true
+		};
 		editingTodo = null;
 	}
 
@@ -60,20 +95,46 @@
 	 */
 	async function handleSubmit() {
 		try {
-			const todoData = {
+			const baseData = {
 				project_id: formData.project_id ? parseInt(formData.project_id) : undefined,
 				title: formData.title,
 				description: formData.description || undefined,
 				priority: formData.priority,
-				due_date: formData.due_date || undefined,
 				tags: formData.tags ? formData.tags.split(',').map((t) => t.trim()) : undefined,
 				context: 'work'
 			};
 
 			if (isEditing && editingTodo) {
+				// Can't convert existing todo to recurring, just update normally
+				const todoData = {
+					...baseData,
+					due_date: formData.due_date || undefined
+				};
 				await todos.updateTodo(editingTodo.id, todoData);
 				toasts.show('Todo updated successfully', 'success');
+			} else if (enableRepeat) {
+				// Create a recurring task instead
+				const recurringData = {
+					...baseData,
+					frequency: repeatData.frequency,
+					interval_value: repeatData.interval_value,
+					start_date: formData.due_date || new Date().toISOString().split('T')[0],
+					weekdays:
+						repeatData.frequency === 'weekly' && repeatData.weekdays.length > 0
+							? repeatData.weekdays
+							: undefined,
+					day_of_month: repeatData.frequency === 'monthly' ? repeatData.day_of_month : undefined,
+					end_date: repeatData.end_date || undefined,
+					skip_missed: repeatData.skip_missed
+				};
+				await recurringTasks.add(recurringData);
+				toasts.show('Recurring task created successfully', 'success');
 			} else {
+				// Create regular todo
+				const todoData = {
+					...baseData,
+					due_date: formData.due_date || undefined
+				};
 				await todos.add(todoData);
 				toasts.show('Todo created successfully', 'success');
 			}
@@ -82,7 +143,8 @@
 			dispatch('success');
 		} catch (error) {
 			toasts.show(
-				`Error ${isEditing ? 'updating' : 'creating'} todo: ` + (error as Error).message,
+				`Error ${isEditing ? 'updating' : 'creating'} ${enableRepeat ? 'recurring task' : 'todo'}: ` +
+					(error as Error).message,
 				'error'
 			);
 		}
@@ -159,7 +221,7 @@
 
 			<div>
 				<label for="due_date" class="block text-sm font-medium text-gray-700"
-					>Due Date (Optional)</label
+					>{enableRepeat ? 'Start Date' : 'Due Date'} (Optional)</label
 				>
 				<input
 					type="date"
@@ -209,6 +271,120 @@
 					bind:value={formData.description}
 				></textarea>
 			</div>
+
+			<!-- Repeat Options -->
+			{#if !isEditing}
+				<div class="form-full-width repeat-section">
+					<div class="repeat-toggle">
+						<label class="toggle-label">
+							<input type="checkbox" bind:checked={enableRepeat} class="toggle-checkbox" />
+							<span class="toggle-text">Repeat this task</span>
+						</label>
+					</div>
+
+					{#if enableRepeat}
+						<div class="repeat-options">
+							<div class="repeat-grid">
+								<div>
+									<label for="frequency" class="block text-sm font-medium text-gray-700"
+										>Frequency</label
+									>
+									<select id="frequency" class="form-select mt-1" bind:value={repeatData.frequency}>
+										<option value="daily">Daily</option>
+										<option value="weekly">Weekly</option>
+										<option value="monthly">Monthly</option>
+										<option value="yearly">Yearly</option>
+									</select>
+								</div>
+
+								<div>
+									<label for="interval" class="block text-sm font-medium text-gray-700">Every</label
+									>
+									<div class="interval-input">
+										<input
+											type="number"
+											id="interval"
+											min="1"
+											max="365"
+											class="form-input mt-1"
+											bind:value={repeatData.interval_value}
+										/>
+										<span class="interval-label">
+											{repeatData.frequency === 'daily'
+												? 'day(s)'
+												: repeatData.frequency === 'weekly'
+													? 'week(s)'
+													: repeatData.frequency === 'monthly'
+														? 'month(s)'
+														: 'year(s)'}
+										</span>
+									</div>
+								</div>
+
+								{#if repeatData.frequency === 'weekly'}
+									<div class="form-full-width">
+										<label class="block text-sm font-medium text-gray-700 mb-2">On days</label>
+										<div class="weekday-picker">
+											{#each weekdayNames as day, index}
+												<button
+													type="button"
+													class="weekday-btn"
+													class:selected={repeatData.weekdays.includes(index)}
+													on:click={() => toggleWeekday(index)}
+												>
+													{day}
+												</button>
+											{/each}
+										</div>
+									</div>
+								{/if}
+
+								{#if repeatData.frequency === 'monthly'}
+									<div>
+										<label for="day_of_month" class="block text-sm font-medium text-gray-700"
+											>Day of month</label
+										>
+										<input
+											type="number"
+											id="day_of_month"
+											min="1"
+											max="31"
+											class="form-input mt-1"
+											bind:value={repeatData.day_of_month}
+										/>
+									</div>
+								{/if}
+
+								<div>
+									<label for="end_date" class="block text-sm font-medium text-gray-700"
+										>End Date (Optional)</label
+									>
+									<input
+										type="date"
+										id="end_date"
+										class="form-input mt-1"
+										bind:value={repeatData.end_date}
+									/>
+								</div>
+
+								<div class="skip-missed-toggle">
+									<label class="toggle-label">
+										<input
+											type="checkbox"
+											bind:checked={repeatData.skip_missed}
+											class="toggle-checkbox"
+										/>
+										<span class="toggle-text">Skip missed occurrences</span>
+									</label>
+									<p class="text-xs text-gray-500 mt-1">
+										If enabled, only the next occurrence will be created
+									</p>
+								</div>
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		<div class="form-submit">
@@ -236,3 +412,128 @@
 		</div>
 	</form>
 </div>
+
+<style>
+	.repeat-section {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px solid #e5e7eb;
+	}
+
+	.repeat-toggle {
+		margin-bottom: 1rem;
+	}
+
+	.toggle-label {
+		display: flex;
+		align-items: center;
+		cursor: pointer;
+	}
+
+	.toggle-checkbox {
+		width: 1.25rem;
+		height: 1.25rem;
+		margin-right: 0.5rem;
+		accent-color: #2563eb;
+	}
+
+	.toggle-text {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: #374151;
+	}
+
+	.repeat-options {
+		background-color: #f9fafb;
+		border-radius: 0.5rem;
+		padding: 1rem;
+	}
+
+	.repeat-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1rem;
+	}
+
+	.repeat-grid .form-full-width {
+		grid-column: span 2;
+	}
+
+	.interval-input {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.interval-input input {
+		width: 5rem;
+	}
+
+	.interval-label {
+		font-size: 0.875rem;
+		color: #6b7280;
+	}
+
+	.weekday-picker {
+		display: flex;
+		gap: 0.25rem;
+		flex-wrap: wrap;
+	}
+
+	.weekday-btn {
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #d1d5db;
+		border-radius: 0.375rem;
+		background-color: white;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: #374151;
+		cursor: pointer;
+		transition: all 0.15s ease-in-out;
+	}
+
+	.weekday-btn:hover {
+		border-color: #2563eb;
+		color: #2563eb;
+	}
+
+	.weekday-btn.selected {
+		background-color: #2563eb;
+		border-color: #2563eb;
+		color: white;
+	}
+
+	.skip-missed-toggle {
+		grid-column: span 2;
+	}
+
+	/* Dark mode support */
+	:global(.dark) .repeat-options {
+		background-color: #1f2937;
+	}
+
+	:global(.dark) .toggle-text {
+		color: #d1d5db;
+	}
+
+	:global(.dark) .weekday-btn {
+		background-color: #374151;
+		border-color: #4b5563;
+		color: #d1d5db;
+	}
+
+	:global(.dark) .weekday-btn:hover {
+		border-color: #60a5fa;
+		color: #60a5fa;
+	}
+
+	:global(.dark) .weekday-btn.selected {
+		background-color: #2563eb;
+		border-color: #2563eb;
+		color: white;
+	}
+
+	:global(.dark) .interval-label {
+		color: #9ca3af;
+	}
+</style>
