@@ -58,6 +58,11 @@
 						<a href="/projects" class="nav-link" class:active={currentPath === '/projects'}
 							>Projects</a
 						>
+						<a
+							href="/recurring-tasks"
+							class="nav-link"
+							class:active={currentPath === '/recurring-tasks'}>Recurring</a
+						>
 
 						<!-- News Dropdown -->
 						<div

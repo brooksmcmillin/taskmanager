@@ -22,6 +22,7 @@ export interface Todo {
 	actual_hours: number | null;
 	tags: string[];
 	context: string | null;
+	recurring_task_id: number | null;
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;
@@ -124,6 +125,51 @@ export interface FeedSource {
 	last_fetched_at: string | null;
 	quality_score: number;
 	created_at: string;
+}
+
+export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+export interface RecurringTask {
+	id: number;
+	title: string;
+	frequency: Frequency;
+	interval_value: number;
+	weekdays: number[] | null;
+	day_of_month: number | null;
+	start_date: string;
+	end_date: string | null;
+	next_due_date: string;
+	project_id: number | null;
+	description: string | null;
+	priority: 'low' | 'medium' | 'high' | 'urgent';
+	estimated_hours: number | null;
+	tags: string[];
+	context: string | null;
+	skip_missed: boolean;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string | null;
+}
+
+export interface RecurringTaskCreate {
+	title: string;
+	frequency: Frequency;
+	start_date: string;
+	interval_value?: number;
+	weekdays?: number[];
+	day_of_month?: number;
+	end_date?: string;
+	project_id?: number;
+	description?: string;
+	priority?: string;
+	estimated_hours?: number;
+	tags?: string[];
+	context?: string;
+	skip_missed?: boolean;
+}
+
+export interface RecurringTaskUpdate extends Partial<RecurringTaskCreate> {
+	is_active?: boolean;
 }
 
 export interface ApiResponse<T> {
