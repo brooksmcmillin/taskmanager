@@ -36,6 +36,35 @@ TASKMANAGER_URL = os.environ.get("TASKMANAGER_OAUTH_HOST", "http://localhost:432
 USERNAME = os.environ.get("TASKMANAGER_USERNAME", CLIENT_ID)
 PASSWORD = os.environ.get("TASKMANAGER_PASSWORD", CLIENT_SECRET)
 
+# CORS allowed origins for OAuth discovery endpoints
+# Parse from comma-separated environment variable, or use empty list to block all origins
+ALLOWED_MCP_ORIGINS = (
+    os.getenv("ALLOWED_MCP_ORIGINS", "").split(",") if os.getenv("ALLOWED_MCP_ORIGINS") else []
+)
+# Remove empty strings and strip whitespace
+ALLOWED_MCP_ORIGINS = [origin.strip() for origin in ALLOWED_MCP_ORIGINS if origin.strip()]
+
+
+def get_cors_origin(request: Request) -> str:
+    """
+    Get CORS origin header value based on request origin.
+
+    Only returns the origin if it's in the allowed list, otherwise returns empty string
+    to deny CORS access.
+
+    Args:
+        request: The incoming request
+
+    Returns:
+        Origin value for Access-Control-Allow-Origin header
+    """
+    request_origin = request.headers.get("origin", "")
+    if request_origin in ALLOWED_MCP_ORIGINS:
+        return request_origin
+    # If no allowed origins configured, deny all CORS (return empty string)
+    # If origin not in allowed list, deny (return empty string)
+    return ""
+
 
 def get_api_client() -> TaskManagerClient:
     """Get API client for authenticated user.
@@ -98,11 +127,14 @@ def create_resource_server(
     # Create FastMCP server with OAuth-protected endpoints
     # Use public auth server URL for OAuth flows
     # Configure transport_security to allow requests from the public hostname
+    # Debug mode controlled by DEBUG environment variable
+    debug_mode = os.getenv("DEBUG", "false").lower() == "true"
+
     app = FastMCP(
         name="TaskManager MCP Server",
         instructions="TaskManager MCP Server with OAuth-protected tools and resources",
         port=port,
-        debug=True,
+        debug=debug_mode,
         token_verifier=token_verifier,
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(auth_server_public_url),
@@ -145,12 +177,12 @@ def create_resource_server(
     @app.custom_route("/.well-known/openid-configuration", methods=["GET", "OPTIONS"])
     async def openid_configuration(request: Request) -> JSONResponse:
         """OpenID Connect Discovery (aliases to OAuth Authorization Server Metadata)"""
-        # Handle CORS preflight
+        # Handle CORS preflight with origin validation
         if request.method == "OPTIONS":
             return JSONResponse(
                 {},
                 headers={
-                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Origin": get_cors_origin(request),
                     "Access-Control-Allow-Methods": "GET, OPTIONS",
                     "Access-Control-Allow-Headers": "*",
                 },
@@ -178,7 +210,7 @@ def create_resource_server(
                 "code_challenge_methods_supported": ["S256"],
             },
             headers={
-                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Origin": get_cors_origin(request),
                 "Access-Control-Allow-Methods": "GET, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
             },
@@ -187,12 +219,12 @@ def create_resource_server(
     @app.custom_route("/.well-known/oauth-authorization-server", methods=["GET", "OPTIONS"])
     async def oauth_authorization_server_metadata(request: Request) -> JSONResponse:
         """OAuth 2.0 Authorization Server Metadata (RFC 8414)"""
-        # Handle CORS preflight
+        # Handle CORS preflight with origin validation
         if request.method == "OPTIONS":
             return JSONResponse(
                 {},
                 headers={
-                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Origin": get_cors_origin(request),
                     "Access-Control-Allow-Methods": "GET, OPTIONS",
                     "Access-Control-Allow-Headers": "*",
                 },
@@ -223,7 +255,7 @@ def create_resource_server(
                 "code_challenge_methods_supported": ["S256"],
             },
             headers={
-                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Origin": get_cors_origin(request),
                 "Access-Control-Allow-Methods": "GET, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
             },
