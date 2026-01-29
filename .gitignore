@@ -11,6 +11,14 @@ build/
 .venv/
 .pytest_cache/
 
+# Test coverage
+.coverage
+.coverage.*
+coverage.json
+htmlcov/
+.nyc_output/
+coverage/
+
 # dependencies
 node_modules/
 
