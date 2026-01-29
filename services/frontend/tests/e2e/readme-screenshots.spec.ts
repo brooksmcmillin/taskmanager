@@ -1,7 +1,8 @@
 /**
- * Screenshot Generation for README
+ * Screenshot Generation for README (MANUAL ONLY - NOT RUN IN CI)
  *
  * This test file generates screenshots of key UI screens for documentation.
+ * It is excluded from CI tests (see testIgnore in playwright.config.ts).
  *
  * Prerequisites:
  * - Frontend dev server running on https://localhost (npm run dev)

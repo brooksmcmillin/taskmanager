@@ -25,6 +25,7 @@ const config: PlaywrightTestConfig = {
 	],
 	testDir: 'tests/e2e',
 	testMatch: /(.+\.)?(test|spec)\.[jt]s/,
+	testIgnore: '**/readme-screenshots.spec.ts',
 	use: {
 		baseURL: 'http://localhost:4173',
 		trace: 'retain-on-failure',

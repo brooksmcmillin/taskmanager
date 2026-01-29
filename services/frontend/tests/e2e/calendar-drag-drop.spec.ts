@@ -41,6 +41,10 @@ test.describe('Calendar Drag and Drop', () => {
 	});
 
 	test('should highlight today', async ({ page }) => {
+		// Wait for calendar to be fully rendered
+		await page.waitForSelector('.calendar-container', { state: 'visible' });
+		await page.waitForLoadState('networkidle');
+
 		// Find today's date cell using local date (not UTC)
 		const today = new Date();
 		const year = today.getFullYear();
