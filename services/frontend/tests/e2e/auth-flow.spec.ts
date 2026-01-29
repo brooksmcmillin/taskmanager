@@ -92,7 +92,13 @@ test.describe('Authentication Flow', () => {
 		await page.fill('[name=password]', 'TestPass123!');
 		await page.click('button[type=submit]');
 
-		// Wait for navigation to load with user data and logout button to appear
+		// Wait for navigation to load
+		await page.waitForURL('/', { timeout: 10000 });
+
+		// Click user profile icon to open dropdown
+		await page.click('.user-dropdown-trigger');
+
+		// Wait for logout button to appear in dropdown
 		await page.waitForSelector('[data-testid=logout-button]', { timeout: 10000 });
 
 		// Click logout button
