@@ -47,6 +47,7 @@ test_output.txt
 *.key
 *.pem
 *.cert
+*.crt
 security-report*.txt
 *-audit-report.txt
 vulnerability-report/
