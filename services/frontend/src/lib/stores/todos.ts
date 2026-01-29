@@ -1,6 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import type { Todo, TodoFilters, TodoCreate, TodoUpdate } from '$lib/types';
 import { api } from '$lib/api/client';
+import { logger } from '$lib/utils/logger';
 
 function createTodoStore() {
 	const { subscribe, set, update } = writable<Todo[]>([]);
@@ -23,7 +24,7 @@ function createTodoStore() {
 				});
 				set(response.data || []);
 			} catch (error) {
-				console.error('Failed to load todos:', error);
+				logger.error('Failed to load todos:', error);
 				throw error;
 			}
 		},
@@ -33,7 +34,7 @@ function createTodoStore() {
 				update((todos) => [...todos, created.data]);
 				return created.data;
 			} catch (error) {
-				console.error('Failed to add todo:', error);
+				logger.error('Failed to add todo:', error);
 				throw error;
 			}
 		},
@@ -43,7 +44,7 @@ function createTodoStore() {
 				update((todos) => todos.map((t) => (t.id === id ? updated.data : t)));
 				return updated.data;
 			} catch (error) {
-				console.error('Failed to update todo:', error);
+				logger.error('Failed to update todo:', error);
 				throw error;
 			}
 		},
@@ -54,7 +55,7 @@ function createTodoStore() {
 					todos.map((t) => (t.id === id ? { ...t, status: 'completed' as const } : t))
 				);
 			} catch (error) {
-				console.error('Failed to complete todo:', error);
+				logger.error('Failed to complete todo:', error);
 				throw error;
 			}
 		},
@@ -63,7 +64,7 @@ function createTodoStore() {
 				await api.delete(`/api/todos/${id}`);
 				update((todos) => todos.filter((t) => t.id !== id));
 			} catch (error) {
-				console.error('Failed to remove todo:', error);
+				logger.error('Failed to remove todo:', error);
 				throw error;
 			}
 		},
@@ -72,7 +73,7 @@ function createTodoStore() {
 				const response = await api.get<{ data: Todo }>(`/api/todos/${id}`);
 				return response.data;
 			} catch (error) {
-				console.error('Failed to get todo:', error);
+				logger.error('Failed to get todo:', error);
 				throw error;
 			}
 		}

@@ -1,5 +1,6 @@
 import type { LayoutServerLoad } from './$types';
 import { env } from '$env/dynamic/private';
+import { logger } from '$lib/utils/logger';
 
 const BACKEND_URL = env.BACKEND_URL || 'http://localhost:8000';
 
@@ -28,7 +29,7 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
 			return { user: data.user };
 		}
 	} catch (error) {
-		console.error('Failed to verify session:', error);
+		logger.error('Failed to verify session:', error);
 	}
 
 	return { user: null };

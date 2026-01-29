@@ -78,25 +78,44 @@ async def get_optional_user(
 OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 
 
-async def get_current_user_oauth(
-    request: Request,
-    db: DbSession,
-) -> User:
-    """Get current authenticated user from OAuth Bearer token."""
+# OAuth token validation helpers
+async def _extract_bearer_token(request: Request) -> str:
+    """Extract Bearer token from Authorization header.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        The Bearer token string
+
+    Raises:
+        HTTPException: If Authorization header is missing or invalid
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise errors.auth_required()
+    return auth_header.replace("Bearer ", "")
+
+
+async def _validate_access_token(db: DbSession, token: str):
+    """Validate access token and return the token object.
+
+    Args:
+        db: Database session
+        token: Access token string
+
+    Returns:
+        AccessToken model instance
+
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
     from datetime import datetime
 
     from sqlalchemy import select
 
     from app.models.oauth import AccessToken
 
-    # Extract Bearer token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise errors.auth_required()
-
-    token = auth_header.replace("Bearer ", "")
-
-    # Validate access token
     result = await db.execute(
         select(AccessToken)
         .where(AccessToken.token == token)
@@ -106,6 +125,20 @@ async def get_current_user_oauth(
 
     if not access_token:
         raise errors.invalid_token()
+
+    return access_token
+
+
+async def get_current_user_oauth(
+    request: Request,
+    db: DbSession,
+) -> User:
+    """Get current authenticated user from OAuth Bearer token."""
+    from sqlalchemy import select
+
+    # Extract and validate token
+    token = await _extract_bearer_token(request)
+    access_token = await _validate_access_token(db, token)
 
     # Client credentials grants don't have a user_id
     if not access_token.user_id:
@@ -133,29 +166,9 @@ async def validate_client_credentials_token(
     This validates machine-to-machine tokens that don't have a user_id.
     Returns the client_id associated with the token.
     """
-    from datetime import datetime
-
-    from sqlalchemy import select
-
-    from app.models.oauth import AccessToken
-
-    # Extract Bearer token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise errors.auth_required()
-
-    token = auth_header.replace("Bearer ", "")
-
-    # Validate access token
-    result = await db.execute(
-        select(AccessToken)
-        .where(AccessToken.token == token)
-        .where(AccessToken.expires_at > datetime.now(UTC))
-    )
-    access_token = result.scalar_one_or_none()
-
-    if not access_token:
-        raise errors.invalid_token()
+    # Extract and validate token
+    token = await _extract_bearer_token(request)
+    access_token = await _validate_access_token(db, token)
 
     # Client credentials grants have client_id but no user_id
     if access_token.user_id is not None:

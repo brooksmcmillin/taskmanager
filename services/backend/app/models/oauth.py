@@ -77,8 +77,10 @@ class AccessToken(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    # Refresh token
-    refresh_token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    # Refresh token (nullable for client credentials grants)
+    refresh_token: Mapped[str | None] = mapped_column(
+        String(255), unique=True, index=True, nullable=True
+    )
     refresh_token_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )

@@ -4,7 +4,41 @@ Note: Most schemas are defined inline in their API modules for simplicity.
 This module contains shared schemas used across multiple endpoints.
 """
 
+from typing import Generic, TypeVar
+
 from pydantic import BaseModel
+
+# Generic type variable for response data
+T = TypeVar("T")
+
+
+class ListResponse(BaseModel, Generic[T]):
+    """Generic list response with data and metadata.
+
+    Use this for any endpoint that returns a list of items with metadata.
+
+    Example:
+        @router.get("")
+        async def list_items(...) -> ListResponse[ItemResponse]:
+            return ListResponse(data=items, meta={"count": len(items)})
+    """
+
+    data: list[T]
+    meta: dict
+
+
+class DataResponse(BaseModel, Generic[T]):
+    """Generic single item response.
+
+    Use this for any endpoint that returns a single item wrapped in a data field.
+
+    Example:
+        @router.post("")
+        async def create_item(...) -> DataResponse[ItemResponse]:
+            return DataResponse(data=item)
+    """
+
+    data: T
 
 
 class MessageResponse(BaseModel):

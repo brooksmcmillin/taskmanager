@@ -10,6 +10,7 @@ from app.core.errors import errors
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
 from app.models.todo import Priority, Status, Todo
+from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/todos", tags=["todos"])
 
@@ -73,11 +74,39 @@ class TodoResponse(BaseModel):
     updated_at: datetime | None
 
 
-class TodoListResponse(BaseModel):
-    """Todo list response."""
+# Helper functions
+def _build_todo_response(
+    todo: Todo,
+    project_name: str | None = None,
+    project_color: str | None = None,
+) -> TodoResponse:
+    """Build TodoResponse from Todo model with optional project info.
 
-    data: list[TodoResponse]
-    meta: dict
+    Args:
+        todo: Todo model instance
+        project_name: Optional project name
+        project_color: Optional project color
+
+    Returns:
+        TodoResponse with all fields populated
+    """
+    return TodoResponse(
+        id=todo.id,
+        title=todo.title,
+        description=todo.description,
+        priority=todo.priority,
+        status=todo.status,
+        due_date=todo.due_date,
+        project_id=todo.project_id,
+        project_name=project_name,
+        project_color=project_color,
+        tags=todo.tags or [],
+        context=todo.context,
+        estimated_hours=float(todo.estimated_hours) if todo.estimated_hours else None,
+        actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
+        created_at=todo.created_at,
+        updated_at=todo.updated_at,
+    )
 
 
 @router.get("")
@@ -89,7 +118,7 @@ async def list_todos(
     category: str | None = Query(None),
     start_date: date | None = Query(None),  # noqa: B008
     end_date: date | None = Query(None),  # noqa: B008
-) -> TodoListResponse:
+) -> ListResponse[TodoResponse]:
     """List todos with optional filters."""
     query = (
         select(
@@ -135,28 +164,12 @@ async def list_todos(
     for row in rows:
         todo = row[0]
         tasks.append(
-            TodoResponse(
-                id=todo.id,
-                title=todo.title,
-                description=todo.description,
-                priority=todo.priority,
-                status=todo.status,
-                due_date=todo.due_date,
-                project_id=todo.project_id,
-                project_name=row.project_name,
-                project_color=row.project_color,
-                tags=todo.tags or [],
-                context=todo.context,
-                estimated_hours=float(todo.estimated_hours)
-                if todo.estimated_hours
-                else None,
-                actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
-                created_at=todo.created_at,
-                updated_at=todo.updated_at,
+            _build_todo_response(
+                todo, project_name=row.project_name, project_color=row.project_color
             )
         )
 
-    return TodoListResponse(data=tasks, meta={"count": len(tasks)})
+    return ListResponse(data=tasks, meta={"count": len(tasks)})
 
 
 @router.post("", status_code=201)
@@ -196,27 +209,7 @@ async def create_todo(
             project_name = project.name
             project_color = project.color
 
-    return {
-        "data": TodoResponse(
-            id=todo.id,
-            title=todo.title,
-            description=todo.description,
-            priority=todo.priority,
-            status=todo.status,
-            due_date=todo.due_date,
-            project_id=todo.project_id,
-            project_name=project_name,
-            project_color=project_color,
-            tags=todo.tags or [],
-            context=todo.context,
-            estimated_hours=(
-                float(todo.estimated_hours) if todo.estimated_hours else None
-            ),
-            actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
-            created_at=todo.created_at,
-            updated_at=todo.updated_at,
-        )
-    }
+    return {"data": _build_todo_response(todo, project_name, project_color)}
 
 
 @router.get("/{todo_id}")
@@ -242,24 +235,8 @@ async def get_todo(
 
     todo = row[0]
     return {
-        "data": TodoResponse(
-            id=todo.id,
-            title=todo.title,
-            description=todo.description,
-            priority=todo.priority,
-            status=todo.status,
-            due_date=todo.due_date,
-            project_id=todo.project_id,
-            project_name=row.project_name,
-            project_color=row.project_color,
-            tags=todo.tags or [],
-            context=todo.context,
-            estimated_hours=float(todo.estimated_hours)
-            if todo.estimated_hours
-            else None,
-            actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
-            created_at=todo.created_at,
-            updated_at=todo.updated_at,
+        "data": _build_todo_response(
+            todo, project_name=row.project_name, project_color=row.project_color
         )
     }
 
@@ -306,27 +283,7 @@ async def update_todo(
             project_color = project.color
 
     # Return full todo object
-    return {
-        "data": TodoResponse(
-            id=todo.id,
-            title=todo.title,
-            description=todo.description,
-            priority=todo.priority,
-            status=todo.status,
-            due_date=todo.due_date,
-            project_id=todo.project_id,
-            project_name=project_name,
-            project_color=project_color,
-            tags=todo.tags or [],
-            context=todo.context,
-            estimated_hours=float(todo.estimated_hours)
-            if todo.estimated_hours
-            else None,
-            actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
-            created_at=todo.created_at,
-            updated_at=todo.updated_at,
-        )
-    }
+    return {"data": _build_todo_response(todo, project_name, project_color)}
 
 
 @router.put("")
