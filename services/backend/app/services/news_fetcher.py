@@ -44,6 +44,26 @@ SECURITY_KEYWORDS = [
 ]
 
 
+def parse_feed_datetime(time_tuple) -> datetime:
+    """Convert feedparser time tuple to UTC datetime.
+
+    Args:
+        time_tuple: Feedparser time.struct_time (9-element tuple)
+
+    Returns:
+        Timezone-aware datetime in UTC
+    """
+    return datetime(
+        int(time_tuple[0]),  # year
+        int(time_tuple[1]),  # month
+        int(time_tuple[2]),  # day
+        int(time_tuple[3]),  # hour
+        int(time_tuple[4]),  # minute
+        int(time_tuple[5]),  # second
+        tzinfo=UTC,
+    )
+
+
 def article_matches_keywords(
     title: str, summary: str, content: str
 ) -> tuple[bool, list[str]]:
@@ -94,27 +114,9 @@ async def fetch_feed(feed_source: FeedSource, db: AsyncSession) -> int:
             # Parse published date
             published_at = None
             if hasattr(entry, "published_parsed") and entry.published_parsed:
-                time_tuple = entry.published_parsed  # type: ignore
-                published_at = datetime(
-                    int(time_tuple[0]),  # year  # type: ignore
-                    int(time_tuple[1]),  # month  # type: ignore
-                    int(time_tuple[2]),  # day  # type: ignore
-                    int(time_tuple[3]),  # hour  # type: ignore
-                    int(time_tuple[4]),  # minute  # type: ignore
-                    int(time_tuple[5]),  # second  # type: ignore
-                    tzinfo=UTC,
-                )
+                published_at = parse_feed_datetime(entry.published_parsed)  # type: ignore
             elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                time_tuple = entry.updated_parsed  # type: ignore
-                published_at = datetime(
-                    int(time_tuple[0]),  # year  # type: ignore
-                    int(time_tuple[1]),  # month  # type: ignore
-                    int(time_tuple[2]),  # day  # type: ignore
-                    int(time_tuple[3]),  # hour  # type: ignore
-                    int(time_tuple[4]),  # minute  # type: ignore
-                    int(time_tuple[5]),  # second  # type: ignore
-                    tzinfo=UTC,
-                )
+                published_at = parse_feed_datetime(entry.updated_parsed)  # type: ignore
 
             # Check if article already exists
             stmt = select(Article).where(Article.url == url)
