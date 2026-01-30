@@ -62,3 +62,6 @@ vulnerability-report/
 .scannerwork/
 
 db/certs/
+
+# File uploads
+uploads/

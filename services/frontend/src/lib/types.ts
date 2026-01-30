@@ -8,6 +8,15 @@ export interface User {
 	created_at: string;
 }
 
+export interface Attachment {
+	id: number;
+	todo_id: number;
+	filename: string;
+	content_type: string;
+	file_size: number;
+	created_at: string;
+}
+
 export interface Subtask {
 	id: number;
 	title: string;
@@ -38,6 +47,7 @@ export interface Todo {
 	recurring_task_id: number | null;
 	parent_id: number | null;
 	subtasks: Subtask[];
+	attachments?: Attachment[];
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;

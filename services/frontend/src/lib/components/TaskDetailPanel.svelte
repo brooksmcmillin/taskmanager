@@ -2,6 +2,7 @@
 	import { createEventDispatcher } from 'svelte';
 	import TodoForm from './TodoForm.svelte';
 	import SubtaskList from './SubtaskList.svelte';
+	import AttachmentList from './AttachmentList.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { todos } from '$lib/stores/todos';
@@ -237,6 +238,9 @@
 							on:subtaskDeleted={handleSubtaskChange}
 						/>
 					{/if}
+
+					<!-- Attachments -->
+					<AttachmentList todoId={todo.id} attachments={todo.attachments || []} />
 				</div>
 
 				<!-- Actions -->

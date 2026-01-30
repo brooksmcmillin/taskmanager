@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 
 if TYPE_CHECKING:
+    from app.models.attachment import Attachment
     from app.models.project import Project
     from app.models.recurring_task import RecurringTask
     from app.models.user import User
@@ -111,4 +112,7 @@ class Todo(Base):
     )
     subtasks: Mapped[list[Todo]] = relationship(
         "Todo", back_populates="parent", cascade="all, delete-orphan"
+    )
+    attachments: Mapped[list[Attachment]] = relationship(
+        "Attachment", back_populates="todo", cascade="all, delete-orphan"
     )

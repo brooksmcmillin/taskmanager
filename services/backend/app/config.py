@@ -98,6 +98,26 @@ class Settings(BaseSettings):
     max_project_name_length: int = 100
     max_todo_title_length: int = 255
 
+    # File uploads
+    upload_dir: str = "./uploads"
+    max_upload_size_mb: int = 10
+    allowed_image_types: str = "image/jpeg,image/png,image/gif,image/webp"
+
+    @property
+    def upload_path(self) -> Path:
+        """Get the upload directory as a Path object."""
+        return Path(self.upload_dir)
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        """Get max upload size in bytes."""
+        return self.max_upload_size_mb * 1024 * 1024
+
+    @property
+    def allowed_image_types_list(self) -> list[str]:
+        """Parse allowed image types from comma-separated string."""
+        return [t.strip() for t in self.allowed_image_types.split(",") if t.strip()]
+
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":
         """Validate that secret key is not the default value in production."""

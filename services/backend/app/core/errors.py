@@ -205,6 +205,11 @@ class Errors:
         """NOT_FOUND_007: Registration code not found."""
         return ApiError("NOT_FOUND_007", 404, "Registration code not found")
 
+    @staticmethod
+    def attachment_not_found() -> ApiError:
+        """NOT_FOUND_008: Attachment not found."""
+        return ApiError("NOT_FOUND_008", 404, "Attachment not found")
+
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
     # =========================================================================
@@ -325,6 +330,35 @@ class Errors:
     def service_unavailable() -> ApiError:
         """SERVER_003: Service unavailable."""
         return ApiError("SERVER_003", 503, "Service temporarily unavailable")
+
+    # =========================================================================
+    # Upload Errors (UPLOAD_001 - UPLOAD_003)
+    # =========================================================================
+
+    @staticmethod
+    def file_too_large(max_size_mb: int) -> ApiError:
+        """UPLOAD_001: File exceeds maximum size."""
+        return ApiError(
+            "UPLOAD_001",
+            413,
+            f"File exceeds maximum size of {max_size_mb}MB",
+            {"max_size_mb": max_size_mb},
+        )
+
+    @staticmethod
+    def invalid_file_type(allowed_types: list[str]) -> ApiError:
+        """UPLOAD_002: Invalid file type."""
+        return ApiError(
+            "UPLOAD_002",
+            415,
+            f"Invalid file type. Allowed: {', '.join(allowed_types)}",
+            {"allowed_types": allowed_types},
+        )
+
+    @staticmethod
+    def upload_failed() -> ApiError:
+        """UPLOAD_003: File upload failed."""
+        return ApiError("UPLOAD_003", 500, "File upload failed")
 
 
 errors = Errors()

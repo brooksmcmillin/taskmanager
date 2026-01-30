@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    attachments,
     auth,
     categories,
     news,
@@ -27,6 +28,8 @@ from app.services.scheduler import start_scheduler, stop_scheduler
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler."""
     await init_db()
+    # Ensure upload directory exists
+    settings.upload_path.mkdir(parents=True, exist_ok=True)
     start_scheduler()
     yield
     stop_scheduler()
@@ -58,6 +61,7 @@ app.include_router(trash.router)
 app.include_router(recurring_tasks.router)
 app.include_router(registration_codes.router)
 app.include_router(news.router)
+app.include_router(attachments.router)
 app.include_router(authorize.router)
 app.include_router(token.router)
 app.include_router(clients.router)
