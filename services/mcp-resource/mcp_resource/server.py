@@ -312,27 +312,6 @@ def create_resource_server(
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
-    async def get_time() -> dict[str, Any]:
-        """
-        Get the current server time.
-
-        This tool demonstrates that system information can be protected
-        by OAuth authentication. User must be authenticated to access it.
-        """
-        # This tool is protected by OAuth authentication at the transport level
-        # All requests to /mcp require a valid Bearer token
-
-        now = datetime.datetime.now()
-
-        return {
-            "current_time": now.isoformat(),
-            "timezone": "UTC",  # Simplified for demo
-            "timestamp": now.timestamp(),
-            "formatted": now.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
     async def check_task_system_status() -> dict[str, Any]:
         """
         Check the health and operational status of the task management backend.
@@ -451,6 +430,7 @@ def create_resource_server(
             "projects_service": checks.get("projects_service", {}),
             "tasks_service": checks.get("tasks_service", {}),
             "timestamp": now.isoformat(),
+            "current_time": now.isoformat(),
             "message": message,
         }
 
@@ -462,6 +442,7 @@ def create_resource_server(
         end_date: str | None = None,
         category: str | None = None,
         limit: int | None = None,
+        include_subtasks: bool = True,
     ) -> str:
         """
         Retrieve tasks with filtering options.
@@ -472,14 +453,15 @@ def create_resource_server(
             end_date: Filter tasks with due date on or before this date (ISO format, e.g., "2025-12-20")
             category: Filter by category/project name
             limit: Maximum number of tasks to return
+            include_subtasks: Whether to include subtasks in the response (default: True)
 
         Returns:
             JSON object with "tasks" array containing task objects with fields:
-            id, title, description, due_date, status, category, priority, tags, created_at, updated_at
+            id, title, description, due_date, status, category, priority, tags, parent_id, subtasks, created_at, updated_at
         """
         logger.info(
             f"=== get_tasks called: status={status}, start_date={start_date}, "
-            f"end_date={end_date}, category={category}, limit={limit} ==="
+            f"end_date={end_date}, category={category}, limit={limit}, include_subtasks={include_subtasks} ==="
         )
         try:
             api_client = get_api_client()
@@ -492,6 +474,7 @@ def create_resource_server(
                 end_date=end_date,
                 category=category,
                 limit=limit,
+                include_subtasks=include_subtasks,
             )
             logger.info(
                 f"get_todos response: success={response.success}, status={response.status_code}"
@@ -510,6 +493,26 @@ def create_resource_server(
                 task_id = task.get("id")
                 if task_id is None:
                     continue  # Skip tasks without valid ID
+
+                # Transform subtasks if present
+                subtasks_list = []
+                if task.get("subtasks"):
+                    for subtask in task["subtasks"]:
+                        subtasks_list.append(
+                            {
+                                "id": f"task_{subtask.get('id')}",
+                                "title": subtask.get("title", ""),
+                                "description": subtask.get("description"),
+                                "status": subtask.get("status", "pending"),
+                                "priority": subtask.get("priority", "medium"),
+                                "due_date": subtask.get("due_date"),
+                                "estimated_hours": subtask.get("estimated_hours"),
+                                "actual_hours": subtask.get("actual_hours"),
+                                "created_at": subtask.get("created_at"),
+                                "updated_at": subtask.get("updated_at"),
+                            }
+                        )
+
                 result_tasks.append(
                     {
                         "id": f"task_{task_id}",
@@ -520,13 +523,22 @@ def create_resource_server(
                         "category": task.get("project_name") or task.get("category"),
                         "priority": task.get("priority", "medium"),
                         "tags": task.get("tags") or [],
+                        "parent_id": f"task_{task.get('parent_id')}"
+                        if task.get("parent_id")
+                        else None,
+                        "subtasks": subtasks_list,
                         "created_at": task.get("created_at"),
                         "updated_at": task.get("updated_at"),
                     }
                 )
 
             logger.info(f"Returning {len(result_tasks)} tasks")
-            return json.dumps({"tasks": result_tasks})
+            return json.dumps(
+                {
+                    "tasks": result_tasks,
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
         except Exception as e:
             logger.error(f"Exception in get_tasks: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
@@ -540,9 +552,10 @@ def create_resource_server(
         category: str | None = None,
         priority: str = "medium",
         tags: list[str] | None = None,
+        parent_id: str | None = None,
     ) -> str:
         """
-        Create a new task.
+        Create a new task or subtask.
 
         Args:
             title: Task title (required)
@@ -551,25 +564,38 @@ def create_resource_server(
             category: Task category/project name (optional)
             priority: Priority level - one of "low", "medium", "high", "urgent" (default: "medium")
             tags: List of task tags (optional)
+            parent_id: Parent task ID to create a subtask - format "task_123" or just "123" (optional)
 
         Returns:
             JSON object with id, title, and status fields confirming task creation
         """
         logger.info(
-            f"=== create_task called: title='{title}', category={category}, priority={priority} ==="
+            f"=== create_task called: title='{title}', category={category}, priority={priority}, parent_id={parent_id} ==="
         )
         try:
             api_client = get_api_client()
             logger.debug("API client created successfully")
 
-            # SDK handles category-to-project mapping
+            # Convert parent_id if provided
+            parent_id_int: int | None = None
+            if parent_id:
+                numeric_id = (
+                    parent_id.replace("task_", "") if parent_id.startswith("task_") else parent_id
+                )
+                try:
+                    parent_id_int = int(numeric_id)
+                except ValueError:
+                    return json.dumps({"error": f"Invalid parent_id format: {parent_id}"})
+
+            # Use SDK method with parent_id support
             response = api_client.create_todo(
                 title=title,
-                category=category,
                 description=description,
+                category=category,
                 priority=priority,
                 due_date=due_date,
                 tags=tags,
+                parent_id=parent_id_int,
             )
             logger.info(
                 f"create_todo response: success={response.success}, status={response.status_code}"
@@ -592,6 +618,8 @@ def create_resource_server(
                 "id": f"task_{task_id}",
                 "title": task.get("title", title) if task is not None else title,
                 "status": "created",
+                "parent_id": f"task_{parent_id_int}" if parent_id_int else None,
+                "current_time": datetime.datetime.now().isoformat(),
             }
             return json.dumps(result)
         except Exception as e:
@@ -612,6 +640,7 @@ def create_resource_server(
         category: str | None = None,
         priority: str | None = None,
         tags: list[str] | None = None,
+        parent_id: str | None = None,
     ) -> str:
         """
         Update an existing task.
@@ -625,11 +654,12 @@ def create_resource_server(
             category: New category/project name (optional)
             priority: New priority - one of "low", "medium", "high", "urgent" (optional)
             tags: New list of tags (optional)
+            parent_id: New parent task ID to move task - format "task_123" or just "123" (optional)
 
         Returns:
             JSON object with id, updated_fields list, and status confirming update
         """
-        logger.info(f"=== update_task called: task_id='{task_id}' ===")
+        logger.info(f"=== update_task called: task_id='{task_id}', parent_id={parent_id} ===")
         try:
             api_client = get_api_client()
             logger.debug("API client created successfully")
@@ -640,6 +670,17 @@ def create_resource_server(
                 todo_id = int(numeric_id)
             except ValueError:
                 return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Convert parent_id if provided
+            parent_id_int: int | None = None
+            if parent_id:
+                parent_numeric_id = (
+                    parent_id.replace("task_", "") if parent_id.startswith("task_") else parent_id
+                )
+                try:
+                    parent_id_int = int(parent_numeric_id)
+                except ValueError:
+                    return json.dumps({"error": f"Invalid parent_id format: {parent_id}"})
 
             # Track which fields are being updated
             updated_fields = []
@@ -657,8 +698,10 @@ def create_resource_server(
                 updated_fields.append("priority")
             if tags is not None:
                 updated_fields.append("tags")
+            if parent_id is not None:
+                updated_fields.append("parent_id")
 
-            # SDK handles category-to-project mapping
+            # Use SDK method with parent_id support
             response = api_client.update_todo(
                 todo_id=todo_id,
                 title=title,
@@ -668,6 +711,7 @@ def create_resource_server(
                 status=status,
                 due_date=due_date,
                 tags=tags,
+                parent_id=parent_id_int,
             )
             logger.info(
                 f"update_todo response: success={response.success}, status={response.status_code}"
@@ -682,6 +726,7 @@ def create_resource_server(
                 "id": f"task_{todo_id}",
                 "updated_fields": updated_fields,
                 "status": "updated",
+                "current_time": datetime.datetime.now().isoformat(),
             }
             return json.dumps(result)
         except Exception as e:
@@ -716,7 +761,12 @@ def create_resource_server(
                 return json.dumps({"error": categories_error})
 
             logger.info(f"Returning {len(categories)} categories")
-            return json.dumps({"categories": categories})
+            return json.dumps(
+                {
+                    "categories": categories,
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
         except Exception as e:
             logger.error(f"Exception in get_categories: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
@@ -775,6 +825,26 @@ def create_resource_server(
                 task_id = task.get("id")
                 if task_id is None:
                     continue
+
+                # Transform subtasks if present
+                subtasks_list = []
+                if task.get("subtasks"):
+                    for subtask in task["subtasks"]:
+                        subtasks_list.append(
+                            {
+                                "id": f"task_{subtask.get('id')}",
+                                "title": subtask.get("title", ""),
+                                "description": subtask.get("description"),
+                                "status": subtask.get("status", "pending"),
+                                "priority": subtask.get("priority", "medium"),
+                                "due_date": subtask.get("due_date"),
+                                "estimated_hours": subtask.get("estimated_hours"),
+                                "actual_hours": subtask.get("actual_hours"),
+                                "created_at": subtask.get("created_at"),
+                                "updated_at": subtask.get("updated_at"),
+                            }
+                        )
+
                 result_tasks.append(
                     {
                         "id": f"task_{task_id}",
@@ -785,15 +855,311 @@ def create_resource_server(
                         "category": task.get("project_name") or task.get("category"),
                         "priority": task.get("priority", "medium"),
                         "tags": task.get("tags") or [],
+                        "parent_id": f"task_{task.get('parent_id')}"
+                        if task.get("parent_id")
+                        else None,
+                        "subtasks": subtasks_list,
                         "created_at": task.get("created_at"),
                         "updated_at": task.get("updated_at"),
                     }
                 )
 
             logger.info(f"Found {len(result_tasks)} tasks matching query '{query}'")
-            return json.dumps({"tasks": result_tasks, "count": len(result_tasks)})
+            return json.dumps(
+                {
+                    "tasks": result_tasks,
+                    "count": len(result_tasks),
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
         except Exception as e:
             logger.error(f"Exception in search_tasks: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def list_task_attachments(task_id: str) -> str:
+        """
+        List all attachments for a specific task.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+
+        Returns:
+            JSON object with "attachments" array containing attachment objects with fields:
+            id, filename, content_type, file_size, created_at
+        """
+        logger.info(f"=== list_task_attachments called: task_id='{task_id}' ===")
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            # Extract numeric ID from task_id
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Get attachments using SDK method
+            response = api_client.get_attachments(todo_id)
+            logger.info(
+                f"list_attachments response: success={response.success}, status={response.status_code}"
+            )
+
+            attachments, attachments_error = validate_list_response(response, "attachments")
+            if attachments_error:
+                logger.error(f"Failed to get attachments: {attachments_error}")
+                return json.dumps({"error": attachments_error})
+
+            logger.info(f"Returning {len(attachments)} attachments")
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "attachments": attachments,
+                    "count": len(attachments),
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in list_task_attachments: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def delete_task_attachment(task_id: str, attachment_id: int) -> str:
+        """
+        Delete an attachment from a task.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+            attachment_id: Attachment ID to delete
+
+        Returns:
+            JSON object confirming deletion with deleted status and id
+        """
+        logger.info(
+            f"=== delete_task_attachment called: task_id='{task_id}', attachment_id={attachment_id} ==="
+        )
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            # Extract numeric ID from task_id
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Delete attachment using SDK method
+            response = api_client.delete_attachment(todo_id, attachment_id)
+            logger.info(
+                f"delete_attachment response: success={response.success}, status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to delete attachment: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Deleted attachment {attachment_id} from task {task_id}")
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "attachment_id": attachment_id,
+                    "status": "deleted",
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in delete_task_attachment: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_task(task_id: str) -> str:
+        """
+        Get a single task by ID with full details.
+
+        Retrieves complete task information including subtasks, attachments count,
+        and all metadata. More efficient than filtering get_tasks for a specific task.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+
+        Returns:
+            JSON object with task data including:
+            id, title, description, status, priority, due_date, category,
+            tags, parent_id, subtasks, estimated_hours, actual_hours,
+            created_at, updated_at, current_time
+        """
+        logger.info(f"=== get_task called: task_id='{task_id}' ===")
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            # Extract numeric ID from task_id
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Get task details using SDK method
+            response = api_client.get_todo(todo_id)
+            logger.info(
+                f"get_todo response: success={response.success}, status={response.status_code}"
+            )
+
+            task, task_error = validate_dict_response(response, "task")
+            if task_error or task is None:
+                logger.error(f"Failed to get task: {task_error}")
+                return json.dumps({"error": task_error or "Task not found"})
+
+            logger.info(f"Retrieved task: {task.get('id')}")
+
+            # Transform subtasks if present
+            subtasks_list = []
+            if task.get("subtasks"):
+                for subtask in task["subtasks"]:
+                    subtasks_list.append(
+                        {
+                            "id": f"task_{subtask.get('id')}",
+                            "title": subtask.get("title", ""),
+                            "description": subtask.get("description"),
+                            "status": subtask.get("status", "pending"),
+                            "priority": subtask.get("priority", "medium"),
+                            "due_date": subtask.get("due_date"),
+                            "estimated_hours": subtask.get("estimated_hours"),
+                            "actual_hours": subtask.get("actual_hours"),
+                            "created_at": subtask.get("created_at"),
+                            "updated_at": subtask.get("updated_at"),
+                        }
+                    )
+
+            # Build response
+            result = {
+                "task": {
+                    "id": f"task_{task.get('id')}",
+                    "title": task.get("title", ""),
+                    "description": task.get("description"),
+                    "due_date": task.get("due_date"),
+                    "status": task.get("status", "pending"),
+                    "category": task.get("project_name") or task.get("category"),
+                    "priority": task.get("priority", "medium"),
+                    "tags": task.get("tags") or [],
+                    "parent_id": (
+                        f"task_{task.get('parent_id')}" if task.get("parent_id") else None
+                    ),
+                    "subtasks": subtasks_list,
+                    "estimated_hours": task.get("estimated_hours"),
+                    "actual_hours": task.get("actual_hours"),
+                    "created_at": task.get("created_at"),
+                    "updated_at": task.get("updated_at"),
+                },
+                "current_time": datetime.datetime.now().isoformat(),
+            }
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Exception in get_task: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def delete_task(task_id: str) -> str:
+        """
+        Delete a task (soft delete).
+
+        Moves the task to trash by setting a deletion timestamp. The task can
+        potentially be restored later. All subtasks are also deleted.
+
+        Args:
+            task_id: Task ID to delete - format "task_123" or just "123"
+
+        Returns:
+            JSON object confirming deletion with deleted status, id, and current_time
+        """
+        logger.info(f"=== delete_task called: task_id='{task_id}' ===")
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            # Extract numeric ID from task_id
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Delete task using SDK method
+            response = api_client.delete_todo(todo_id)
+            logger.info(
+                f"delete_todo response: success={response.success}, status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to delete task: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Deleted task {task_id}")
+            return json.dumps(
+                {
+                    "id": task_id,
+                    "status": "deleted",
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in delete_task: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def complete_task(task_id: str) -> str:
+        """
+        Mark a task as completed.
+
+        Sets the task status to "completed" and records the completion timestamp.
+        This is a convenience method equivalent to update_task with status="completed".
+
+        Args:
+            task_id: Task ID to complete - format "task_123" or just "123"
+
+        Returns:
+            JSON object confirming completion with status, id, and current_time
+        """
+        logger.info(f"=== complete_task called: task_id='{task_id}' ===")
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            # Extract numeric ID from task_id
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Complete task using SDK method
+            response = api_client.complete_todo(todo_id)
+            logger.info(
+                f"complete_todo response: success={response.success}, status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to complete task: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Completed task {task_id}")
+            return json.dumps(
+                {
+                    "id": task_id,
+                    "status": "completed",
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in complete_task: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     return app
