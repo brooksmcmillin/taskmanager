@@ -762,6 +762,8 @@ def create_authorization_server(
     # Add MCP client callback route
     async def mcp_client_callback_handler(request: Request) -> Response:
         """Handle callback from MCP client OAuth flow."""
+        from html import escape
+
         from starlette.responses import HTMLResponse
 
         # Extract auth code and state from query params
@@ -774,7 +776,7 @@ def create_authorization_server(
             <html>
             <body>
                 <h1>Authorization Failed</h1>
-                <p>Error: {error}</p>
+                <p>Error: {escape(error)}</p>
                 <p>You can close this window and return to the terminal.</p>
             </body>
             </html>

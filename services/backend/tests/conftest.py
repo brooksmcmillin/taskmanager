@@ -3,6 +3,7 @@
 # IMPORTANT: Set environment variables BEFORE importing any app modules
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load .env file from project root (two directories up from tests/)
@@ -12,21 +13,28 @@ load_dotenv(env_path)
 # Disable registration codes for testing
 os.environ["REGISTRATION_CODE_REQUIRED"] = "false"
 
-import asyncio
-from collections.abc import AsyncGenerator
-from urllib.parse import quote_plus
+# Set frontend URL for testing
+os.environ["FRONTEND_URL"] = "http://localhost:3000"
 
-import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+import asyncio  # noqa: E402
+from collections.abc import AsyncGenerator  # noqa: E402
+from urllib.parse import quote_plus  # noqa: E402
 
-from app.core.rate_limit import login_rate_limiter
-from app.core.security import hash_password
-from app.db.database import Base
-from app.dependencies import get_db
-from app.main import app
-from app.models.user import User
+import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy.ext.asyncio import (  # noqa: E402
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from app.core.rate_limit import login_rate_limiter  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
+from app.db.database import Base  # noqa: E402
+from app.dependencies import get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.user import User  # noqa: E402
 
 # Use a separate test database
 # Read credentials from environment variables, same as production
