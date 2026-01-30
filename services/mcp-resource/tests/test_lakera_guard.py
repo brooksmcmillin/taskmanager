@@ -146,6 +146,7 @@ class TestScreenContent:
                 json={
                     "messages": [{"role": "user", "content": "test content"}],
                     "breakdown": True,
+                    "project_id": "project-9146177048",
                 },
                 headers={
                     "Authorization": "Bearer test-api-key",
