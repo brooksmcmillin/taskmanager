@@ -9,6 +9,12 @@ import aiofiles
 from app.config import settings
 
 
+class PathTraversalError(ValueError):
+    """Raised when a path traversal attack is detected."""
+
+    pass
+
+
 class StorageService:
     """Service for managing file storage on the local filesystem."""
 
@@ -19,6 +25,24 @@ class StorageService:
     def _ensure_base_dir(self) -> None:
         """Ensure the base upload directory exists."""
         self.base_path.mkdir(parents=True, exist_ok=True)
+
+    def _validate_path(self, storage_path: str) -> Path:
+        """Validate that the storage path stays within the base directory.
+
+        Args:
+            storage_path: The relative storage path to validate
+
+        Returns:
+            The resolved full path
+
+        Raises:
+            PathTraversalError: If the path attempts to escape the base directory
+        """
+        full_path = (self.base_path / storage_path).resolve()
+        base_resolved = self.base_path.resolve()
+        if not full_path.is_relative_to(base_resolved):
+            raise PathTraversalError("Invalid storage path")
+        return full_path
 
     async def save_file(
         self, content: bytes, filename: str, content_type: str
@@ -67,8 +91,9 @@ class StorageService:
 
         Raises:
             FileNotFoundError: If file doesn't exist
+            PathTraversalError: If path attempts to escape base directory
         """
-        full_path = self.base_path / storage_path
+        full_path = self._validate_path(storage_path)
         async with aiofiles.open(full_path, "rb") as f:
             return await f.read()
 
@@ -81,8 +106,11 @@ class StorageService:
 
         Returns:
             True if file was deleted, False if it didn't exist
+
+        Raises:
+            PathTraversalError: If path attempts to escape base directory
         """
-        full_path = self.base_path / storage_path
+        full_path = self._validate_path(storage_path)
         try:
             os.remove(full_path)
             return True
@@ -98,8 +126,11 @@ class StorageService:
 
         Returns:
             True if file exists
+
+        Raises:
+            PathTraversalError: If path attempts to escape base directory
         """
-        full_path = self.base_path / storage_path
+        full_path = self._validate_path(storage_path)
         return full_path.exists()
 
 
