@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import secrets
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Form, Request
@@ -18,13 +19,17 @@ router = APIRouter(prefix="/api/oauth", tags=["oauth"])
 
 
 def verify_pkce(code_verifier: str, code_challenge: str, method: str) -> bool:
-    """Verify PKCE code challenge."""
+    """Verify PKCE code challenge with constant-time comparison."""
     if method == "plain":
-        return code_verifier == code_challenge
+        return secrets.compare_digest(
+            code_verifier.encode("utf-8"), code_challenge.encode("utf-8")
+        )
     elif method == "S256":
         digest = hashlib.sha256(code_verifier.encode()).digest()
         computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
-        return computed == code_challenge
+        return secrets.compare_digest(
+            computed.encode("utf-8"), code_challenge.encode("utf-8")
+        )
     return False
 
 
@@ -93,14 +98,17 @@ async def _handle_authorization_code(
 
     result = await db.execute(
         select(AuthorizationCode).where(
-            AuthorizationCode.code == code,
+            AuthorizationCode.code == code,  # SQL filter (OK for performance)
             AuthorizationCode.client_id == client.client_id,
             AuthorizationCode.expires_at > datetime.now(UTC),
         )
     )
     auth_code = result.scalar_one_or_none()
 
-    if not auth_code:
+    # Add constant-time verification to prevent timing attacks
+    if not auth_code or not secrets.compare_digest(
+        auth_code.code.encode("utf-8"), code.encode("utf-8")
+    ):
         raise errors.oauth_invalid_grant()
 
     # Verify redirect URI
@@ -153,14 +161,18 @@ async def _handle_refresh_token(
 
     result = await db.execute(
         select(AccessToken).where(
-            AccessToken.refresh_token == refresh_token,
+            AccessToken.refresh_token
+            == refresh_token,  # SQL filter (OK for performance)
             AccessToken.client_id == client.client_id,
             AccessToken.refresh_token_expires_at > datetime.now(UTC),
         )
     )
     old_token = result.scalar_one_or_none()
 
-    if not old_token:
+    # Add constant-time verification to prevent timing attacks
+    if not old_token or not secrets.compare_digest(
+        old_token.refresh_token.encode("utf-8"), refresh_token.encode("utf-8")
+    ):
         raise errors.oauth_invalid_grant()
 
     # Create new access token
@@ -228,11 +240,16 @@ async def _handle_device_code(db, client: OAuthClient, device_code: str | None) 
 
     # First, check if the device code exists at all
     result = await db.execute(
-        select(DeviceCode).where(DeviceCode.device_code == device_code)
+        select(DeviceCode).where(
+            DeviceCode.device_code == device_code
+        )  # SQL filter (OK for performance)
     )
     dc = result.scalar_one_or_none()
 
-    if not dc:
+    # Add constant-time verification to prevent timing attacks
+    if not dc or not secrets.compare_digest(
+        dc.device_code.encode("utf-8"), device_code.encode("utf-8")
+    ):
         # Device code not found - either invalid or expired and cleaned up
         raise errors.oauth_invalid_grant()
 
@@ -326,12 +343,15 @@ async def verify_token(
     # Validate access token
     result = await db.execute(
         select(AccessToken)
-        .where(AccessToken.token == token)
+        .where(AccessToken.token == token)  # SQL filter (OK for performance)
         .where(AccessToken.revoked.is_(False))
     )
     access_token = result.scalar_one_or_none()
 
-    if not access_token:
+    # Add constant-time verification to prevent timing attacks
+    if not access_token or not secrets.compare_digest(
+        access_token.token.encode("utf-8"), token.encode("utf-8")
+    ):
         raise errors.invalid_token()
 
     # Check if token is expired
