@@ -142,7 +142,7 @@
 	.attachment-list {
 		margin-top: 1.5rem;
 		padding-top: 1.5rem;
-		border-top: 1px solid #e5e7eb;
+		border-top: 1px solid var(--border-color);
 	}
 
 	.attachment-header {
@@ -155,7 +155,7 @@
 	.attachment-title {
 		font-size: 0.875rem;
 		font-weight: 600;
-		color: #374151;
+		color: var(--text-secondary);
 		margin: 0;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -163,7 +163,7 @@
 
 	.attachment-count {
 		font-weight: 400;
-		color: #6b7280;
+		color: var(--text-muted);
 		margin-left: 0.5rem;
 	}
 
@@ -171,21 +171,21 @@
 		width: 1.75rem;
 		height: 1.75rem;
 		border-radius: 50%;
-		border: 1px dashed #9ca3af;
+		border: 1px dashed var(--gray-400);
 		background: transparent;
-		color: #6b7280;
+		color: var(--text-muted);
 		font-size: 1.25rem;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		transition: all 0.2s;
+		transition: all var(--transition-base);
 	}
 
 	.add-attachment-btn:hover:not(:disabled) {
-		border-color: #3b82f6;
-		color: #3b82f6;
-		background-color: #eff6ff;
+		border-color: var(--primary-500);
+		color: var(--primary-500);
+		background-color: var(--primary-50);
 	}
 
 	.add-attachment-btn:disabled {
@@ -206,8 +206,8 @@
 	.spinner {
 		width: 1rem;
 		height: 1rem;
-		border: 2px solid #e5e7eb;
-		border-top-color: #3b82f6;
+		border: 2px solid var(--border-color);
+		border-top-color: var(--primary-500);
 		border-radius: 50%;
 		animation: spin 0.8s linear infinite;
 	}
@@ -219,9 +219,9 @@
 	}
 
 	.error-message {
-		background-color: #fef2f2;
-		border: 1px solid #fecaca;
-		color: #dc2626;
+		background-color: var(--error-50);
+		border: 1px solid var(--error-100);
+		color: var(--error-600);
 		padding: 0.5rem 0.75rem;
 		border-radius: 0.375rem;
 		font-size: 0.875rem;
@@ -236,10 +236,10 @@
 
 	.attachment-item {
 		position: relative;
-		background-color: #f9fafb;
+		background-color: var(--bg-page);
 		border-radius: 0.5rem;
 		overflow: hidden;
-		border: 1px solid #e5e7eb;
+		border: 1px solid var(--border-color);
 	}
 
 	.attachment-preview {
@@ -247,7 +247,7 @@
 		aspect-ratio: 1;
 		padding: 0;
 		border: none;
-		background: #f3f4f6;
+		background: var(--bg-hover);
 		cursor: pointer;
 		display: block;
 	}
@@ -269,7 +269,7 @@
 	.attachment-name {
 		display: block;
 		font-size: 0.75rem;
-		color: #374151;
+		color: var(--text-primary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -277,7 +277,7 @@
 
 	.attachment-size {
 		font-size: 0.625rem;
-		color: #9ca3af;
+		color: var(--text-muted);
 	}
 
 	.delete-btn {
@@ -287,15 +287,15 @@
 		width: 1.5rem;
 		height: 1.5rem;
 		border: none;
-		background: rgba(255, 255, 255, 0.9);
-		color: #6b7280;
+		background: var(--bg-card);
+		color: var(--text-muted);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		border-radius: 0.25rem;
 		opacity: 0;
-		transition: all 0.2s;
+		transition: all var(--transition-base);
 	}
 
 	.attachment-item:hover .delete-btn {
@@ -303,8 +303,8 @@
 	}
 
 	.delete-btn:hover {
-		color: #ef4444;
-		background: white;
+		color: var(--error-500);
+		background: var(--bg-card);
 	}
 
 	.delete-btn svg {
@@ -314,7 +314,7 @@
 
 	.no-attachments {
 		font-size: 0.875rem;
-		color: #9ca3af;
+		color: var(--text-muted);
 		text-align: center;
 		padding: 1rem 0;
 		margin: 0;

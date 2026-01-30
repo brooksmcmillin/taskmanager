@@ -125,13 +125,13 @@
 </script>
 
 <div class="container mx-auto p-6">
-	<div class="mb-6">
-		<h1 class="text-3xl font-bold mb-2">AI/LLM Security News</h1>
-		<p class="text-gray-600">
+	<header class="page-header">
+		<h1>AI/LLM Security News</h1>
+		<p>
 			Stay updated with the latest security research, vulnerabilities, and best practices for AI and
 			large language models.
 		</p>
-	</div>
+	</header>
 
 	<!-- Filters and Search -->
 	<div class="flex gap-4 mb-6 items-center flex-wrap">
@@ -177,16 +177,16 @@
 			</form>
 		</div>
 
-		<div class="text-sm text-gray-600">
+		<div class="article-count">
 			{total}
 			{total === 1 ? 'article' : 'articles'}
 		</div>
 	</div>
 
 	<!-- Rating Legend -->
-	<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-		<h3 class="font-semibold mb-2">Rating Guide:</h3>
-		<ul class="text-sm space-y-1">
+	<div class="rating-guide">
+		<h3>Rating Guide:</h3>
+		<ul>
 			<li>
 				<strong>Good:</strong> High-quality content that's relevant and useful
 			</li>
@@ -197,20 +197,20 @@
 				<strong>Not Interested:</strong> Good quality but not relevant to your interests
 			</li>
 		</ul>
-		<p class="text-xs text-gray-600 mt-2">
+		<p class="rating-guide-note">
 			Your ratings help improve future article recommendations by adjusting source quality scores.
 		</p>
 	</div>
 
 	<!-- Articles List -->
 	{#if loading}
-		<div class="text-center py-12">
+		<div class="loading-state">
 			<div class="spinner"></div>
-			<p class="text-gray-600 mt-2">Loading articles...</p>
+			<p>Loading articles...</p>
 		</div>
 	{:else if articles.length === 0}
-		<div class="text-center py-12 bg-gray-50 rounded-lg">
-			<p class="text-gray-600">No articles found.</p>
+		<div class="empty-state">
+			<p>No articles found.</p>
 			{#if searchQuery || showUnreadOnly}
 				<button
 					onclick={() => {
@@ -257,7 +257,7 @@
 								{/if}
 							</div>
 
-							<div class="text-sm text-gray-600 mb-2">
+							<div class="article-meta">
 								<span class="font-medium">{article.feed_source_name}</span>
 								{#if article.author}
 									<span> • {article.author}</span>
@@ -266,7 +266,7 @@
 							</div>
 
 							{#if article.summary}
-								<p class="text-gray-700 mb-3 line-clamp-3">{article.summary}</p>
+								<p class="article-summary">{article.summary}</p>
 							{/if}
 
 							{#if article.keywords.length > 0}
@@ -334,11 +334,113 @@
 </div>
 
 <style>
+	/* Page Header */
+	.page-header {
+		margin-bottom: 2rem;
+		padding-bottom: 1.5rem;
+		border-bottom: 1px solid var(--border-color);
+	}
+
+	.page-header h1 {
+		font-size: 1.875rem;
+		font-weight: 700;
+		color: var(--text-primary);
+		margin: 0 0 0.5rem 0;
+	}
+
+	.page-header p {
+		color: var(--text-secondary);
+		font-size: 1rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	/* Article count */
+	.article-count {
+		font-size: 0.875rem;
+		color: var(--text-muted);
+	}
+
+	/* Rating Guide */
+	.rating-guide {
+		background-color: var(--primary-50);
+		border: 1px solid var(--primary-200);
+		border-radius: var(--radius-lg);
+		padding: 1rem 1.25rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.rating-guide h3 {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--text-primary);
+		margin: 0 0 0.5rem 0;
+	}
+
+	.rating-guide ul {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+	}
+
+	.rating-guide li {
+		margin-bottom: 0.25rem;
+	}
+
+	.rating-guide-note {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		margin: 0.5rem 0 0 0;
+	}
+
+	/* Loading State */
+	.loading-state {
+		text-align: center;
+		padding: 3rem 0;
+	}
+
+	.loading-state p {
+		color: var(--text-muted);
+		margin-top: 0.5rem;
+	}
+
+	/* Empty State */
+	.empty-state {
+		text-align: center;
+		padding: 3rem 0;
+		background-color: var(--bg-page);
+		border-radius: var(--radius-lg);
+	}
+
+	.empty-state p {
+		color: var(--text-muted);
+	}
+
+	/* Article Meta */
+	.article-meta {
+		font-size: 0.875rem;
+		color: var(--text-muted);
+		margin-bottom: 0.5rem;
+	}
+
+	/* Article Summary */
+	.article-summary {
+		color: var(--text-secondary);
+		margin-bottom: 0.75rem;
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	/* Spinner */
 	.spinner {
 		width: 48px;
 		height: 48px;
-		border: 4px solid #f3f4f6;
-		border-top: 4px solid #3b82f6;
+		border: 4px solid var(--border-color);
+		border-top: 4px solid var(--primary-500);
 		border-radius: 50%;
 		animation: spin 1s linear infinite;
 		margin: 0 auto;

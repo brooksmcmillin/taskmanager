@@ -266,7 +266,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background-color: rgba(0, 0, 0, 0.5);
+		background-color: var(--bg-overlay);
 		z-index: 1000;
 		display: flex;
 		justify-content: flex-end;
@@ -283,12 +283,12 @@
 	}
 
 	.panel-container {
-		background: white;
+		background: var(--bg-card);
 		width: 100%;
 		max-width: 500px;
 		height: 100vh;
 		overflow-y: auto;
-		box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+		box-shadow: var(--shadow-lg);
 		display: flex;
 		flex-direction: column;
 		animation: slideIn 0.3s ease-out;
@@ -305,20 +305,20 @@
 
 	.panel-header {
 		padding: 1.5rem;
-		border-bottom: 1px solid #e5e7eb;
+		border-bottom: 1px solid var(--border-color);
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		position: sticky;
 		top: 0;
-		background: white;
+		background: var(--bg-card);
 		z-index: 10;
 	}
 
 	.panel-header h2 {
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: #111827;
+		color: var(--text-primary);
 		margin: 0;
 	}
 
@@ -327,7 +327,7 @@
 		background: none;
 		border: none;
 		font-size: 2rem;
-		color: #6b7280;
+		color: var(--text-muted);
 		cursor: pointer;
 		padding: 0;
 		width: 2rem;
@@ -336,13 +336,13 @@
 		align-items: center;
 		justify-content: center;
 		border-radius: 0.25rem;
-		transition: all 0.2s;
+		transition: all var(--transition-base);
 	}
 
 	.close-btn:hover,
 	.back-btn:hover {
-		background-color: #f3f4f6;
-		color: #111827;
+		background-color: var(--bg-hover);
+		color: var(--text-primary);
 	}
 
 	.back-btn {
@@ -364,14 +364,14 @@
 		display: block;
 		font-size: 0.6875rem;
 		font-weight: 700;
-		color: #374151;
+		color: var(--text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		margin-bottom: 0.5rem;
 	}
 
 	.detail-text {
-		color: #374151;
+		color: var(--text-primary);
 		font-size: 0.875rem;
 		line-height: 1.5;
 		white-space: pre-wrap;
@@ -380,8 +380,8 @@
 	.tag {
 		display: inline-block;
 		padding: 0.25rem 0.75rem;
-		background-color: #e5e7eb;
-		color: #374151;
+		background-color: var(--tag-bg);
+		color: var(--tag-text);
 		font-size: 0.75rem;
 		border-radius: 9999px;
 		font-weight: 500;
@@ -389,10 +389,10 @@
 
 	.panel-footer {
 		padding: 1.5rem;
-		border-top: 1px solid #e5e7eb;
+		border-top: 1px solid var(--border-color);
 		display: flex;
 		gap: 0.75rem;
-		background: white;
+		background: var(--bg-card);
 		position: sticky;
 		bottom: 0;
 	}

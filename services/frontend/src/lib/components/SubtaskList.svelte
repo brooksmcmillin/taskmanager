@@ -171,7 +171,7 @@
 	.subtask-list {
 		margin-top: 1.5rem;
 		padding-top: 1.5rem;
-		border-top: 1px solid #e5e7eb;
+		border-top: 1px solid var(--border-color);
 	}
 
 	.subtask-header {
@@ -184,7 +184,7 @@
 	.subtask-title {
 		font-size: 0.875rem;
 		font-weight: 600;
-		color: #374151;
+		color: var(--text-secondary);
 		margin: 0;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -192,7 +192,7 @@
 
 	.subtask-count {
 		font-weight: 400;
-		color: #6b7280;
+		color: var(--text-muted);
 		margin-left: 0.5rem;
 	}
 
@@ -200,26 +200,26 @@
 		width: 1.75rem;
 		height: 1.75rem;
 		border-radius: 50%;
-		border: 1px dashed #9ca3af;
+		border: 1px dashed var(--gray-400);
 		background: transparent;
-		color: #6b7280;
+		color: var(--text-muted);
 		font-size: 1.25rem;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		transition: all 0.2s;
+		transition: all var(--transition-base);
 	}
 
 	.add-subtask-btn:hover {
-		border-color: #3b82f6;
-		color: #3b82f6;
-		background-color: #eff6ff;
+		border-color: var(--primary-500);
+		color: var(--primary-500);
+		background-color: var(--primary-50);
 	}
 
 	.progress-bar {
 		height: 4px;
-		background-color: #e5e7eb;
+		background-color: var(--border-color);
 		border-radius: 2px;
 		margin-bottom: 1rem;
 		overflow: hidden;
@@ -233,7 +233,7 @@
 	}
 
 	.add-subtask-form {
-		background-color: #f9fafb;
+		background-color: var(--bg-page);
 		border-radius: 0.5rem;
 		padding: 0.75rem;
 		margin-bottom: 1rem;
@@ -248,23 +248,26 @@
 	.subtask-input {
 		flex: 1;
 		padding: 0.5rem 0.75rem;
-		border: 1px solid #d1d5db;
+		border: 1px solid var(--gray-300);
 		border-radius: 0.375rem;
 		font-size: 0.875rem;
+		background-color: var(--bg-input);
+		color: var(--text-primary);
 	}
 
 	.subtask-input:focus {
 		outline: none;
-		border-color: #3b82f6;
+		border-color: var(--primary-500);
 		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 	}
 
 	.priority-select {
 		padding: 0.5rem;
-		border: 1px solid #d1d5db;
+		border: 1px solid var(--gray-300);
 		border-radius: 0.375rem;
 		font-size: 0.875rem;
-		background: white;
+		background: var(--bg-input);
+		color: var(--text-primary);
 	}
 
 	.form-actions {
@@ -280,7 +283,7 @@
 		font-weight: 500;
 		cursor: pointer;
 		border: none;
-		transition: all 0.2s;
+		transition: all var(--transition-base);
 	}
 
 	.btn-sm {
@@ -288,12 +291,12 @@
 	}
 
 	.btn-primary {
-		background-color: #3b82f6;
+		background-color: var(--primary-500);
 		color: white;
 	}
 
 	.btn-primary:hover:not(:disabled) {
-		background-color: #2563eb;
+		background-color: var(--primary-600);
 	}
 
 	.btn-primary:disabled {
@@ -302,12 +305,12 @@
 	}
 
 	.btn-secondary {
-		background-color: #e5e7eb;
-		color: #374151;
+		background-color: var(--bg-hover);
+		color: var(--text-primary);
 	}
 
 	.btn-secondary:hover {
-		background-color: #d1d5db;
+		background-color: var(--bg-active);
 	}
 
 	.subtask-items {
@@ -321,7 +324,7 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.5rem 0;
-		border-bottom: 1px solid #f3f4f6;
+		border-bottom: 1px solid var(--border-light);
 	}
 
 	.subtask-item:last-child {
@@ -330,30 +333,30 @@
 
 	.subtask-item.completed .subtask-text {
 		text-decoration: line-through;
-		color: #9ca3af;
+		color: var(--text-muted);
 	}
 
 	.checkbox {
 		width: 1.25rem;
 		height: 1.25rem;
 		border-radius: 50%;
-		border: 2px solid #d1d5db;
-		background: white;
+		border: 2px solid var(--gray-300);
+		background: var(--bg-card);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
-		transition: all 0.2s;
+		transition: all var(--transition-base);
 	}
 
 	.checkbox:hover:not(:disabled) {
-		border-color: #10b981;
+		border-color: var(--success-500);
 	}
 
 	.checkbox.checked {
-		background-color: #10b981;
-		border-color: #10b981;
+		background-color: var(--success-500);
+		border-color: var(--success-500);
 	}
 
 	.checkbox.checked svg {
@@ -376,7 +379,7 @@
 
 	.subtask-text {
 		font-size: 0.875rem;
-		color: #374151;
+		color: var(--text-primary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -394,14 +397,14 @@
 		height: 1.5rem;
 		border: none;
 		background: transparent;
-		color: #9ca3af;
+		color: var(--text-muted);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		border-radius: 0.25rem;
 		opacity: 0;
-		transition: all 0.2s;
+		transition: all var(--transition-base);
 	}
 
 	.subtask-item:hover .delete-btn {
@@ -409,8 +412,8 @@
 	}
 
 	.delete-btn:hover {
-		color: #ef4444;
-		background-color: #fef2f2;
+		color: var(--error-500);
+		background-color: var(--error-50);
 	}
 
 	.delete-btn svg {
@@ -420,7 +423,7 @@
 
 	.no-subtasks {
 		font-size: 0.875rem;
-		color: #9ca3af;
+		color: var(--text-muted);
 		text-align: center;
 		padding: 1rem 0;
 		margin: 0;
