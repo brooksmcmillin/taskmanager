@@ -1,7 +1,8 @@
 """GitHub OAuth endpoints for social login."""
 
 import secrets
-from urllib.parse import urlencode
+from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -23,12 +24,15 @@ from app.services.github_oauth import (
     get_user_info,
     is_github_configured,
 )
+from app.services.token_encryption import encrypt_token
 
 router = APIRouter(prefix="/api/auth/github", tags=["github-oauth"])
 
-# In-memory state storage (in production, use Redis or database)
-# Maps state -> {return_to: str, created_at: datetime}
+# State storage with expiration
+# In production, use Redis with TTL instead
 _oauth_states: dict[str, dict] = {}
+STATE_EXPIRY_MINUTES = 5
+STATE_CLEANUP_THRESHOLD = 100  # Cleanup when we have more than this many states
 
 
 class GitHubConfigResponse(BaseModel):
@@ -46,6 +50,69 @@ class OAuthProviderResponse(BaseModel):
     provider_email: str | None
     avatar_url: str | None
     connected_at: str
+
+
+def _cleanup_expired_states() -> None:
+    """Remove expired states from storage."""
+    now = datetime.now(UTC)
+    expiry_delta = timedelta(minutes=STATE_EXPIRY_MINUTES)
+    expired_states = [
+        state
+        for state, data in _oauth_states.items()
+        if now - data.get("created_at", now) > expiry_delta
+    ]
+    for state in expired_states:
+        _oauth_states.pop(state, None)
+
+
+def _validate_and_consume_state(state: str) -> dict | None:
+    """Validate state parameter and remove it from storage.
+
+    Returns the state data if valid, None if invalid or expired.
+    """
+    # Cleanup if we have too many states (memory protection)
+    if len(_oauth_states) > STATE_CLEANUP_THRESHOLD:
+        _cleanup_expired_states()
+
+    state_data = _oauth_states.pop(state, None)
+    if not state_data:
+        return None
+
+    # Check expiration
+    created_at = state_data.get("created_at")
+    if not created_at:
+        return None
+
+    if datetime.now(UTC) - created_at > timedelta(minutes=STATE_EXPIRY_MINUTES):
+        return None
+
+    return state_data
+
+
+def _validate_return_to(return_to: str) -> str:
+    """Validate return_to is a safe local URL.
+
+    Only allows relative URLs (no scheme/domain) to prevent open redirect attacks.
+    """
+    if not return_to:
+        return "/"
+
+    # Parse the URL
+    parsed = urlparse(return_to)
+
+    # Reject URLs with scheme or netloc (domain)
+    if parsed.scheme or parsed.netloc:
+        return "/"
+
+    # Prevent protocol-relative URLs (//evil.com)
+    if return_to.startswith("//"):
+        return "/"
+
+    # Ensure it starts with /
+    if not return_to.startswith("/"):
+        return "/"
+
+    return return_to
 
 
 @router.get("/config")
@@ -67,14 +134,20 @@ async def github_authorize(
     """Start GitHub OAuth flow by redirecting to GitHub.
 
     Args:
-        return_to: URL to redirect to after successful authentication
+        return_to: URL to redirect to after successful authentication (must be relative)
     """
     if not is_github_configured():
         raise errors.github_not_configured()
 
-    # Generate and store state
+    # Validate return_to to prevent open redirect
+    safe_return_to = _validate_return_to(return_to)
+
+    # Generate and store state with timestamp
     state = generate_state()
-    _oauth_states[state] = {"return_to": return_to}
+    _oauth_states[state] = {
+        "return_to": safe_return_to,
+        "created_at": datetime.now(UTC),
+    }
 
     # Redirect to GitHub
     auth_url = get_authorization_url(state)
@@ -94,7 +167,7 @@ async def github_callback(
     """Handle GitHub OAuth callback.
 
     This endpoint:
-    1. Validates the state parameter
+    1. Validates the state parameter (with expiration check)
     2. Exchanges the code for an access token
     3. Fetches user info from GitHub
     4. Creates or links the user account
@@ -108,8 +181,8 @@ async def github_callback(
         error_msg = error_description or error
         return _redirect_with_error(error_msg)
 
-    # Validate state
-    state_data = _oauth_states.pop(state, None)
+    # Validate and consume state (checks expiration)
+    state_data = _validate_and_consume_state(state)
     if not state_data:
         return _redirect_with_error("Invalid or expired OAuth state")
 
@@ -126,6 +199,9 @@ async def github_callback(
             return _redirect_with_error(
                 "Your GitHub account must have a verified email address"
             )
+
+        # Encrypt the access token before storing
+        encrypted_token = encrypt_token(access_token)
 
         # Check if this GitHub account is already linked to a user
         result = await db.execute(
@@ -144,7 +220,7 @@ async def github_callback(
             existing_provider.provider_username = github_user.login
             existing_provider.provider_email = github_user.email
             existing_provider.avatar_url = github_user.avatar_url
-            existing_provider.access_token = access_token
+            existing_provider.access_token = encrypted_token
         else:
             # Check if a user with this email already exists
             result = await db.execute(
@@ -161,7 +237,7 @@ async def github_callback(
                     provider_username=github_user.login,
                     provider_email=github_user.email,
                     avatar_url=github_user.avatar_url,
-                    access_token=access_token,
+                    access_token=encrypted_token,
                 )
                 db.add(oauth_provider)
             else:
@@ -188,7 +264,7 @@ async def github_callback(
                     provider_username=github_user.login,
                     provider_email=github_user.email,
                     avatar_url=github_user.avatar_url,
-                    access_token=access_token,
+                    access_token=encrypted_token,
                 )
                 db.add(oauth_provider)
 

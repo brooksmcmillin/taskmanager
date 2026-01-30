@@ -1,6 +1,7 @@
 """Tests for GitHub OAuth authentication endpoints."""
 
 import os
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,6 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.oauth_provider import UserOAuthProvider
 from app.models.user import User
 from app.services.github_oauth import GitHubOAuthError, GitHubUser
+
+
+def _create_valid_state(github_module, state_key: str, return_to: str = "/") -> None:
+    """Helper to create a valid state with proper timestamp."""
+    github_module._oauth_states[state_key] = {
+        "return_to": return_to,
+        "created_at": datetime.now(UTC),
+    }
 
 
 @pytest.mark.asyncio
@@ -80,6 +89,66 @@ async def test_github_authorize_redirect(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_github_authorize_validates_return_to(client: AsyncClient):
+    """Test that authorize endpoint validates return_to to prevent open redirect."""
+    from app.api.oauth import github as github_module
+
+    with (
+        patch("app.api.oauth.github.is_github_configured", return_value=True),
+        patch(
+            "app.api.oauth.github.get_authorization_url",
+            return_value="https://github.com/login/oauth/authorize?client_id=test",
+        ),
+    ):
+        # Test with malicious URL
+        response = await client.get(
+            "/api/auth/github/authorize",
+            params={"return_to": "https://evil.com/steal"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+
+        # Check that the stored state has "/" instead of the malicious URL
+        # (state was created during the request)
+        stored_states = list(github_module._oauth_states.values())
+        if stored_states:
+            assert stored_states[-1]["return_to"] == "/"
+
+        # Cleanup
+        github_module._oauth_states.clear()
+
+
+@pytest.mark.asyncio
+async def test_github_authorize_allows_relative_paths(client: AsyncClient):
+    """Test that authorize endpoint allows relative paths."""
+    from app.api.oauth import github as github_module
+
+    with (
+        patch("app.api.oauth.github.is_github_configured", return_value=True),
+        patch(
+            "app.api.oauth.github.get_authorization_url",
+            return_value="https://github.com/login/oauth/authorize?client_id=test",
+        ),
+    ):
+        response = await client.get(
+            "/api/auth/github/authorize",
+            params={"return_to": "/dashboard"},
+            follow_redirects=False,
+        )
+
+        assert response.status_code == 302
+
+        # Check that the stored state preserved the relative path
+        stored_states = list(github_module._oauth_states.values())
+        if stored_states:
+            assert stored_states[-1]["return_to"] == "/dashboard"
+
+        # Cleanup
+        github_module._oauth_states.clear()
+
+
+@pytest.mark.asyncio
 async def test_github_callback_invalid_state(client: AsyncClient):
     """Test callback with invalid state parameter."""
     with patch("app.api.oauth.github.is_github_configured", return_value=True):
@@ -92,6 +161,30 @@ async def test_github_callback_invalid_state(client: AsyncClient):
         # Should redirect to login with error
         assert response.status_code == 302
         assert "error=" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_github_callback_expired_state(client: AsyncClient):
+    """Test callback with expired state parameter."""
+    from app.api.oauth import github as github_module
+
+    # Create an expired state (6 minutes old, beyond 5-minute limit)
+    github_module._oauth_states["expired_state"] = {
+        "return_to": "/",
+        "created_at": datetime.now(UTC) - timedelta(minutes=6),
+    }
+
+    with patch("app.api.oauth.github.is_github_configured", return_value=True):
+        response = await client.get(
+            "/api/auth/github/callback",
+            params={"code": "test_code", "state": "expired_state"},
+            follow_redirects=False,
+        )
+
+        # Should redirect to login with error
+        assert response.status_code == 302
+        assert "error=" in response.headers["location"]
+        assert "expired" in response.headers["location"].lower()
 
 
 @pytest.mark.asyncio
@@ -126,10 +219,10 @@ async def test_github_callback_creates_new_user(
         name="GitHub User",
     )
 
-    # Set up the state in the internal storage
+    # Set up the state in the internal storage with proper timestamp
     from app.api.oauth import github as github_module
 
-    github_module._oauth_states["valid_state"] = {"return_to": "/dashboard"}
+    _create_valid_state(github_module, "valid_state", "/dashboard")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -173,6 +266,9 @@ async def test_github_callback_creates_new_user(
     assert provider is not None
     assert provider.provider == "github"
     assert provider.provider_user_id == "12345"
+    # Verify token is encrypted (not plain text)
+    assert provider.access_token != "mock_access_token"
+    assert provider.access_token is not None
 
 
 @pytest.mark.asyncio
@@ -190,7 +286,7 @@ async def test_github_callback_links_existing_user(
 
     from app.api.oauth import github as github_module
 
-    github_module._oauth_states["link_state"] = {"return_to": "/"}
+    _create_valid_state(github_module, "link_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -257,7 +353,7 @@ async def test_github_callback_existing_github_user_login(
 
     from app.api.oauth import github as github_module
 
-    github_module._oauth_states["existing_state"] = {"return_to": "/"}
+    _create_valid_state(github_module, "existing_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -295,7 +391,7 @@ async def test_github_callback_no_email(client: AsyncClient):
 
     from app.api.oauth import github as github_module
 
-    github_module._oauth_states["noemail_state"] = {"return_to": "/"}
+    _create_valid_state(github_module, "noemail_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -327,7 +423,7 @@ async def test_github_callback_token_exchange_failure(client: AsyncClient):
     """Test callback when token exchange fails."""
     from app.api.oauth import github as github_module
 
-    github_module._oauth_states["fail_state"] = {"return_to": "/"}
+    _create_valid_state(github_module, "fail_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -440,7 +536,7 @@ async def test_unique_username_generation(
 
     from app.api.oauth import github as github_module
 
-    github_module._oauth_states["dup_state"] = {"return_to": "/"}
+    _create_valid_state(github_module, "dup_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -471,3 +567,125 @@ async def test_unique_username_generation(
     assert new_user is not None
     assert new_user.username != "duplicateuser"
     assert new_user.username.startswith("duplicateuser")
+
+
+# =============================================================================
+# Token Encryption Tests
+# =============================================================================
+
+
+def test_token_encryption_roundtrip():
+    """Test that tokens can be encrypted and decrypted."""
+    from app.services.token_encryption import decrypt_token, encrypt_token
+
+    original_token = "gho_test_access_token_12345"
+    encrypted = encrypt_token(original_token)
+
+    # Encrypted should be different from original
+    assert encrypted != original_token
+    assert encrypted is not None
+
+    # Should decrypt back to original
+    decrypted = decrypt_token(encrypted)
+    assert decrypted == original_token
+
+
+def test_token_encryption_empty_token():
+    """Test handling of empty tokens."""
+    from app.services.token_encryption import decrypt_token, encrypt_token
+
+    assert encrypt_token("") == ""
+    assert decrypt_token("") is None
+    assert decrypt_token(None) is None  # type: ignore
+
+
+def test_token_decryption_invalid_token():
+    """Test that invalid encrypted tokens return None."""
+    from app.services.token_encryption import decrypt_token
+
+    assert decrypt_token("invalid_encrypted_token") is None
+    assert decrypt_token("gAAAAA_not_valid_fernet") is None
+
+
+# =============================================================================
+# Return-to Validation Tests
+# =============================================================================
+
+
+def test_validate_return_to_rejects_external_urls():
+    """Test that external URLs are rejected."""
+    from app.api.oauth.github import _validate_return_to
+
+    # Various malicious URLs should be rejected
+    assert _validate_return_to("https://evil.com") == "/"
+    assert _validate_return_to("http://evil.com/steal") == "/"
+    assert _validate_return_to("//evil.com") == "/"
+    assert _validate_return_to("javascript:alert(1)") == "/"
+    assert _validate_return_to("ftp://evil.com") == "/"
+
+
+def test_validate_return_to_allows_relative_paths():
+    """Test that relative paths are allowed."""
+    from app.api.oauth.github import _validate_return_to
+
+    assert _validate_return_to("/") == "/"
+    assert _validate_return_to("/dashboard") == "/dashboard"
+    assert _validate_return_to("/oauth/callback") == "/oauth/callback"
+    url_with_params = "/path/with/params?foo=bar"
+    assert _validate_return_to(url_with_params) == url_with_params
+
+
+def test_validate_return_to_rejects_invalid_paths():
+    """Test that invalid paths are rejected."""
+    from app.api.oauth.github import _validate_return_to
+
+    assert _validate_return_to("") == "/"
+    assert _validate_return_to("relative-path") == "/"  # Must start with /
+    assert _validate_return_to("../escape") == "/"
+
+
+# =============================================================================
+# State Expiration Tests
+# =============================================================================
+
+
+def test_validate_and_consume_state_valid():
+    """Test that valid states are accepted."""
+    from app.api.oauth import github as github_module
+    from app.api.oauth.github import _validate_and_consume_state
+
+    _create_valid_state(github_module, "test_valid", "/dashboard")
+
+    result = _validate_and_consume_state("test_valid")
+    assert result is not None
+    assert result["return_to"] == "/dashboard"
+
+    # State should be consumed (removed)
+    assert "test_valid" not in github_module._oauth_states
+
+
+def test_validate_and_consume_state_expired():
+    """Test that expired states are rejected."""
+    from app.api.oauth import github as github_module
+    from app.api.oauth.github import _validate_and_consume_state
+
+    # Create an expired state
+    github_module._oauth_states["test_expired"] = {
+        "return_to": "/",
+        "created_at": datetime.now(UTC) - timedelta(minutes=10),
+    }
+
+    result = _validate_and_consume_state("test_expired")
+    assert result is None
+
+
+def test_validate_and_consume_state_missing_timestamp():
+    """Test that states without timestamp are rejected."""
+    from app.api.oauth import github as github_module
+    from app.api.oauth.github import _validate_and_consume_state
+
+    # Create a state without timestamp
+    github_module._oauth_states["test_no_timestamp"] = {"return_to": "/"}
+
+    result = _validate_and_consume_state("test_no_timestamp")
+    assert result is None
