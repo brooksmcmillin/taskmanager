@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.article_interaction import ArticleInteraction
     from app.models.attachment import Attachment
     from app.models.oauth import OAuthClient
+    from app.models.oauth_provider import UserOAuthProvider
     from app.models.project import Project
     from app.models.recurring_task import RecurringTask
     from app.models.registration_code import RegistrationCode
@@ -68,4 +69,7 @@ class User(Base):
     )
     webauthn_credentials: Mapped[list[WebAuthnCredential]] = relationship(
         "WebAuthnCredential", back_populates="user", cascade="all, delete-orphan"
+    )
+    oauth_providers: Mapped[list[UserOAuthProvider]] = relationship(
+        "UserOAuthProvider", back_populates="user", cascade="all, delete-orphan"
     )
