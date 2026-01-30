@@ -315,12 +315,10 @@
 		left: 0;
 		margin-top: 0.5rem;
 		min-width: 10rem;
-		background-color: white;
+		background-color: var(--dropdown-bg);
 		border-radius: 0.5rem;
-		box-shadow:
-			0 10px 15px -3px rgba(0, 0, 0, 0.1),
-			0 4px 6px -2px rgba(0, 0, 0, 0.05);
-		border: 1px solid #e5e7eb;
+		box-shadow: var(--shadow-lg);
+		border: 1px solid var(--border-color);
 		overflow: hidden;
 		z-index: 50;
 		animation: slideDown 0.15s ease-out;
@@ -346,18 +344,18 @@
 		display: block;
 		padding: 0.5rem 1rem;
 		font-size: 0.875rem;
-		color: #374151;
+		color: var(--text-secondary);
 		text-decoration: none;
-		transition: background-color 0.15s ease-in-out;
+		transition: background-color var(--transition-fast);
 	}
 
 	.dropdown-item:hover {
-		background-color: #f3f4f6;
+		background-color: var(--bg-hover);
 	}
 
 	.dropdown-item.active {
-		background-color: #dbeafe;
-		color: #2563eb;
+		background-color: var(--primary-50);
+		color: var(--primary-600);
 		font-weight: 500;
 	}
 
@@ -372,14 +370,14 @@
 
 	.dropdown-header {
 		padding: 0.75rem 1rem 0.5rem 1rem;
-		color: #111827;
+		color: var(--text-primary);
 		font-size: 0.875rem;
 	}
 
 	.dropdown-divider {
 		height: 1px;
 		margin: 0.25rem 0;
-		background-color: #e5e7eb;
+		background-color: var(--border-color);
 	}
 
 	.user-dropdown {
@@ -395,53 +393,17 @@
 		background: none;
 		cursor: pointer;
 		border-radius: 9999px;
-		transition: background-color 0.15s ease-in-out;
-		color: #6b7280;
+		transition: background-color var(--transition-fast);
+		color: var(--text-muted);
 	}
 
 	.user-dropdown-trigger:hover {
-		background-color: #f3f4f6;
-		color: #111827;
+		background-color: var(--bg-hover);
+		color: var(--text-primary);
 	}
 
 	.user-icon {
 		width: 1.75rem;
 		height: 1.75rem;
-	}
-
-	/* Dark mode support */
-	:global(.dark) .dropdown-menu {
-		background-color: #1f2937;
-		border-color: #374151;
-	}
-
-	:global(.dark) .dropdown-item {
-		color: #d1d5db;
-	}
-
-	:global(.dark) .dropdown-item:hover {
-		background-color: #374151;
-	}
-
-	:global(.dark) .dropdown-item.active {
-		background-color: #1e3a8a;
-		color: #60a5fa;
-	}
-
-	:global(.dark) .dropdown-header {
-		color: #f3f4f6;
-	}
-
-	:global(.dark) .dropdown-divider {
-		background-color: #374151;
-	}
-
-	:global(.dark) .user-dropdown-trigger {
-		color: #9ca3af;
-	}
-
-	:global(.dark) .user-dropdown-trigger:hover {
-		background-color: #374151;
-		color: #f3f4f6;
 	}
 </style>

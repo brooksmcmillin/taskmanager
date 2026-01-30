@@ -419,7 +419,7 @@
 		display: block;
 		font-size: 0.6875rem;
 		font-weight: 700;
-		color: #374151;
+		color: var(--text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
 		margin-bottom: 0.5rem;
@@ -430,19 +430,19 @@
 	.form-select {
 		width: 100%;
 		padding: 0.5rem 0.75rem;
-		border: 1px solid #e5e7eb;
+		border: 1px solid var(--border-color);
 		border-radius: 0.375rem;
 		font-size: 0.875rem;
-		color: #374151;
-		background-color: white;
-		transition: border-color 0.15s ease-in-out;
+		color: var(--text-primary);
+		background-color: var(--bg-input);
+		transition: border-color var(--transition-fast);
 	}
 
 	.form-input:focus,
 	.form-textarea:focus,
 	.form-select:focus {
 		outline: none;
-		border-color: #2563eb;
+		border-color: var(--primary-500);
 		box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 	}
 
@@ -453,7 +453,7 @@
 
 	.repeat-section {
 		padding-top: 1.5rem;
-		border-top: 1px solid #e5e7eb;
+		border-top: 1px solid var(--border-color);
 	}
 
 	.repeat-toggle {
@@ -476,7 +476,7 @@
 	.toggle-text {
 		font-size: 0.875rem;
 		font-weight: 500;
-		color: #374151;
+		color: var(--text-primary);
 	}
 
 	.repeat-options {
@@ -495,7 +495,7 @@
 
 	.interval-label {
 		font-size: 0.875rem;
-		color: #6b7280;
+		color: var(--text-muted);
 	}
 
 	.weekday-picker {
@@ -506,24 +506,24 @@
 
 	.weekday-btn {
 		padding: 0.5rem 0.75rem;
-		border: 1px solid #d1d5db;
+		border: 1px solid var(--gray-300);
 		border-radius: 0.375rem;
-		background-color: white;
+		background-color: var(--bg-input);
 		font-size: 0.75rem;
 		font-weight: 500;
-		color: #374151;
+		color: var(--text-primary);
 		cursor: pointer;
-		transition: all 0.15s ease-in-out;
+		transition: all var(--transition-fast);
 	}
 
 	.weekday-btn:hover {
-		border-color: #2563eb;
-		color: #2563eb;
+		border-color: var(--primary-500);
+		color: var(--primary-500);
 	}
 
 	.weekday-btn.selected {
-		background-color: #2563eb;
-		border-color: #2563eb;
+		background-color: var(--primary-600);
+		border-color: var(--primary-600);
 		color: white;
 	}
 
@@ -536,7 +536,7 @@
 		gap: 0.75rem;
 		margin-top: 2rem;
 		padding-top: 1.5rem;
-		border-top: 1px solid #e5e7eb;
+		border-top: 1px solid var(--border-color);
 	}
 
 	.form-actions .btn-primary {
