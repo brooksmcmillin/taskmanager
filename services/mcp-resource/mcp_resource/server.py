@@ -468,22 +468,14 @@ def create_resource_server(
             logger.debug("API client created successfully")
 
             # SDK handles all filtering server-side
-            # Add include_subtasks parameter
-            params: dict[str, str | int | bool] = {}
-            if status and status.lower() != "all":
-                params["status"] = status
-            if start_date:
-                params["start_date"] = start_date
-            if end_date:
-                params["end_date"] = end_date
-            if category:
-                params["category"] = category
-            if limit:
-                params["limit"] = limit
-            if include_subtasks:
-                params["include_subtasks"] = True
-
-            response = api_client._make_request("GET", "/todos", params=params)
+            response = api_client.get_todos(
+                status=status if status and status.lower() != "all" else None,
+                start_date=start_date,
+                end_date=end_date,
+                category=category,
+                limit=limit,
+                include_subtasks=include_subtasks,
+            )
             logger.info(
                 f"get_todos response: success={response.success}, status={response.status_code}"
             )
@@ -595,22 +587,16 @@ def create_resource_server(
                 except ValueError:
                     return json.dumps({"error": f"Invalid parent_id format: {parent_id}"})
 
-            # Build request data
-            data: dict[str, str | int | list[str]] = {"title": title}
-            if description:
-                data["description"] = description
-            if category:
-                data["category"] = category
-            if priority:
-                data["priority"] = priority
-            if due_date:
-                data["due_date"] = due_date
-            if tags:
-                data["tags"] = tags
-            if parent_id_int:
-                data["parent_id"] = parent_id_int
-
-            response = api_client._make_request("POST", "/todos", data)
+            # Use SDK method with parent_id support
+            response = api_client.create_todo(
+                title=title,
+                description=description,
+                category=category,
+                priority=priority,
+                due_date=due_date,
+                tags=tags,
+                parent_id=parent_id_int,
+            )
             logger.info(
                 f"create_todo response: success={response.success}, status={response.status_code}"
             )
@@ -715,26 +701,18 @@ def create_resource_server(
             if parent_id is not None:
                 updated_fields.append("parent_id")
 
-            # Build request data
-            data: dict[str, str | int | list[str]] = {}
-            if title is not None:
-                data["title"] = title
-            if description is not None:
-                data["description"] = description
-            if category is not None:
-                data["category"] = category
-            if priority is not None:
-                data["priority"] = priority
-            if status is not None:
-                data["status"] = status
-            if due_date is not None:
-                data["due_date"] = due_date
-            if tags is not None:
-                data["tags"] = tags
-            if parent_id_int is not None:
-                data["parent_id"] = parent_id_int
-
-            response = api_client._make_request("PUT", f"/todos/{todo_id}", data)
+            # Use SDK method with parent_id support
+            response = api_client.update_todo(
+                todo_id=todo_id,
+                title=title,
+                description=description,
+                category=category,
+                priority=priority,
+                status=status,
+                due_date=due_date,
+                tags=tags,
+                parent_id=parent_id_int,
+            )
             logger.info(
                 f"update_todo response: success={response.success}, status={response.status_code}"
             )
@@ -923,8 +901,8 @@ def create_resource_server(
             except ValueError:
                 return json.dumps({"error": f"Invalid task_id format: {task_id}"})
 
-            # Get attachments
-            response = api_client._make_request("GET", f"/todos/{todo_id}/attachments")
+            # Get attachments using SDK method
+            response = api_client.get_attachments(todo_id)
             logger.info(
                 f"list_attachments response: success={response.success}, status={response.status_code}"
             )
@@ -974,10 +952,8 @@ def create_resource_server(
             except ValueError:
                 return json.dumps({"error": f"Invalid task_id format: {task_id}"})
 
-            # Delete attachment
-            response = api_client._make_request(
-                "DELETE", f"/todos/{todo_id}/attachments/{attachment_id}"
-            )
+            # Delete attachment using SDK method
+            response = api_client.delete_attachment(todo_id, attachment_id)
             logger.info(
                 f"delete_attachment response: success={response.success}, status={response.status_code}"
             )
@@ -1029,8 +1005,8 @@ def create_resource_server(
             except ValueError:
                 return json.dumps({"error": f"Invalid task_id format: {task_id}"})
 
-            # Get task details
-            response = api_client._make_request("GET", f"/todos/{todo_id}")
+            # Get task details using SDK method
+            response = api_client.get_todo(todo_id)
             logger.info(
                 f"get_todo response: success={response.success}, status={response.status_code}"
             )
@@ -1115,8 +1091,8 @@ def create_resource_server(
             except ValueError:
                 return json.dumps({"error": f"Invalid task_id format: {task_id}"})
 
-            # Delete task
-            response = api_client._make_request("DELETE", f"/todos/{todo_id}")
+            # Delete task using SDK method
+            response = api_client.delete_todo(todo_id)
             logger.info(
                 f"delete_todo response: success={response.success}, status={response.status_code}"
             )
@@ -1164,8 +1140,8 @@ def create_resource_server(
             except ValueError:
                 return json.dumps({"error": f"Invalid task_id format: {task_id}"})
 
-            # Complete task using dedicated endpoint
-            response = api_client._make_request("POST", f"/todos/{todo_id}/complete")
+            # Complete task using SDK method
+            response = api_client.complete_todo(todo_id)
             logger.info(
                 f"complete_todo response: success={response.success}, status={response.status_code}"
             )

@@ -299,6 +299,7 @@ class TaskManagerClient:
         end_date: str | None = None,
         category: str | None = None,
         limit: int | None = None,
+        include_subtasks: bool = False,
     ) -> ApiResponse:
         """
         Get todos with optional filtering.
@@ -310,11 +311,12 @@ class TaskManagerClient:
             end_date: Filter tasks with due_date on or before this date (ISO format)
             category: Filter by category name (project name)
             limit: Maximum number of tasks to return
+            include_subtasks: Include subtasks in the response (default: False)
 
         Returns:
             ApiResponse with TaskListResponse data
         """
-        params: dict[str, str | int] = {}
+        params: dict[str, str | int | bool] = {}
         if project_id is not None:
             params["project_id"] = project_id
         if status is not None:
@@ -327,6 +329,8 @@ class TaskManagerClient:
             params["category"] = category
         if limit is not None:
             params["limit"] = limit
+        if include_subtasks:
+            params["include_subtasks"] = True
         return self._make_request("GET", "/todos", params=params)
 
     def create_todo(
@@ -339,9 +343,10 @@ class TaskManagerClient:
         estimated_hours: float | None = None,
         due_date: str | None = None,
         tags: list[str] | None = None,
+        parent_id: int | None = None,
     ) -> ApiResponse:
         """
-        Create a new todo item.
+        Create a new todo item or subtask.
 
         Args:
             title: Todo title
@@ -352,6 +357,7 @@ class TaskManagerClient:
             estimated_hours: Estimated hours to complete
             due_date: Due date in ISO format
             tags: list of tags
+            parent_id: Parent todo ID to create a subtask (optional)
 
         Returns:
             ApiResponse with TaskCreateResponse data
@@ -371,6 +377,8 @@ class TaskManagerClient:
             data["due_date"] = due_date
         if tags is not None:
             data["tags"] = tags
+        if parent_id is not None:
+            data["parent_id"] = parent_id
         return self._make_request("POST", "/todos", data)
 
     def get_todo(self, todo_id: int) -> ApiResponse:
@@ -397,6 +405,7 @@ class TaskManagerClient:
         status: str | None = None,
         due_date: str | None = None,
         tags: list[str] | None = None,
+        parent_id: int | None = None,
     ) -> ApiResponse:
         """
         Update a todo item.
@@ -412,6 +421,7 @@ class TaskManagerClient:
             status: New status (pending, in_progress, completed, cancelled)
             due_date: New due date (for rescheduling)
             tags: New tags list
+            parent_id: New parent ID to move task (optional)
 
         Returns:
             ApiResponse with TaskUpdateResponse data
@@ -435,6 +445,8 @@ class TaskManagerClient:
             data["due_date"] = due_date
         if tags is not None:
             data["tags"] = tags
+        if parent_id is not None:
+            data["parent_id"] = parent_id
         return self._make_request("PUT", f"/todos/{todo_id}", data)
 
     def delete_todo(self, todo_id: int) -> ApiResponse:
@@ -466,6 +478,33 @@ class TaskManagerClient:
         if actual_hours is not None:
             data["actual_hours"] = actual_hours
         return self._make_request("POST", f"/todos/{todo_id}/complete", data)
+
+    def get_attachments(self, todo_id: int) -> ApiResponse:
+        """
+        Get all attachments for a todo.
+
+        Args:
+            todo_id: Todo ID
+
+        Returns:
+            ApiResponse with list of attachments
+        """
+        return self._make_request("GET", f"/todos/{todo_id}/attachments")
+
+    def delete_attachment(self, todo_id: int, attachment_id: int) -> ApiResponse:
+        """
+        Delete an attachment from a todo.
+
+        Args:
+            todo_id: Todo ID
+            attachment_id: Attachment ID to delete
+
+        Returns:
+            ApiResponse with deletion result
+        """
+        return self._make_request(
+            "DELETE", f"/todos/{todo_id}/attachments/{attachment_id}"
+        )
 
     # Category methods
     def get_categories(self) -> ApiResponse:
