@@ -196,233 +196,263 @@
 </script>
 
 <div class="todo-form-container">
-	<form class="card" on:submit|preventDefault={handleSubmit}>
-		<div class="form-grid">
-			<div class="form-full-width">
-				<label for="title" class="block text-sm font-medium text-gray-700">Title</label>
-				<input
-					type="text"
-					id="title"
-					name="title"
-					required
-					class="form-input mt-1"
-					bind:value={formData.title}
-				/>
-			</div>
-
-			<div>
-				<label for="project_id" class="block text-sm font-medium text-gray-700">Project</label>
-				<select
-					id="project_id"
-					name="project_id"
-					class="form-select mt-1"
-					bind:value={formData.project_id}
-				>
-					<option value="">Select a project...</option>
-					{#each projectList as project}
-						<option value={project.id.toString()}>{project.name}</option>
-					{/each}
-				</select>
-			</div>
-
-			<div>
-				<label for="due_date" class="block text-sm font-medium text-gray-700"
-					>{enableRepeat ? 'Start Date' : 'Due Date'} (Optional)</label
-				>
-				<input
-					type="date"
-					id="due_date"
-					name="due_date"
-					class="form-input mt-1"
-					bind:value={formData.due_date}
-				/>
-			</div>
-
-			<div>
-				<label for="tags" class="block text-sm font-medium text-gray-700"
-					>Tags (comma-separated)</label
-				>
-				<input
-					type="text"
-					id="tags"
-					name="tags"
-					placeholder="backend, urgent, review"
-					class="form-input mt-1"
-					bind:value={formData.tags}
-				/>
-			</div>
-
-			<div>
-				<label for="priority" class="block text-sm font-medium text-gray-700">Priority</label>
-				<select
-					id="priority"
-					name="priority"
-					class="form-select mt-1"
-					bind:value={formData.priority}
-				>
-					<option value="low">Low</option>
-					<option value="medium">Medium</option>
-					<option value="high">High</option>
-					<option value="urgent">Urgent</option>
-				</select>
-			</div>
-
-			<div class="form-full-width">
-				<label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-				<textarea
-					id="description"
-					name="description"
-					rows="3"
-					class="form-textarea mt-1"
-					bind:value={formData.description}
-				></textarea>
-			</div>
-
-			<!-- Repeat Options -->
-			{#if !isEditing}
-				<div class="form-full-width repeat-section">
-					<div class="repeat-toggle">
-						<label class="toggle-label">
-							<input type="checkbox" bind:checked={enableRepeat} class="toggle-checkbox" />
-							<span class="toggle-text">Repeat this task</span>
-						</label>
-					</div>
-
-					{#if enableRepeat}
-						<div class="repeat-options">
-							<div class="repeat-grid">
-								<div>
-									<label for="frequency" class="block text-sm font-medium text-gray-700"
-										>Frequency</label
-									>
-									<select id="frequency" class="form-select mt-1" bind:value={repeatData.frequency}>
-										<option value="daily">Daily</option>
-										<option value="weekly">Weekly</option>
-										<option value="monthly">Monthly</option>
-										<option value="yearly">Yearly</option>
-									</select>
-								</div>
-
-								<div>
-									<label for="interval" class="block text-sm font-medium text-gray-700">Every</label
-									>
-									<div class="interval-input">
-										<input
-											type="number"
-											id="interval"
-											min="1"
-											max="365"
-											class="form-input mt-1"
-											bind:value={repeatData.interval_value}
-										/>
-										<span class="interval-label">
-											{repeatData.frequency === 'daily'
-												? 'day(s)'
-												: repeatData.frequency === 'weekly'
-													? 'week(s)'
-													: repeatData.frequency === 'monthly'
-														? 'month(s)'
-														: 'year(s)'}
-										</span>
-									</div>
-								</div>
-
-								{#if repeatData.frequency === 'weekly'}
-									<div class="form-full-width">
-										<label class="block text-sm font-medium text-gray-700 mb-2">On days</label>
-										<div class="weekday-picker">
-											{#each weekdayNames as day, index}
-												<button
-													type="button"
-													class="weekday-btn"
-													class:selected={repeatData.weekdays.includes(index)}
-													on:click={() => toggleWeekday(index)}
-												>
-													{day}
-												</button>
-											{/each}
-										</div>
-									</div>
-								{/if}
-
-								{#if repeatData.frequency === 'monthly'}
-									<div>
-										<label for="day_of_month" class="block text-sm font-medium text-gray-700"
-											>Day of month</label
-										>
-										<input
-											type="number"
-											id="day_of_month"
-											min="1"
-											max="31"
-											class="form-input mt-1"
-											bind:value={repeatData.day_of_month}
-										/>
-									</div>
-								{/if}
-
-								<div>
-									<label for="end_date" class="block text-sm font-medium text-gray-700"
-										>End Date (Optional)</label
-									>
-									<input
-										type="date"
-										id="end_date"
-										class="form-input mt-1"
-										bind:value={repeatData.end_date}
-									/>
-								</div>
-
-								<div class="skip-missed-toggle">
-									<label class="toggle-label">
-										<input
-											type="checkbox"
-											bind:checked={repeatData.skip_missed}
-											class="toggle-checkbox"
-										/>
-										<span class="toggle-text">Skip missed occurrences</span>
-									</label>
-									<p class="text-xs text-gray-500 mt-1">
-										If enabled, only the next occurrence will be created
-									</p>
-								</div>
-							</div>
-						</div>
-					{/if}
-				</div>
-			{/if}
+	<form on:submit|preventDefault={handleSubmit}>
+		<!-- Title -->
+		<div class="form-section">
+			<label for="title" class="form-label">Title</label>
+			<input
+				type="text"
+				id="title"
+				name="title"
+				required
+				class="form-input"
+				bind:value={formData.title}
+			/>
 		</div>
 
-		<div class="form-submit">
-			<div class="form-actions">
-				<button type="submit" class="btn btn-primary flex-1">{submitButtonText}</button>
-				{#if isEditing}
-					<button
-						type="button"
-						class="btn btn-danger btn-delete"
-						on:click={handleDelete}
-						title="Delete todo"
-					>
-						🗑️
-					</button>
-					<button
-						type="button"
-						class="btn btn-edit-complete"
-						on:click={handleComplete}
-						title="Mark as complete"
-					>
-						✓
-					</button>
+		<!-- Description -->
+		<div class="form-section">
+			<label for="description" class="form-label">Description</label>
+			<textarea
+				id="description"
+				name="description"
+				rows="3"
+				class="form-textarea"
+				bind:value={formData.description}
+			></textarea>
+		</div>
+
+		<!-- Project -->
+		<div class="form-section">
+			<label for="project_id" class="form-label">Project</label>
+			<select
+				id="project_id"
+				name="project_id"
+				class="form-select"
+				bind:value={formData.project_id}
+			>
+				<option value="">Select a project...</option>
+				{#each projectList as project}
+					<option value={project.id.toString()}>{project.name}</option>
+				{/each}
+			</select>
+		</div>
+
+		<!-- Priority -->
+		<div class="form-section">
+			<label for="priority" class="form-label">Priority</label>
+			<select id="priority" name="priority" class="form-select" bind:value={formData.priority}>
+				<option value="low">Low</option>
+				<option value="medium">Medium</option>
+				<option value="high">High</option>
+				<option value="urgent">Urgent</option>
+			</select>
+		</div>
+
+		<!-- Due Date -->
+		<div class="form-section">
+			<label for="due_date" class="form-label"
+				>{enableRepeat ? 'Start Date' : 'Due Date'} (Optional)</label
+			>
+			<input
+				type="date"
+				id="due_date"
+				name="due_date"
+				class="form-input"
+				bind:value={formData.due_date}
+			/>
+		</div>
+
+		<!-- Tags -->
+		<div class="form-section">
+			<label for="tags" class="form-label">Tags (comma-separated)</label>
+			<input
+				type="text"
+				id="tags"
+				name="tags"
+				placeholder="backend, urgent, review"
+				class="form-input"
+				bind:value={formData.tags}
+			/>
+		</div>
+
+		<!-- Repeat Options -->
+		{#if !isEditing}
+			<div class="form-section repeat-section">
+				<div class="repeat-toggle">
+					<label class="toggle-label">
+						<input type="checkbox" bind:checked={enableRepeat} class="toggle-checkbox" />
+						<span class="toggle-text">Repeat this task</span>
+					</label>
+				</div>
+
+				{#if enableRepeat}
+					<div class="repeat-options">
+						<div class="form-section">
+							<label for="frequency" class="form-label">Frequency</label>
+							<select id="frequency" class="form-select" bind:value={repeatData.frequency}>
+								<option value="daily">Daily</option>
+								<option value="weekly">Weekly</option>
+								<option value="monthly">Monthly</option>
+								<option value="yearly">Yearly</option>
+							</select>
+						</div>
+
+						<div class="form-section">
+							<label for="interval" class="form-label">Every</label>
+							<div class="interval-input">
+								<input
+									type="number"
+									id="interval"
+									min="1"
+									max="365"
+									class="form-input"
+									bind:value={repeatData.interval_value}
+								/>
+								<span class="interval-label">
+									{repeatData.frequency === 'daily'
+										? 'day(s)'
+										: repeatData.frequency === 'weekly'
+											? 'week(s)'
+											: repeatData.frequency === 'monthly'
+												? 'month(s)'
+												: 'year(s)'}
+								</span>
+							</div>
+						</div>
+
+						{#if repeatData.frequency === 'weekly'}
+							<div class="form-section">
+								<label class="form-label">On days</label>
+								<div class="weekday-picker">
+									{#each weekdayNames as day, index}
+										<button
+											type="button"
+											class="weekday-btn"
+											class:selected={repeatData.weekdays.includes(index)}
+											on:click={() => toggleWeekday(index)}
+										>
+											{day}
+										</button>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
+						{#if repeatData.frequency === 'monthly'}
+							<div class="form-section">
+								<label for="day_of_month" class="form-label">Day of month</label>
+								<input
+									type="number"
+									id="day_of_month"
+									min="1"
+									max="31"
+									class="form-input"
+									bind:value={repeatData.day_of_month}
+								/>
+							</div>
+						{/if}
+
+						<div class="form-section">
+							<label for="end_date" class="form-label">End Date (Optional)</label>
+							<input
+								type="date"
+								id="end_date"
+								class="form-input"
+								bind:value={repeatData.end_date}
+							/>
+						</div>
+
+						<div class="form-section skip-missed-toggle">
+							<label class="toggle-label">
+								<input
+									type="checkbox"
+									bind:checked={repeatData.skip_missed}
+									class="toggle-checkbox"
+								/>
+								<span class="toggle-text">Skip missed occurrences</span>
+							</label>
+							<p class="text-xs text-gray-500 mt-1">
+								If enabled, only the next occurrence will be created
+							</p>
+						</div>
+					</div>
 				{/if}
 			</div>
+		{/if}
+
+		<!-- Actions -->
+		<div class="form-actions">
+			<button type="submit" class="btn btn-primary">{submitButtonText}</button>
+			{#if isEditing}
+				<button
+					type="button"
+					class="btn btn-danger btn-delete"
+					on:click={handleDelete}
+					title="Delete todo"
+				>
+					🗑️
+				</button>
+				<button
+					type="button"
+					class="btn btn-edit-complete"
+					on:click={handleComplete}
+					title="Mark as complete"
+				>
+					✓
+				</button>
+			{/if}
 		</div>
 	</form>
 </div>
 
 <style>
+	.todo-form-container {
+		/* Remove any default container styling */
+	}
+
+	.form-section {
+		margin-bottom: 1.5rem;
+	}
+
+	.form-label {
+		display: block;
+		font-size: 0.6875rem;
+		font-weight: 700;
+		color: #374151;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		margin-bottom: 0.5rem;
+	}
+
+	.form-input,
+	.form-textarea,
+	.form-select {
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.375rem;
+		font-size: 0.875rem;
+		color: #374151;
+		background-color: white;
+		transition: border-color 0.15s ease-in-out;
+	}
+
+	.form-input:focus,
+	.form-textarea:focus,
+	.form-select:focus {
+		outline: none;
+		border-color: #2563eb;
+		box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+	}
+
+	.form-textarea {
+		resize: vertical;
+		min-height: 80px;
+	}
+
 	.repeat-section {
-		margin-top: 1rem;
-		padding-top: 1rem;
+		padding-top: 1.5rem;
 		border-top: 1px solid #e5e7eb;
 	}
 
@@ -450,19 +480,7 @@
 	}
 
 	.repeat-options {
-		background-color: #f9fafb;
-		border-radius: 0.5rem;
-		padding: 1rem;
-	}
-
-	.repeat-grid {
-		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 1rem;
-	}
-
-	.repeat-grid .form-full-width {
-		grid-column: span 2;
+		padding-top: 1rem;
 	}
 
 	.interval-input {
@@ -472,7 +490,7 @@
 	}
 
 	.interval-input input {
-		width: 5rem;
+		flex: 0 0 5rem;
 	}
 
 	.interval-label {
@@ -510,36 +528,24 @@
 	}
 
 	.skip-missed-toggle {
-		grid-column: span 2;
+		margin-top: 1rem;
 	}
 
-	/* Dark mode support */
-	:global(.dark) .repeat-options {
-		background-color: #1f2937;
+	.form-actions {
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 2rem;
+		padding-top: 1.5rem;
+		border-top: 1px solid #e5e7eb;
 	}
 
-	:global(.dark) .toggle-text {
-		color: #d1d5db;
+	.form-actions .btn-primary {
+		flex: 1;
+		margin-left: 0;
 	}
 
-	:global(.dark) .weekday-btn {
-		background-color: #374151;
-		border-color: #4b5563;
-		color: #d1d5db;
-	}
-
-	:global(.dark) .weekday-btn:hover {
-		border-color: #60a5fa;
-		color: #60a5fa;
-	}
-
-	:global(.dark) .weekday-btn.selected {
-		background-color: #2563eb;
-		border-color: #2563eb;
-		color: white;
-	}
-
-	:global(.dark) .interval-label {
-		color: #9ca3af;
+	.form-actions .btn-delete,
+	.form-actions .btn-edit-complete {
+		margin-left: 0;
 	}
 </style>
