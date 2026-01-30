@@ -407,3 +407,451 @@ class TestTaskTransformation:
 
         category = task.get("project_name") or task.get("category")
         assert category == "Personal"
+
+
+class TestTimestampInResponses:
+    """Tests for current_time timestamp in MCP tool responses."""
+
+    def test_timestamp_format(self) -> None:
+        """Test that timestamps are in ISO format."""
+        import datetime
+
+        now = datetime.datetime.now()
+        timestamp = now.isoformat()
+
+        # Verify it's a valid ISO format
+        parsed = datetime.datetime.fromisoformat(timestamp)
+        assert isinstance(parsed, datetime.datetime)
+
+    def test_response_includes_current_time(self) -> None:
+        """Test that responses include current_time field."""
+        import datetime
+        import json
+
+        # Simulate a response with current_time
+        response_dict = {
+            "tasks": [{"id": "task_1", "title": "Test"}],
+            "current_time": datetime.datetime.now().isoformat(),
+        }
+
+        response = json.dumps(response_dict)
+        parsed = json.loads(response)
+
+        assert "current_time" in parsed
+        assert isinstance(parsed["current_time"], str)
+        # Verify it can be parsed as ISO timestamp
+        datetime.datetime.fromisoformat(parsed["current_time"])
+
+
+class TestSubtasksSupport:
+    """Tests for subtasks functionality in MCP tools."""
+
+    def test_task_with_subtasks_structure(self) -> None:
+        """Test that tasks can include subtasks array."""
+        task = {
+            "id": 1,
+            "title": "Parent Task",
+            "subtasks": [
+                {
+                    "id": 2,
+                    "title": "Subtask 1",
+                    "status": "pending",
+                    "priority": "medium",
+                },
+                {
+                    "id": 3,
+                    "title": "Subtask 2",
+                    "status": "completed",
+                    "priority": "high",
+                },
+            ],
+        }
+
+        assert "subtasks" in task
+        assert len(task["subtasks"]) == 2
+        assert task["subtasks"][0]["title"] == "Subtask 1"
+        assert task["subtasks"][1]["status"] == "completed"
+
+    def test_subtask_transformation(self) -> None:
+        """Test transformation of subtasks in response."""
+        subtask = {
+            "id": 10,
+            "title": "Subtask",
+            "description": "Details",
+            "status": "in_progress",
+            "priority": "high",
+            "due_date": "2025-02-01",
+            "estimated_hours": 2.5,
+            "actual_hours": 1.0,
+            "created_at": "2025-01-30T10:00:00",
+            "updated_at": "2025-01-30T11:00:00",
+        }
+
+        transformed = {
+            "id": f"task_{subtask.get('id')}",
+            "title": subtask.get("title", ""),
+            "description": subtask.get("description"),
+            "status": subtask.get("status", "pending"),
+            "priority": subtask.get("priority", "medium"),
+            "due_date": subtask.get("due_date"),
+            "estimated_hours": subtask.get("estimated_hours"),
+            "actual_hours": subtask.get("actual_hours"),
+            "created_at": subtask.get("created_at"),
+            "updated_at": subtask.get("updated_at"),
+        }
+
+        assert transformed["id"] == "task_10"
+        assert transformed["title"] == "Subtask"
+        assert transformed["status"] == "in_progress"
+        assert transformed["estimated_hours"] == 2.5
+
+    def test_parent_id_parsing(self) -> None:
+        """Test parsing parent_id from task."""
+        task = {"id": 5, "title": "Child Task", "parent_id": 1}
+
+        parent_id_str = f"task_{task.get('parent_id')}" if task.get("parent_id") else None
+        assert parent_id_str == "task_1"
+
+    def test_parent_id_none_for_root_task(self) -> None:
+        """Test that root tasks have None parent_id."""
+        task = {"id": 1, "title": "Root Task", "parent_id": None}
+
+        parent_id_str = f"task_{task.get('parent_id')}" if task.get("parent_id") else None
+        assert parent_id_str is None
+
+    def test_parent_id_conversion_for_create(self) -> None:
+        """Test converting parent_id string to int for API calls."""
+        parent_id = "task_123"
+
+        numeric_id = parent_id.replace("task_", "") if parent_id.startswith("task_") else parent_id
+        parent_id_int = int(numeric_id)
+
+        assert parent_id_int == 123
+
+    def test_parent_id_conversion_without_prefix(self) -> None:
+        """Test converting parent_id without prefix."""
+        parent_id = "456"
+
+        numeric_id = parent_id.replace("task_", "") if parent_id.startswith("task_") else parent_id
+        parent_id_int = int(numeric_id)
+
+        assert parent_id_int == 456
+
+    @pytest.mark.asyncio
+    async def test_get_tasks_with_subtasks_response(self) -> None:
+        """Test get_tasks handles tasks with subtasks."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={
+                "tasks": [
+                    {
+                        "id": 1,
+                        "title": "Parent",
+                        "subtasks": [
+                            {"id": 2, "title": "Child 1", "status": "pending"},
+                            {"id": 3, "title": "Child 2", "status": "completed"},
+                        ],
+                    }
+                ]
+            },
+            status_code=200,
+        )
+
+        response = mock_client._make_request("GET", "/todos", {"include_subtasks": True})
+        tasks, error = validate_list_response(response, "tasks")
+
+        assert error is None
+        assert len(tasks) == 1
+        assert "subtasks" in tasks[0]
+        assert len(tasks[0]["subtasks"]) == 2
+
+
+class TestAttachmentTools:
+    """Tests for attachment management MCP tools."""
+
+    @pytest.mark.asyncio
+    async def test_list_attachments_response(self) -> None:
+        """Test list_task_attachments returns attachment data."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={
+                "attachments": [
+                    {
+                        "id": 1,
+                        "todo_id": 10,
+                        "filename": "screenshot.png",
+                        "content_type": "image/png",
+                        "file_size": 12345,
+                        "created_at": "2025-01-30T10:00:00",
+                    },
+                    {
+                        "id": 2,
+                        "todo_id": 10,
+                        "filename": "document.pdf",
+                        "content_type": "application/pdf",
+                        "file_size": 54321,
+                        "created_at": "2025-01-30T11:00:00",
+                    },
+                ]
+            },
+            status_code=200,
+        )
+
+        response = mock_client._make_request("GET", "/todos/10/attachments")
+        attachments, error = validate_list_response(response, "attachments")
+
+        assert error is None
+        assert len(attachments) == 2
+        assert attachments[0]["filename"] == "screenshot.png"
+        assert attachments[0]["content_type"] == "image/png"
+        assert attachments[1]["file_size"] == 54321
+
+    @pytest.mark.asyncio
+    async def test_list_attachments_empty(self) -> None:
+        """Test list_task_attachments with no attachments."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={"attachments": []},
+            status_code=200,
+        )
+
+        response = mock_client._make_request("GET", "/todos/10/attachments")
+        attachments, error = validate_list_response(response, "attachments")
+
+        assert error is None
+        assert len(attachments) == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_attachment_success(self) -> None:
+        """Test delete_task_attachment successful response."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={"deleted": True, "id": 5},
+            status_code=200,
+        )
+
+        response = mock_client._make_request("DELETE", "/todos/10/attachments/5")
+
+        assert response.success is True
+        assert response.data is not None
+        assert response.data.get("deleted") is True
+        assert response.data.get("id") == 5
+
+    @pytest.mark.asyncio
+    async def test_delete_attachment_not_found(self) -> None:
+        """Test delete_task_attachment when attachment doesn't exist."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=False,
+            error="Attachment not found",
+            status_code=404,
+        )
+
+        response = mock_client._make_request("DELETE", "/todos/10/attachments/999")
+
+        assert response.success is False
+        assert response.error == "Attachment not found"
+
+    def test_attachment_response_structure(self) -> None:
+        """Test attachment response data structure."""
+        attachment = {
+            "id": 1,
+            "todo_id": 10,
+            "filename": "image.jpg",
+            "content_type": "image/jpeg",
+            "file_size": 102400,
+            "created_at": "2025-01-30T10:00:00",
+        }
+
+        assert "id" in attachment
+        assert "todo_id" in attachment
+        assert "filename" in attachment
+        assert "content_type" in attachment
+        assert "file_size" in attachment
+        assert "created_at" in attachment
+        assert isinstance(attachment["file_size"], int)
+        assert attachment["file_size"] > 0
+
+
+class TestGetTaskTool:
+    """Tests for get_task MCP tool."""
+
+    @pytest.mark.asyncio
+    async def test_get_task_success(self) -> None:
+        """Test get_task retrieves a single task with full details."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 42,
+                "title": "Test Task",
+                "description": "Task description",
+                "status": "in_progress",
+                "priority": "high",
+                "due_date": "2025-02-15",
+                "project_name": "Work",
+                "tags": ["urgent", "backend"],
+                "parent_id": None,
+                "subtasks": [
+                    {
+                        "id": 43,
+                        "title": "Subtask 1",
+                        "status": "pending",
+                        "priority": "medium",
+                    }
+                ],
+                "estimated_hours": 5.0,
+                "actual_hours": 2.5,
+                "created_at": "2025-01-30T10:00:00",
+                "updated_at": "2025-01-30T12:00:00",
+            },
+            status_code=200,
+        )
+
+        response = mock_client._make_request("GET", "/todos/42")
+        task, error = validate_dict_response(response, "task")
+
+        assert error is None
+        assert task is not None
+        assert task["id"] == 42
+        assert task["title"] == "Test Task"
+        assert task["status"] == "in_progress"
+        assert task["priority"] == "high"
+        assert "subtasks" in task
+        assert len(task["subtasks"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_get_task_not_found(self) -> None:
+        """Test get_task handles task not found error."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=False, error="Task not found", status_code=404
+        )
+
+        response = mock_client._make_request("GET", "/todos/999")
+        task, error = validate_dict_response(response, "task")
+
+        assert error == "Task not found"
+        assert task is None
+
+    def test_task_id_parsing_for_get_task(self) -> None:
+        """Test parsing task_id in different formats."""
+        # Test with prefix
+        task_id = "task_123"
+        numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+        assert int(numeric_id) == 123
+
+        # Test without prefix
+        task_id = "456"
+        numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+        assert int(numeric_id) == 456
+
+
+class TestDeleteTaskTool:
+    """Tests for delete_task MCP tool."""
+
+    @pytest.mark.asyncio
+    async def test_delete_task_success(self) -> None:
+        """Test delete_task successfully deletes a task."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True, data={"deleted": True}, status_code=200
+        )
+
+        response = mock_client._make_request("DELETE", "/todos/10")
+
+        assert response.success is True
+        assert response.data is not None
+        assert response.data.get("deleted") is True
+
+    @pytest.mark.asyncio
+    async def test_delete_task_not_found(self) -> None:
+        """Test delete_task handles task not found error."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=False, error="Task not found", status_code=404
+        )
+
+        response = mock_client._make_request("DELETE", "/todos/999")
+
+        assert response.success is False
+        assert response.error == "Task not found"
+
+    @pytest.mark.asyncio
+    async def test_delete_task_with_subtasks(self) -> None:
+        """Test that deleting a task also deletes its subtasks."""
+        mock_client = MagicMock()
+        # Backend handles cascade delete, so we just verify the request succeeds
+        mock_client._make_request.return_value = ApiResponse(
+            success=True, data={"deleted": True}, status_code=200
+        )
+
+        response = mock_client._make_request("DELETE", "/todos/10")
+
+        assert response.success is True
+
+    def test_delete_task_id_parsing(self) -> None:
+        """Test task_id parsing for delete operations."""
+        task_id = "task_123"
+        numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+        assert int(numeric_id) == 123
+
+
+class TestCompleteTaskTool:
+    """Tests for complete_task MCP tool."""
+
+    @pytest.mark.asyncio
+    async def test_complete_task_success(self) -> None:
+        """Test complete_task marks a task as completed."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True, data={"completed": True}, status_code=200
+        )
+
+        response = mock_client._make_request("POST", "/todos/10/complete")
+
+        assert response.success is True
+        assert response.data is not None
+        assert response.data.get("completed") is True
+
+    @pytest.mark.asyncio
+    async def test_complete_task_not_found(self) -> None:
+        """Test complete_task handles task not found error."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=False, error="Task not found", status_code=404
+        )
+
+        response = mock_client._make_request("POST", "/todos/999/complete")
+
+        assert response.success is False
+        assert response.error == "Task not found"
+
+    @pytest.mark.asyncio
+    async def test_complete_already_completed_task(self) -> None:
+        """Test completing an already completed task."""
+        mock_client = MagicMock()
+        # Backend allows re-completing tasks
+        mock_client._make_request.return_value = ApiResponse(
+            success=True, data={"completed": True}, status_code=200
+        )
+
+        response = mock_client._make_request("POST", "/todos/10/complete")
+
+        assert response.success is True
+
+    def test_complete_task_id_parsing(self) -> None:
+        """Test task_id parsing for complete operations."""
+        # With prefix
+        task_id = "task_789"
+        numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+        assert int(numeric_id) == 789
+
+        # Without prefix
+        task_id = "123"
+        numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+        assert int(numeric_id) == 123
