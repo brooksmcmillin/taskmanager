@@ -58,6 +58,7 @@ async def screen_content(text: str, role: str = "user") -> dict[str, Any]:
             json={
                 "messages": [{"role": role, "content": text}],
                 "breakdown": True,
+                "project_id": "project-9146177048",
             },
             headers={
                 "Authorization": f"Bearer {LAKERA_API_KEY}",
