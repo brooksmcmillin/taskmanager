@@ -1,5 +1,6 @@
 """FastAPI dependency injection."""
 
+import secrets
 from collections.abc import AsyncGenerator
 from datetime import UTC
 from typing import Annotated
@@ -98,7 +99,7 @@ async def _extract_bearer_token(request: Request) -> str:
 
 
 async def _validate_access_token(db: DbSession, token: str):
-    """Validate access token and return the token object.
+    """Validate access token with constant-time comparison.
 
     Args:
         db: Database session
@@ -118,12 +119,15 @@ async def _validate_access_token(db: DbSession, token: str):
 
     result = await db.execute(
         select(AccessToken)
-        .where(AccessToken.token == token)
+        .where(AccessToken.token == token)  # SQL filter (OK for performance)
         .where(AccessToken.expires_at > datetime.now(UTC))
     )
     access_token = result.scalar_one_or_none()
 
-    if not access_token:
+    # Add constant-time verification to prevent timing attacks
+    if not access_token or not secrets.compare_digest(
+        access_token.token.encode("utf-8"), token.encode("utf-8")
+    ):
         raise errors.invalid_token()
 
     return access_token

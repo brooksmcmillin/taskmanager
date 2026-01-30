@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Authorization {{ 'Success' if code else 'Failed' }}</title>
+    <style>
+        body { font-family: system-ui; background: #f9fafb; padding: 2rem; }
+        .card { max-width: 480px; margin: 0 auto; background: white;
+                border-radius: 1rem; padding: 2rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        h1 { color: {{ '#dc2626' if error else '#059669' }}; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        {% if error %}
+            <h1>Authorization Failed</h1>
+            <p>Error: {{ error }}</p>
+        {% else %}
+            <h1>Authorization Successful!</h1>
+            <p>You can close this window and return to the terminal.</p>
+            <script>setTimeout(() => window.close(), 2000);</script>
+        {% endif %}
+    </div>
+</body>
+</html>

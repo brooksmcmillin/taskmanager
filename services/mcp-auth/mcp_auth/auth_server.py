@@ -5,6 +5,7 @@ import os
 import secrets
 import time
 from collections.abc import Awaitable, Callable, MutableMapping
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import aiohttp
@@ -31,6 +32,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
+from starlette.templating import Jinja2Templates
 from taskmanager_sdk import AuthenticationError, TaskManagerClient, TokenConfig
 from uvicorn import Config, Server
 
@@ -41,6 +43,10 @@ from .taskmanager_oauth_provider import TaskManagerAuthSettings, TaskManagerOAut
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+# Template setup
+templates_dir = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(templates_dir))
 
 # Constants for device flow
 DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
@@ -353,7 +359,10 @@ async def handle_refresh_token_exchange(
                 status_code=401,
                 headers={"Cache-Control": "no-store"},
             )
-        if client.client_secret and client_secret != client.client_secret:
+        if client.client_secret and not secrets.compare_digest(
+            client_secret.encode("utf-8") if client_secret else b"",
+            client.client_secret.encode("utf-8"),
+        ):
             logger.warning(f"Invalid client_secret for client: {client_id}")
             return JSONResponse(
                 {"error": "invalid_client", "error_description": "Invalid client credentials"},
@@ -762,40 +771,24 @@ def create_authorization_server(
     # Add MCP client callback route
     async def mcp_client_callback_handler(request: Request) -> Response:
         """Handle callback from MCP client OAuth flow."""
-        from html import escape
-
-        from starlette.responses import HTMLResponse
-
         # Extract auth code and state from query params
         code = request.query_params.get("code")
         error = request.query_params.get("error")
 
         if error:
-            return HTMLResponse(
-                f"""
-            <html>
-            <body>
-                <h1>Authorization Failed</h1>
-                <p>Error: {escape(error)}</p>
-                <p>You can close this window and return to the terminal.</p>
-            </body>
-            </html>
-            """,
+            return templates.TemplateResponse(
+                "authorization_callback.html",
+                {"request": request, "error": error, "code": None},
                 status_code=400,
             )
 
         if code:
-            return HTMLResponse(
-                """
-            <html>
-            <body>
-                <h1>Authorization Successful!</h1>
-                <p>You can close this window and return to the terminal.</p>
-                <script>setTimeout(() => window.close(), 2000);</script>
-            </body>
-            </html>
-            """
+            return templates.TemplateResponse(
+                "authorization_callback.html",
+                {"request": request, "code": code, "error": None},
             )
+
+        from starlette.responses import HTMLResponse
 
         return HTMLResponse("Invalid callback", status_code=400)
 
