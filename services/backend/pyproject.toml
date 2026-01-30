@@ -28,6 +28,10 @@ dependencies = [
     "feedparser>=6.0.11",
     "apscheduler>=3.10.4",
     "cryptography==46.0.4",
+    # File uploads
+    "aiofiles>=24.1.0",
+    "filetype>=1.2.0",
+    "pillow>=11.0.0",
 ]
 
 [project.optional-dependencies]

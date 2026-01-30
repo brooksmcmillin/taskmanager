@@ -20,6 +20,9 @@ services:
       - ENVIRONMENT=production
       - DEBUG=false
       - FRONTEND_URL=${FRONTEND_URL:-https://todo.brooksmcmillin.com}
+      - UPLOAD_DIR=/app/uploads
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -121,6 +124,7 @@ volumes:
   postgres_data:
     external: true
     name: db_postgres_data
+  uploads_data:
 
 networks:
   taskmanager_network:

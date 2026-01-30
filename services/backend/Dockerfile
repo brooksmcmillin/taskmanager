@@ -29,8 +29,10 @@ COPY alembic.ini ./
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
 
-# Create non-root user
-RUN adduser --disabled-password --gecos "" appuser
+# Create non-root user and uploads directory
+RUN adduser --disabled-password --gecos "" appuser && \
+    mkdir -p /app/uploads && \
+    chown appuser:appuser /app/uploads
 USER appuser
 
 EXPOSE 8000

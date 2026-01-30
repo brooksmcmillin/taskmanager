@@ -1,5 +1,13 @@
 import { writable, derived } from 'svelte/store';
-import type { Todo, TodoFilters, TodoCreate, TodoUpdate, Subtask, SubtaskCreate } from '$lib/types';
+import type {
+	Todo,
+	TodoFilters,
+	TodoCreate,
+	TodoUpdate,
+	Subtask,
+	SubtaskCreate,
+	Attachment
+} from '$lib/types';
 import { api } from '$lib/api/client';
 import { logger } from '$lib/utils/logger';
 
@@ -145,6 +153,60 @@ function createTodoStore() {
 				logger.error('Failed to load subtasks:', error);
 				throw error;
 			}
+		},
+		// Attachment methods
+		loadAttachments: async (todoId: number): Promise<Attachment[]> => {
+			try {
+				const response = await api.get<{ data: Attachment[] }>(`/api/todos/${todoId}/attachments`);
+				// Update the todo's attachments in the store
+				update((todos) =>
+					todos.map((t) => (t.id === todoId ? { ...t, attachments: response.data } : t))
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to load attachments:', error);
+				throw error;
+			}
+		},
+		uploadAttachment: async (todoId: number, file: File): Promise<Attachment> => {
+			try {
+				const response = await api.uploadFile<{ data: Attachment }>(
+					`/api/todos/${todoId}/attachments`,
+					file
+				);
+				// Update the todo's attachments in the store
+				update((todos) =>
+					todos.map((t) =>
+						t.id === todoId ? { ...t, attachments: [...(t.attachments || []), response.data] } : t
+					)
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to upload attachment:', error);
+				throw error;
+			}
+		},
+		removeAttachment: async (todoId: number, attachmentId: number) => {
+			try {
+				await api.delete(`/api/todos/${todoId}/attachments/${attachmentId}`);
+				// Remove the attachment from the store
+				update((todos) =>
+					todos.map((t) =>
+						t.id === todoId
+							? {
+									...t,
+									attachments: (t.attachments || []).filter((a) => a.id !== attachmentId)
+								}
+							: t
+					)
+				);
+			} catch (error) {
+				logger.error('Failed to remove attachment:', error);
+				throw error;
+			}
+		},
+		getAttachmentUrl: (todoId: number, attachmentId: number): string => {
+			return `/api/todos/${todoId}/attachments/${attachmentId}`;
 		}
 	};
 }

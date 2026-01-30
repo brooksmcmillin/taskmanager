@@ -2,6 +2,7 @@
 
 from app.models.article import Article
 from app.models.article_interaction import ArticleInteraction, ArticleRating
+from app.models.attachment import Attachment
 from app.models.feed_source import FeedSource, FeedType
 from app.models.oauth import AccessToken, AuthorizationCode, DeviceCode, OAuthClient
 from app.models.project import Project
@@ -31,4 +32,5 @@ __all__ = [
     "FeedType",
     "ArticleInteraction",
     "ArticleRating",
+    "Attachment",
 ]

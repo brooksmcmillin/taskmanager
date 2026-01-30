@@ -57,6 +57,30 @@ class ApiClient {
 	delete<T>(path: string) {
 		return this.request<T>('DELETE', path);
 	}
+
+	async uploadFile<T>(path: string, file: File): Promise<T> {
+		const url = new URL(`${BASE_URL}${path}`, window.location.origin);
+		const formData = new FormData();
+		formData.append('file', file);
+
+		const response = await fetch(url.toString(), {
+			method: 'POST',
+			credentials: 'include',
+			body: formData
+		});
+
+		if (response.status === 401) {
+			if (browser) goto('/login');
+			throw new Error('Authentication required');
+		}
+
+		if (!response.ok) {
+			const error = await response.json();
+			throw new Error(error.detail?.message || error.error?.message || 'Upload failed');
+		}
+
+		return response.json();
+	}
 }
 
 export const api = new ApiClient();

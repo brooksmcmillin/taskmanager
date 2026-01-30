@@ -12,6 +12,7 @@ from app.db.database import Base
 
 if TYPE_CHECKING:
     from app.models.article_interaction import ArticleInteraction
+    from app.models.attachment import Attachment
     from app.models.oauth import OAuthClient
     from app.models.project import Project
     from app.models.recurring_task import RecurringTask
@@ -56,4 +57,7 @@ class User(Base):
     )
     article_interactions: Mapped[list[ArticleInteraction]] = relationship(
         "ArticleInteraction", back_populates="user", cascade="all, delete-orphan"
+    )
+    attachments: Mapped[list[Attachment]] = relationship(
+        "Attachment", back_populates="user", cascade="all, delete-orphan"
     )
