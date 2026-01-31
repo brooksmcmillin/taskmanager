@@ -6,7 +6,7 @@ This migration adds:
 3. position field to todos table for manual ordering within projects/parents
 
 Revision ID: 0006_add_position_and_archived_at
-Revises: 9103b4db1955
+Revises: 0005_add_attachments
 Create Date: 2026-01-31
 
 """
@@ -19,7 +19,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0006_add_position_and_archived_at"
-down_revision: str | None = "9103b4db1955"
+down_revision: str | None = "0005_add_attachments"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
