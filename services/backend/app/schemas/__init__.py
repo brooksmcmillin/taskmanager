@@ -4,7 +4,7 @@ Note: Most schemas are defined inline in their API modules for simplicity.
 This module contains shared schemas used across multiple endpoints.
 """
 
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -12,7 +12,7 @@ from pydantic import BaseModel
 T = TypeVar("T")
 
 
-class ListResponse(BaseModel, Generic[T]):
+class ListResponse[T](BaseModel):
     """Generic list response with data and metadata.
 
     Use this for any endpoint that returns a list of items with metadata.
@@ -27,7 +27,7 @@ class ListResponse(BaseModel, Generic[T]):
     meta: dict
 
 
-class DataResponse(BaseModel, Generic[T]):
+class DataResponse[T](BaseModel):
     """Generic single item response.
 
     Use this for any endpoint that returns a single item wrapped in a data field.

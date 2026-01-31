@@ -9,7 +9,7 @@ from sqlalchemy import and_, select
 from app.core.errors import errors
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
-from app.models.todo import Priority, Status, Todo
+from app.models.todo import ActionType, AgentStatus, Priority, Status, Todo
 from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/todos", tags=["todos"])
@@ -30,6 +30,9 @@ class TodoCreate(BaseModel):
     estimated_hours: float | None = None
     parent_id: int | None = None
     position: int | None = None
+    # Agent fields - typically not set on creation, inferred automatically
+    agent_actionable: bool | None = None
+    action_type: ActionType | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -47,6 +50,12 @@ class TodoUpdate(BaseModel):
     actual_hours: float | None = None
     parent_id: int | None = None
     position: int | None = None
+    # Agent fields
+    agent_actionable: bool | None = None
+    action_type: ActionType | None = None
+    agent_status: AgentStatus | None = None
+    agent_notes: str | None = None
+    blocking_reason: str | None = None
 
 
 class BulkUpdateRequest(BaseModel):
@@ -72,6 +81,10 @@ class SubtaskResponse(BaseModel):
     position: int
     created_at: datetime
     updated_at: datetime | None
+    # Agent fields
+    agent_actionable: bool | None = None
+    action_type: ActionType | None = None
+    agent_status: AgentStatus | None = None
 
 
 class TodoResponse(BaseModel):
@@ -97,6 +110,12 @@ class TodoResponse(BaseModel):
     subtasks: list[SubtaskResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime | None
+    # Agent fields
+    agent_actionable: bool | None = None
+    action_type: ActionType | None = None
+    agent_status: AgentStatus | None = None
+    agent_notes: str | None = None
+    blocking_reason: str | None = None
 
 
 # Helper functions
@@ -123,6 +142,9 @@ def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
         position=subtask.position,
         created_at=subtask.created_at,
         updated_at=subtask.updated_at,
+        agent_actionable=subtask.agent_actionable,
+        action_type=subtask.action_type,
+        agent_status=subtask.agent_status,
     )
 
 
@@ -168,7 +190,148 @@ def _build_todo_response(
         subtasks=subtask_responses,
         created_at=todo.created_at,
         updated_at=todo.updated_at,
+        agent_actionable=todo.agent_actionable,
+        action_type=todo.action_type,
+        agent_status=todo.agent_status,
+        agent_notes=todo.agent_notes,
+        blocking_reason=todo.blocking_reason,
     )
+
+
+# Rule-based action type inference patterns
+# Each entry: action_type -> (keywords, agent_actionable)
+ACTION_PATTERNS: dict[ActionType, tuple[list[str], bool]] = {
+    ActionType.research: (
+        [
+            "research",
+            "find out",
+            "look up",
+            "investigate",
+            "learn about",
+            "explore",
+            "discover",
+            "analyze",
+            "study",
+            "review options",
+            "compare",
+        ],
+        True,  # Agent can do research
+    ),
+    ActionType.code: (
+        [
+            "implement",
+            "fix bug",
+            "refactor",
+            "write code",
+            "build",
+            "debug",
+            "code",
+            "program",
+            "develop",
+            "create script",
+            "automate",
+        ],
+        True,  # Agent can write/modify code
+    ),
+    ActionType.email: (
+        [
+            "email",
+            "send",
+            "reply",
+            "follow up with",
+            "draft",
+            "respond to",
+            "write to",
+            "contact via email",
+            "compose",
+        ],
+        True,  # Agent can draft emails
+    ),
+    ActionType.document: (
+        [
+            "write",
+            "document",
+            "create doc",
+            "draft document",
+            "prepare report",
+            "write up",
+            "summarize",
+            "create summary",
+        ],
+        True,  # Agent can create documents
+    ),
+    ActionType.review: (
+        ["review", "check", "proofread", "audit", "evaluate", "assess", "inspect"],
+        True,  # Agent can review content
+    ),
+    ActionType.data_entry: (
+        ["enter data", "input", "fill out", "update spreadsheet", "log", "record"],
+        True,  # Agent can do data entry with proper access
+    ),
+    ActionType.purchase: (
+        ["buy", "purchase", "order", "book", "reserve", "subscribe"],
+        False,  # Needs human approval/payment
+    ),
+    ActionType.schedule: (
+        [
+            "schedule",
+            "set up meeting",
+            "arrange",
+            "plan meeting",
+            "book time",
+            "calendar",
+            "set appointment",
+        ],
+        False,  # Needs human for scheduling decisions
+    ),
+    ActionType.call: (
+        ["call", "phone", "dial", "ring", "speak with", "talk to"],
+        False,  # Agent can't make phone calls
+    ),
+    ActionType.errand: (
+        ["pick up", "drop off", "go to", "visit", "attend", "deliver", "collect"],
+        False,  # Physical presence required
+    ),
+    ActionType.manual: (
+        [
+            "physically",
+            "in person",
+            "hands-on",
+            "manually",
+            "assemble",
+            "install",
+            "repair",
+            "fix physically",
+            "clean",
+            "organize physically",
+        ],
+        False,  # Physical action required
+    ),
+}
+
+
+def infer_action_type(
+    title: str, description: str | None
+) -> tuple[ActionType | None, bool | None]:
+    """Infer action type and agent actionability from task title/description.
+
+    Uses keyword matching to classify tasks. Returns (None, None) if no
+    pattern matches, allowing the agent to classify later via LLM.
+
+    Args:
+        title: Task title
+        description: Optional task description
+
+    Returns:
+        Tuple of (action_type, agent_actionable) or (None, None) if unknown
+    """
+    text = f"{title} {description or ''}".lower()
+
+    for action_type, (keywords, actionable) in ACTION_PATTERNS.items():
+        if any(keyword in text for keyword in keywords):
+            return action_type, actionable
+
+    return None, None  # Unknown - agent can classify later
 
 
 @router.get("")
@@ -182,7 +345,7 @@ async def list_todos(
     end_date: date | None = Query(None),  # noqa: B008
     parent_id: int | None = Query(None),
     include_subtasks: bool = Query(False),
-    order_by: str | None = Query(None, description="Order by: 'position' or 'due_date'"),
+    order_by: str | None = Query(None, description="Order by: position or due_date"),
 ) -> ListResponse[TodoResponse]:
     """List todos with optional filters.
 
@@ -318,6 +481,18 @@ async def create_todo(
         max_pos = max_pos_result.scalar() or 0
         position = max_pos + 1
 
+    # Infer agent fields if not provided
+    agent_actionable = request.agent_actionable
+    action_type = request.action_type
+    if agent_actionable is None or action_type is None:
+        inferred_type, inferred_actionable = infer_action_type(
+            request.title, request.description
+        )
+        if action_type is None:
+            action_type = inferred_type
+        if agent_actionable is None:
+            agent_actionable = inferred_actionable
+
     todo = Todo(
         user_id=user.id,
         title=request.title,
@@ -331,6 +506,8 @@ async def create_todo(
         estimated_hours=request.estimated_hours,
         parent_id=request.parent_id,
         position=position,
+        agent_actionable=agent_actionable,
+        action_type=action_type,
     )
     db.add(todo)
     await db.flush()
