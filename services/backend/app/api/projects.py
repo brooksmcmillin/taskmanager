@@ -1,6 +1,6 @@
 """Project API routes."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,14 +25,16 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectUpdate(BaseModel):
-    """Update project request."""
+    """Update project request.
+
+    Note: archived_at is not settable via update - use /archive and /unarchive endpoints.
+    """
 
     name: str | None = None
     description: str | None = None
     color: str | None = None
     position: int | None = None
     is_active: bool | None = None
-    archived_at: datetime | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -181,7 +183,7 @@ async def archive_project(
     if not project:
         raise errors.project_not_found()
 
-    project.archived_at = datetime.now()
+    project.archived_at = datetime.now(UTC)
 
     return {"data": ProjectResponse.model_validate(project)}
 
@@ -227,9 +229,13 @@ async def reorder_projects(
     )
     projects = {p.id: p for p in result.scalars().all()}
 
+    # Validate all requested IDs were found and belong to user
+    if len(projects) != len(request.project_ids):
+        missing_ids = set(request.project_ids) - set(projects.keys())
+        raise errors.not_found(f"Projects not found: {missing_ids}")
+
     # Update positions based on order in the list
     for position, project_id in enumerate(request.project_ids):
-        if project_id in projects:
-            projects[project_id].position = position
+        projects[project_id].position = position
 
     return {"data": {"reordered": len(projects)}}

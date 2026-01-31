@@ -661,9 +661,13 @@ async def reorder_todos(
     )
     todos = {t.id: t for t in result.scalars().all()}
 
+    # Validate all requested IDs were found and belong to user
+    if len(todos) != len(request.todo_ids):
+        missing_ids = set(request.todo_ids) - set(todos.keys())
+        raise errors.not_found(f"Todos not found: {missing_ids}")
+
     # Update positions based on order in the list
     for position, todo_id in enumerate(request.todo_ids):
-        if todo_id in todos:
-            todos[todo_id].position = position
+        todos[todo_id].position = position
 
     return {"data": {"reordered": len(todos)}}

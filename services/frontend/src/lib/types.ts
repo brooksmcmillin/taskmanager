@@ -114,7 +114,7 @@ export interface ProjectCreate {
 
 export interface ProjectUpdate extends Partial<ProjectCreate> {
 	is_active?: boolean;
-	archived_at?: string | null;
+	// Note: archived_at is not settable via update - use archive/unarchive endpoints
 }
 
 export interface OAuthClient {
