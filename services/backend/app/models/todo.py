@@ -10,6 +10,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -93,6 +94,7 @@ class Todo(Base):
     tags: Mapped[list] = mapped_column(JSONB, default=list)
     context: Mapped[str | None] = mapped_column(String(50))
     time_horizon: Mapped[TimeHorizon | None] = mapped_column(String(20))
+    position: Mapped[int] = mapped_column(Integer, default=0)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

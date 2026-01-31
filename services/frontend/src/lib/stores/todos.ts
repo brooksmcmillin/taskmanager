@@ -207,6 +207,28 @@ function createTodoStore() {
 		},
 		getAttachmentUrl: (todoId: number, attachmentId: number): string => {
 			return `/api/todos/${todoId}/attachments/${attachmentId}`;
+		},
+		reorder: async (todoIds: number[]) => {
+			try {
+				await api.post('/api/todos/reorder', { todo_ids: todoIds });
+				// Update local positions
+				update((todos) => {
+					const todoMap = new Map(todos.map((t) => [t.id, t]));
+					return todoIds
+						.map((id, index) => {
+							const todo = todoMap.get(id);
+							if (todo) {
+								return { ...todo, position: index };
+							}
+							return null;
+						})
+						.filter((t): t is Todo => t !== null)
+						.concat(todos.filter((t) => !todoIds.includes(t.id)));
+				});
+			} catch (error) {
+				logger.error('Failed to reorder todos:', error);
+				throw error;
+			}
 		}
 	};
 }

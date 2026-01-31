@@ -26,6 +26,7 @@ export interface Subtask {
 	due_date: string | null;
 	estimated_hours: number | null;
 	actual_hours: number | null;
+	position: number;
 	created_at: string;
 	updated_at: string | null;
 }
@@ -46,6 +47,7 @@ export interface Todo {
 	context: string | null;
 	recurring_task_id: number | null;
 	parent_id: number | null;
+	position: number;
 	subtasks: Subtask[];
 	attachments?: Attachment[];
 	created_at: string;
@@ -61,6 +63,9 @@ export interface Project {
 	name: string;
 	description: string | null;
 	color: string;
+	position: number;
+	is_active: boolean;
+	archived_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -84,6 +89,7 @@ export interface TodoCreate {
 	context?: string;
 	project_id?: number;
 	parent_id?: number;
+	position?: number;
 }
 
 export interface SubtaskCreate {
@@ -103,9 +109,13 @@ export interface ProjectCreate {
 	name: string;
 	description?: string;
 	color: string;
+	position?: number;
 }
 
-export interface ProjectUpdate extends Partial<ProjectCreate> {}
+export interface ProjectUpdate extends Partial<ProjectCreate> {
+	is_active?: boolean;
+	archived_at?: string | null;
+}
 
 export interface OAuthClient {
 	id: number;

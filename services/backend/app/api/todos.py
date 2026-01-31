@@ -29,6 +29,7 @@ class TodoCreate(BaseModel):
     context: str | None = None
     estimated_hours: float | None = None
     parent_id: int | None = None
+    position: int | None = None
 
 
 class TodoUpdate(BaseModel):
@@ -45,6 +46,7 @@ class TodoUpdate(BaseModel):
     estimated_hours: float | None = None
     actual_hours: float | None = None
     parent_id: int | None = None
+    position: int | None = None
 
 
 class BulkUpdateRequest(BaseModel):
@@ -67,6 +69,7 @@ class SubtaskResponse(BaseModel):
     due_date: date | None
     estimated_hours: float | None
     actual_hours: float | None
+    position: int
     created_at: datetime
     updated_at: datetime | None
 
@@ -89,6 +92,7 @@ class TodoResponse(BaseModel):
     context: str | None
     estimated_hours: float | None
     actual_hours: float | None
+    position: int
     parent_id: int | None = None
     subtasks: list[SubtaskResponse] = Field(default_factory=list)
     created_at: datetime
@@ -116,6 +120,7 @@ def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
         if subtask.estimated_hours
         else None,
         actual_hours=float(subtask.actual_hours) if subtask.actual_hours else None,
+        position=subtask.position,
         created_at=subtask.created_at,
         updated_at=subtask.updated_at,
     )
@@ -158,6 +163,7 @@ def _build_todo_response(
         context=todo.context,
         estimated_hours=float(todo.estimated_hours) if todo.estimated_hours else None,
         actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
+        position=todo.position,
         parent_id=todo.parent_id,
         subtasks=subtask_responses,
         created_at=todo.created_at,
@@ -176,12 +182,14 @@ async def list_todos(
     end_date: date | None = Query(None),  # noqa: B008
     parent_id: int | None = Query(None),
     include_subtasks: bool = Query(False),
+    order_by: str | None = Query(None, description="Order by: 'position' or 'due_date'"),
 ) -> ListResponse[TodoResponse]:
     """List todos with optional filters.
 
     By default, only returns root-level todos (no parent).
     Use parent_id to get subtasks of a specific todo.
     Use include_subtasks=true to include subtasks in the response.
+    Use order_by='position' to sort by manual position instead of due date.
     """
     query = (
         select(
@@ -224,7 +232,11 @@ async def list_todos(
     if end_date:
         query = query.where(Todo.due_date <= end_date)
 
-    query = query.order_by(Todo.due_date.asc().nulls_last(), Todo.priority.desc())
+    # Apply ordering
+    if order_by == "position":
+        query = query.order_by(Todo.position, Todo.created_at)
+    else:
+        query = query.order_by(Todo.due_date.asc().nulls_last(), Todo.priority.desc())
 
     result = await db.execute(query)
     rows = result.all()
@@ -238,7 +250,7 @@ async def list_todos(
                 select(Todo)
                 .where(Todo.parent_id.in_(todo_ids))
                 .where(Todo.deleted_at.is_(None))
-                .order_by(Todo.created_at.asc())
+                .order_by(Todo.position, Todo.created_at.asc())
             )
             subtasks_result = await db.execute(subtasks_query)
             for subtask in subtasks_result.scalars().all():
@@ -287,6 +299,25 @@ async def create_todo(
         if not parent:
             raise errors.todo_not_found()
 
+    # Auto-assign position if not provided
+    position = request.position
+    if position is None:
+        from sqlalchemy import func as sql_func
+
+        # Get max position for todos with same parent and project
+        pos_query = select(sql_func.max(Todo.position)).where(
+            Todo.user_id == user.id,
+            Todo.deleted_at.is_(None),
+        )
+        if request.parent_id:
+            pos_query = pos_query.where(Todo.parent_id == request.parent_id)
+        else:
+            pos_query = pos_query.where(Todo.parent_id.is_(None))
+
+        max_pos_result = await db.execute(pos_query)
+        max_pos = max_pos_result.scalar() or 0
+        position = max_pos + 1
+
     todo = Todo(
         user_id=user.id,
         title=request.title,
@@ -299,6 +330,7 @@ async def create_todo(
         context=request.context,
         estimated_hours=request.estimated_hours,
         parent_id=request.parent_id,
+        position=position,
     )
     db.add(todo)
     await db.flush()
@@ -542,7 +574,7 @@ async def list_subtasks(
     result = await db.execute(
         select(Todo)
         .where(Todo.parent_id == todo_id, Todo.deleted_at.is_(None))
-        .order_by(Todo.created_at.asc())
+        .order_by(Todo.position, Todo.created_at.asc())
     )
     subtasks = result.scalars().all()
 
@@ -578,6 +610,18 @@ async def create_subtask(
             "Cannot create subtasks of subtasks. Only one level of nesting is allowed."
         )
 
+    # Auto-assign position for the subtask
+    from sqlalchemy import func as sql_func
+
+    max_pos_result = await db.execute(
+        select(sql_func.max(Todo.position)).where(
+            Todo.parent_id == todo_id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    max_pos = max_pos_result.scalar() or 0
+    position = max_pos + 1
+
     subtask = Todo(
         user_id=user.id,
         title=request.title,
@@ -589,9 +633,37 @@ async def create_subtask(
         parent_id=todo_id,
         project_id=parent.project_id,  # Inherit project from parent
         tags=[],
+        position=position,
     )
     db.add(subtask)
     await db.flush()
     await db.refresh(subtask)
 
     return {"data": _build_subtask_response(subtask)}
+
+
+class TodoReorderRequest(BaseModel):
+    """Reorder todos request."""
+
+    todo_ids: list[int] = Field(..., min_length=1)
+
+
+@router.post("/reorder")
+async def reorder_todos(
+    request: TodoReorderRequest,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Reorder todos by providing the new order of todo IDs."""
+    # Fetch all todos for user
+    result = await db.execute(
+        select(Todo).where(Todo.id.in_(request.todo_ids), Todo.user_id == user.id)
+    )
+    todos = {t.id: t for t in result.scalars().all()}
+
+    # Update positions based on order in the list
+    for position, todo_id in enumerate(request.todo_ids):
+        if todo_id in todos:
+            todos[todo_id].position = position
+
+    return {"data": {"reordered": len(todos)}}
