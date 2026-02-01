@@ -47,6 +47,48 @@ function createProjectStore() {
 				logger.error('Failed to remove project:', error);
 				throw error;
 			}
+		},
+		archive: async (id: number) => {
+			try {
+				const updated = await api.post<{ data: Project }>(`/api/projects/${id}/archive`);
+				update((projects) => projects.map((p) => (p.id === id ? updated.data : p)));
+				return updated.data;
+			} catch (error) {
+				logger.error('Failed to archive project:', error);
+				throw error;
+			}
+		},
+		unarchive: async (id: number) => {
+			try {
+				const updated = await api.post<{ data: Project }>(`/api/projects/${id}/unarchive`);
+				update((projects) => projects.map((p) => (p.id === id ? updated.data : p)));
+				return updated.data;
+			} catch (error) {
+				logger.error('Failed to unarchive project:', error);
+				throw error;
+			}
+		},
+		reorder: async (projectIds: number[]) => {
+			try {
+				await api.post('/api/projects/reorder', { project_ids: projectIds });
+				// Update local positions
+				update((projects) => {
+					const projectMap = new Map(projects.map((p) => [p.id, p]));
+					return projectIds
+						.map((id, index) => {
+							const project = projectMap.get(id);
+							if (project) {
+								return { ...project, position: index };
+							}
+							return null;
+						})
+						.filter((p): p is Project => p !== null)
+						.concat(projects.filter((p) => !projectIds.includes(p.id)));
+				});
+			} catch (error) {
+				logger.error('Failed to reorder projects:', error);
+				throw error;
+			}
 		}
 	};
 }
