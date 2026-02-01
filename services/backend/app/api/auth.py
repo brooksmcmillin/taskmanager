@@ -75,6 +75,29 @@ class AuthResponse(BaseModel):
     user: UserResponse
 
 
+class UpdateEmailRequest(BaseModel):
+    """Update email request."""
+
+    email: EmailStr
+
+
+class UpdatePasswordRequest(BaseModel):
+    """Update password request."""
+
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strong(cls, v: str) -> str:
+        if not validate_password_strength(v):
+            raise ValueError(
+                "Password must contain at least 2 of: "
+                "lowercase, uppercase, numbers, special chars"
+            )
+        return v
+
+
 @router.post("/register", status_code=201)
 async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
     """Register a new user."""
@@ -258,3 +281,47 @@ async def get_me(user: CurrentUser) -> dict:
             "is_admin": user.is_admin,
         }
     }
+
+
+@router.put("/email")
+async def update_email(
+    request: UpdateEmailRequest,
+    user: CurrentUser,
+    db: DbSession,
+) -> AuthResponse:
+    """Update the current user's email address."""
+    # Check if email is already taken by another user
+    result = await db.execute(
+        select(User).where(User.email == request.email, User.id != user.id)
+    )
+    if result.scalar_one_or_none():
+        raise errors.email_exists()
+
+    # Update email
+    user.email = request.email
+    await db.flush()
+
+    return AuthResponse(
+        message="Email updated successfully",
+        user=UserResponse(
+            id=user.id, username=user.username, email=user.email, is_admin=user.is_admin
+        ),
+    )
+
+
+@router.put("/password")
+async def update_password(
+    request: UpdatePasswordRequest,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict[str, str]:
+    """Update the current user's password."""
+    # Verify current password
+    if not verify_password(request.current_password, user.password_hash):
+        raise errors.invalid_credentials()
+
+    # Update password
+    user.password_hash = hash_password(request.new_password)
+    await db.flush()
+
+    return {"message": "Password updated successfully"}

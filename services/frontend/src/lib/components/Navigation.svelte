@@ -245,6 +245,14 @@
 								</div>
 								<div class="dropdown-divider"></div>
 								<a
+									href="/settings"
+									class="dropdown-item"
+									class:active={currentPath === '/settings'}
+									onclick={closeDropdowns}
+								>
+									Settings
+								</a>
+								<a
 									href="/oauth-clients"
 									class="dropdown-item"
 									class:active={currentPath === '/oauth-clients'}
