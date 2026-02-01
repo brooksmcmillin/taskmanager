@@ -27,7 +27,7 @@ class ProjectCreate(BaseModel):
 class ProjectUpdate(BaseModel):
     """Update project request.
 
-    Note: archived_at is not settable via update - use /archive and /unarchive endpoints.
+    Note: archived_at is not settable via update - use /archive and /unarchive.
     """
 
     name: str | None = None

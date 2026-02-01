@@ -1114,6 +1114,353 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
+    @guard_tool(input_params=["status", "category"], screen_output=True)
+    async def get_agent_tasks(
+        due_today: bool = False,
+        agent_actionable_only: bool = False,
+        unclassified_only: bool = False,
+        include_subtasks: bool = True,
+    ) -> str:
+        """
+        Get tasks filtered for AI agent processing.
+
+        Convenience method that pre-filters tasks for agent work queues.
+        Use this instead of get_tasks when working as an AI agent.
+
+        Args:
+            due_today: Only return tasks due today (default: False)
+            agent_actionable_only: Only return tasks the agent can work on autonomously (default: False)
+            unclassified_only: Only return tasks that haven't been classified yet (default: False)
+            include_subtasks: Whether to include subtasks in the response (default: True)
+
+        Returns:
+            JSON object with "tasks" array containing task objects with agent fields:
+            id, title, description, due_date, status, category, priority, tags,
+            agent_actionable, action_type, agent_status, agent_notes, blocking_reason
+        """
+        logger.info(
+            f"=== get_agent_tasks called: due_today={due_today}, "
+            f"agent_actionable_only={agent_actionable_only}, "
+            f"unclassified_only={unclassified_only} ==="
+        )
+        try:
+            api_client = get_api_client()
+
+            # Build date filter for today if requested
+            start_date = None
+            end_date = None
+            if due_today:
+                today = datetime.datetime.now().strftime("%Y-%m-%d")
+                start_date = today
+                end_date = today
+
+            # Get all pending/in_progress tasks
+            response = api_client.get_todos(
+                status="pending",
+                start_date=start_date,
+                end_date=end_date,
+                include_subtasks=include_subtasks,
+            )
+
+            tasks, tasks_error = validate_list_response(response, "tasks")
+            if tasks_error:
+                logger.error(f"Failed to get tasks: {tasks_error}")
+                return json.dumps({"error": tasks_error})
+
+            # Filter based on agent criteria
+            result_tasks = []
+            for task in tasks:
+                task_id = task.get("id")
+                if task_id is None:
+                    continue
+
+                agent_actionable = task.get("agent_actionable")
+                action_type = task.get("action_type")
+
+                # Apply filters
+                if agent_actionable_only and agent_actionable is not True:
+                    continue
+                if unclassified_only and (agent_actionable is not None or action_type is not None):
+                    continue
+
+                # Transform subtasks
+                subtasks_list = []
+                if task.get("subtasks"):
+                    for subtask in task["subtasks"]:
+                        subtasks_list.append(
+                            {
+                                "id": f"task_{subtask.get('id')}",
+                                "title": subtask.get("title", ""),
+                                "description": subtask.get("description"),
+                                "status": subtask.get("status", "pending"),
+                                "priority": subtask.get("priority", "medium"),
+                                "due_date": subtask.get("due_date"),
+                                "agent_actionable": subtask.get("agent_actionable"),
+                                "action_type": subtask.get("action_type"),
+                                "agent_status": subtask.get("agent_status"),
+                            }
+                        )
+
+                result_tasks.append(
+                    {
+                        "id": f"task_{task_id}",
+                        "title": task.get("title", ""),
+                        "description": task.get("description"),
+                        "due_date": task.get("due_date"),
+                        "status": task.get("status", "pending"),
+                        "category": task.get("project_name") or task.get("category"),
+                        "priority": task.get("priority", "medium"),
+                        "tags": task.get("tags") or [],
+                        "subtasks": subtasks_list,
+                        "agent_actionable": agent_actionable,
+                        "action_type": action_type,
+                        "agent_status": task.get("agent_status"),
+                        "agent_notes": task.get("agent_notes"),
+                        "blocking_reason": task.get("blocking_reason"),
+                        "created_at": task.get("created_at"),
+                        "updated_at": task.get("updated_at"),
+                    }
+                )
+
+            logger.info(f"Returning {len(result_tasks)} agent tasks")
+            return json.dumps(
+                {
+                    "tasks": result_tasks,
+                    "count": len(result_tasks),
+                    "filters_applied": {
+                        "due_today": due_today,
+                        "agent_actionable_only": agent_actionable_only,
+                        "unclassified_only": unclassified_only,
+                    },
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in get_agent_tasks: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["action_type", "blocking_reason"], screen_output=True)
+    async def classify_task(
+        task_id: str,
+        action_type: str,
+        agent_actionable: bool,
+        blocking_reason: str | None = None,
+    ) -> str:
+        """
+        Classify a task with action type and agent actionability.
+
+        Use this to classify tasks that weren't automatically classified at creation.
+        The agent should analyze the task title/description and determine:
+        1. What type of action is required
+        2. Whether the agent can complete it autonomously
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+            action_type: Type of action - one of "research", "code", "email", "document",
+                        "purchase", "schedule", "call", "errand", "manual", "review",
+                        "data_entry", "other"
+            agent_actionable: True if agent can complete without human intervention
+            blocking_reason: Why agent can't proceed (optional, use if agent_actionable=False)
+
+        Returns:
+            JSON object confirming classification with updated task fields
+        """
+        logger.info(
+            f"=== classify_task called: task_id={task_id}, "
+            f"action_type={action_type}, agent_actionable={agent_actionable} ==="
+        )
+        try:
+            api_client = get_api_client()
+
+            # Extract numeric ID
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Validate action_type
+            valid_action_types = [
+                "research",
+                "code",
+                "email",
+                "document",
+                "purchase",
+                "schedule",
+                "call",
+                "errand",
+                "manual",
+                "review",
+                "data_entry",
+                "other",
+            ]
+            if action_type not in valid_action_types:
+                return json.dumps(
+                    {
+                        "error": f"Invalid action_type: {action_type}. Must be one of: {valid_action_types}"
+                    }
+                )
+
+            # Update task with classification
+            response = api_client.update_todo(
+                todo_id=todo_id,
+                action_type=action_type,
+                agent_actionable=agent_actionable,
+                blocking_reason=blocking_reason,
+            )
+
+            if not response.success:
+                logger.error(f"Failed to classify task: {response.error}")
+                return json.dumps({"error": response.error})
+
+            return json.dumps(
+                {
+                    "id": f"task_{todo_id}",
+                    "status": "classified",
+                    "action_type": action_type,
+                    "agent_actionable": agent_actionable,
+                    "blocking_reason": blocking_reason,
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in classify_task: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["note"], screen_output=True)
+    async def add_agent_note(task_id: str, note: str, append: bool = True) -> str:
+        """
+        Add an agent note to a task.
+
+        Use this to store research findings, context, or other information
+        the agent has gathered while working on a task. Notes persist and
+        can be used by future agent sessions.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+            note: The note content to add
+            append: If True, append to existing notes. If False, replace (default: True)
+
+        Returns:
+            JSON object confirming note was added
+        """
+        logger.info(f"=== add_agent_note called: task_id={task_id}, append={append} ===")
+        try:
+            api_client = get_api_client()
+
+            # Extract numeric ID
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Get current task to append notes if needed
+            if append:
+                task_response = api_client.get_todo(todo_id)
+                if task_response.success and task_response.data:
+                    existing_notes = task_response.data.get("agent_notes") or ""
+                    if existing_notes:
+                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                        note = f"{existing_notes}\n\n---\n[{timestamp}]\n{note}"
+
+            # Update task with note
+            response = api_client.update_todo(
+                todo_id=todo_id,
+                agent_notes=note,
+            )
+
+            if not response.success:
+                logger.error(f"Failed to add note: {response.error}")
+                return json.dumps({"error": response.error})
+
+            return json.dumps(
+                {
+                    "id": f"task_{todo_id}",
+                    "status": "note_added",
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in add_agent_note: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["status", "blocking_reason"], screen_output=True)
+    async def set_agent_status(
+        task_id: str,
+        status: str,
+        blocking_reason: str | None = None,
+    ) -> str:
+        """
+        Set the agent processing status for a task.
+
+        Use this to track agent progress on tasks. Helps coordinate
+        between multiple agent sessions and provides visibility to users.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+            status: Agent status - one of "pending_review", "in_progress",
+                   "completed", "blocked", "needs_human"
+            blocking_reason: Required when status is "blocked" - explain why
+
+        Returns:
+            JSON object confirming status update
+        """
+        logger.info(f"=== set_agent_status called: task_id={task_id}, status={status} ===")
+        try:
+            api_client = get_api_client()
+
+            # Extract numeric ID
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            # Validate status
+            valid_statuses = [
+                "pending_review",
+                "in_progress",
+                "completed",
+                "blocked",
+                "needs_human",
+            ]
+            if status not in valid_statuses:
+                return json.dumps(
+                    {"error": f"Invalid status: {status}. Must be one of: {valid_statuses}"}
+                )
+
+            # Require blocking_reason for blocked status
+            if status == "blocked" and not blocking_reason:
+                return json.dumps({"error": "blocking_reason is required when status is 'blocked'"})
+
+            # Update task with agent status
+            response = api_client.update_todo(
+                todo_id=todo_id,
+                agent_status=status,
+                blocking_reason=blocking_reason if status == "blocked" else None,
+            )
+
+            if not response.success:
+                logger.error(f"Failed to set agent status: {response.error}")
+                return json.dumps({"error": response.error})
+
+            return json.dumps(
+                {
+                    "id": f"task_{todo_id}",
+                    "agent_status": status,
+                    "blocking_reason": blocking_reason if status == "blocked" else None,
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in set_agent_status: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
     @guard_tool(input_params=[], screen_output=True)
     async def complete_task(task_id: str) -> str:
         """

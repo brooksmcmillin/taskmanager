@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     Date,
     DateTime,
     ForeignKey,
@@ -61,6 +62,33 @@ class TimeHorizon(str, enum.Enum):
     someday = "someday"
 
 
+class AgentStatus(str, enum.Enum):
+    """Agent processing status for tasks."""
+
+    pending_review = "pending_review"  # Agent has seen but not processed
+    in_progress = "in_progress"  # Agent is actively working on it
+    completed = "completed"  # Agent finished its work
+    blocked = "blocked"  # Agent cannot proceed (see blocking_reason)
+    needs_human = "needs_human"  # Agent determined human action required
+
+
+class ActionType(str, enum.Enum):
+    """Type of action required for the task."""
+
+    research = "research"  # Information gathering, lookups
+    code = "code"  # Writing or modifying code
+    email = "email"  # Drafting or sending emails
+    document = "document"  # Creating or editing documents
+    purchase = "purchase"  # Buying something
+    schedule = "schedule"  # Scheduling meetings/events
+    call = "call"  # Phone calls
+    errand = "errand"  # Physical errands
+    manual = "manual"  # Requires manual/physical action
+    review = "review"  # Reviewing content/code
+    data_entry = "data_entry"  # Data entry tasks
+    other = "other"  # Uncategorized
+
+
 class Todo(Base):
     """Todo/task model."""
 
@@ -102,6 +130,23 @@ class Todo(Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), onupdate=func.now()
     )
+
+    # Agent integration fields
+    agent_actionable: Mapped[bool | None] = mapped_column(
+        Boolean, default=None
+    )  # True if agent can complete without human
+    action_type: Mapped[ActionType | None] = mapped_column(
+        String(20)
+    )  # Type of action required
+    agent_status: Mapped[AgentStatus | None] = mapped_column(
+        String(20)
+    )  # Agent's processing status
+    agent_notes: Mapped[str | None] = mapped_column(
+        Text
+    )  # Agent-generated context/research
+    blocking_reason: Mapped[str | None] = mapped_column(
+        String(500)
+    )  # Why agent can't proceed
 
     # Relationships
     user: Mapped[User] = relationship("User", back_populates="todos")

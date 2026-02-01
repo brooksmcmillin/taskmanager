@@ -406,6 +406,11 @@ class TaskManagerClient:
         due_date: str | None = None,
         tags: list[str] | None = None,
         parent_id: int | None = None,
+        agent_actionable: bool | None = None,
+        action_type: str | None = None,
+        agent_status: str | None = None,
+        agent_notes: str | None = None,
+        blocking_reason: str | None = None,
     ) -> ApiResponse:
         """
         Update a todo item.
@@ -422,11 +427,16 @@ class TaskManagerClient:
             due_date: New due date (for rescheduling)
             tags: New tags list
             parent_id: New parent ID to move task (optional)
+            agent_actionable: Whether an AI agent can complete this task autonomously
+            action_type: Type of action (research, code, email, etc.)
+            agent_status: Agent processing status (pending_review, in_progress, etc.)
+            agent_notes: Agent-generated notes and context
+            blocking_reason: Why agent cannot proceed (if blocked)
 
         Returns:
             ApiResponse with TaskUpdateResponse data
         """
-        data: dict[str, float | str | int | list[str]] = {}
+        data: dict[str, float | str | int | bool | list[str]] = {}
         if title is not None:
             data["title"] = title
         if description is not None:
@@ -447,6 +457,16 @@ class TaskManagerClient:
             data["tags"] = tags
         if parent_id is not None:
             data["parent_id"] = parent_id
+        if agent_actionable is not None:
+            data["agent_actionable"] = agent_actionable
+        if action_type is not None:
+            data["action_type"] = action_type
+        if agent_status is not None:
+            data["agent_status"] = agent_status
+        if agent_notes is not None:
+            data["agent_notes"] = agent_notes
+        if blocking_reason is not None:
+            data["blocking_reason"] = blocking_reason
         return self._make_request("PUT", f"/todos/{todo_id}", data)
 
     def delete_todo(self, todo_id: int) -> ApiResponse:
