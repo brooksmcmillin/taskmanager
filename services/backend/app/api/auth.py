@@ -10,7 +10,7 @@ from sqlalchemy import delete, select
 
 from app.config import settings
 from app.core.errors import errors
-from app.core.rate_limit import login_rate_limiter
+from app.core.rate_limit import RateLimiter, login_rate_limiter
 from app.core.security import (
     generate_session_id,
     get_session_expiry,
@@ -23,6 +23,9 @@ from app.models.session import Session
 from app.models.user import User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# Rate limiter for account modifications (5 attempts per 5 minutes)
+account_update_rate_limiter = RateLimiter(max_attempts=5, window_ms=300000)
 
 
 # Request/Response schemas
@@ -290,12 +293,24 @@ async def update_email(
     db: DbSession,
 ) -> AuthResponse:
     """Update the current user's email address."""
+    rate_limit_key = f"email_update_{user.id}"
+
+    # Rate limit by user ID
+    account_update_rate_limiter.check(rate_limit_key)
+
     # Check if email is already taken by another user
+    # Always query to maintain constant-time response regardless of email existence
     result = await db.execute(
         select(User).where(User.email == request.email, User.id != user.id)
     )
-    if result.scalar_one_or_none():
+    email_taken = result.scalar_one_or_none() is not None
+
+    if email_taken:
+        account_update_rate_limiter.record(rate_limit_key)
         raise errors.email_exists()
+
+    # Reset rate limit on success
+    account_update_rate_limiter.reset(rate_limit_key)
 
     # Update email
     user.email = request.email
@@ -316,12 +331,26 @@ async def update_password(
     db: DbSession,
 ) -> dict[str, str]:
     """Update the current user's password."""
+    rate_limit_key = f"password_update_{user.id}"
+
+    # Rate limit by user ID
+    account_update_rate_limiter.check(rate_limit_key)
+
     # Verify current password
     if not verify_password(request.current_password, user.password_hash):
+        account_update_rate_limiter.record(rate_limit_key)
         raise errors.invalid_credentials()
+
+    # Reset rate limit on success
+    account_update_rate_limiter.reset(rate_limit_key)
 
     # Update password
     user.password_hash = hash_password(request.new_password)
+
+    # SECURITY: Invalidate all user sessions after password change
+    # This ensures any compromised session tokens are revoked
+    await db.execute(delete(Session).where(Session.user_id == user.id))
+
     await db.flush()
 
-    return {"message": "Password updated successfully"}
+    return {"message": "Password updated successfully. Please log in again."}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api/client';
 	import { toasts } from '$lib/stores/ui';
@@ -159,24 +160,13 @@
 				current_password: currentPassword,
 				new_password: newPassword
 			});
-			toasts.show(response.message || 'Password updated successfully', 'success');
-			// Reset form
-			currentPassword = '';
-			newPassword = '';
-			confirmPassword = '';
-			passwordTouched = {
-				currentPassword: false,
-				newPassword: false,
-				confirmPassword: false
-			};
-			passwordErrors = {
-				currentPassword: '',
-				newPassword: '',
-				confirmPassword: ''
-			};
+			toasts.show(response.message || 'Password updated successfully. Please log in again.', 'success');
+			// Redirect to login since all sessions are invalidated after password change
+			setTimeout(() => {
+				goto('/login');
+			}, 1500);
 		} catch (error) {
 			toasts.show((error as Error).message || 'Failed to update password', 'error');
-		} finally {
 			passwordSubmitting = false;
 		}
 	}
