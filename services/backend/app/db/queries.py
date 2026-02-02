@@ -1,7 +1,12 @@
 """Reusable database query helpers.
 
-Provides centralized, type-safe utilities for common database operations
-like authorization checks, soft-delete filtering, and position assignment.
+Provides centralized utilities for common database operations like
+authorization checks, soft-delete filtering, and position assignment.
+
+Note on typing: These functions use `Any` for model parameters because
+SQLAlchemy models use `Mapped[T]` column descriptors that don't satisfy
+simple Protocol definitions. Type safety is ensured at runtime via
+`hasattr` checks. All models must have `id` and `user_id` columns.
 """
 
 from collections.abc import Callable
@@ -37,7 +42,8 @@ async def get_resource_for_user(
         resource_id: Resource ID to fetch
         user_id: User ID for authorization check
         error_factory: Error factory function (e.g., errors.todo_not_found)
-        check_deleted: Whether to filter by deleted_at (default True)
+        check_deleted: Whether to filter by deleted_at (default True).
+                       Only applies if model has a deleted_at column.
 
     Returns:
         Model instance
@@ -78,9 +84,19 @@ async def get_next_position(
     Calculates max(position) + 1 for a given model scoped to the user.
     Handles hierarchical models (with parent_id) and soft-deleted records.
 
+    Note: This function is NOT safe for concurrent use. If two requests call
+    this function simultaneously before either commits, they may receive the
+    same position value. Callers should either:
+    1. Use database-level locking (SELECT FOR UPDATE) around position assignment
+    2. Handle unique constraint violations with retry logic
+    3. Accept that position values may have gaps or duplicates
+
+    For critical ordering requirements, consider using database sequences
+    or adding a unique constraint on (user_id, parent_id, position).
+
     Args:
         db: Database session
-        model: SQLAlchemy model class with position field
+        model: SQLAlchemy model class (must have position and user_id columns)
         user_id: User ID for scoping
         parent_id: Optional parent ID for hierarchical models (e.g., subtasks).
                    If the model has parent_id and this is None, filters for
