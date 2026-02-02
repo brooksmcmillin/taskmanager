@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.core.errors import ApiError, errors
+from app.db.queries import get_resource_for_user
 from app.dependencies import CurrentUser, DbSession
 from app.models.attachment import Attachment
 from app.models.todo import Todo
@@ -126,17 +127,9 @@ async def _get_todo_for_user(db: DbSession, todo_id: int, user_id: int) -> Todo:
     Raises:
         errors.todo_not_found: If todo doesn't exist or belongs to another user
     """
-    result = await db.execute(
-        select(Todo).where(
-            Todo.id == todo_id,
-            Todo.user_id == user_id,
-            Todo.deleted_at.is_(None),
-        )
+    return await get_resource_for_user(
+        db, Todo, todo_id, user_id, errors.todo_not_found
     )
-    todo = result.scalar_one_or_none()
-    if not todo:
-        raise errors.todo_not_found()
-    return todo
 
 
 async def _get_attachment_for_user(
@@ -155,6 +148,10 @@ async def _get_attachment_for_user(
 
     Raises:
         errors.attachment_not_found: If attachment doesn't exist or is unauthorized
+
+    Note:
+        Attachment model has user_id but also needs todo_id verification,
+        so we use a custom query here rather than the generic helper.
     """
     result = await db.execute(
         select(Attachment).where(

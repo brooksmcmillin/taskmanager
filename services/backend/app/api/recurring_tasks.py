@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
 from app.core.errors import errors
+from app.db.queries import get_resource_for_user, verify_resource_exists
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
 from app.models.recurring_task import Frequency, RecurringTask
@@ -207,15 +208,14 @@ async def create_recurring_task(
     """Create a new recurring task."""
     # Verify project exists if provided
     if request.project_id:
-        result = await db.execute(
-            select(Project).where(
-                Project.id == request.project_id,
-                Project.user_id == user.id,
-            )
+        await verify_resource_exists(
+            db,
+            Project,
+            request.project_id,
+            user.id,
+            errors.project_not_found,
+            check_deleted=False,
         )
-        project = result.scalar_one_or_none()
-        if not project:
-            raise errors.project_not_found()
 
     # Calculate initial next_due_date (same as start_date)
     next_due_date = request.start_date
@@ -251,16 +251,14 @@ async def get_recurring_task(
     db: DbSession,
 ) -> dict:
     """Get a single recurring task by ID."""
-    result = await db.execute(
-        select(RecurringTask).where(
-            RecurringTask.id == task_id,
-            RecurringTask.user_id == user.id,
-        )
+    task = await get_resource_for_user(
+        db,
+        RecurringTask,
+        task_id,
+        user.id,
+        errors.recurring_task_not_found,
+        check_deleted=False,
     )
-    task = result.scalar_one_or_none()
-
-    if not task:
-        raise errors.recurring_task_not_found()
 
     return {"data": _build_recurring_task_response(task)}
 
@@ -273,28 +271,25 @@ async def update_recurring_task(
     db: DbSession,
 ) -> dict:
     """Update a recurring task."""
-    result = await db.execute(
-        select(RecurringTask).where(
-            RecurringTask.id == task_id,
-            RecurringTask.user_id == user.id,
-        )
+    task = await get_resource_for_user(
+        db,
+        RecurringTask,
+        task_id,
+        user.id,
+        errors.recurring_task_not_found,
+        check_deleted=False,
     )
-    task = result.scalar_one_or_none()
-
-    if not task:
-        raise errors.recurring_task_not_found()
 
     # Verify project exists if provided
     if request.project_id:
-        project_result = await db.execute(
-            select(Project).where(
-                Project.id == request.project_id,
-                Project.user_id == user.id,
-            )
+        await verify_resource_exists(
+            db,
+            Project,
+            request.project_id,
+            user.id,
+            errors.project_not_found,
+            check_deleted=False,
         )
-        project = project_result.scalar_one_or_none()
-        if not project:
-            raise errors.project_not_found()
 
     # Update fields
     update_data = request.model_dump(exclude_unset=True)
@@ -314,16 +309,14 @@ async def delete_recurring_task(
     db: DbSession,
 ) -> dict:
     """Deactivate a recurring task (soft delete)."""
-    result = await db.execute(
-        select(RecurringTask).where(
-            RecurringTask.id == task_id,
-            RecurringTask.user_id == user.id,
-        )
+    task = await get_resource_for_user(
+        db,
+        RecurringTask,
+        task_id,
+        user.id,
+        errors.recurring_task_not_found,
+        check_deleted=False,
     )
-    task = result.scalar_one_or_none()
-
-    if not task:
-        raise errors.recurring_task_not_found()
 
     # Soft delete by setting is_active to False
     task.is_active = False

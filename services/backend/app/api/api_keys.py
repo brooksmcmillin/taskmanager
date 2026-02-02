@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.core.errors import errors
 from app.core.security import generate_api_key, get_api_key_prefix, hash_password
+from app.db.queries import get_resource_for_user
 from app.dependencies import CurrentUser, DbSession
 from app.models.api_key import ApiKey
 from app.schemas import ListResponse
@@ -151,13 +152,9 @@ async def get_api_key(
     db: DbSession,
 ) -> dict:
     """Get an API key by ID."""
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user.id)
+    api_key = await get_resource_for_user(
+        db, ApiKey, key_id, user.id, errors.api_key_not_found, check_deleted=False
     )
-    api_key = result.scalar_one_or_none()
-
-    if not api_key:
-        raise errors.api_key_not_found()
 
     return {"data": _to_response(api_key)}
 
@@ -170,13 +167,9 @@ async def update_api_key(
     db: DbSession,
 ) -> dict:
     """Update an API key's name or active status."""
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user.id)
+    api_key = await get_resource_for_user(
+        db, ApiKey, key_id, user.id, errors.api_key_not_found, check_deleted=False
     )
-    api_key = result.scalar_one_or_none()
-
-    if not api_key:
-        raise errors.api_key_not_found()
 
     update_data = request.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -192,13 +185,9 @@ async def delete_api_key(
     db: DbSession,
 ) -> dict:
     """Delete an API key."""
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user.id)
+    api_key = await get_resource_for_user(
+        db, ApiKey, key_id, user.id, errors.api_key_not_found, check_deleted=False
     )
-    api_key = result.scalar_one_or_none()
-
-    if not api_key:
-        raise errors.api_key_not_found()
 
     await db.delete(api_key)
 
@@ -212,13 +201,9 @@ async def revoke_api_key(
     db: DbSession,
 ) -> dict:
     """Revoke (deactivate) an API key without deleting it."""
-    result = await db.execute(
-        select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user.id)
+    api_key = await get_resource_for_user(
+        db, ApiKey, key_id, user.id, errors.api_key_not_found, check_deleted=False
     )
-    api_key = result.scalar_one_or_none()
-
-    if not api_key:
-        raise errors.api_key_not_found()
 
     api_key.is_active = False
 

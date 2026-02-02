@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.core.errors import errors
+from app.db.queries import (
+    get_next_position,
+    get_resource_for_user,
+    get_resources_for_user,
+)
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
 from app.schemas import ListResponse
@@ -85,14 +90,7 @@ async def create_project(
     # Auto-assign position if not provided
     position = request.position
     if position is None:
-        # Get the max position for this user's projects
-        from sqlalchemy import func as sql_func
-
-        max_pos_result = await db.execute(
-            select(sql_func.max(Project.position)).where(Project.user_id == user.id)
-        )
-        max_pos = max_pos_result.scalar() or 0
-        position = max_pos + 1
+        position = await get_next_position(db, Project, user.id)
 
     project = Project(
         user_id=user.id,
@@ -114,13 +112,9 @@ async def get_project(
     db: DbSession,
 ) -> dict:
     """Get a project by ID."""
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+    project = await get_resource_for_user(
+        db, Project, project_id, user.id, errors.project_not_found, check_deleted=False
     )
-    project = result.scalar_one_or_none()
-
-    if not project:
-        raise errors.project_not_found()
 
     return {"data": ProjectResponse.model_validate(project)}
 
@@ -133,13 +127,9 @@ async def update_project(
     db: DbSession,
 ) -> dict:
     """Update a project."""
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+    project = await get_resource_for_user(
+        db, Project, project_id, user.id, errors.project_not_found, check_deleted=False
     )
-    project = result.scalar_one_or_none()
-
-    if not project:
-        raise errors.project_not_found()
 
     update_data = request.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -155,13 +145,9 @@ async def delete_project(
     db: DbSession,
 ) -> dict:
     """Delete a project."""
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+    project = await get_resource_for_user(
+        db, Project, project_id, user.id, errors.project_not_found, check_deleted=False
     )
-    project = result.scalar_one_or_none()
-
-    if not project:
-        raise errors.project_not_found()
 
     await db.delete(project)
 
@@ -175,13 +161,9 @@ async def archive_project(
     db: DbSession,
 ) -> dict:
     """Archive a project."""
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+    project = await get_resource_for_user(
+        db, Project, project_id, user.id, errors.project_not_found, check_deleted=False
     )
-    project = result.scalar_one_or_none()
-
-    if not project:
-        raise errors.project_not_found()
 
     project.archived_at = datetime.now(UTC)
 
@@ -195,13 +177,9 @@ async def unarchive_project(
     db: DbSession,
 ) -> dict:
     """Unarchive a project."""
-    result = await db.execute(
-        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+    project = await get_resource_for_user(
+        db, Project, project_id, user.id, errors.project_not_found, check_deleted=False
     )
-    project = result.scalar_one_or_none()
-
-    if not project:
-        raise errors.project_not_found()
 
     project.archived_at = None
 
@@ -222,12 +200,9 @@ async def reorder_projects(
 ) -> dict:
     """Reorder projects by providing the new order of project IDs."""
     # Fetch all projects for user
-    result = await db.execute(
-        select(Project).where(
-            Project.id.in_(request.project_ids), Project.user_id == user.id
-        )
+    projects = await get_resources_for_user(
+        db, Project, request.project_ids, user.id, check_deleted=False
     )
-    projects = {p.id: p for p in result.scalars().all()}
 
     # Validate all requested IDs were found and belong to user
     if len(projects) != len(request.project_ids):
