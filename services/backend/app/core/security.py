@@ -79,3 +79,31 @@ def get_token_expiry(seconds: int | None = None) -> datetime:
     """Get token expiry datetime."""
     expiry_seconds = seconds if seconds is not None else settings.access_token_expiry
     return datetime.now(UTC) + timedelta(seconds=expiry_seconds)
+
+
+# API Key constants
+API_KEY_PREFIX = "tm_"  # pragma: allowlist secret
+API_KEY_LENGTH = 48  # 48 hex chars = 24 bytes of entropy
+
+
+def generate_api_key() -> str:
+    """Generate a new API key.
+
+    Returns a key in format: tm_ + 48 hex characters.
+    Example: tm_abc123def456...
+    """
+    random_part = secrets.token_hex(API_KEY_LENGTH // 2)
+    return f"{API_KEY_PREFIX}{random_part}"
+
+
+def get_api_key_prefix(key: str) -> str:
+    """Get the display prefix of an API key.
+
+    Returns the first 11 characters (tm_ + 8 hex chars) for display.
+    """
+    return key[:11]
+
+
+def is_api_key(token: str) -> bool:
+    """Check if a token is an API key (starts with tm_)."""
+    return token.startswith(API_KEY_PREFIX)

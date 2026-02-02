@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.database import Base
 
 if TYPE_CHECKING:
+    from app.models.api_key import ApiKey
     from app.models.article_interaction import ArticleInteraction
     from app.models.attachment import Attachment
     from app.models.oauth import OAuthClient
@@ -60,4 +61,7 @@ class User(Base):
     )
     attachments: Mapped[list[Attachment]] = relationship(
         "Attachment", back_populates="user", cascade="all, delete-orphan"
+    )
+    api_keys: Mapped[list[ApiKey]] = relationship(
+        "ApiKey", back_populates="user", cascade="all, delete-orphan"
     )
