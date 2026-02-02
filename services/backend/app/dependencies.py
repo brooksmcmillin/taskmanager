@@ -10,7 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import errors
-from app.core.security import is_api_key, verify_password
+from app.core.rate_limit import api_key_rate_limiter
+from app.core.security import hash_password, is_api_key, verify_password
 from app.db.database import async_session_maker
 from app.models.api_key import ApiKey
 from app.models.session import Session
@@ -190,19 +191,26 @@ async def validate_client_credentials_token(
 ClientCredentialsToken = Annotated[str, Depends(validate_client_credentials_token)]
 
 
-async def _validate_api_key(db: DbSession, key: str) -> ApiKey:
+async def _validate_api_key(
+    db: DbSession, key: str, client_ip: str | None = None
+) -> ApiKey:
     """Validate an API key and return the ApiKey model.
 
     Args:
         db: Database session
         key: The full API key string (tm_...)
+        client_ip: Client IP address for rate limiting
 
     Returns:
         ApiKey model instance
 
     Raises:
-        HTTPException: If key is invalid, expired, or revoked
+        HTTPException: If key is invalid, expired, revoked, or rate limited
     """
+    # Rate limit by IP address to prevent brute force attacks
+    rate_limit_key = client_ip or "unknown"
+    api_key_rate_limiter.check(rate_limit_key)
+
     # Extract prefix for efficient lookup
     prefix = key[:11]
 
@@ -214,18 +222,44 @@ async def _validate_api_key(db: DbSession, key: str) -> ApiKey:
     )
     api_keys = result.scalars().all()
 
-    # Check each candidate with constant-time comparison
+    # Always perform at least one bcrypt verification to prevent timing attacks
+    # This ensures consistent response time regardless of whether prefix exists
+    if not api_keys:
+        # Dummy hash to maintain constant timing
+        hash_password("dummy_timing_normalization_value")
+        api_key_rate_limiter.record(rate_limit_key)
+        raise errors.invalid_token()
+
+    # Check each candidate with bcrypt verification
     for api_key in api_keys:
         if verify_password(key, api_key.key_hash):
             # Check expiration
             if api_key.expires_at and api_key.expires_at < datetime.now(UTC):
+                api_key_rate_limiter.record(rate_limit_key)
                 raise errors.invalid_token()
 
-            # Update last_used_at
+            # Update last_used_at and commit immediately
             api_key.last_used_at = datetime.now(UTC)
+            await db.commit()
+
+            # Reset rate limiter on successful auth
+            api_key_rate_limiter.reset(rate_limit_key)
             return api_key
 
+    # Record failed attempt for rate limiting
+    api_key_rate_limiter.record(rate_limit_key)
     raise errors.invalid_token()
+
+
+def _get_client_ip(request: Request) -> str | None:
+    """Extract client IP from request, checking X-Forwarded-For header."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        # Take the first IP in the chain (original client)
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return None
 
 
 async def get_current_user_api_key(
@@ -233,10 +267,12 @@ async def get_current_user_api_key(
     db: DbSession,
 ) -> User:
     """Get current authenticated user from API key."""
+    client_ip = _get_client_ip(request)
+
     # Check X-API-Key header
     api_key_header = request.headers.get("X-API-Key")
     if api_key_header and is_api_key(api_key_header):
-        api_key = await _validate_api_key(db, api_key_header)
+        api_key = await _validate_api_key(db, api_key_header, client_ip)
         result = await db.execute(select(User).where(User.id == api_key.user_id))
         user = result.scalar_one_or_none()
         if not user:
@@ -248,7 +284,7 @@ async def get_current_user_api_key(
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.replace("Bearer ", "")
         if is_api_key(token):
-            api_key = await _validate_api_key(db, token)
+            api_key = await _validate_api_key(db, token, client_ip)
             result = await db.execute(select(User).where(User.id == api_key.user_id))
             user = result.scalar_one_or_none()
             if not user:

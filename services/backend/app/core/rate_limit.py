@@ -70,3 +70,7 @@ class RateLimiter:
 
 # Global rate limiter for login attempts
 login_rate_limiter = RateLimiter()
+
+# Rate limiter for API key authentication attempts
+# More restrictive: 20 attempts per minute to prevent brute force
+api_key_rate_limiter = RateLimiter(max_attempts=20, window_ms=60000)

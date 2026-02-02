@@ -1,11 +1,9 @@
 """API Keys management endpoints."""
 
-import json
 from datetime import datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func as sql_func
 from sqlalchemy import select
 
 from app.core.errors import errors
@@ -20,11 +18,13 @@ MAX_API_KEYS_PER_USER = 10
 
 
 # Schemas
+# Note: scopes field removed - will be added back when scope enforcement is implemented
+
+
 class ApiKeyCreate(BaseModel):
     """Create API key request."""
 
     name: str = Field(..., min_length=1, max_length=100)
-    scopes: list[str] | None = None
     expires_at: datetime | None = None
 
 
@@ -32,7 +32,6 @@ class ApiKeyUpdate(BaseModel):
     """Update API key request."""
 
     name: str | None = None
-    scopes: list[str] | None = None
     is_active: bool | None = None
 
 
@@ -44,7 +43,6 @@ class ApiKeyResponse(BaseModel):
     id: int
     name: str
     key_prefix: str
-    scopes: list[str] | None
     is_active: bool
     expires_at: datetime | None
     last_used_at: datetime | None
@@ -58,20 +56,9 @@ class ApiKeyCreateResponse(BaseModel):
     name: str
     key: str
     key_prefix: str
-    scopes: list[str] | None
     is_active: bool
     expires_at: datetime | None
     created_at: datetime
-
-
-def _parse_scopes(scopes_json: str | None) -> list[str] | None:
-    """Parse scopes JSON string to list."""
-    if not scopes_json:
-        return None
-    try:
-        return json.loads(scopes_json)
-    except json.JSONDecodeError:
-        return None
 
 
 def _to_response(api_key: ApiKey) -> ApiKeyResponse:
@@ -80,7 +67,6 @@ def _to_response(api_key: ApiKey) -> ApiKeyResponse:
         id=api_key.id,
         name=api_key.name,
         key_prefix=api_key.key_prefix,
-        scopes=_parse_scopes(api_key.scopes),
         is_active=api_key.is_active,
         expires_at=api_key.expires_at,
         last_used_at=api_key.last_used_at,
@@ -118,11 +104,13 @@ async def create_api_key(
     The secret key is only returned once and cannot be retrieved later.
     Store it securely.
     """
-    # Check API key limit
-    count_result = await db.execute(
-        select(sql_func.count(ApiKey.id)).where(ApiKey.user_id == user.id)
+    # Check API key limit with row locking to prevent race condition
+    # Select existing keys with FOR UPDATE to lock rows during the check
+    existing_keys_result = await db.execute(
+        select(ApiKey.id).where(ApiKey.user_id == user.id).with_for_update()
     )
-    count = count_result.scalar() or 0
+    existing_keys = existing_keys_result.scalars().all()
+    count = len(existing_keys)
 
     if count >= MAX_API_KEYS_PER_USER:
         raise errors.api_key_limit_exceeded(MAX_API_KEYS_PER_USER)
@@ -132,19 +120,16 @@ async def create_api_key(
     key_hash = hash_password(secret_key)
     key_prefix = get_api_key_prefix(secret_key)
 
-    # Serialize scopes if provided
-    scopes_json = json.dumps(request.scopes) if request.scopes else None
-
     api_key = ApiKey(
         user_id=user.id,
         name=request.name,
         key_hash=key_hash,
         key_prefix=key_prefix,
-        scopes=scopes_json,
         expires_at=request.expires_at,
     )
     db.add(api_key)
     await db.flush()
+    await db.commit()  # Explicit commit to ensure key is persisted
 
     return {
         "data": ApiKeyCreateResponse(
@@ -152,7 +137,6 @@ async def create_api_key(
             name=api_key.name,
             key=secret_key,
             key_prefix=key_prefix,
-            scopes=request.scopes,
             is_active=api_key.is_active,
             expires_at=api_key.expires_at,
             created_at=api_key.created_at,
@@ -185,7 +169,7 @@ async def update_api_key(
     user: CurrentUser,
     db: DbSession,
 ) -> dict:
-    """Update an API key's name, scopes, or active status."""
+    """Update an API key's name or active status."""
     result = await db.execute(
         select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == user.id)
     )
@@ -195,12 +179,6 @@ async def update_api_key(
         raise errors.api_key_not_found()
 
     update_data = request.model_dump(exclude_unset=True)
-
-    # Handle scopes serialization
-    if "scopes" in update_data:
-        scopes = update_data.pop("scopes")
-        api_key.scopes = json.dumps(scopes) if scopes else None
-
     for field, value in update_data.items():
         setattr(api_key, field, value)
 

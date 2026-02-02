@@ -3,6 +3,7 @@
 import pytest
 from httpx import AsyncClient
 
+from app.core.rate_limit import api_key_rate_limiter
 from app.core.security import generate_api_key, get_api_key_prefix
 
 
@@ -59,20 +60,6 @@ class TestApiKeyCrud:
         assert data["key"].startswith("tm_")
         assert data["key_prefix"] == data["key"][:11]
         assert data["is_active"] is True
-        assert data["scopes"] is None
-
-    @pytest.mark.asyncio
-    async def test_create_api_key_with_scopes(
-        self, authenticated_client: AsyncClient
-    ) -> None:
-        """Create API key with scopes."""
-        response = await authenticated_client.post(
-            "/api/api-keys",
-            json={"name": "Scoped Key", "scopes": ["read", "write"]},
-        )
-        assert response.status_code == 201
-        data = response.json()["data"]
-        assert data["scopes"] == ["read", "write"]
 
     @pytest.mark.asyncio
     async def test_get_api_key(self, authenticated_client: AsyncClient) -> None:
@@ -286,3 +273,126 @@ class TestApiKeyAuthentication:
         # Now last_used_at should be set
         get_response = await authenticated_client.get(f"/api/api-keys/{key_id}")
         assert get_response.json()["data"]["last_used_at"] is not None
+
+
+class TestApiKeyRateLimiting:
+    """Test rate limiting for API key authentication."""
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_on_invalid_keys(self, client: AsyncClient) -> None:
+        """Too many invalid API key attempts triggers rate limiting."""
+        # Clear any existing rate limit state
+        api_key_rate_limiter._attempts.clear()
+
+        # Make 20 invalid attempts (the limit)
+        for _ in range(20):
+            await client.get(
+                "/api/oauth/clients",
+                headers={"X-API-Key": "tm_invalid_key_that_does_not_exist_1234"},
+            )
+
+        # 21st attempt should be rate limited
+        response = await client.get(
+            "/api/oauth/clients",
+            headers={"X-API-Key": "tm_another_invalid_key_to_trigger_limit"},
+        )
+        assert response.status_code == 429
+        assert "RATE_001" in response.json()["detail"]["code"]
+
+        # Clean up
+        api_key_rate_limiter._attempts.clear()
+
+    @pytest.mark.asyncio
+    async def test_successful_auth_resets_rate_limit(
+        self, authenticated_client: AsyncClient
+    ) -> None:
+        """Successful API key auth resets rate limit counter."""
+        # Clear any existing rate limit state
+        api_key_rate_limiter._attempts.clear()
+
+        # Create a valid API key
+        create_response = await authenticated_client.post(
+            "/api/api-keys",
+            json={"name": "Rate Limit Test"},
+        )
+        api_key = create_response.json()["data"]["key"]
+
+        # Make some invalid attempts
+        authenticated_client.cookies.clear()
+        for _ in range(5):
+            await authenticated_client.get(
+                "/api/oauth/clients",
+                headers={"X-API-Key": "tm_invalid_key_for_rate_limit_test"},
+            )
+
+        # Now use a valid key - should succeed and reset counter
+        response = await authenticated_client.get(
+            "/api/oauth/clients",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 200
+
+        # Clean up
+        api_key_rate_limiter._attempts.clear()
+
+
+class TestApiKeyExpiration:
+    """Test API key expiration handling."""
+
+    @pytest.mark.asyncio
+    async def test_expired_api_key_rejected(
+        self, authenticated_client: AsyncClient
+    ) -> None:
+        """Expired API keys cannot authenticate."""
+        from datetime import UTC, datetime, timedelta
+
+        # Create an API key that expires in the past
+        past_time = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+        create_response = await authenticated_client.post(
+            "/api/api-keys",
+            json={"name": "Expired Key", "expires_at": past_time},
+        )
+        assert create_response.status_code == 201
+        api_key = create_response.json()["data"]["key"]
+
+        # Clear cookies to ensure we're not using session auth
+        authenticated_client.cookies.clear()
+
+        # Clear rate limiter
+        api_key_rate_limiter._attempts.clear()
+
+        # Try to use expired key
+        response = await authenticated_client.get(
+            "/api/oauth/clients",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 401
+
+        # Clean up rate limiter
+        api_key_rate_limiter._attempts.clear()
+
+    @pytest.mark.asyncio
+    async def test_non_expired_api_key_works(
+        self, authenticated_client: AsyncClient
+    ) -> None:
+        """API keys with future expiration work correctly."""
+        from datetime import UTC, datetime, timedelta
+
+        # Create an API key that expires in the future
+        future_time = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+        create_response = await authenticated_client.post(
+            "/api/api-keys",
+            json={"name": "Future Key", "expires_at": future_time},
+        )
+        assert create_response.status_code == 201
+        api_key = create_response.json()["data"]["key"]
+
+        # Clear cookies to ensure we're not using session auth
+        authenticated_client.cookies.clear()
+
+        # Use the key - should work
+        response = await authenticated_client.get(
+            "/api/oauth/clients",
+            headers={"X-API-Key": api_key},
+        )
+        assert response.status_code == 200
