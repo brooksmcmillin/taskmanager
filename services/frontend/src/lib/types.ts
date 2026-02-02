@@ -228,3 +228,22 @@ export interface ApiResponse<T> {
 		details?: Record<string, unknown>;
 	};
 }
+
+export interface ApiKey {
+	id: number;
+	name: string;
+	key_prefix: string;
+	is_active: boolean;
+	expires_at: string | null;
+	last_used_at: string | null;
+	created_at: string;
+}
+
+export interface ApiKeyCreate {
+	name: string;
+	expires_at?: string;
+}
+
+export interface ApiKeyCreateResponse extends ApiKey {
+	key: string;
+}
