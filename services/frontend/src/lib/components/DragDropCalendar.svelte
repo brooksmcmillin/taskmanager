@@ -12,7 +12,12 @@
 	const DEFAULT_PROJECT_COLOR = '#6b7280';
 	const dispatch = createEventDispatcher<{ editTodo: Todo }>();
 
-	let currentWeekStart = getStartOfWeek(new Date());
+	// Start from the previous week's Monday to show past/current/next week
+	let currentWeekStart = (() => {
+		const thisWeekMonday = getStartOfWeek(new Date());
+		thisWeekMonday.setDate(thisWeekMonday.getDate() - 7);
+		return thisWeekMonday;
+	})();
 	let todosByDate: Record<string, Todo[]> = {};
 	// Track drag operation state
 	let draggedTodoId: number | null = null;
@@ -169,7 +174,7 @@
 
 	<div id="calendar-container">
 		<div class="calendar-headers">
-			{#each ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as day}
+			{#each ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as day}
 				<div class="calendar-header-day">{day}</div>
 			{/each}
 		</div>

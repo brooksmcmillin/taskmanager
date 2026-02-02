@@ -160,7 +160,10 @@
 				current_password: currentPassword,
 				new_password: newPassword
 			});
-			toasts.show(response.message || 'Password updated successfully. Please log in again.', 'success');
+			toasts.show(
+				response.message || 'Password updated successfully. Please log in again.',
+				'success'
+			);
 			// Redirect to login since all sessions are invalidated after password change
 			setTimeout(() => {
 				goto('/login');
