@@ -89,6 +89,40 @@ class ActionType(str, enum.Enum):
     other = "other"  # Uncategorized
 
 
+class AutonomyTier(int, enum.Enum):
+    """Autonomy tier for task execution.
+
+    Defines risk levels and approval requirements for autonomous task execution:
+    - Tier 1: Fully autonomous (read-only, no side effects)
+    - Tier 2: Propose & execute (async notification, can be reverted)
+    - Tier 3: Propose & wait (explicit approval before execution)
+    - Tier 4: Never autonomous (always human-executed)
+    """
+
+    fully_autonomous = 1  # Low risk: research, reading, classification
+    propose_execute = 2  # Medium risk: emails to known recipients, file modifications
+    propose_wait = 3  # High risk: git push, external emails, code changes
+    never_autonomous = 4  # Critical: financial, credentials, infrastructure
+
+
+# Default autonomy tier mapping from action_type
+# This provides sensible defaults that can be overridden per-task
+ACTION_TYPE_DEFAULT_TIER: dict[ActionType, AutonomyTier] = {
+    ActionType.research: AutonomyTier.fully_autonomous,
+    ActionType.review: AutonomyTier.fully_autonomous,
+    ActionType.data_entry: AutonomyTier.propose_execute,
+    ActionType.document: AutonomyTier.propose_execute,
+    ActionType.email: AutonomyTier.propose_execute,  # Can be tier 3 for external
+    ActionType.schedule: AutonomyTier.propose_execute,
+    ActionType.code: AutonomyTier.propose_wait,
+    ActionType.purchase: AutonomyTier.never_autonomous,
+    ActionType.call: AutonomyTier.never_autonomous,
+    ActionType.errand: AutonomyTier.never_autonomous,
+    ActionType.manual: AutonomyTier.never_autonomous,
+    ActionType.other: AutonomyTier.propose_wait,  # Conservative default
+}
+
+
 class Todo(Base):
     """Todo/task model."""
 
@@ -138,6 +172,9 @@ class Todo(Base):
     action_type: Mapped[ActionType | None] = mapped_column(
         String(20)
     )  # Type of action required
+    autonomy_tier: Mapped[int | None] = mapped_column(
+        Integer
+    )  # Risk level: 1=fully autonomous, 2=propose & execute, 3=propose & wait, 4=never
     agent_status: Mapped[AgentStatus | None] = mapped_column(
         String(20)
     )  # Agent's processing status

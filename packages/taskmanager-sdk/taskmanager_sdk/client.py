@@ -408,6 +408,7 @@ class TaskManagerClient:
         parent_id: int | None = None,
         agent_actionable: bool | None = None,
         action_type: str | None = None,
+        autonomy_tier: int | None = None,
         agent_status: str | None = None,
         agent_notes: str | None = None,
         blocking_reason: str | None = None,
@@ -429,6 +430,7 @@ class TaskManagerClient:
             parent_id: New parent ID to move task (optional)
             agent_actionable: Whether an AI agent can complete this task autonomously
             action_type: Type of action (research, code, email, etc.)
+            autonomy_tier: Risk level 1-4 (1=fully autonomous, 4=never autonomous)
             agent_status: Agent processing status (pending_review, in_progress, etc.)
             agent_notes: Agent-generated notes and context
             blocking_reason: Why agent cannot proceed (if blocked)
@@ -461,6 +463,8 @@ class TaskManagerClient:
             data["agent_actionable"] = agent_actionable
         if action_type is not None:
             data["action_type"] = action_type
+        if autonomy_tier is not None:
+            data["autonomy_tier"] = autonomy_tier
         if agent_status is not None:
             data["agent_status"] = agent_status
         if agent_notes is not None:

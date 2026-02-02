@@ -14,7 +14,14 @@ from app.db.queries import (
 )
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
-from app.models.todo import ActionType, AgentStatus, Priority, Status, Todo
+from app.models.todo import (
+    ACTION_TYPE_DEFAULT_TIER,
+    ActionType,
+    AgentStatus,
+    Priority,
+    Status,
+    Todo,
+)
 from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/todos", tags=["todos"])
@@ -38,6 +45,9 @@ class TodoCreate(BaseModel):
     # Agent fields - typically not set on creation, inferred automatically
     agent_actionable: bool | None = None
     action_type: ActionType | None = None
+    autonomy_tier: int | None = Field(
+        None, ge=1, le=4, description="Risk level: 1-4 (1=fully autonomous, 4=never)"
+    )
 
 
 class TodoUpdate(BaseModel):
@@ -58,6 +68,9 @@ class TodoUpdate(BaseModel):
     # Agent fields
     agent_actionable: bool | None = None
     action_type: ActionType | None = None
+    autonomy_tier: int | None = Field(
+        None, ge=1, le=4, description="Risk level: 1-4 (1=fully autonomous, 4=never)"
+    )
     agent_status: AgentStatus | None = None
     agent_notes: str | None = None
     blocking_reason: str | None = None
@@ -89,6 +102,7 @@ class SubtaskResponse(BaseModel):
     # Agent fields
     agent_actionable: bool | None = None
     action_type: ActionType | None = None
+    autonomy_tier: int | None = None
     agent_status: AgentStatus | None = None
 
 
@@ -118,6 +132,7 @@ class TodoResponse(BaseModel):
     # Agent fields
     agent_actionable: bool | None = None
     action_type: ActionType | None = None
+    autonomy_tier: int | None = None
     agent_status: AgentStatus | None = None
     agent_notes: str | None = None
     blocking_reason: str | None = None
@@ -149,6 +164,7 @@ def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
         updated_at=subtask.updated_at,
         agent_actionable=subtask.agent_actionable,
         action_type=subtask.action_type,
+        autonomy_tier=subtask.autonomy_tier,
         agent_status=subtask.agent_status,
     )
 
@@ -197,6 +213,7 @@ def _build_todo_response(
         updated_at=todo.updated_at,
         agent_actionable=todo.agent_actionable,
         action_type=todo.action_type,
+        autonomy_tier=todo.autonomy_tier,
         agent_status=todo.agent_status,
         agent_notes=todo.agent_notes,
         blocking_reason=todo.blocking_reason,
@@ -317,10 +334,10 @@ ACTION_PATTERNS: dict[ActionType, tuple[list[str], bool]] = {
 
 def infer_action_type(
     title: str, description: str | None
-) -> tuple[ActionType | None, bool | None]:
-    """Infer action type and agent actionability from task title/description.
+) -> tuple[ActionType | None, bool | None, int | None]:
+    """Infer action type, agent actionability, and autonomy tier from task.
 
-    Uses keyword matching to classify tasks. Returns (None, None) if no
+    Uses keyword matching to classify tasks. Returns (None, None, None) if no
     pattern matches, allowing the agent to classify later via LLM.
 
     Args:
@@ -328,15 +345,19 @@ def infer_action_type(
         description: Optional task description
 
     Returns:
-        Tuple of (action_type, agent_actionable) or (None, None) if unknown
+        Tuple of (action_type, agent_actionable, autonomy_tier) or
+        (None, None, None) if unknown.
     """
     text = f"{title} {description or ''}".lower()
 
     for action_type, (keywords, actionable) in ACTION_PATTERNS.items():
         if any(keyword in text for keyword in keywords):
-            return action_type, actionable
+            # Get default autonomy tier from mapping
+            default_tier = ACTION_TYPE_DEFAULT_TIER.get(action_type)
+            tier_value = default_tier.value if default_tier else None
+            return action_type, actionable, tier_value
 
-    return None, None  # Unknown - agent can classify later
+    return None, None, None  # Unknown - agent can classify later
 
 
 @router.get("")
@@ -470,14 +491,17 @@ async def create_todo(
     # Infer agent fields if not provided
     agent_actionable = request.agent_actionable
     action_type = request.action_type
-    if agent_actionable is None or action_type is None:
-        inferred_type, inferred_actionable = infer_action_type(
+    autonomy_tier = request.autonomy_tier
+    if agent_actionable is None or action_type is None or autonomy_tier is None:
+        inferred_type, inferred_actionable, inferred_tier = infer_action_type(
             request.title, request.description
         )
         if action_type is None:
             action_type = inferred_type
         if agent_actionable is None:
             agent_actionable = inferred_actionable
+        if autonomy_tier is None:
+            autonomy_tier = inferred_tier
 
     todo = Todo(
         user_id=user.id,
@@ -494,6 +518,7 @@ async def create_todo(
         position=position,
         agent_actionable=agent_actionable,
         action_type=action_type,
+        autonomy_tier=autonomy_tier,
     )
     db.add(todo)
     await db.flush()
