@@ -91,14 +91,16 @@ export function isToday(dateStr: string): boolean {
 }
 
 /**
- * Get start of week (Sunday)
+ * Get start of week (Monday)
  * @param date - Date object
- * @returns Date object for start of week
+ * @returns Date object for start of week (Monday)
  */
 export function getStartOfWeek(date: Date): Date {
 	const d = new Date(date);
 	const day = d.getDay();
-	d.setDate(d.getDate() - day);
+	// Convert Sunday (0) to 7, so Monday becomes day 1
+	const daysFromMonday = (day + 6) % 7;
+	d.setDate(d.getDate() - daysFromMonday);
 	d.setHours(0, 0, 0, 0);
 	return d;
 }
