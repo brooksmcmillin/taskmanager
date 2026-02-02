@@ -210,6 +210,11 @@ class Errors:
         """NOT_FOUND_008: Attachment not found."""
         return ApiError("NOT_FOUND_008", 404, "Attachment not found")
 
+    @staticmethod
+    def api_key_not_found() -> ApiError:
+        """NOT_FOUND_009: API key not found."""
+        return ApiError("NOT_FOUND_009", 404, "API key not found")
+
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
     # =========================================================================
@@ -228,6 +233,16 @@ class Errors:
     def registration_code_exists() -> ApiError:
         """CONFLICT_003: Registration code already exists."""
         return ApiError("CONFLICT_003", 409, "Registration code already exists")
+
+    @staticmethod
+    def api_key_limit_exceeded(limit: int = 10) -> ApiError:
+        """LIMIT_001: API key limit exceeded."""
+        return ApiError(
+            "LIMIT_001",
+            400,
+            f"Maximum number of API keys ({limit}) exceeded",
+            {"limit": limit},
+        )
 
     # =========================================================================
     # Registration Code Errors (REG_001 - REG_003)

@@ -2,14 +2,17 @@
 
 import secrets
 from collections.abc import AsyncGenerator
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import errors
+from app.core.security import is_api_key, verify_password
 from app.db.database import async_session_maker
+from app.models.api_key import ApiKey
 from app.models.session import Session
 from app.models.user import User
 
@@ -187,14 +190,95 @@ async def validate_client_credentials_token(
 ClientCredentialsToken = Annotated[str, Depends(validate_client_credentials_token)]
 
 
+async def _validate_api_key(db: DbSession, key: str) -> ApiKey:
+    """Validate an API key and return the ApiKey model.
+
+    Args:
+        db: Database session
+        key: The full API key string (tm_...)
+
+    Returns:
+        ApiKey model instance
+
+    Raises:
+        HTTPException: If key is invalid, expired, or revoked
+    """
+    # Extract prefix for efficient lookup
+    prefix = key[:11]
+
+    # Find API keys with matching prefix
+    result = await db.execute(
+        select(ApiKey)
+        .where(ApiKey.key_prefix == prefix)
+        .where(ApiKey.is_active.is_(True))
+    )
+    api_keys = result.scalars().all()
+
+    # Check each candidate with constant-time comparison
+    for api_key in api_keys:
+        if verify_password(key, api_key.key_hash):
+            # Check expiration
+            if api_key.expires_at and api_key.expires_at < datetime.now(UTC):
+                raise errors.invalid_token()
+
+            # Update last_used_at
+            api_key.last_used_at = datetime.now(UTC)
+            return api_key
+
+    raise errors.invalid_token()
+
+
+async def get_current_user_api_key(
+    request: Request,
+    db: DbSession,
+) -> User:
+    """Get current authenticated user from API key."""
+    # Check X-API-Key header
+    api_key_header = request.headers.get("X-API-Key")
+    if api_key_header and is_api_key(api_key_header):
+        api_key = await _validate_api_key(db, api_key_header)
+        result = await db.execute(select(User).where(User.id == api_key.user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise errors.auth_required()
+        return user
+
+    # Check Authorization: Bearer header for API key
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.replace("Bearer ", "")
+        if is_api_key(token):
+            api_key = await _validate_api_key(db, token)
+            result = await db.execute(select(User).where(User.id == api_key.user_id))
+            user = result.scalar_one_or_none()
+            if not user:
+                raise errors.auth_required()
+            return user
+
+    raise errors.auth_required()
+
+
+CurrentUserApiKey = Annotated[User, Depends(get_current_user_api_key)]
+
+
 async def get_current_user_flexible(
     request: Request,
     db: DbSession,
 ) -> User:
-    """Get current user from either session cookie or OAuth Bearer token."""
-    # Try OAuth Bearer token first
+    """Get current user from session cookie, OAuth Bearer token, or API key."""
+    # Check X-API-Key header first
+    api_key_header = request.headers.get("X-API-Key")
+    if api_key_header and is_api_key(api_key_header):
+        return await get_current_user_api_key(request, db)
+
+    # Check Authorization header
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.replace("Bearer ", "")
+        # Check if it's an API key
+        if is_api_key(token):
+            return await get_current_user_api_key(request, db)
+        # Otherwise treat as OAuth token
         return await get_current_user_oauth(request, db)
 
     # Fall back to session cookie
