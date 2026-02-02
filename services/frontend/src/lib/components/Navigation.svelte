@@ -260,6 +260,14 @@
 								>
 									OAuth Clients
 								</a>
+								<a
+									href="/api-keys"
+									class="dropdown-item"
+									class:active={currentPath === '/api-keys'}
+									onclick={closeDropdowns}
+								>
+									API Keys
+								</a>
 								{#if user.is_admin}
 									<a
 										href="/admin/registration-codes"
