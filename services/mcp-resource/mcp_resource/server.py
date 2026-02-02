@@ -1311,12 +1311,19 @@ def create_resource_server(
                 )
 
             # Validate autonomy_tier if provided
-            if autonomy_tier is not None and (autonomy_tier < 1 or autonomy_tier > 4):
-                return json.dumps(
-                    {"error": f"Invalid autonomy_tier: {autonomy_tier}. Must be 1-4."}
-                )
+            if autonomy_tier is not None:
+                if not isinstance(autonomy_tier, int):
+                    return json.dumps(
+                        {"error": "autonomy_tier must be an integer"}
+                    )
+                if autonomy_tier < 1 or autonomy_tier > 4:
+                    return json.dumps(
+                        {"error": f"Invalid autonomy_tier: {autonomy_tier}. Must be 1-4."}
+                    )
 
             # Infer default autonomy_tier from action_type if not provided
+            # NOTE: This mapping is duplicated from services/backend/app/models/todo.py
+            # (ACTION_TYPE_DEFAULT_TIER). Keep in sync if changing defaults.
             if autonomy_tier is None:
                 default_tiers = {
                     "research": 1,

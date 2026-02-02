@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -127,6 +128,12 @@ class Todo(Base):
     """Todo/task model."""
 
     __tablename__ = "todos"
+    __table_args__ = (
+        CheckConstraint(
+            "autonomy_tier IS NULL OR (autonomy_tier >= 1 AND autonomy_tier <= 4)",
+            name="ck_todos_autonomy_tier_range",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))

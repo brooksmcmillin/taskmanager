@@ -36,8 +36,16 @@ def upgrade() -> None:
     # Create index on autonomy_tier for efficient filtering
     op.create_index("ix_todos_autonomy_tier", "todos", ["autonomy_tier"])
 
+    # Add check constraint to ensure valid range (1-4)
+    op.create_check_constraint(
+        "ck_todos_autonomy_tier_range",
+        "todos",
+        "autonomy_tier IS NULL OR (autonomy_tier >= 1 AND autonomy_tier <= 4)",
+    )
+
 
 def downgrade() -> None:
     """Remove autonomy_tier field from todos table."""
+    op.drop_constraint("ck_todos_autonomy_tier_range", "todos", type_="check")
     op.drop_index("ix_todos_autonomy_tier", table_name="todos")
     op.drop_column("todos", "autonomy_tier")
