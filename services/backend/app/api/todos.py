@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, select
 
 from app.core.errors import errors
+from app.db.queries import (
+    get_next_position,
+    get_resource_for_user,
+    get_resources_for_user,
+)
 from app.dependencies import CurrentUser, DbSession
 from app.models.project import Project
 from app.models.todo import ActionType, AgentStatus, Priority, Status, Todo
@@ -451,35 +456,16 @@ async def create_todo(
     """
     # Verify parent todo exists and belongs to user if parent_id is provided
     if request.parent_id:
-        parent_result = await db.execute(
-            select(Todo).where(
-                Todo.id == request.parent_id,
-                Todo.user_id == user.id,
-                Todo.deleted_at.is_(None),
-            )
+        await get_resource_for_user(
+            db, Todo, request.parent_id, user.id, errors.todo_not_found
         )
-        parent = parent_result.scalar_one_or_none()
-        if not parent:
-            raise errors.todo_not_found()
 
     # Auto-assign position if not provided
     position = request.position
     if position is None:
-        from sqlalchemy import func as sql_func
-
-        # Get max position for todos with same parent and project
-        pos_query = select(sql_func.max(Todo.position)).where(
-            Todo.user_id == user.id,
-            Todo.deleted_at.is_(None),
+        position = await get_next_position(
+            db, Todo, user.id, parent_id=request.parent_id
         )
-        if request.parent_id:
-            pos_query = pos_query.where(Todo.parent_id == request.parent_id)
-        else:
-            pos_query = pos_query.where(Todo.parent_id.is_(None))
-
-        max_pos_result = await db.execute(pos_query)
-        max_pos = max_pos_result.scalar() or 0
-        position = max_pos + 1
 
     # Infer agent fields if not provided
     agent_actionable = request.agent_actionable
@@ -537,6 +523,7 @@ async def get_todo(
     db: DbSession,
 ) -> dict:
     """Get a todo by ID with its subtasks."""
+    # Verify todo exists and belongs to user, get with project info
     result = await db.execute(
         select(
             Todo,
@@ -579,27 +566,16 @@ async def update_todo(
     db: DbSession,
 ) -> dict:
     """Update a todo."""
-    result = await db.execute(
-        select(Todo).where(Todo.id == todo_id, Todo.user_id == user.id)
+    todo = await get_resource_for_user(
+        db, Todo, todo_id, user.id, errors.todo_not_found, check_deleted=False
     )
-    todo = result.scalar_one_or_none()
-
-    if not todo:
-        raise errors.todo_not_found()
 
     # Verify parent_id authorization if being updated
     update_data = request.model_dump(exclude_unset=True)
     if "parent_id" in update_data and update_data["parent_id"] is not None:
-        parent_result = await db.execute(
-            select(Todo).where(
-                Todo.id == update_data["parent_id"],
-                Todo.user_id == user.id,
-                Todo.deleted_at.is_(None),
-            )
+        parent = await get_resource_for_user(
+            db, Todo, update_data["parent_id"], user.id, errors.todo_not_found
         )
-        parent = parent_result.scalar_one_or_none()
-        if not parent:
-            raise errors.todo_not_found()
 
         # Prevent nested subtasks (subtasks of subtasks)
         if parent.parent_id is not None:
@@ -643,24 +619,15 @@ async def bulk_update_todos(
     db: DbSession,
 ) -> dict:
     """Bulk update todos."""
-    result = await db.execute(
-        select(Todo).where(Todo.id.in_(request.ids), Todo.user_id == user.id)
-    )
-    todos = result.scalars().all()
+    todos_dict = await get_resources_for_user(db, Todo, request.ids, user.id)
+    todos = list(todos_dict.values())
 
     # Verify parent_id authorization if being updated
     update_data = request.updates.model_dump(exclude_unset=True)
     if "parent_id" in update_data and update_data["parent_id"] is not None:
-        parent_result = await db.execute(
-            select(Todo).where(
-                Todo.id == update_data["parent_id"],
-                Todo.user_id == user.id,
-                Todo.deleted_at.is_(None),
-            )
+        parent = await get_resource_for_user(
+            db, Todo, update_data["parent_id"], user.id, errors.todo_not_found
         )
-        parent = parent_result.scalar_one_or_none()
-        if not parent:
-            raise errors.todo_not_found()
 
         # Prevent nested subtasks (subtasks of subtasks)
         if parent.parent_id is not None:
@@ -683,13 +650,9 @@ async def delete_todo(
     db: DbSession,
 ) -> dict:
     """Soft delete a todo."""
-    result = await db.execute(
-        select(Todo).where(Todo.id == todo_id, Todo.user_id == user.id)
+    todo = await get_resource_for_user(
+        db, Todo, todo_id, user.id, errors.todo_not_found, check_deleted=False
     )
-    todo = result.scalar_one_or_none()
-
-    if not todo:
-        raise errors.todo_not_found()
 
     todo.deleted_at = datetime.now(UTC)
 
@@ -703,13 +666,9 @@ async def complete_todo(
     db: DbSession,
 ) -> dict:
     """Mark a todo as complete."""
-    result = await db.execute(
-        select(Todo).where(Todo.id == todo_id, Todo.user_id == user.id)
+    todo = await get_resource_for_user(
+        db, Todo, todo_id, user.id, errors.todo_not_found, check_deleted=False
     )
-    todo = result.scalar_one_or_none()
-
-    if not todo:
-        raise errors.todo_not_found()
 
     todo.status = Status.completed
     todo.completed_date = datetime.now(UTC)
@@ -736,16 +695,7 @@ async def list_subtasks(
 ) -> ListResponse[SubtaskResponse]:
     """List all subtasks for a todo."""
     # Verify parent todo exists and belongs to user
-    parent_result = await db.execute(
-        select(Todo).where(
-            Todo.id == todo_id,
-            Todo.user_id == user.id,
-            Todo.deleted_at.is_(None),
-        )
-    )
-    parent = parent_result.scalar_one_or_none()
-    if not parent:
-        raise errors.todo_not_found()
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
 
     # Fetch subtasks
     result = await db.execute(
@@ -770,16 +720,9 @@ async def create_subtask(
 ) -> dict:
     """Create a subtask for a todo."""
     # Verify parent todo exists and belongs to user
-    parent_result = await db.execute(
-        select(Todo).where(
-            Todo.id == todo_id,
-            Todo.user_id == user.id,
-            Todo.deleted_at.is_(None),
-        )
+    parent = await get_resource_for_user(
+        db, Todo, todo_id, user.id, errors.todo_not_found
     )
-    parent = parent_result.scalar_one_or_none()
-    if not parent:
-        raise errors.todo_not_found()
 
     # Prevent nested subtasks (subtasks of subtasks)
     if parent.parent_id is not None:
@@ -788,16 +731,7 @@ async def create_subtask(
         )
 
     # Auto-assign position for the subtask
-    from sqlalchemy import func as sql_func
-
-    max_pos_result = await db.execute(
-        select(sql_func.max(Todo.position)).where(
-            Todo.parent_id == todo_id,
-            Todo.deleted_at.is_(None),
-        )
-    )
-    max_pos = max_pos_result.scalar() or 0
-    position = max_pos + 1
+    position = await get_next_position(db, Todo, user.id, parent_id=todo_id)
 
     subtask = Todo(
         user_id=user.id,
@@ -833,10 +767,7 @@ async def reorder_todos(
 ) -> dict:
     """Reorder todos by providing the new order of todo IDs."""
     # Fetch all todos for user
-    result = await db.execute(
-        select(Todo).where(Todo.id.in_(request.todo_ids), Todo.user_id == user.id)
-    )
-    todos = {t.id: t for t in result.scalars().all()}
+    todos = await get_resources_for_user(db, Todo, request.todo_ids, user.id)
 
     # Validate all requested IDs were found and belong to user
     if len(todos) != len(request.todo_ids):
