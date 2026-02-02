@@ -166,7 +166,7 @@
 						/>
 					</svg>
 					<p class="text-gray-500 mt-4 mb-2">No API keys yet.</p>
-					<p class="text-sm text-gray-400">
+					<p class="text-sm text-gray-500">
 						Create an API key to access TaskManager programmatically.
 					</p>
 				</div>
