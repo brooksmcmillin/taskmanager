@@ -31,9 +31,9 @@ test.describe('Calendar Drag and Drop', () => {
 		const headers = page.locator('.calendar-header-day');
 		await expect(headers).toHaveCount(7);
 
-		// Verify day names
-		await expect(headers.nth(0)).toContainText('Sunday');
-		await expect(headers.nth(6)).toContainText('Saturday');
+		// Verify day names (week starts on Monday)
+		await expect(headers.nth(0)).toContainText('Monday');
+		await expect(headers.nth(6)).toContainText('Sunday');
 
 		// Verify 21 day cells (3 weeks × 7 days)
 		const days = page.locator('.calendar-day');
