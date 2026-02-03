@@ -6,7 +6,8 @@ import type {
 	TodoUpdate,
 	Subtask,
 	SubtaskCreate,
-	Attachment
+	Attachment,
+	TaskDependency
 } from '$lib/types';
 import { api } from '$lib/api/client';
 import { logger } from '$lib/utils/logger';
@@ -207,6 +208,59 @@ function createTodoStore() {
 		},
 		getAttachmentUrl: (todoId: number, attachmentId: number): string => {
 			return `/api/todos/${todoId}/attachments/${attachmentId}`;
+		},
+		// Dependency methods
+		loadDependencies: async (todoId: number): Promise<TaskDependency[]> => {
+			try {
+				const response = await api.get<{ data: TaskDependency[] }>(
+					`/api/todos/${todoId}/dependencies`
+				);
+				// Update the todo's dependencies in the store
+				update((todos) =>
+					todos.map((t) => (t.id === todoId ? { ...t, dependencies: response.data } : t))
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to load dependencies:', error);
+				throw error;
+			}
+		},
+		addDependency: async (todoId: number, dependencyId: number): Promise<TaskDependency> => {
+			try {
+				const response = await api.post<{ data: TaskDependency }>(
+					`/api/todos/${todoId}/dependencies`,
+					{ dependency_id: dependencyId }
+				);
+				// Update the todo's dependencies in the store
+				update((todos) =>
+					todos.map((t) =>
+						t.id === todoId ? { ...t, dependencies: [...(t.dependencies || []), response.data] } : t
+					)
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to add dependency:', error);
+				throw error;
+			}
+		},
+		removeDependency: async (todoId: number, dependencyId: number): Promise<void> => {
+			try {
+				await api.delete(`/api/todos/${todoId}/dependencies/${dependencyId}`);
+				// Remove the dependency from the store
+				update((todos) =>
+					todos.map((t) =>
+						t.id === todoId
+							? {
+									...t,
+									dependencies: (t.dependencies || []).filter((d) => d.id !== dependencyId)
+								}
+							: t
+					)
+				);
+			} catch (error) {
+				logger.error('Failed to remove dependency:', error);
+				throw error;
+			}
 		},
 		reorder: async (todoIds: number[]) => {
 			try {
