@@ -917,6 +917,9 @@ async def _check_circular_dependency(
     the dependent task is reachable from the dependency task (which would
     create a cycle).
 
+    This implementation fetches the entire dependency graph upfront in a single
+    query to avoid N+1 query performance issues.
+
     Args:
         db: Database session
         dependent_id: The task that will depend on another
@@ -925,6 +928,18 @@ async def _check_circular_dependency(
     Returns:
         True if adding this dependency would create a cycle, False otherwise
     """
+    # Fetch entire dependency graph in a single query
+    result = await db.execute(select(task_dependencies))
+    all_deps = result.all()
+
+    # Build adjacency list: dependent_id -> [dependency_ids]
+    graph: dict[int, list[int]] = {}
+    for row in all_deps:
+        dep_id = row.dependent_id
+        if dep_id not in graph:
+            graph[dep_id] = []
+        graph[dep_id].append(row.dependency_id)
+
     # BFS to find if dependent_id is reachable from dependency_id
     visited: set[int] = set()
     queue = [dependency_id]
@@ -938,15 +953,10 @@ async def _check_circular_dependency(
             continue
         visited.add(current_id)
 
-        # Get all tasks that the current task depends on
-        result = await db.execute(
-            select(task_dependencies.c.dependency_id).where(
-                task_dependencies.c.dependent_id == current_id
-            )
-        )
-        for row in result.all():
-            if row[0] not in visited:
-                queue.append(row[0])
+        # Get all tasks that the current task depends on (from in-memory graph)
+        for next_id in graph.get(current_id, []):
+            if next_id not in visited:
+                queue.append(next_id)
 
     return False
 
@@ -991,7 +1001,14 @@ async def add_dependency(
     """Add a dependency to a todo.
 
     The dependency_id specifies the task that must be completed before this task.
+
+    This endpoint handles race conditions by:
+    1. Relying on database primary key constraint for duplicate detection
+    2. Checking circular dependencies before insert (best effort)
+    3. Catching IntegrityError to return appropriate error responses
     """
+    from sqlalchemy.exc import IntegrityError
+
     # Verify todo exists and belongs to user
     await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
 
@@ -1004,27 +1021,24 @@ async def add_dependency(
     if todo_id == request.dependency_id:
         raise errors.self_dependency()
 
-    # Check if dependency already exists
-    existing = await db.execute(
-        select(task_dependencies).where(
-            task_dependencies.c.dependent_id == todo_id,
-            task_dependencies.c.dependency_id == request.dependency_id,
-        )
-    )
-    if existing.first():
-        raise errors.dependency_exists()
-
-    # Check for circular dependency
+    # Check for circular dependency before attempting insert
+    # Note: There's still a small race window, but circular deps are caught
+    # at query time and don't corrupt data (just create invalid state)
     if await _check_circular_dependency(db, todo_id, request.dependency_id):
         raise errors.circular_dependency()
 
-    # Add the dependency
-    await db.execute(
-        task_dependencies.insert().values(
-            dependent_id=todo_id,
-            dependency_id=request.dependency_id,
+    # Try to add the dependency - rely on DB constraint for duplicate detection
+    try:
+        await db.execute(
+            task_dependencies.insert().values(
+                dependent_id=todo_id,
+                dependency_id=request.dependency_id,
+            )
         )
-    )
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise errors.dependency_exists() from None
 
     # Get project name for response
     project_name = None

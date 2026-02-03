@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { createEventDispatcher } from 'svelte';
 	import { todos } from '$lib/stores/todos';
+	import { toasts } from '$lib/stores/ui';
 	import { getPriorityColor } from '$lib/utils/priority';
 	import type { TaskDependency, Todo } from '$lib/types';
 
@@ -16,6 +17,34 @@
 	let searchQuery = '';
 
 	const dispatch = createEventDispatcher();
+
+	// Map backend error codes to user-friendly messages
+	function getErrorMessage(error: unknown): string {
+		if (error && typeof error === 'object') {
+			// Check for API error response with code
+			const apiError = error as { response?: { data?: { detail?: { code?: string } } } };
+			const code = apiError.response?.data?.detail?.code;
+			if (code) {
+				switch (code) {
+					case 'CONFLICT_004':
+						return 'This dependency already exists.';
+					case 'CONFLICT_005':
+						return 'Cannot add this dependency: it would create a circular dependency chain.';
+					case 'CONFLICT_006':
+						return 'A task cannot depend on itself.';
+					case 'NOT_FOUND_003':
+						return 'Task not found.';
+					default:
+						break;
+				}
+			}
+			// Fall back to message field
+			if ('message' in error) {
+				return (error as { message: string }).message;
+			}
+		}
+		return 'Failed to add dependency. Please try again.';
+	}
 
 	async function loadAvailableTasks() {
 		isLoadingTasks = true;
@@ -41,6 +70,7 @@
 			);
 		} catch (error) {
 			console.error('Failed to load tasks:', error);
+			toasts.error('Failed to load available tasks.');
 		} finally {
 			isLoadingTasks = false;
 		}
@@ -61,15 +91,10 @@
 			showAddForm = false;
 			searchQuery = '';
 			dispatch('dependencyAdded');
+			toasts.success('Dependency added successfully.');
 		} catch (error: unknown) {
 			console.error('Failed to add dependency:', error);
-			// Show error message for circular dependency
-			if (error && typeof error === 'object' && 'message' in error) {
-				const errorMessage = (error as { message: string }).message;
-				if (errorMessage.includes('circular')) {
-					alert('Cannot add this dependency: it would create a circular dependency chain.');
-				}
-			}
+			toasts.error(getErrorMessage(error));
 		} finally {
 			isSubmitting = false;
 		}
@@ -80,8 +105,10 @@
 		try {
 			await todos.removeDependency(todoId, dependencyId);
 			dispatch('dependencyRemoved', dependencyId);
+			toasts.success('Dependency removed.');
 		} catch (error) {
 			console.error('Failed to remove dependency:', error);
+			toasts.error('Failed to remove dependency. Please try again.');
 		}
 	}
 

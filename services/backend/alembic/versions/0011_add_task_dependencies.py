@@ -64,10 +64,19 @@ def upgrade() -> None:
         "task_dependencies",
         ["dependency_id"],
     )
+    # Composite index for optimized "dependents" query (lookup by dependency_id)
+    op.create_index(
+        "ix_task_dependencies_dependency_dependent",
+        "task_dependencies",
+        ["dependency_id", "dependent_id"],
+    )
 
 
 def downgrade() -> None:
     """Drop task_dependencies table."""
+    op.drop_index(
+        "ix_task_dependencies_dependency_dependent", table_name="task_dependencies"
+    )
     op.drop_index("ix_task_dependencies_dependency_id", table_name="task_dependencies")
     op.drop_index("ix_task_dependencies_dependent_id", table_name="task_dependencies")
     op.drop_table("task_dependencies")
