@@ -43,6 +43,8 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 from taskmanager_sdk import TokenConfig
 
+from .cimd import CIMDError, CIMDFetcher, get_cimd_fetcher
+
 if TYPE_CHECKING:
     from mcp_auth_framework.storage import TokenStorage
 
@@ -112,6 +114,7 @@ class TaskManagerOAuthProvider(
         server_url: str,
         token_storage: "TokenStorage | None" = None,
         api_client: Any = None,
+        cimd_fetcher: CIMDFetcher | None = None,
     ):
         """
         Initialize the TaskManager OAuth provider.
@@ -122,11 +125,14 @@ class TaskManagerOAuthProvider(
             token_storage: Optional persistent token storage. If not provided,
                           tokens are stored in memory (not recommended for production).
             api_client: Optional TaskManager API client for loading client data
+            cimd_fetcher: Optional CIMD fetcher for URL-based client IDs.
+                         If not provided, uses the global fetcher instance.
         """
         self.settings = settings
         self.server_url = server_url
         self.token_storage = token_storage
         self.api_client = api_client
+        self.cimd_fetcher = cimd_fetcher or get_cimd_fetcher()
 
         # In-memory storage (used as fallback or for auth codes/state)
         self.clients: dict[str, OAuthClientInformationFull] = {}
@@ -145,7 +151,7 @@ class TaskManagerOAuthProvider(
         storage_type = "database" if token_storage else "in-memory"
         logger.info(
             f"Initialized TaskManager OAuth provider for {settings.base_url} "
-            f"with {storage_type} token storage"
+            f"with {storage_type} token storage and CIMD support"
         )
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -160,20 +166,43 @@ class TaskManagerOAuthProvider(
         return self._session
 
     async def close(self) -> None:
-        """Clean up HTTP session."""
+        """Clean up HTTP session and CIMD fetcher."""
         if self._session:
             await self._session.close()
             self._session = None
+        if self.cimd_fetcher:
+            await self.cimd_fetcher.close()
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         """
         Get OAuth client information.
 
-        This first checks our local cache, then the registered_clients dict,
-        and finally attempts to load from the backend API.
+        This method supports three types of client identification:
+        1. CIMD (Client ID Metadata Document) - URL-based client_ids
+        2. Local cache and registered clients
+        3. Backend API lookup
+
+        For CIMD clients, the client_id is a URL pointing to a JSON metadata document.
+        This is checked first to support the draft-ietf-oauth-client-id-metadata-document spec.
         """
         logger.info("=== GET CLIENT ===")
         logger.info(f"Looking for client: {client_id}")
+
+        # Check if this is a CIMD (URL-based) client_id
+        if self.cimd_fetcher.is_cimd_client_id(client_id):
+            logger.info(f"Detected CIMD client_id (URL-based): {client_id}")
+            try:
+                client_info = await self.cimd_fetcher.get_client_info(client_id)
+                if client_info:
+                    # Cache the CIMD client for this session
+                    self.clients[client_id] = client_info
+                    logger.info(f"Successfully loaded CIMD client: {client_id}")
+                    logger.info(f"CIMD client auth method: {client_info.token_endpoint_auth_method}")
+                    return client_info
+            except CIMDError as e:
+                logger.error(f"Failed to fetch CIMD metadata for {client_id}: {e}")
+                return None
+
         logger.info(f"Local cache clients: {list(self.clients.keys())}")
 
         # Check local cache first
