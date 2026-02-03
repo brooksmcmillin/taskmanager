@@ -1,7 +1,7 @@
 """Add webauthn_credentials table for passkey authentication.
 
-Revision ID: 0011_add_webauthn_credentials
-Revises: 0010_add_autonomy_tier
+Revision ID: 0012_add_webauthn_credentials
+Revises: 0011_add_task_dependencies
 Create Date: 2026-02-03
 
 """
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0011_add_webauthn_credentials"
-down_revision: str | None = "0010_add_autonomy_tier"
+revision: str = "0012_add_webauthn_credentials"
+down_revision: str | None = "0011_add_task_dependencies"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
