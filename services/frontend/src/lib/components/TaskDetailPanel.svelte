@@ -2,6 +2,7 @@
 	import { createEventDispatcher } from 'svelte';
 	import TodoForm from './TodoForm.svelte';
 	import SubtaskList from './SubtaskList.svelte';
+	import DependencyList from './DependencyList.svelte';
 	import AttachmentList from './AttachmentList.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
 	import { formatDateDisplay } from '$lib/utils/dates';
@@ -74,6 +75,19 @@
 
 	async function handleSubtaskChange() {
 		// Refresh the todo to get updated subtasks
+		if (todo) {
+			try {
+				const updatedTodo = await todos.getById(todo.id);
+				todo = updatedTodo;
+				dispatch('formSuccess');
+			} catch (error) {
+				console.error('Failed to refresh todo:', error);
+			}
+		}
+	}
+
+	async function handleDependencyChange() {
+		// Refresh the todo to get updated dependencies
 		if (todo) {
 			try {
 				const updatedTodo = await todos.getById(todo.id);
@@ -236,6 +250,17 @@
 							on:subtaskAdded={handleSubtaskChange}
 							on:subtaskCompleted={handleSubtaskChange}
 							on:subtaskDeleted={handleSubtaskChange}
+						/>
+					{/if}
+
+					<!-- Dependencies (only show for non-subtask todos) -->
+					{#if !todo.parent_id}
+						<DependencyList
+							todoId={todo.id}
+							dependencies={todo.dependencies || []}
+							dependents={todo.dependents || []}
+							on:dependencyAdded={handleDependencyChange}
+							on:dependencyRemoved={handleDependencyChange}
 						/>
 					{/if}
 

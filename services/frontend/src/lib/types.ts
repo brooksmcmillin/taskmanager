@@ -31,6 +31,16 @@ export interface Subtask {
 	updated_at: string | null;
 }
 
+export interface TaskDependency {
+	id: number;
+	title: string;
+	status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+	priority: 'low' | 'medium' | 'high' | 'urgent';
+	due_date: string | null;
+	project_id: number | null;
+	project_name: string | null;
+}
+
 export interface Todo {
 	id: number;
 	project_id: number | null;
@@ -49,6 +59,8 @@ export interface Todo {
 	parent_id: number | null;
 	position: number;
 	subtasks: Subtask[];
+	dependencies?: TaskDependency[];
+	dependents?: TaskDependency[];
 	attachments?: Attachment[];
 	created_at: string;
 	updated_at: string;
