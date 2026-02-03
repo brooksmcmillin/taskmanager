@@ -197,7 +197,9 @@ class TaskManagerOAuthProvider(
                     # Cache the CIMD client for this session
                     self.clients[client_id] = client_info
                     logger.info(f"Successfully loaded CIMD client: {client_id}")
-                    logger.info(f"CIMD client auth method: {client_info.token_endpoint_auth_method}")
+                    logger.info(
+                        f"CIMD client auth method: {client_info.token_endpoint_auth_method}"
+                    )
                     return client_info
             except CIMDError as e:
                 logger.error(f"Failed to fetch CIMD metadata for {client_id}: {e}")

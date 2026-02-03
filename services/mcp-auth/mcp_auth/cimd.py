@@ -12,11 +12,14 @@ Key features:
 - Metadata fetched on-demand from client-controlled URLs
 - Caching to reduce network requests
 - Support for public clients (PKCE) and confidential clients (private_key_jwt)
+- SSRF protection for URL fetching
 """
 
 import asyncio
 import hashlib
+import ipaddress
 import logging
+import socket
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -37,6 +40,26 @@ CIMD_CONNECT_TIMEOUT_SECONDS = 5  # 5 second connection timeout
 # Note: client_secret_* methods are NOT allowed per the spec since there's no way
 # to establish a shared secret with CIMD
 CIMD_ALLOWED_AUTH_METHODS = {"none", "private_key_jwt"}
+
+# Private IP ranges that should be blocked for SSRF protection
+# These are blocked unless allow_localhost is True and the host is localhost
+PRIVATE_IP_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),  # Link-local
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),  # IPv6 private
+    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
+]
+
+# Cloud metadata endpoints that should always be blocked
+BLOCKED_METADATA_HOSTS = [
+    "169.254.169.254",  # AWS/GCP/Azure metadata
+    "metadata.google.internal",
+    "metadata.goog",
+]
 
 
 @dataclass
@@ -158,6 +181,95 @@ class CIMDFetcher:
         except Exception:
             return False
 
+    def _is_private_ip(self, ip_str: str) -> bool:
+        """
+        Check if an IP address is in a private/internal range.
+
+        Args:
+            ip_str: IP address string
+
+        Returns:
+            True if the IP is private/internal, False otherwise
+        """
+        try:
+            ip = ipaddress.ip_address(ip_str)
+            return any(ip in network for network in PRIVATE_IP_NETWORKS)
+        except ValueError:
+            # Not a valid IP address
+            return False
+
+    def _validate_url_ssrf(self, url: str, is_jwks: bool = False) -> None:
+        """
+        Validate a URL for SSRF vulnerabilities.
+
+        This checks that the URL doesn't point to internal/private resources.
+
+        Args:
+            url: The URL to validate
+            is_jwks: If True, this is a JWKS URI (stricter validation)
+
+        Raises:
+            CIMDValidationError: If the URL fails SSRF validation
+        """
+        try:
+            parsed = urlparse(url)
+        except Exception as e:
+            raise CIMDValidationError(f"Invalid URL format: {e}") from e
+
+        hostname = parsed.hostname or ""
+
+        # Block known cloud metadata endpoints
+        if hostname in BLOCKED_METADATA_HOSTS:
+            raise CIMDValidationError(f"URL points to blocked metadata endpoint: {hostname}")
+
+        # For JWKS URIs, always require HTTPS (no localhost exception)
+        if is_jwks and parsed.scheme != "https":
+            raise CIMDValidationError(f"jwks_uri must use HTTPS (got {parsed.scheme})")
+
+        # Check if hostname is an IP address
+        try:
+            ip = ipaddress.ip_address(hostname)
+            # For JWKS, block all private IPs
+            if is_jwks and self._is_private_ip(hostname):
+                raise CIMDValidationError(f"jwks_uri cannot point to private IP: {hostname}")
+            # For CIMD metadata, allow localhost if enabled
+            if self._is_private_ip(hostname):
+                if not self.allow_localhost:
+                    raise CIMDValidationError(f"URL points to private IP: {hostname}")
+                # Only allow actual localhost, not other private IPs
+                if str(ip) not in ("127.0.0.1", "::1"):
+                    raise CIMDValidationError(
+                        f"URL points to private IP (only localhost allowed): {hostname}"
+                    )
+        except ValueError:
+            # Not an IP address, it's a hostname - resolve and check
+            # For JWKS, also block localhost hostnames
+            if is_jwks and hostname in ("localhost", "localhost.localdomain"):
+                raise CIMDValidationError(
+                    f"jwks_uri cannot point to localhost: {hostname}"
+                ) from None
+
+            # Try to resolve the hostname and check if it resolves to a private IP
+            try:
+                # Use getaddrinfo to resolve the hostname
+                addrs = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+                for addr in addrs:
+                    ip_str = str(addr[4][0])
+                    if self._is_private_ip(ip_str):
+                        # For JWKS, block all private IPs
+                        if is_jwks:
+                            raise CIMDValidationError(
+                                f"jwks_uri hostname {hostname} resolves to private IP: {ip_str}"
+                            )
+                        # For CIMD, only allow localhost
+                        if not self.allow_localhost or ip_str not in ("127.0.0.1", "::1"):
+                            raise CIMDValidationError(
+                                f"Hostname {hostname} resolves to private IP: {ip_str}"
+                            )
+            except socket.gaierror:
+                # DNS resolution failed - we'll let the actual request fail
+                logger.warning(f"Could not resolve hostname for SSRF check: {hostname}")
+
     def _validate_url(self, url: str) -> None:
         """
         Validate that a URL is acceptable for CIMD.
@@ -179,6 +291,8 @@ class CIMDFetcher:
 
         # HTTPS required for production
         if parsed.scheme == "https":
+            # Perform SSRF validation
+            self._validate_url_ssrf(url, is_jwks=False)
             return
 
         # Allow localhost HTTP for development
@@ -240,10 +354,12 @@ class CIMDFetcher:
             )
 
         # If using private_key_jwt, must have jwks or jwks_uri
-        if auth_method == "private_key_jwt" and not metadata.get("jwks") and not metadata.get("jwks_uri"):
-            raise CIMDValidationError(
-                "Clients using private_key_jwt must provide jwks or jwks_uri"
-            )
+        if (
+            auth_method == "private_key_jwt"
+            and not metadata.get("jwks")
+            and not metadata.get("jwks_uri")
+        ):
+            raise CIMDValidationError("Clients using private_key_jwt must provide jwks or jwks_uri")
 
         # client_name is recommended but not required
         if "client_name" in metadata and not isinstance(metadata["client_name"], str):
@@ -332,15 +448,13 @@ class CIMDFetcher:
             async with session.get(url) as response:
                 # Check status
                 if response.status != 200:
-                    raise CIMDFetchError(
-                        f"Failed to fetch CIMD metadata: HTTP {response.status}"
-                    )
+                    raise CIMDFetchError(f"Failed to fetch CIMD metadata: HTTP {response.status}")
 
-                # Check content type
+                # Check content type - must be application/json
                 content_type = response.headers.get("Content-Type", "")
                 if not content_type.startswith("application/json"):
-                    logger.warning(
-                        f"CIMD metadata has unexpected Content-Type: {content_type}"
+                    raise CIMDFetchError(
+                        f"CIMD metadata must have Content-Type: application/json (got {content_type})"
                     )
 
                 # Check content length
@@ -405,9 +519,7 @@ class CIMDFetcher:
         auth_method = metadata.get("token_endpoint_auth_method", "none")
 
         # Extract grant types (default to authorization_code + refresh_token)
-        grant_types = metadata.get(
-            "grant_types", ["authorization_code", "refresh_token"]
-        )
+        grant_types = metadata.get("grant_types", ["authorization_code", "refresh_token"])
 
         # Extract response types (default to code)
         response_types = metadata.get("response_types", ["code"])
@@ -433,32 +545,86 @@ class CIMDFetcher:
         """
         Get the JWKS for a CIMD client using private_key_jwt.
 
+        This method includes SSRF protection and size limits for security.
+
         Args:
             client_id: The CIMD URL
 
         Returns:
             JWKS dictionary or None if not available
+
+        Raises:
+            CIMDValidationError: If jwks_uri fails SSRF validation
         """
         if not self.is_cimd_client_id(client_id):
             return None
 
         metadata = await self.fetch_metadata(client_id)
 
-        # Check for inline JWKS
+        # Check for inline JWKS (already validated via metadata fetch)
         if "jwks" in metadata:
-            return metadata["jwks"]
+            jwks = metadata["jwks"]
+            # Validate inline JWKS structure
+            if not isinstance(jwks, dict) or "keys" not in jwks:
+                logger.error(f"Invalid inline JWKS structure for {client_id}")
+                return None
+            return jwks
 
         # Check for jwks_uri
         jwks_uri = metadata.get("jwks_uri")
         if jwks_uri:
-            # Fetch JWKS from URI
+            # Validate JWKS URI for SSRF vulnerabilities (strict mode)
+            try:
+                self._validate_url_ssrf(jwks_uri, is_jwks=True)
+            except CIMDValidationError as e:
+                logger.error(f"JWKS URI failed SSRF validation: {e}")
+                raise
+
+            # Fetch JWKS from URI with size limits
             session = await self._get_session()
             try:
                 async with session.get(jwks_uri) as response:
                     if response.status != 200:
-                        logger.error(f"Failed to fetch JWKS from {jwks_uri}: HTTP {response.status}")
+                        logger.error(
+                            f"Failed to fetch JWKS from {jwks_uri}: HTTP {response.status}"
+                        )
                         return None
-                    return await response.json()
+
+                    # Check content type
+                    content_type = response.headers.get("Content-Type", "")
+                    if not content_type.startswith("application/json"):
+                        logger.error(
+                            f"JWKS has unexpected Content-Type: {content_type} (expected application/json)"
+                        )
+                        return None
+
+                    # Check content length before reading
+                    content_length = response.headers.get("Content-Length")
+                    if content_length and int(content_length) > self.max_document_size:
+                        logger.error(
+                            f"JWKS exceeds max size: {content_length} > {self.max_document_size}"
+                        )
+                        return None
+
+                    # Read with size limit
+                    body = await response.read()
+                    if len(body) > self.max_document_size:
+                        logger.error(
+                            f"JWKS body exceeds max size: {len(body)} > {self.max_document_size}"
+                        )
+                        return None
+
+                    jwks = await response.json()
+
+                    # Validate JWKS structure
+                    if not isinstance(jwks, dict) or "keys" not in jwks:
+                        logger.error(f"Invalid JWKS structure from {jwks_uri}")
+                        return None
+
+                    return jwks
+
+            except CIMDValidationError:
+                raise
             except Exception as e:
                 logger.error(f"Error fetching JWKS from {jwks_uri}: {e}")
                 return None

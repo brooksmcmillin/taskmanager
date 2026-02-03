@@ -19,7 +19,6 @@ from mcp_auth_framework.responses import (
     backend_connection_error,
     backend_invalid_response,
     backend_timeout,
-    invalid_client,
     invalid_request,
     rate_limit_exceeded,
     server_error,
@@ -565,26 +564,9 @@ async def handle_device_code_token_exchange(
         )
         if not auth_success:
             return auth_error  # type: ignore[return-value]
-    else:
-        # Client not found in provider, check registered_clients (legacy path)
-        legacy_client = oauth_provider.registered_clients.get(client_id)
-        if legacy_client:
-            auth_method = legacy_client.get("token_endpoint_auth_method", "client_secret_post")
-
-            # If client requires authentication, validate the secret
-            if auth_method != "none":
-                if not client_secret:
-                    logger.warning(f"Missing client_secret for confidential client: {client_id}")
-                    return invalid_client("client_secret required")
-
-                expected_secret = legacy_client.get("client_secret")
-                # Use constant-time comparison to prevent timing attacks
-                if expected_secret and not secrets.compare_digest(
-                    client_secret.encode("utf-8") if client_secret else b"",
-                    expected_secret.encode("utf-8"),
-                ):
-                    logger.warning(f"Invalid client_secret for client: {client_id}")
-                    return invalid_client("Invalid client credentials")
+    # Note: If client is not found by get_client() (which checks CIMD, cache, registered_clients,
+    # and backend), we still proxy the request to TaskManager. This allows the backend to handle
+    # authentication for clients that may only exist there.
 
     # === Proxy to TaskManager with timeout ===
     timeout = aiohttp.ClientTimeout(total=TokenConfig.HTTP_REQUEST_TIMEOUT_SECONDS)

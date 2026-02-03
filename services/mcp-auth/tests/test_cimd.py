@@ -140,9 +140,7 @@ class TestCIMDMetadataValidation:
             }
             # Should not raise for "none"
             if auth_method == "none":
-                fetcher._validate_metadata(
-                    "https://example.com/oauth/metadata.json", metadata
-                )
+                fetcher._validate_metadata("https://example.com/oauth/metadata.json", metadata)
 
     def test_rejects_invalid_auth_methods(self) -> None:
         """Test that invalid authentication methods are rejected."""
@@ -281,9 +279,7 @@ class TestCIMDMetadataFetching:
             patch.object(fetcher, "_get_session", return_value=mock_session),
             pytest.raises(CIMDFetchError, match="HTTP 404"),
         ):
-            await fetcher.fetch_metadata(
-                "https://example.com/oauth/metadata.json", use_cache=False
-            )
+            await fetcher.fetch_metadata("https://example.com/oauth/metadata.json", use_cache=False)
 
     @pytest.mark.asyncio
     async def test_rejects_oversized_document(self) -> None:
@@ -304,9 +300,7 @@ class TestCIMDMetadataFetching:
             patch.object(fetcher, "_get_session", return_value=mock_session),
             pytest.raises(CIMDFetchError, match="exceeds maximum size"),
         ):
-            await fetcher.fetch_metadata(
-                "https://example.com/oauth/metadata.json", use_cache=False
-            )
+            await fetcher.fetch_metadata("https://example.com/oauth/metadata.json", use_cache=False)
 
 
 class TestCIMDClientInfo:
@@ -338,14 +332,13 @@ class TestCIMDClientInfo:
         with patch.object(
             fetcher, "fetch_metadata", new_callable=AsyncMock, return_value=mock_metadata
         ):
-            client_info = await fetcher.get_client_info(
-                "https://example.com/oauth/metadata.json"
-            )
+            client_info = await fetcher.get_client_info("https://example.com/oauth/metadata.json")
 
         assert client_info is not None
         assert client_info.client_id == "https://example.com/oauth/metadata.json"
         assert client_info.client_secret is None  # CIMD clients never have secrets
         # redirect_uris are converted to AnyUrl objects by pydantic
+        assert client_info.redirect_uris is not None
         assert [str(uri) for uri in client_info.redirect_uris] == ["https://example.com/callback"]
         assert client_info.token_endpoint_auth_method == "none"
         assert client_info.scope == "read write"

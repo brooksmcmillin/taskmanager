@@ -9,9 +9,15 @@ When a client uses private_key_jwt:
 2. Client sends JWT as client_assertion in token request
 3. Server fetches client's public key (JWKS) from metadata
 4. Server verifies JWT signature and claims
+
+Security features:
+- Algorithm whitelist to prevent algorithm confusion attacks
+- JWT replay protection via jti tracking
+- Short expiration times enforced
 """
 
 import logging
+import threading
 import time
 from typing import Any
 
@@ -25,6 +31,29 @@ logger = logging.getLogger(__name__)
 # JWT validation constants
 JWT_MAX_CLOCK_SKEW_SECONDS = 60  # Allow 60 seconds of clock skew
 JWT_MAX_LIFETIME_SECONDS = 300  # JWT should not be valid for more than 5 minutes
+JWT_REPLAY_CACHE_CLEANUP_INTERVAL = 60  # Clean up expired JTIs every 60 seconds
+
+# Allowed JWT algorithms (explicit whitelist to prevent algorithm confusion)
+# Only asymmetric algorithms are allowed for private_key_jwt
+ALLOWED_JWT_ALGORITHMS = {
+    "RS256",
+    "RS384",
+    "RS512",  # RSA with SHA-2
+    "ES256",
+    "ES384",
+    "ES512",  # ECDSA with SHA-2
+    "PS256",
+    "PS384",
+    "PS512",  # RSA-PSS with SHA-2
+}
+
+# Explicitly blocked algorithms
+BLOCKED_JWT_ALGORITHMS = {
+    "none",  # No signature - never allowed
+    "HS256",
+    "HS384",
+    "HS512",  # Symmetric algorithms - not allowed for private_key_jwt
+}
 
 
 class JWTAuthError(Exception):
@@ -39,6 +68,11 @@ class JWTClientAuthenticator:
 
     This is used by CIMD confidential clients that sign JWTs
     with their private key for client authentication.
+
+    Security features:
+    - Algorithm whitelist (only asymmetric algorithms allowed)
+    - JWT replay protection via jti tracking
+    - Short expiration time enforcement
     """
 
     def __init__(
@@ -56,6 +90,54 @@ class JWTClientAuthenticator:
         self.token_endpoint = token_endpoint
         self.cimd_fetcher = cimd_fetcher or get_cimd_fetcher()
         self._jwk_clients: dict[str, PyJWKClient] = {}
+
+        # JWT replay protection: track used jti values with their expiry times
+        # Key: jti, Value: expiry timestamp
+        self._used_jtis: dict[str, float] = {}
+        self._jti_lock = threading.Lock()
+        self._last_cleanup = time.time()
+
+    def _cleanup_expired_jtis(self) -> None:
+        """Remove expired JTIs from the replay cache."""
+        now = time.time()
+
+        # Only cleanup periodically to avoid lock contention
+        if now - self._last_cleanup < JWT_REPLAY_CACHE_CLEANUP_INTERVAL:
+            return
+
+        with self._jti_lock:
+            # Double-check after acquiring lock
+            if now - self._last_cleanup < JWT_REPLAY_CACHE_CLEANUP_INTERVAL:
+                return
+
+            expired_jtis = [jti for jti, exp in self._used_jtis.items() if now > exp]
+            for jti in expired_jtis:
+                del self._used_jtis[jti]
+
+            if expired_jtis:
+                logger.debug(f"Cleaned up {len(expired_jtis)} expired JTIs from replay cache")
+
+            self._last_cleanup = now
+
+    def _check_and_record_jti(self, jti: str, exp: float) -> bool:
+        """
+        Check if a JTI has been used and record it if not.
+
+        Args:
+            jti: The JWT ID
+            exp: The expiry timestamp
+
+        Returns:
+            True if the JTI is new (not a replay), False if it's been seen before
+        """
+        # Cleanup expired entries periodically
+        self._cleanup_expired_jtis()
+
+        with self._jti_lock:
+            if jti in self._used_jtis:
+                return False  # Replay detected
+            self._used_jtis[jti] = exp
+            return True
 
     async def authenticate(
         self,
@@ -97,6 +179,8 @@ class JWTClientAuthenticator:
             await self._verify_jwt(client_id, client_assertion, jwks)
             logger.info(f"Successfully authenticated client {client_id} via private_key_jwt")
             return True
+        except JWTAuthError:
+            raise
         except Exception as e:
             raise JWTAuthError(f"JWT verification failed: {e}") from e
 
@@ -138,9 +222,19 @@ class JWTClientAuthenticator:
         except jwt.exceptions.DecodeError as e:
             raise JWTAuthError(f"Invalid JWT format: {e}") from e
 
-        # Get the key ID from the header
+        # Get the key ID and algorithm from the header
         kid = unverified_header.get("kid")
         alg = unverified_header.get("alg", "RS256")
+
+        # SECURITY: Validate algorithm against whitelist to prevent algorithm confusion
+        if alg in BLOCKED_JWT_ALGORITHMS:
+            raise JWTAuthError(f"Algorithm '{alg}' is explicitly blocked for security reasons")
+
+        if alg not in ALLOWED_JWT_ALGORITHMS:
+            raise JWTAuthError(
+                f"Algorithm '{alg}' is not allowed. "
+                f"Allowed algorithms: {sorted(ALLOWED_JWT_ALGORITHMS)}"
+            )
 
         # Find the matching key in JWKS
         signing_key = self._find_signing_key(jwks, kid, alg)
@@ -154,7 +248,7 @@ class JWTClientAuthenticator:
             payload = jwt.decode(
                 assertion,
                 signing_key,
-                algorithms=[alg],
+                algorithms=[alg],  # Only allow the specific algorithm from the whitelist
                 audience=self.token_endpoint,
                 issuer=client_id,
                 options={
@@ -180,18 +274,26 @@ class JWTClientAuthenticator:
 
         # Verify subject matches client_id (required by RFC 7523)
         if payload.get("sub") != client_id:
-            raise JWTAuthError(
-                f"Subject mismatch: expected {client_id}, got {payload.get('sub')}"
-            )
+            raise JWTAuthError(f"Subject mismatch: expected {client_id}, got {payload.get('sub')}")
 
         # Check that JWT is not too old
         iat = payload.get("iat", 0)
         if now - iat > JWT_MAX_LIFETIME_SECONDS + JWT_MAX_CLOCK_SKEW_SECONDS:
             raise JWTAuthError("JWT is too old (iat too far in the past)")
 
-        # Optional: Check jti for replay protection
-        # This would require maintaining a cache of seen jti values
-        # For now, we rely on short expiration times
+        # SECURITY: Check jti for replay protection
+        jti = payload.get("jti")
+        if jti:
+            exp = payload.get("exp", now + JWT_MAX_LIFETIME_SECONDS)
+            if not self._check_and_record_jti(jti, exp):
+                raise JWTAuthError("JWT replay detected: this token has already been used")
+        else:
+            # jti is recommended but not required by RFC 7523
+            # Log a warning for tokens without jti
+            logger.warning(
+                f"JWT from client {client_id} does not include jti claim - "
+                "replay protection not available for this token"
+            )
 
         return payload
 
