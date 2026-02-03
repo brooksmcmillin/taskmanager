@@ -1,10 +1,11 @@
 """WebAuthn API routes for passkey authentication."""
 
+import logging
 import secrets
 from base64 import urlsafe_b64decode
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from webauthn import (
@@ -24,13 +25,22 @@ from webauthn.helpers.structs import (
 
 from app.config import settings
 from app.core.errors import ApiError, errors
+from app.core.rate_limit import RateLimiter
 from app.core.security import generate_session_id, get_session_expiry
 from app.dependencies import CurrentUser, DbSession
 from app.models.session import Session
 from app.models.user import User
 from app.models.webauthn_credential import WebAuthnCredential
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/auth/webauthn", tags=["webauthn"])
+
+# Rate limiters for WebAuthn endpoints
+# Authentication attempts: 10 per 5 minutes per IP
+webauthn_auth_rate_limiter = RateLimiter(max_attempts=10, window_ms=300000)
+# Registration attempts: 5 per 5 minutes per user (requires auth)
+webauthn_register_rate_limiter = RateLimiter(max_attempts=5, window_ms=300000)
 
 # In-memory challenge store (in production, use Redis or similar)
 # Format: {challenge_id: {"challenge": bytes, "user_id": int|None, "expires_at": dt}}
@@ -129,6 +139,12 @@ async def get_registration_options(
     db: DbSession,
 ) -> RegisterOptionsResponse:
     """Generate WebAuthn registration options for authenticated user."""
+    # Rate limit by user ID
+    rate_limit_key = f"webauthn_register_{user.id}"
+    webauthn_register_rate_limiter.check(rate_limit_key)
+
+    logger.info("WebAuthn registration options requested for user %s", user.username)
+
     # Get existing credentials to exclude
     result = await db.execute(
         select(WebAuthnCredential).where(WebAuthnCredential.user_id == user.id)
@@ -200,9 +216,16 @@ async def verify_registration(
     # Retrieve challenge
     challenge_data = _get_challenge(request.challenge_id)
     if not challenge_data:
+        logger.warning(
+            "WebAuthn registration failed: invalid challenge for user %s", user.username
+        )
         raise errors.validation("Invalid or expired challenge")
 
     if challenge_data["user_id"] != user.id:
+        logger.warning(
+            "WebAuthn registration failed: challenge mismatch for user %s",
+            user.username,
+        )
         raise errors.validation("Challenge does not match user")
 
     try:
@@ -217,7 +240,12 @@ async def verify_registration(
             expected_origin=settings.webauthn_origin,
         )
     except Exception as e:
-        raise errors.validation(f"Registration verification failed: {e}") from None
+        logger.warning(
+            "WebAuthn registration verification failed for user %s: %s",
+            user.username,
+            e,
+        )
+        raise errors.validation(f"Registration verification failed: {e}") from e
 
     # Check if credential ID already exists
     result = await db.execute(
@@ -245,6 +273,12 @@ async def verify_registration(
     db.add(webauthn_cred)
     await db.flush()
 
+    logger.info(
+        "WebAuthn credential registered successfully for user %s (credential_id=%s)",
+        user.username,
+        webauthn_cred.id,
+    )
+
     return CredentialResponse(
         id=webauthn_cred.id,
         device_name=webauthn_cred.device_name,
@@ -256,14 +290,26 @@ async def verify_registration(
 @router.post("/authenticate/options", response_model=AuthenticateOptionsResponse)
 async def get_authentication_options(
     request: AuthenticateOptionsRequest,
+    http_request: Request,
     db: DbSession,
 ) -> AuthenticateOptionsResponse:
-    """Generate WebAuthn authentication options."""
+    """Generate WebAuthn authentication options.
+
+    Note: To prevent user enumeration, this endpoint always returns a valid
+    challenge even if the username doesn't exist or has no passkeys. The
+    authentication will fail during verification instead.
+    """
+    # Rate limit by IP address
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    webauthn_auth_rate_limiter.check(f"webauthn_auth_options_{client_ip}")
+
     allow_credentials = None
     user_id_for_challenge = None
 
     if request.username:
         # Find user and their credentials
+        # Note: We always generate options regardless of whether user exists
+        # to prevent user enumeration attacks
         result = await db.execute(
             select(User).where(User.username == request.username)
         )
@@ -298,6 +344,8 @@ async def get_authentication_options(
     challenge_id = _store_challenge(options.challenge, user_id=user_id_for_challenge)
 
     # Convert options to JSON-serializable dict
+    # Note: Always return empty allowCredentials array when no credentials found
+    # to prevent user enumeration (attacker can't tell if user exists)
     options_dict = {
         "challenge": bytes_to_base64url(options.challenge),
         "timeout": options.timeout,
@@ -321,13 +369,23 @@ async def get_authentication_options(
 @router.post("/authenticate/verify")
 async def verify_authentication(
     request: AuthenticateVerifyRequest,
+    http_request: Request,
     response: Response,
     db: DbSession,
 ) -> AuthenticateVerifyResponse:
     """Verify WebAuthn authentication and create session."""
+    # Rate limit by IP address
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    rate_limit_key = f"webauthn_auth_verify_{client_ip}"
+    webauthn_auth_rate_limiter.check(rate_limit_key)
+
     # Retrieve challenge
     challenge_data = _get_challenge(request.challenge_id)
     if not challenge_data:
+        logger.warning(
+            "WebAuthn authentication failed: invalid challenge from %s", client_ip
+        )
+        webauthn_auth_rate_limiter.record(rate_limit_key)
         raise errors.validation("Invalid or expired challenge")
 
     try:
@@ -344,8 +402,8 @@ async def verify_authentication(
             # Add padding if needed
             padded = raw_id + "=" * (4 - len(raw_id) % 4)
             credential_id = urlsafe_b64decode(padded)
-        except Exception:
-            raise errors.validation("Invalid credential ID encoding") from None
+        except Exception as decode_err:
+            raise errors.validation("Invalid credential ID encoding") from decode_err
 
         # Find the credential in database
         result = await db.execute(
@@ -356,6 +414,10 @@ async def verify_authentication(
         webauthn_cred = result.scalar_one_or_none()
 
         if not webauthn_cred:
+            logger.warning(
+                "WebAuthn authentication failed: unknown credential from %s", client_ip
+            )
+            webauthn_auth_rate_limiter.record(rate_limit_key)
             raise errors.invalid_credentials()
 
         # Get the user
@@ -365,6 +427,11 @@ async def verify_authentication(
         user = result.scalar_one_or_none()
 
         if not user or not user.is_active:
+            logger.warning(
+                "WebAuthn authentication failed: inactive user for credential %s",
+                webauthn_cred.id,
+            )
+            webauthn_auth_rate_limiter.record(rate_limit_key)
             raise errors.invalid_credentials()
 
         # Verify the authentication response
@@ -377,6 +444,20 @@ async def verify_authentication(
             credential_current_sign_count=webauthn_cred.sign_count,
         )
 
+        # Check for sign count rollback (potential cloned authenticator)
+        if (
+            webauthn_cred.sign_count > 0
+            and verification.new_sign_count <= webauthn_cred.sign_count
+        ):
+            logger.warning(
+                "WebAuthn sign count rollback detected for user %s (credential %s): "
+                "stored=%d, received=%d. Possible cloned authenticator.",
+                user.username,
+                webauthn_cred.id,
+                webauthn_cred.sign_count,
+                verification.new_sign_count,
+            )
+
         # Update sign count and last used
         webauthn_cred.sign_count = verification.new_sign_count
         webauthn_cred.last_used_at = datetime.now(UTC)
@@ -384,7 +465,14 @@ async def verify_authentication(
     except ApiError:
         raise
     except Exception as e:
-        raise errors.validation(f"Authentication verification failed: {e}") from None
+        logger.warning(
+            "WebAuthn authentication verification failed from %s: %s", client_ip, e
+        )
+        webauthn_auth_rate_limiter.record(rate_limit_key)
+        raise errors.validation(f"Authentication verification failed: {e}") from e
+
+    # Reset rate limit on success
+    webauthn_auth_rate_limiter.reset(rate_limit_key)
 
     # Create session
     session = Session(
@@ -402,6 +490,12 @@ async def verify_authentication(
         samesite="lax",
         max_age=settings.session_duration_days * 24 * 60 * 60,
         secure=settings.is_production,
+    )
+
+    logger.info(
+        "WebAuthn authentication successful for user %s (credential_id=%s)",
+        user.username,
+        webauthn_cred.id,
     )
 
     return AuthenticateVerifyResponse(
@@ -460,10 +554,21 @@ async def delete_credential(
     credential = result.scalar_one_or_none()
 
     if not credential:
+        logger.warning(
+            "WebAuthn credential deletion failed: credential %s not found for user %s",
+            credential_id,
+            user.username,
+        )
         raise errors.not_found("Credential")
 
     await db.execute(
         delete(WebAuthnCredential).where(WebAuthnCredential.id == credential_id)
+    )
+
+    logger.info(
+        "WebAuthn credential deleted for user %s (credential_id=%s)",
+        user.username,
+        credential_id,
     )
 
     return {"deleted": True, "id": credential_id}
