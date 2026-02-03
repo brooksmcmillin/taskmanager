@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.project import Project
 from app.models.todo import Todo
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/tasks", tags=["search"])
 
 @router.get("/search")
 async def search_tasks(
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
     q: str = Query(..., min_length=1),
     category: str | None = Query(None),

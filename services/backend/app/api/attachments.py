@@ -15,7 +15,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.core.errors import ApiError, errors
 from app.db.queries import get_resource_for_user
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.attachment import Attachment
 from app.models.todo import Todo
 from app.schemas import ListResponse
@@ -169,7 +169,7 @@ async def _get_attachment_for_user(
 @router.get("/{todo_id}/attachments")
 async def list_attachments(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> ListResponse[AttachmentResponse]:
     """List all attachments for a todo."""
@@ -193,7 +193,7 @@ async def list_attachments(
 async def upload_attachment(
     todo_id: int,
     file: UploadFile,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Upload an image attachment to a todo.
@@ -262,7 +262,7 @@ async def upload_attachment(
 async def get_attachment(
     todo_id: int,
     attachment_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> Response:
     """Download/view an attachment.
@@ -298,7 +298,7 @@ async def get_attachment(
 async def delete_attachment(
     todo_id: int,
     attachment_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Delete an attachment."""

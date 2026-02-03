@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from sqlalchemy import func, select
 
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.project import Project
 from app.models.todo import Status, Todo
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/categories", tags=["categories"])
 
 @router.get("")
 async def get_categories(
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Get categories (projects) with task counts."""
