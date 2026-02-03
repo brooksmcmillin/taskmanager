@@ -1136,7 +1136,7 @@ def create_resource_server(
         Returns:
             JSON object with "tasks" array containing task objects with agent fields:
             id, title, description, due_date, status, category, priority, tags,
-            agent_actionable, action_type, agent_status, agent_notes, blocking_reason
+            agent_actionable, action_type, autonomy_tier, agent_status, agent_notes, blocking_reason
         """
         logger.info(
             f"=== get_agent_tasks called: due_today={due_today}, "
@@ -1197,6 +1197,7 @@ def create_resource_server(
                                 "due_date": subtask.get("due_date"),
                                 "agent_actionable": subtask.get("agent_actionable"),
                                 "action_type": subtask.get("action_type"),
+                                "autonomy_tier": subtask.get("autonomy_tier"),
                                 "agent_status": subtask.get("agent_status"),
                             }
                         )
@@ -1214,6 +1215,7 @@ def create_resource_server(
                         "subtasks": subtasks_list,
                         "agent_actionable": agent_actionable,
                         "action_type": action_type,
+                        "autonomy_tier": task.get("autonomy_tier"),
                         "agent_status": task.get("agent_status"),
                         "agent_notes": task.get("agent_notes"),
                         "blocking_reason": task.get("blocking_reason"),
@@ -1245,15 +1247,17 @@ def create_resource_server(
         task_id: str,
         action_type: str,
         agent_actionable: bool,
+        autonomy_tier: int | None = None,
         blocking_reason: str | None = None,
     ) -> str:
         """
-        Classify a task with action type and agent actionability.
+        Classify a task with action type, autonomy tier, and agent actionability.
 
         Use this to classify tasks that weren't automatically classified at creation.
         The agent should analyze the task title/description and determine:
         1. What type of action is required
-        2. Whether the agent can complete it autonomously
+        2. What autonomy tier (risk level) applies
+        3. Whether the agent can complete it autonomously
 
         Args:
             task_id: Task ID - format "task_123" or just "123"
@@ -1261,6 +1265,9 @@ def create_resource_server(
                         "purchase", "schedule", "call", "errand", "manual", "review",
                         "data_entry", "other"
             agent_actionable: True if agent can complete without human intervention
+            autonomy_tier: Risk level 1-4 (1=fully autonomous, 2=propose & execute,
+                          3=propose & wait, 4=never autonomous). If not provided,
+                          a default is inferred from action_type.
             blocking_reason: Why agent can't proceed (optional, use if agent_actionable=False)
 
         Returns:
@@ -1268,7 +1275,8 @@ def create_resource_server(
         """
         logger.info(
             f"=== classify_task called: task_id={task_id}, "
-            f"action_type={action_type}, agent_actionable={agent_actionable} ==="
+            f"action_type={action_type}, autonomy_tier={autonomy_tier}, "
+            f"agent_actionable={agent_actionable} ==="
         )
         try:
             api_client = get_api_client()
@@ -1302,11 +1310,43 @@ def create_resource_server(
                     }
                 )
 
+            # Validate autonomy_tier if provided
+            if autonomy_tier is not None:
+                if not isinstance(autonomy_tier, int):
+                    return json.dumps(
+                        {"error": "autonomy_tier must be an integer"}
+                    )
+                if autonomy_tier < 1 or autonomy_tier > 4:
+                    return json.dumps(
+                        {"error": f"Invalid autonomy_tier: {autonomy_tier}. Must be 1-4."}
+                    )
+
+            # Infer default autonomy_tier from action_type if not provided
+            # NOTE: This mapping is duplicated from services/backend/app/models/todo.py
+            # (ACTION_TYPE_DEFAULT_TIER). Keep in sync if changing defaults.
+            if autonomy_tier is None:
+                default_tiers = {
+                    "research": 1,
+                    "review": 1,
+                    "data_entry": 2,
+                    "document": 2,
+                    "email": 2,
+                    "schedule": 2,
+                    "code": 3,
+                    "purchase": 4,
+                    "call": 4,
+                    "errand": 4,
+                    "manual": 4,
+                    "other": 3,
+                }
+                autonomy_tier = default_tiers.get(action_type, 3)
+
             # Update task with classification
             response = api_client.update_todo(
                 todo_id=todo_id,
                 action_type=action_type,
                 agent_actionable=agent_actionable,
+                autonomy_tier=autonomy_tier,
                 blocking_reason=blocking_reason,
             )
 
@@ -1319,6 +1359,7 @@ def create_resource_server(
                     "id": f"task_{todo_id}",
                     "status": "classified",
                     "action_type": action_type,
+                    "autonomy_tier": autonomy_tier,
                     "agent_actionable": agent_actionable,
                     "blocking_reason": blocking_reason,
                     "current_time": datetime.datetime.now().isoformat(),

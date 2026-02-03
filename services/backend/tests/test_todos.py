@@ -363,3 +363,207 @@ async def test_cannot_create_nested_subtasks_via_update(
     # Should fail with validation error
     assert response.status_code == 400
     assert "nesting" in response.json()["detail"]["message"].lower()
+
+
+# Autonomy Tier Tests
+
+
+@pytest.mark.asyncio
+async def test_create_todo_with_valid_autonomy_tier(authenticated_client: AsyncClient):
+    """Test creating a todo with a valid autonomy_tier value."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Research task",
+            "autonomy_tier": 1,
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["autonomy_tier"] == 1
+
+
+@pytest.mark.asyncio
+async def test_create_todo_autonomy_tier_min_boundary(
+    authenticated_client: AsyncClient,
+):
+    """Test creating a todo with autonomy_tier at minimum boundary (1)."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Tier 1 task",
+            "autonomy_tier": 1,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["autonomy_tier"] == 1
+
+
+@pytest.mark.asyncio
+async def test_create_todo_autonomy_tier_max_boundary(
+    authenticated_client: AsyncClient,
+):
+    """Test creating a todo with autonomy_tier at maximum boundary (4)."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Tier 4 task",
+            "autonomy_tier": 4,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["autonomy_tier"] == 4
+
+
+@pytest.mark.asyncio
+async def test_create_todo_rejects_autonomy_tier_below_minimum(
+    authenticated_client: AsyncClient,
+):
+    """Test that autonomy_tier below 1 is rejected."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Invalid tier task",
+            "autonomy_tier": 0,
+        },
+    )
+
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_create_todo_rejects_autonomy_tier_above_maximum(
+    authenticated_client: AsyncClient,
+):
+    """Test that autonomy_tier above 4 is rejected."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Invalid tier task",
+            "autonomy_tier": 5,
+        },
+    )
+
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_create_todo_infers_autonomy_tier_from_research_action(
+    authenticated_client: AsyncClient,
+):
+    """Test that autonomy_tier is inferred from action_type='research' (tier 1)."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Research the new API",
+            "description": "Look up documentation",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    # "research" keyword should infer action_type=research, autonomy_tier=1
+    assert data["action_type"] == "research"
+    assert data["autonomy_tier"] == 1
+
+
+@pytest.mark.asyncio
+async def test_create_todo_infers_autonomy_tier_from_code_action(
+    authenticated_client: AsyncClient,
+):
+    """Test that autonomy_tier is inferred from action_type='code' (tier 3)."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Fix the login bug",
+            "description": "Debug and fix the authentication issue",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    # "fix" and "bug" keywords should infer action_type=code, autonomy_tier=3
+    assert data["action_type"] == "code"
+    assert data["autonomy_tier"] == 3
+
+
+@pytest.mark.asyncio
+async def test_create_todo_infers_autonomy_tier_from_purchase_action(
+    authenticated_client: AsyncClient,
+):
+    """Test that autonomy_tier is inferred from action_type='purchase' (tier 4)."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Buy new office supplies",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    # "buy" keyword should infer action_type=purchase, autonomy_tier=4
+    assert data["action_type"] == "purchase"
+    assert data["autonomy_tier"] == 4
+
+
+@pytest.mark.asyncio
+async def test_create_todo_explicit_autonomy_tier_overrides_inference(
+    authenticated_client: AsyncClient,
+):
+    """Test that explicit autonomy_tier overrides the inferred value."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Research the new API",  # Would normally infer tier 1
+            "autonomy_tier": 3,  # Explicit override
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    # Should use explicit tier 3, not inferred tier 1
+    assert data["autonomy_tier"] == 3
+
+
+@pytest.mark.asyncio
+async def test_update_todo_autonomy_tier(authenticated_client: AsyncClient):
+    """Test updating autonomy_tier on an existing todo."""
+    # Create a todo
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to update"},
+    )
+    todo_id = create_response.json()["data"]["id"]
+
+    # Update the autonomy_tier
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"autonomy_tier": 2},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["autonomy_tier"] == 2
+
+
+@pytest.mark.asyncio
+async def test_update_todo_rejects_invalid_autonomy_tier(
+    authenticated_client: AsyncClient,
+):
+    """Test that updating with invalid autonomy_tier is rejected."""
+    # Create a todo
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to update"},
+    )
+    todo_id = create_response.json()["data"]["id"]
+
+    # Try to update with invalid autonomy_tier
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"autonomy_tier": 10},
+    )
+
+    assert response.status_code == 422  # Validation error
