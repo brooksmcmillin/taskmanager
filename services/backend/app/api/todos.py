@@ -12,7 +12,7 @@ from app.db.queries import (
     get_resource_for_user,
     get_resources_for_user,
 )
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.project import Project
 from app.models.todo import (
     ACTION_TYPE_DEFAULT_TIER,
@@ -362,7 +362,7 @@ def infer_action_type(
 
 @router.get("")
 async def list_todos(
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
     status: str | None = Query(None),
     project_id: int | None = Query(None),
@@ -468,7 +468,7 @@ async def list_todos(
 @router.post("", status_code=201)
 async def create_todo(
     request: TodoCreate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Create a new todo or subtask.
@@ -544,7 +544,7 @@ async def create_todo(
 @router.get("/{todo_id}")
 async def get_todo(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Get a todo by ID with its subtasks."""
@@ -587,7 +587,7 @@ async def get_todo(
 async def update_todo(
     todo_id: int,
     request: TodoUpdate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Update a todo."""
@@ -640,7 +640,7 @@ async def update_todo(
 @router.put("")
 async def bulk_update_todos(
     request: BulkUpdateRequest,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Bulk update todos."""
@@ -671,7 +671,7 @@ async def bulk_update_todos(
 @router.delete("/{todo_id}")
 async def delete_todo(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Soft delete a todo."""
@@ -687,7 +687,7 @@ async def delete_todo(
 @router.post("/{todo_id}/complete")
 async def complete_todo(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Mark a todo as complete."""
@@ -715,7 +715,7 @@ class SubtaskCreate(BaseModel):
 @router.get("/{todo_id}/subtasks")
 async def list_subtasks(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> ListResponse[SubtaskResponse]:
     """List all subtasks for a todo."""
@@ -740,7 +740,7 @@ async def list_subtasks(
 async def create_subtask(
     todo_id: int,
     request: SubtaskCreate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Create a subtask for a todo."""
@@ -787,7 +787,7 @@ class TodoReorderRequest(BaseModel):
 @router.post("/reorder")
 async def reorder_todos(
     request: TodoReorderRequest,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Reorder todos by providing the new order of todo IDs."""

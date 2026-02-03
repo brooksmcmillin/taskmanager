@@ -32,9 +32,8 @@ MCP_AUTH_SERVER = os.environ["MCP_AUTH_SERVER"]
 # TaskManager API URL
 TASKMANAGER_URL = os.environ.get("TASKMANAGER_OAUTH_HOST", "http://localhost:4321")
 
-# User credentials for API access
-USERNAME = os.environ.get("TASKMANAGER_USERNAME", CLIENT_ID)
-PASSWORD = os.environ.get("TASKMANAGER_PASSWORD", CLIENT_SECRET)
+# API key for TaskManager API access (replaces username/password auth)
+API_KEY = os.environ.get("TASKMANAGER_API_KEY")
 
 # CORS allowed origins for OAuth discovery endpoints
 # Parse from comma-separated environment variable, or use empty list to block all origins
@@ -69,24 +68,29 @@ def get_cors_origin(request: Request) -> str:
 def get_api_client() -> TaskManagerClient:
     """Get API client for authenticated user.
 
-    Currently uses server credentials for all requests.
-    In a production system, this should be modified to use
-    user-specific authentication tokens.
+    Uses an API key for authentication. The API key should be set
+    via the TASKMANAGER_API_KEY environment variable.
 
     Returns:
         TaskManagerClient: Authenticated API client
 
     Raises:
-        AuthenticationError: If authentication fails
+        RuntimeError: If TASKMANAGER_API_KEY is not configured
         NetworkError: If unable to connect to backend
     """
-    # Use the public TaskManager URL for API calls
-    task_manager = TaskManagerClient(base_url=f"{TASKMANAGER_URL}/api")
+    if not API_KEY:
+        raise RuntimeError(
+            "TASKMANAGER_API_KEY environment variable is not set. "
+            "Please generate an API key in the TaskManager settings."
+        )
 
-    # Use username/password for API authentication
-    # SDK raises AuthenticationError on failure
-    task_manager.login(USERNAME, PASSWORD)
-    logger.debug("Successfully authenticated with TaskManager API")
+    # Use the public TaskManager URL for API calls
+    # Pass API key as access_token - SDK will use it as Bearer token
+    task_manager = TaskManagerClient(
+        base_url=f"{TASKMANAGER_URL}/api",
+        access_token=API_KEY,
+    )
+    logger.debug("Created TaskManager API client with API key authentication")
     return task_manager
 
 
