@@ -32,6 +32,8 @@ dependencies = [
     "aiofiles>=24.1.0",
     "filetype>=1.2.0",
     "pillow>=11.0.0",
+    # WebAuthn
+    "webauthn>=2.0.0",
 ]
 
 [project.optional-dependencies]

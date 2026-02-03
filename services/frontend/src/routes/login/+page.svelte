@@ -2,15 +2,21 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api/client';
+	import { authenticateWithPasskey, isWebAuthnSupported } from '$lib/api/webauthn';
 	import { onMount } from 'svelte';
 
-	let username = '';
-	let password = '';
-	let error = '';
-	let returnTo = '/';
+	let username = $state('');
+	let password = $state('');
+	let error = $state('');
+	let returnTo = $state('/');
+	let webauthnSupported = $state(false);
+	let passkeyLoading = $state(false);
 
 	onMount(() => {
 		if (browser) {
+			// Check WebAuthn support
+			webauthnSupported = isWebAuthnSupported();
+
 			// Get return_to parameter from URL
 			const params = new URLSearchParams(window.location.search);
 			const returnToParam = params.get('return_to');
@@ -77,6 +83,23 @@
 			error = 'Network error. Please try again.';
 		}
 	}
+
+	async function handlePasskeyLogin() {
+		error = '';
+		passkeyLoading = true;
+
+		try {
+			// Pass username if entered, otherwise use discoverable credentials
+			await authenticateWithPasskey(username || undefined);
+			// Use full page reload to ensure layout re-runs and fetches user data
+			window.location.href = returnTo;
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Passkey authentication failed';
+			error = errorMessage;
+		} finally {
+			passkeyLoading = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -87,7 +110,7 @@
 	<div class="card">
 		<h1>Login</h1>
 
-		<form on:submit={handleSubmit}>
+		<form onsubmit={handleSubmit}>
 			<div class="form-group">
 				<label for="username">Username:</label>
 				<input
@@ -115,6 +138,25 @@
 			<button type="submit" class="btn btn-primary">Login</button>
 		</form>
 
+		{#if webauthnSupported}
+			<div class="divider">
+				<span>or</span>
+			</div>
+
+			<button
+				type="button"
+				class="btn btn-secondary passkey-btn"
+				onclick={handlePasskeyLogin}
+				disabled={passkeyLoading}
+			>
+				{#if passkeyLoading}
+					Authenticating...
+				{:else}
+					Sign in with Passkey
+				{/if}
+			</button>
+		{/if}
+
 		{#if error}
 			<div class="error-message" style="margin-top: 1rem;">
 				{error}
@@ -122,3 +164,29 @@
 		{/if}
 	</div>
 </main>
+
+<style>
+	.divider {
+		display: flex;
+		align-items: center;
+		text-align: center;
+		margin: 1.5rem 0;
+		color: var(--text-muted, #6b7280);
+	}
+
+	.divider::before,
+	.divider::after {
+		content: '';
+		flex: 1;
+		border-bottom: 1px solid var(--border-color, #e5e7eb);
+	}
+
+	.divider span {
+		padding: 0 0.75rem;
+		font-size: 0.875rem;
+	}
+
+	.passkey-btn {
+		width: 100%;
+	}
+</style>

@@ -12,6 +12,7 @@ from app.models.registration_code import RegistrationCode
 from app.models.session import Session
 from app.models.todo import Priority, Status, TimeHorizon, Todo
 from app.models.user import User
+from app.models.webauthn_credential import WebAuthnCredential
 
 __all__ = [
     "ApiKey",
@@ -35,4 +36,5 @@ __all__ = [
     "ArticleInteraction",
     "ArticleRating",
     "Attachment",
+    "WebAuthnCredential",
 ]
