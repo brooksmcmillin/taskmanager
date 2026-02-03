@@ -110,7 +110,7 @@
 	<div class="card">
 		<h1>Login</h1>
 
-		<form on:submit={handleSubmit}>
+		<form onsubmit={handleSubmit}>
 			<div class="form-group">
 				<label for="username">Username:</label>
 				<input
