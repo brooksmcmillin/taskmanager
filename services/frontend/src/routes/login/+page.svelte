@@ -5,10 +5,10 @@
 	import { authenticateWithPasskey, isWebAuthnSupported } from '$lib/api/webauthn';
 	import { onMount } from 'svelte';
 
-	let username = '';
-	let password = '';
-	let error = '';
-	let returnTo = '/';
+	let username = $state('');
+	let password = $state('');
+	let error = $state('');
+	let returnTo = $state('/');
 	let webauthnSupported = $state(false);
 	let passkeyLoading = $state(false);
 
