@@ -21,6 +21,7 @@ from app.models.todo import (
     Priority,
     Status,
     Todo,
+    task_dependencies,
 )
 from app.schemas import ListResponse
 
@@ -106,6 +107,20 @@ class SubtaskResponse(BaseModel):
     agent_status: AgentStatus | None = None
 
 
+class DependencyResponse(BaseModel):
+    """Task dependency response (simplified todo for dependency display)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    status: Status
+    priority: Priority
+    due_date: date | None
+    project_id: int | None = None
+    project_name: str | None = None
+
+
 class TodoResponse(BaseModel):
     """Todo response."""
 
@@ -127,6 +142,9 @@ class TodoResponse(BaseModel):
     position: int
     parent_id: int | None = None
     subtasks: list[SubtaskResponse] = Field(default_factory=list)
+    # Task dependencies
+    dependencies: list[DependencyResponse] = Field(default_factory=list)
+    dependents: list[DependencyResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime | None
     # Agent fields
@@ -139,6 +157,29 @@ class TodoResponse(BaseModel):
 
 
 # Helper functions
+def _build_dependency_response(
+    todo: Todo, project_name: str | None = None
+) -> DependencyResponse:
+    """Build DependencyResponse from Todo model.
+
+    Args:
+        todo: Todo model instance
+        project_name: Optional project name
+
+    Returns:
+        DependencyResponse with key fields
+    """
+    return DependencyResponse(
+        id=todo.id,
+        title=todo.title,
+        status=todo.status,
+        priority=todo.priority,
+        due_date=todo.due_date,
+        project_id=todo.project_id,
+        project_name=project_name,
+    )
+
+
 def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
     """Build SubtaskResponse from Todo model.
 
@@ -174,6 +215,8 @@ def _build_todo_response(
     project_name: str | None = None,
     project_color: str | None = None,
     subtasks: list[Todo] | None = None,
+    dependencies: list[tuple[Todo, str | None]] | None = None,
+    dependents: list[tuple[Todo, str | None]] | None = None,
 ) -> TodoResponse:
     """Build TodoResponse from Todo model with optional project info.
 
@@ -182,6 +225,8 @@ def _build_todo_response(
         project_name: Optional project name
         project_color: Optional project color
         subtasks: Optional list of subtask Todo instances
+        dependencies: Optional list of (Todo, project_name) tuples
+        dependents: Optional list of (Todo, project_name) tuples
 
     Returns:
         TodoResponse with all fields populated
@@ -190,6 +235,22 @@ def _build_todo_response(
     if subtasks:
         subtask_responses = [
             _build_subtask_response(s) for s in subtasks if s.deleted_at is None
+        ]
+
+    dependency_responses = []
+    if dependencies:
+        dependency_responses = [
+            _build_dependency_response(dep, proj_name)
+            for dep, proj_name in dependencies
+            if dep.deleted_at is None
+        ]
+
+    dependent_responses = []
+    if dependents:
+        dependent_responses = [
+            _build_dependency_response(dep, proj_name)
+            for dep, proj_name in dependents
+            if dep.deleted_at is None
         ]
 
     return TodoResponse(
@@ -209,6 +270,8 @@ def _build_todo_response(
         position=todo.position,
         parent_id=todo.parent_id,
         subtasks=subtask_responses,
+        dependencies=dependency_responses,
+        dependents=dependent_responses,
         created_at=todo.created_at,
         updated_at=todo.updated_at,
         agent_actionable=todo.agent_actionable,
@@ -547,7 +610,7 @@ async def get_todo(
     user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
-    """Get a todo by ID with its subtasks."""
+    """Get a todo by ID with its subtasks and dependencies."""
     # Verify todo exists and belongs to user, get with project info
     result = await db.execute(
         select(
@@ -573,12 +636,44 @@ async def get_todo(
     )
     subtasks = list(subtasks_result.scalars().all())
 
+    # Fetch dependencies (tasks this todo depends on)
+    dependencies_result = await db.execute(
+        select(Todo, Project.name.label("project_name"))
+        .outerjoin(Project, Todo.project_id == Project.id)
+        .join(
+            task_dependencies,
+            Todo.id == task_dependencies.c.dependency_id,
+        )
+        .where(
+            task_dependencies.c.dependent_id == todo_id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    dependencies = [(row[0], row.project_name) for row in dependencies_result.all()]
+
+    # Fetch dependents (tasks that depend on this todo)
+    dependents_result = await db.execute(
+        select(Todo, Project.name.label("project_name"))
+        .outerjoin(Project, Todo.project_id == Project.id)
+        .join(
+            task_dependencies,
+            Todo.id == task_dependencies.c.dependent_id,
+        )
+        .where(
+            task_dependencies.c.dependency_id == todo_id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    dependents = [(row[0], row.project_name) for row in dependents_result.all()]
+
     return {
         "data": _build_todo_response(
             todo,
             project_name=row.project_name,
             project_color=row.project_color,
             subtasks=subtasks,
+            dependencies=dependencies,
+            dependents=dependents,
         )
     }
 
@@ -804,3 +899,171 @@ async def reorder_todos(
         todos[todo_id].position = position
 
     return {"data": {"reordered": len(todos)}}
+
+
+# Dependency endpoints
+class DependencyCreate(BaseModel):
+    """Add dependency request."""
+
+    dependency_id: int = Field(..., description="ID of the task this task depends on")
+
+
+async def _check_circular_dependency(
+    db: DbSession, dependent_id: int, dependency_id: int
+) -> bool:
+    """Check if adding this dependency would create a circular dependency.
+
+    Uses breadth-first search to traverse the dependency graph and check if
+    the dependent task is reachable from the dependency task (which would
+    create a cycle).
+
+    Args:
+        db: Database session
+        dependent_id: The task that will depend on another
+        dependency_id: The task being depended upon
+
+    Returns:
+        True if adding this dependency would create a cycle, False otherwise
+    """
+    # BFS to find if dependent_id is reachable from dependency_id
+    visited: set[int] = set()
+    queue = [dependency_id]
+
+    while queue:
+        current_id = queue.pop(0)
+        if current_id == dependent_id:
+            return True  # Found a cycle
+
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+
+        # Get all tasks that the current task depends on
+        result = await db.execute(
+            select(task_dependencies.c.dependency_id).where(
+                task_dependencies.c.dependent_id == current_id
+            )
+        )
+        for row in result.all():
+            if row[0] not in visited:
+                queue.append(row[0])
+
+    return False
+
+
+@router.get("/{todo_id}/dependencies")
+async def list_dependencies(
+    todo_id: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> ListResponse[DependencyResponse]:
+    """List all dependencies for a todo (tasks it depends on)."""
+    # Verify todo exists and belongs to user
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
+
+    # Fetch dependencies
+    result = await db.execute(
+        select(Todo, Project.name.label("project_name"))
+        .outerjoin(Project, Todo.project_id == Project.id)
+        .join(
+            task_dependencies,
+            Todo.id == task_dependencies.c.dependency_id,
+        )
+        .where(
+            task_dependencies.c.dependent_id == todo_id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    dependencies = [
+        _build_dependency_response(row[0], row.project_name) for row in result.all()
+    ]
+
+    return ListResponse(data=dependencies, meta={"count": len(dependencies)})
+
+
+@router.post("/{todo_id}/dependencies", status_code=201)
+async def add_dependency(
+    todo_id: int,
+    request: DependencyCreate,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> dict:
+    """Add a dependency to a todo.
+
+    The dependency_id specifies the task that must be completed before this task.
+    """
+    # Verify todo exists and belongs to user
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
+
+    # Verify dependency todo exists and belongs to user
+    dependency = await get_resource_for_user(
+        db, Todo, request.dependency_id, user.id, errors.todo_not_found
+    )
+
+    # Prevent self-dependency
+    if todo_id == request.dependency_id:
+        raise errors.self_dependency()
+
+    # Check if dependency already exists
+    existing = await db.execute(
+        select(task_dependencies).where(
+            task_dependencies.c.dependent_id == todo_id,
+            task_dependencies.c.dependency_id == request.dependency_id,
+        )
+    )
+    if existing.first():
+        raise errors.dependency_exists()
+
+    # Check for circular dependency
+    if await _check_circular_dependency(db, todo_id, request.dependency_id):
+        raise errors.circular_dependency()
+
+    # Add the dependency
+    await db.execute(
+        task_dependencies.insert().values(
+            dependent_id=todo_id,
+            dependency_id=request.dependency_id,
+        )
+    )
+
+    # Get project name for response
+    project_name = None
+    if dependency.project_id:
+        project_result = await db.execute(
+            select(Project.name).where(Project.id == dependency.project_id)
+        )
+        project_name = project_result.scalar_one_or_none()
+
+    return {"data": _build_dependency_response(dependency, project_name)}
+
+
+@router.delete("/{todo_id}/dependencies/{dependency_id}")
+async def remove_dependency(
+    todo_id: int,
+    dependency_id: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> dict:
+    """Remove a dependency from a todo."""
+    # Verify todo exists and belongs to user
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
+
+    # Check if dependency exists
+    existing = await db.execute(
+        select(task_dependencies).where(
+            task_dependencies.c.dependent_id == todo_id,
+            task_dependencies.c.dependency_id == dependency_id,
+        )
+    )
+    if not existing.first():
+        raise errors.dependency_not_found()
+
+    # Remove the dependency
+    await db.execute(
+        task_dependencies.delete().where(
+            task_dependencies.c.dependent_id == todo_id,
+            task_dependencies.c.dependency_id == dependency_id,
+        )
+    )
+
+    return {"data": {"deleted": True, "dependency_id": dependency_id}}

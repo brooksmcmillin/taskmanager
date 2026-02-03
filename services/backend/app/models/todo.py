@@ -9,12 +9,14 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Column,
     Date,
     DateTime,
     ForeignKey,
     Integer,
     Numeric,
     String,
+    Table,
     Text,
     func,
 )
@@ -22,6 +24,25 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
+
+# Association table for task dependencies (many-to-many self-referential)
+task_dependencies = Table(
+    "task_dependencies",
+    Base.metadata,
+    Column(
+        "dependent_id",
+        Integer,
+        ForeignKey("todos.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "dependency_id",
+        Integer,
+        ForeignKey("todos.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("created_at", DateTime(timezone=True), server_default=func.now()),
+)
 
 if TYPE_CHECKING:
     from app.models.attachment import Attachment
@@ -206,4 +227,13 @@ class Todo(Base):
     )
     attachments: Mapped[list[Attachment]] = relationship(
         "Attachment", back_populates="todo", cascade="all, delete-orphan"
+    )
+
+    # Task dependencies: tasks this task depends on (must be completed first)
+    dependencies: Mapped[list[Todo]] = relationship(
+        "Todo",
+        secondary=task_dependencies,
+        primaryjoin="Todo.id == task_dependencies.c.dependent_id",
+        secondaryjoin="Todo.id == task_dependencies.c.dependency_id",
+        backref="dependents",
     )

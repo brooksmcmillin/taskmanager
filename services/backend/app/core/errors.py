@@ -215,6 +215,11 @@ class Errors:
         """NOT_FOUND_009: API key not found."""
         return ApiError("NOT_FOUND_009", 404, "API key not found")
 
+    @staticmethod
+    def dependency_not_found() -> ApiError:
+        """NOT_FOUND_010: Task dependency not found."""
+        return ApiError("NOT_FOUND_010", 404, "Task dependency not found")
+
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
     # =========================================================================
@@ -243,6 +248,25 @@ class Errors:
             f"Maximum number of API keys ({limit}) exceeded",
             {"limit": limit},
         )
+
+    @staticmethod
+    def dependency_exists() -> ApiError:
+        """CONFLICT_004: Task dependency already exists."""
+        return ApiError("CONFLICT_004", 409, "Task dependency already exists")
+
+    @staticmethod
+    def circular_dependency() -> ApiError:
+        """CONFLICT_005: Circular dependency detected."""
+        return ApiError(
+            "CONFLICT_005",
+            400,
+            "Cannot add dependency: would create a circular dependency chain",
+        )
+
+    @staticmethod
+    def self_dependency() -> ApiError:
+        """CONFLICT_006: Cannot depend on self."""
+        return ApiError("CONFLICT_006", 400, "A task cannot depend on itself")
 
     # =========================================================================
     # Registration Code Errors (REG_001 - REG_003)
