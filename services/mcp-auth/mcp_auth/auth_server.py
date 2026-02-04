@@ -19,7 +19,6 @@ from mcp_auth_framework.responses import (
     backend_connection_error,
     backend_invalid_response,
     backend_timeout,
-    invalid_client,
     invalid_request,
     rate_limit_exceeded,
     server_error,
@@ -39,6 +38,8 @@ from uvicorn import Config, Server
 if TYPE_CHECKING:
     from mcp_auth_framework.storage import TokenStorage
 
+from .cimd import get_cimd_fetcher
+from .jwt_auth import JWTAuthError, JWTClientAuthenticator
 from .taskmanager_oauth_provider import TaskManagerAuthSettings, TaskManagerOAuthProvider
 
 load_dotenv()
@@ -290,9 +291,99 @@ def load_registered_clients() -> dict[str, Any]:
 registered_clients = {}
 
 
+async def authenticate_client(
+    client: Any,
+    client_id: str,
+    parsed_body: dict[str, list[str]],
+    token_endpoint: str,
+    cimd_fetcher: Any | None = None,
+) -> tuple[bool, Response | None]:
+    """
+    Authenticate a client using the appropriate method.
+
+    Supports:
+    - none: Public clients (PKCE required)
+    - client_secret_post: Traditional client secret
+    - private_key_jwt: JWT-based authentication for CIMD clients
+
+    Args:
+        client: The OAuth client object
+        client_id: The client identifier
+        parsed_body: Parsed request body
+        token_endpoint: The token endpoint URL (for JWT audience validation)
+        cimd_fetcher: Optional CIMD fetcher for JWT clients
+
+    Returns:
+        Tuple of (success, error_response). If success is True, error_response is None.
+    """
+    auth_method = client.token_endpoint_auth_method or "client_secret_post"
+    logger.info(f"Authenticating client {client_id} with method: {auth_method}")
+
+    # Public clients don't require authentication (rely on PKCE)
+    if auth_method == "none":
+        logger.info(f"Client {client_id} is a public client, no authentication required")
+        return True, None
+
+    # Check for private_key_jwt authentication
+    client_assertion = parsed_body.get("client_assertion", [""])[0]
+    client_assertion_type = parsed_body.get("client_assertion_type", [""])[0]
+
+    if auth_method == "private_key_jwt":
+        if not client_assertion or not client_assertion_type:
+            logger.warning(f"Missing client_assertion for private_key_jwt client: {client_id}")
+            return False, JSONResponse(
+                {"error": "invalid_client", "error_description": "client_assertion required"},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+
+        try:
+            jwt_auth = JWTClientAuthenticator(
+                token_endpoint=token_endpoint,
+                cimd_fetcher=cimd_fetcher,
+            )
+            await jwt_auth.authenticate(client_id, client_assertion, client_assertion_type)
+            logger.info(f"Client {client_id} authenticated via private_key_jwt")
+            return True, None
+        except JWTAuthError as e:
+            logger.warning(f"JWT authentication failed for client {client_id}: {e}")
+            return False, JSONResponse(
+                {"error": "invalid_client", "error_description": str(e)},
+                status_code=401,
+                headers={"Cache-Control": "no-store"},
+            )
+
+    # Traditional client_secret authentication
+    client_secret = parsed_body.get("client_secret", [""])[0]
+
+    if not client_secret:
+        logger.warning(f"Missing client_secret for confidential client: {client_id}")
+        return False, JSONResponse(
+            {"error": "invalid_client", "error_description": "client_secret required"},
+            status_code=401,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    # Verify client secret using constant-time comparison
+    if client.client_secret and not secrets.compare_digest(
+        client_secret.encode("utf-8") if client_secret else b"",
+        client.client_secret.encode("utf-8"),
+    ):
+        logger.warning(f"Invalid client_secret for client: {client_id}")
+        return False, JSONResponse(
+            {"error": "invalid_client", "error_description": "Invalid client credentials"},
+            status_code=401,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    logger.info(f"Client {client_id} authenticated via client_secret")
+    return True, None
+
+
 async def handle_refresh_token_exchange(
     parsed_body: dict[str, list[str]],
     oauth_provider: "TaskManagerAuthProvider",  # type: ignore[type-arg]
+    token_endpoint: str = "",
 ) -> Response:
     """
     Handle refresh_token grant type token exchange (RFC 6749 Section 6).
@@ -301,14 +392,13 @@ async def handle_refresh_token_exchange(
     and refresh token (token rotation).
 
     Security features:
-    - Client authentication validation
+    - Client authentication validation (supports client_secret and private_key_jwt)
     - Refresh token validation and expiration check
     - Token rotation (old refresh token is invalidated)
     - Scope validation (requested scopes must be subset of original)
     """
     refresh_token_str = parsed_body.get("refresh_token", [""])[0]
     client_id = parsed_body.get("client_id", [""])[0]
-    client_secret = parsed_body.get("client_secret", [""])[0]
     scope = parsed_body.get("scope", [""])[0]
 
     logger.info("=== REFRESH TOKEN EXCHANGE ===")
@@ -329,8 +419,11 @@ async def handle_refresh_token_exchange(
             headers={"Cache-Control": "no-store"},
         )
 
-    # Validate client_id format
-    if not validate_client_id(client_id):
+    # Validate client_id format (allow both traditional IDs and CIMD URLs)
+    cimd_fetcher = get_cimd_fetcher()
+    is_cimd = cimd_fetcher.is_cimd_client_id(client_id)
+
+    if not is_cimd and not validate_client_id(client_id):
         logger.warning("Invalid client_id format in refresh token exchange")
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Invalid client_id format"},
@@ -349,26 +442,16 @@ async def handle_refresh_token_exchange(
             headers={"Cache-Control": "no-store"},
         )
 
-    # Check if client requires authentication
-    auth_method = client.token_endpoint_auth_method or "client_secret_post"
-    if auth_method != "none":
-        if not client_secret:
-            logger.warning(f"Missing client_secret for confidential client: {client_id}")
-            return JSONResponse(
-                {"error": "invalid_client", "error_description": "client_secret required"},
-                status_code=401,
-                headers={"Cache-Control": "no-store"},
-            )
-        if client.client_secret and not secrets.compare_digest(
-            client_secret.encode("utf-8") if client_secret else b"",
-            client.client_secret.encode("utf-8"),
-        ):
-            logger.warning(f"Invalid client_secret for client: {client_id}")
-            return JSONResponse(
-                {"error": "invalid_client", "error_description": "Invalid client credentials"},
-                status_code=401,
-                headers={"Cache-Control": "no-store"},
-            )
+    # Authenticate the client using the appropriate method
+    auth_success, auth_error = await authenticate_client(
+        client=client,
+        client_id=client_id,
+        parsed_body=parsed_body,
+        token_endpoint=token_endpoint,
+        cimd_fetcher=cimd_fetcher,
+    )
+    if not auth_success:
+        return auth_error  # type: ignore[return-value]
 
     # === Load and Validate Refresh Token ===
     refresh_token = await oauth_provider.load_refresh_token(client, refresh_token_str)
@@ -419,6 +502,7 @@ async def handle_device_code_token_exchange(
     parsed_body: dict[str, list[str]],
     oauth_provider: "TaskManagerAuthProvider",  # type: ignore[type-arg]
     auth_settings: TaskManagerAuthSettings,
+    token_endpoint: str = "",
 ) -> Response:
     """
     Handle device_code grant type token exchange (RFC 8628).
@@ -429,7 +513,7 @@ async def handle_device_code_token_exchange(
     Security features:
     - Input validation for device_code and client_id
     - Rate limiting to prevent brute-force attacks
-    - Client authentication validation for confidential clients
+    - Client authentication validation (supports client_secret and private_key_jwt)
     - Request timeouts to prevent blocking
     - Proper error handling for backend failures
     """
@@ -447,7 +531,11 @@ async def handle_device_code_token_exchange(
         return invalid_request("client_id is required")
 
     # Validate input format to prevent injection attacks
-    if not validate_client_id(client_id):
+    # Allow both traditional IDs and CIMD URLs
+    cimd_fetcher = get_cimd_fetcher()
+    is_cimd = cimd_fetcher.is_cimd_client_id(client_id)
+
+    if not is_cimd and not validate_client_id(client_id):
         logger.warning("Invalid client_id format in device token exchange")
         return invalid_request("Invalid client_id format")
 
@@ -462,36 +550,35 @@ async def handle_device_code_token_exchange(
         return slow_down("Polling too frequently", retry_after)
 
     # === Client Authentication Validation ===
-    # Check if client exists and validate authentication requirements
-    client = oauth_provider.registered_clients.get(client_id)
+    # Try to get client from provider (supports CIMD clients)
+    client = await oauth_provider.get_client(client_id)
+
     if client:
-        auth_method = client.get("token_endpoint_auth_method", "client_secret_post")
-
-        # If client requires authentication, validate the secret
-        if auth_method != "none":
-            if not client_secret:
-                logger.warning(f"Missing client_secret for confidential client: {client_id}")
-                return invalid_client("client_secret required")
-
-            expected_secret = client.get("client_secret")
-            # Use constant-time comparison to prevent timing attacks
-            if expected_secret and not secrets.compare_digest(
-                client_secret.encode("utf-8") if client_secret else b"",
-                expected_secret.encode("utf-8"),
-            ):
-                logger.warning(f"Invalid client_secret for client: {client_id}")
-                return invalid_client("Invalid client credentials")
+        # Authenticate using the appropriate method (supports private_key_jwt for CIMD)
+        auth_success, auth_error = await authenticate_client(
+            client=client,
+            client_id=client_id,
+            parsed_body=parsed_body,
+            token_endpoint=token_endpoint,
+            cimd_fetcher=cimd_fetcher,
+        )
+        if not auth_success:
+            return auth_error  # type: ignore[return-value]
+    # Note: If client is not found by get_client() (which checks CIMD, cache, registered_clients,
+    # and backend), we still proxy the request to TaskManager. This allows the backend to handle
+    # authentication for clients that may only exist there.
 
     # === Proxy to TaskManager with timeout ===
     timeout = aiohttp.ClientTimeout(total=TokenConfig.HTTP_REQUEST_TIMEOUT_SECONDS)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            token_data = {
+            token_data: dict[str, str] = {
                 "grant_type": DEVICE_CODE_GRANT_TYPE,
                 "device_code": device_code,
                 "client_id": client_id,
             }
             # Only include client_secret if provided (for backend validation)
+            # Note: CIMD clients using private_key_jwt don't have client_secret
             if client_secret:
                 token_data["client_secret"] = client_secret
 
@@ -678,12 +765,17 @@ def create_authorization_server(
                     if grant_type == "urn:ietf:params:oauth:grant-type:device_code":
                         logger.info("=== DEVICE CODE TOKEN EXCHANGE ===")
                         return await handle_device_code_token_exchange(
-                            parsed_body, oauth_provider, auth_settings
+                            parsed_body,
+                            oauth_provider,
+                            auth_settings,
+                            token_endpoint=f"{server_url}/token",
                         )
 
                     if grant_type == "refresh_token":
                         logger.info("=== REFRESH TOKEN EXCHANGE ===")
-                        return await handle_refresh_token_exchange(parsed_body, oauth_provider)
+                        return await handle_refresh_token_exchange(
+                            parsed_body, oauth_provider, token_endpoint=f"{server_url}/token"
+                        )
 
                     # Try to parse form data
                     if request.headers.get("content-type", "").startswith(
@@ -1086,7 +1178,7 @@ def create_authorization_server(
 
     # Add custom OAuth metadata endpoint to advertise registration support
     async def oauth_metadata_handler(request: Request) -> JSONResponse:
-        """OAuth 2.0 Authorization Server Metadata with registration endpoint"""
+        """OAuth 2.0 Authorization Server Metadata with registration and CIMD support"""
         server_url_str = str(server_url).rstrip("/")
 
         return JSONResponse(
@@ -1103,9 +1195,15 @@ def create_authorization_server(
                     "refresh_token",
                     "urn:ietf:params:oauth:grant-type:device_code",
                 ],
-                "token_endpoint_auth_methods_supported": ["client_secret_post", "none"],
+                "token_endpoint_auth_methods_supported": [
+                    "client_secret_post",
+                    "none",
+                    "private_key_jwt",  # For CIMD confidential clients
+                ],
                 "code_challenge_methods_supported": ["S256"],
                 "scopes_supported": [auth_settings.mcp_scope],
+                # CIMD support (draft-ietf-oauth-client-id-metadata-document)
+                "client_id_metadata_document_supported": True,
             },
             headers={
                 "Access-Control-Allow-Origin": get_cors_origin(request),
