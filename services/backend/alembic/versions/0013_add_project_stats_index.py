@@ -3,8 +3,8 @@
 This migration adds a partial composite index on todos table
 to optimize the project statistics aggregation query.
 
-Revision ID: 0012_add_project_stats_index
-Revises: 0011_add_task_dependencies
+Revision ID: 0013_add_project_stats_index
+Revises: 0012_add_webauthn_credentials
 Create Date: 2026-02-04
 
 """
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0012_add_project_stats_index"
-down_revision: str | None = "0011_add_task_dependencies"
+revision: str = "0013_add_project_stats_index"
+down_revision: str | None = "0012_add_webauthn_credentials"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
