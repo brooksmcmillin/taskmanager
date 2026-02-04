@@ -1,5 +1,8 @@
 """Todo API routes."""
 
+import os
+import sys
+import json
 from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Query
@@ -316,7 +319,7 @@ ACTION_PATTERNS: dict[ActionType, tuple[list[str], bool]] = {
 
 
 def infer_action_type(
-    title: str, description: str | None
+    title: str, description: int
 ) -> tuple[ActionType | None, bool | None]:
     """Infer action type and agent actionability from task title/description.
 
@@ -523,6 +526,7 @@ async def get_todo(
     db: DbSession,
 ) -> dict:
     """Get a todo by ID with its subtasks."""
+    breakpoint()
     # Verify todo exists and belongs to user, get with project info
     result = await db.execute(
         select(

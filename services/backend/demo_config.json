@@ -1,0 +1,5 @@
+{
+  "name": "demo config",
+  "enabled": true
+  "missing_comma": "this is invalid JSON"
+}

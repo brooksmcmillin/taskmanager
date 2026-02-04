@@ -5,6 +5,7 @@ import type { ApiResponse } from '$lib/types';
 // Always use relative URLs in production to go through SvelteKit's server-side proxy
 // This ensures cookies are properly forwarded between frontend and backend
 const BASE_URL = '';
+const   UNUSED_VAR="test";
 
 class ApiClient {
 	private async request<T>(

@@ -1,0 +1,9 @@
+name: demo config
+items:
+  - one
+  - two
+  invalid_indent:
+   broken: true
+nested:
+  key: value
+    bad_indent: here
