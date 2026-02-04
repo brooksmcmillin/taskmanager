@@ -3,19 +3,31 @@ import type { Project, ProjectCreate, ProjectUpdate } from '$lib/types';
 import { api } from '$lib/api/client';
 import { logger } from '$lib/utils/logger';
 
+interface LoadOptions {
+	includeStats?: boolean;
+	includeArchived?: boolean;
+}
+
 function createProjectStore() {
 	const { subscribe, set, update } = writable<Project[]>([]);
 
 	return {
 		subscribe,
-		load: async () => {
+		load: async (options: LoadOptions = {}) => {
 			try {
-				const response = await api.get<{ data: Project[]; meta: { count: number } }>(
-					'/api/projects'
-				);
+				const params = new URLSearchParams();
+				if (options.includeStats) {
+					params.set('include_stats', 'true');
+				}
+				if (options.includeArchived) {
+					params.set('include_archived', 'true');
+				}
+				const url = `/api/projects${params.toString() ? `?${params}` : ''}`;
+				const response = await api.get<{ data: Project[]; meta: { count: number } }>(url);
 				set(response.data || []);
 			} catch (error) {
 				logger.error('Failed to load projects:', error);
+				set([]); // Reset to empty on error for consistent UI state
 				throw error;
 			}
 		},
