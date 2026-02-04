@@ -55,7 +55,14 @@
 									<span>{project.stats.completed_tasks} / {project.stats.total_tasks} tasks</span>
 									<span>{project.stats.completion_percentage}%</span>
 								</div>
-								<div class="w-full bg-gray-200 rounded-full h-2">
+								<div
+									class="w-full bg-gray-200 rounded-full h-2"
+									role="progressbar"
+									aria-label="Project completion progress"
+									aria-valuenow={project.stats.completion_percentage}
+									aria-valuemin={0}
+									aria-valuemax={100}
+								>
 									<div
 										class="h-2 rounded-full transition-all duration-300"
 										class:bg-green-500={project.stats.completion_percentage === 100}

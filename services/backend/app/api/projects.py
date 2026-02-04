@@ -86,9 +86,8 @@ async def _get_project_stats(
 
     Only counts top-level tasks (parent_id IS NULL) to avoid double-counting subtasks.
     """
-    from datetime import date
-
-    today = date.today()
+    # Use UTC for consistent date comparison across timezones
+    today = datetime.now(UTC).date()
 
     # Build the aggregation query
     stats_query = (
@@ -177,7 +176,7 @@ async def list_projects(
     db: DbSession,
     include_archived: bool = False,
     include_stats: bool = False,
-) -> ListResponse[ProjectResponse] | ListResponse[ProjectWithStats]:
+) -> ListResponse[ProjectWithStats]:
     """List all projects for the user, ordered by position.
 
     Args:
@@ -193,26 +192,21 @@ async def list_projects(
     result = await db.execute(query)
     projects = result.scalars().all()
 
+    # Get stats if requested, otherwise stats will be None
+    stats_by_project: dict[int, ProjectStats] = {}
     if include_stats:
         project_ids = [p.id for p in projects]
         if project_ids:
             stats_by_project = await _get_project_stats(db, project_ids)
-        else:
-            stats_by_project = {}
-
-        return ListResponse(
-            data=[
-                ProjectWithStats(
-                    **ProjectResponse.model_validate(p).model_dump(),
-                    stats=stats_by_project.get(p.id),
-                )
-                for p in projects
-            ],
-            meta={"count": len(projects)},
-        )
 
     return ListResponse(
-        data=[ProjectResponse.model_validate(p) for p in projects],
+        data=[
+            ProjectWithStats(
+                **ProjectResponse.model_validate(p).model_dump(),
+                stats=stats_by_project.get(p.id) if include_stats else None,
+            )
+            for p in projects
+        ],
         meta={"count": len(projects)},
     )
 

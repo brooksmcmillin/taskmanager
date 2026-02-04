@@ -22,12 +22,12 @@ function createProjectStore() {
 				if (options.includeArchived) {
 					params.set('include_archived', 'true');
 				}
-				const queryString = params.toString();
-				const url = queryString ? `/api/projects?${queryString}` : '/api/projects';
+				const url = `/api/projects${params.toString() ? `?${params}` : ''}`;
 				const response = await api.get<{ data: Project[]; meta: { count: number } }>(url);
 				set(response.data || []);
 			} catch (error) {
 				logger.error('Failed to load projects:', error);
+				set([]); // Reset to empty on error for consistent UI state
 				throw error;
 			}
 		},
