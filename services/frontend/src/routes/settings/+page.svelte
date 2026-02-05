@@ -2,8 +2,16 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api/client';
+	import {
+		deletePasskey,
+		isWebAuthnSupported,
+		listPasskeys,
+		registerPasskey,
+		type WebAuthnCredential
+	} from '$lib/api/webauthn';
 	import { toasts } from '$lib/stores/ui';
 	import type { User } from '$lib/types';
+	import { onMount } from 'svelte';
 
 	// Get user from layout data
 	let user: User | null = $derived($page.data.user);
@@ -30,12 +38,71 @@
 	});
 	let passwordSubmitting = $state(false);
 
+	// Passkey state
+	let webauthnSupported = $state(false);
+	let passkeys = $state<WebAuthnCredential[]>([]);
+	let passkeyLoading = $state(false);
+	let newPasskeyName = $state('');
+	let showAddPasskey = $state(false);
+
 	// Initialize email field with current email
 	$effect(() => {
 		if (user && !newEmail) {
 			newEmail = user.email;
 		}
 	});
+
+	onMount(async () => {
+		webauthnSupported = isWebAuthnSupported();
+		if (webauthnSupported) {
+			await loadPasskeys();
+		}
+	});
+
+	async function loadPasskeys() {
+		try {
+			passkeys = await listPasskeys();
+		} catch (error) {
+			console.error('Failed to load passkeys:', error);
+		}
+	}
+
+	async function handleAddPasskey() {
+		passkeyLoading = true;
+		try {
+			await registerPasskey(newPasskeyName || undefined);
+			toasts.show('Passkey added successfully', 'success');
+			newPasskeyName = '';
+			showAddPasskey = false;
+			await loadPasskeys();
+		} catch (error) {
+			toasts.show((error as Error).message || 'Failed to add passkey', 'error');
+		} finally {
+			passkeyLoading = false;
+		}
+	}
+
+	async function handleDeletePasskey(id: number) {
+		if (!confirm('Are you sure you want to remove this passkey?')) {
+			return;
+		}
+
+		try {
+			await deletePasskey(id);
+			toasts.show('Passkey removed successfully', 'success');
+			await loadPasskeys();
+		} catch (error) {
+			toasts.show((error as Error).message || 'Failed to remove passkey', 'error');
+		}
+	}
+
+	function formatDate(dateString: string): string {
+		return new Date(dateString).toLocaleDateString(undefined, {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric'
+		});
+	}
 
 	// Email validation
 	function validateEmail(): string {
@@ -274,6 +341,90 @@
 			</button>
 		</form>
 	</div>
+
+	<!-- Passkeys Section -->
+	{#if webauthnSupported}
+		<div class="card" style="margin-top: 2rem;">
+			<h2>Passkeys</h2>
+			<p class="text-muted" style="margin-bottom: 1rem;">
+				Passkeys let you sign in securely without a password using your device's biometrics or
+				security key.
+			</p>
+
+			{#if passkeys.length > 0}
+				<div class="passkey-list">
+					{#each passkeys as passkey (passkey.id)}
+						<div class="passkey-item">
+							<div class="passkey-info">
+								<span class="passkey-name">{passkey.device_name || 'Unnamed passkey'}</span>
+								<span class="passkey-meta">
+									Added {formatDate(passkey.created_at)}
+									{#if passkey.last_used_at}
+										&middot; Last used {formatDate(passkey.last_used_at)}
+									{/if}
+								</span>
+							</div>
+							<button
+								type="button"
+								class="btn btn-danger btn-sm"
+								onclick={() => handleDeletePasskey(passkey.id)}
+							>
+								Remove
+							</button>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-muted" style="font-style: italic;">No passkeys registered yet.</p>
+			{/if}
+
+			{#if showAddPasskey}
+				<div class="add-passkey-form" style="margin-top: 1rem;">
+					<div class="form-group">
+						<label for="passkey-name">Passkey Name (optional)</label>
+						<input
+							type="text"
+							id="passkey-name"
+							class="form-input"
+							bind:value={newPasskeyName}
+							placeholder="e.g., MacBook Touch ID"
+							disabled={passkeyLoading}
+						/>
+					</div>
+					<div class="button-group">
+						<button
+							type="button"
+							class="btn btn-primary"
+							onclick={handleAddPasskey}
+							disabled={passkeyLoading}
+						>
+							{passkeyLoading ? 'Registering...' : 'Register Passkey'}
+						</button>
+						<button
+							type="button"
+							class="btn btn-secondary"
+							onclick={() => {
+								showAddPasskey = false;
+								newPasskeyName = '';
+							}}
+							disabled={passkeyLoading}
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			{:else}
+				<button
+					type="button"
+					class="btn btn-primary"
+					style="margin-top: 1rem;"
+					onclick={() => (showAddPasskey = true)}
+				>
+					Add Passkey
+				</button>
+			{/if}
+		</div>
+	{/if}
 </main>
 
 <style>
@@ -304,5 +455,58 @@
 	small {
 		display: block;
 		margin-top: 0.25rem;
+	}
+
+	.passkey-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.passkey-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.75rem;
+		background: var(--bg-secondary, #f9fafb);
+		border-radius: 0.5rem;
+		border: 1px solid var(--border-color, #e5e7eb);
+	}
+
+	.passkey-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.passkey-name {
+		font-weight: 500;
+		color: var(--text-primary);
+	}
+
+	.passkey-meta {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.btn-sm {
+		padding: 0.25rem 0.5rem;
+		font-size: 0.875rem;
+	}
+
+	.btn-danger {
+		background: var(--error-color, #e53e3e);
+		color: white;
+		border: none;
+	}
+
+	.btn-danger:hover {
+		background: #c53030;
+	}
+
+	.button-group {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 1rem;
 	}
 </style>

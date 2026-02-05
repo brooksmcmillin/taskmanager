@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     device_code_expiry: int = 1800  # 30 minutes in seconds
     device_poll_interval: int = 5  # seconds
 
+    # WebAuthn
+    webauthn_rp_id: str = "localhost"
+    webauthn_rp_name: str = "TaskManager"
+    webauthn_origin: str = "http://localhost:3000"
+    webauthn_challenge_timeout: int = 300  # 5 minutes in seconds
+
     # Frontend URL (for OAuth consent page redirects)
     frontend_url: str = "http://localhost:3000"
 

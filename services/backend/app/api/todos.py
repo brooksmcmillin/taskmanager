@@ -15,9 +15,17 @@ from app.db.queries import (
     get_resource_for_user,
     get_resources_for_user,
 )
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.project import Project
-from app.models.todo import ActionType, AgentStatus, Priority, Status, Todo
+from app.models.todo import (
+    ACTION_TYPE_DEFAULT_TIER,
+    ActionType,
+    AgentStatus,
+    Priority,
+    Status,
+    Todo,
+    task_dependencies,
+)
 from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/todos", tags=["todos"])
@@ -41,6 +49,9 @@ class TodoCreate(BaseModel):
     # Agent fields - typically not set on creation, inferred automatically
     agent_actionable: bool | None = None
     action_type: ActionType | None = None
+    autonomy_tier: int | None = Field(
+        None, ge=1, le=4, description="Risk level: 1-4 (1=fully autonomous, 4=never)"
+    )
 
 
 class TodoUpdate(BaseModel):
@@ -61,6 +72,9 @@ class TodoUpdate(BaseModel):
     # Agent fields
     agent_actionable: bool | None = None
     action_type: ActionType | None = None
+    autonomy_tier: int | None = Field(
+        None, ge=1, le=4, description="Risk level: 1-4 (1=fully autonomous, 4=never)"
+    )
     agent_status: AgentStatus | None = None
     agent_notes: str | None = None
     blocking_reason: str | None = None
@@ -92,7 +106,22 @@ class SubtaskResponse(BaseModel):
     # Agent fields
     agent_actionable: bool | None = None
     action_type: ActionType | None = None
+    autonomy_tier: int | None = None
     agent_status: AgentStatus | None = None
+
+
+class DependencyResponse(BaseModel):
+    """Task dependency response (simplified todo for dependency display)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    status: Status
+    priority: Priority
+    due_date: date | None
+    project_id: int | None = None
+    project_name: str | None = None
 
 
 class TodoResponse(BaseModel):
@@ -116,17 +145,44 @@ class TodoResponse(BaseModel):
     position: int
     parent_id: int | None = None
     subtasks: list[SubtaskResponse] = Field(default_factory=list)
+    # Task dependencies
+    dependencies: list[DependencyResponse] = Field(default_factory=list)
+    dependents: list[DependencyResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime | None
     # Agent fields
     agent_actionable: bool | None = None
     action_type: ActionType | None = None
+    autonomy_tier: int | None = None
     agent_status: AgentStatus | None = None
     agent_notes: str | None = None
     blocking_reason: str | None = None
 
 
 # Helper functions
+def _build_dependency_response(
+    todo: Todo, project_name: str | None = None
+) -> DependencyResponse:
+    """Build DependencyResponse from Todo model.
+
+    Args:
+        todo: Todo model instance
+        project_name: Optional project name
+
+    Returns:
+        DependencyResponse with key fields
+    """
+    return DependencyResponse(
+        id=todo.id,
+        title=todo.title,
+        status=todo.status,
+        priority=todo.priority,
+        due_date=todo.due_date,
+        project_id=todo.project_id,
+        project_name=project_name,
+    )
+
+
 def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
     """Build SubtaskResponse from Todo model.
 
@@ -152,6 +208,7 @@ def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
         updated_at=subtask.updated_at,
         agent_actionable=subtask.agent_actionable,
         action_type=subtask.action_type,
+        autonomy_tier=subtask.autonomy_tier,
         agent_status=subtask.agent_status,
     )
 
@@ -161,6 +218,8 @@ def _build_todo_response(
     project_name: str | None = None,
     project_color: str | None = None,
     subtasks: list[Todo] | None = None,
+    dependencies: list[tuple[Todo, str | None]] | None = None,
+    dependents: list[tuple[Todo, str | None]] | None = None,
 ) -> TodoResponse:
     """Build TodoResponse from Todo model with optional project info.
 
@@ -169,6 +228,8 @@ def _build_todo_response(
         project_name: Optional project name
         project_color: Optional project color
         subtasks: Optional list of subtask Todo instances
+        dependencies: Optional list of (Todo, project_name) tuples
+        dependents: Optional list of (Todo, project_name) tuples
 
     Returns:
         TodoResponse with all fields populated
@@ -177,6 +238,22 @@ def _build_todo_response(
     if subtasks:
         subtask_responses = [
             _build_subtask_response(s) for s in subtasks if s.deleted_at is None
+        ]
+
+    dependency_responses = []
+    if dependencies:
+        dependency_responses = [
+            _build_dependency_response(dep, proj_name)
+            for dep, proj_name in dependencies
+            if dep.deleted_at is None
+        ]
+
+    dependent_responses = []
+    if dependents:
+        dependent_responses = [
+            _build_dependency_response(dep, proj_name)
+            for dep, proj_name in dependents
+            if dep.deleted_at is None
         ]
 
     return TodoResponse(
@@ -196,10 +273,13 @@ def _build_todo_response(
         position=todo.position,
         parent_id=todo.parent_id,
         subtasks=subtask_responses,
+        dependencies=dependency_responses,
+        dependents=dependent_responses,
         created_at=todo.created_at,
         updated_at=todo.updated_at,
         agent_actionable=todo.agent_actionable,
         action_type=todo.action_type,
+        autonomy_tier=todo.autonomy_tier,
         agent_status=todo.agent_status,
         agent_notes=todo.agent_notes,
         blocking_reason=todo.blocking_reason,
@@ -319,11 +399,11 @@ ACTION_PATTERNS: dict[ActionType, tuple[list[str], bool]] = {
 
 
 def infer_action_type(
-    title: str, description: int
-) -> tuple[ActionType | None, bool | None]:
-    """Infer action type and agent actionability from task title/description.
+    title: str, description: str | None
+) -> tuple[ActionType | None, bool | None, int | None]:
+    """Infer action type, agent actionability, and autonomy tier from task.
 
-    Uses keyword matching to classify tasks. Returns (None, None) if no
+    Uses keyword matching to classify tasks. Returns (None, None, None) if no
     pattern matches, allowing the agent to classify later via LLM.
 
     Args:
@@ -331,20 +411,24 @@ def infer_action_type(
         description: Optional task description
 
     Returns:
-        Tuple of (action_type, agent_actionable) or (None, None) if unknown
+        Tuple of (action_type, agent_actionable, autonomy_tier) or
+        (None, None, None) if unknown.
     """
     text = f"{title} {description or ''}".lower()
 
     for action_type, (keywords, actionable) in ACTION_PATTERNS.items():
         if any(keyword in text for keyword in keywords):
-            return action_type, actionable
+            # Get default autonomy tier from mapping
+            default_tier = ACTION_TYPE_DEFAULT_TIER.get(action_type)
+            tier_value = default_tier.value if default_tier else None
+            return action_type, actionable, tier_value
 
-    return None, None  # Unknown - agent can classify later
+    return None, None, None  # Unknown - agent can classify later
 
 
 @router.get("")
 async def list_todos(
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
     status: str | None = Query(None),
     project_id: int | None = Query(None),
@@ -450,7 +534,7 @@ async def list_todos(
 @router.post("", status_code=201)
 async def create_todo(
     request: TodoCreate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Create a new todo or subtask.
@@ -473,14 +557,17 @@ async def create_todo(
     # Infer agent fields if not provided
     agent_actionable = request.agent_actionable
     action_type = request.action_type
-    if agent_actionable is None or action_type is None:
-        inferred_type, inferred_actionable = infer_action_type(
+    autonomy_tier = request.autonomy_tier
+    if agent_actionable is None or action_type is None or autonomy_tier is None:
+        inferred_type, inferred_actionable, inferred_tier = infer_action_type(
             request.title, request.description
         )
         if action_type is None:
             action_type = inferred_type
         if agent_actionable is None:
             agent_actionable = inferred_actionable
+        if autonomy_tier is None:
+            autonomy_tier = inferred_tier
 
     todo = Todo(
         user_id=user.id,
@@ -497,6 +584,7 @@ async def create_todo(
         position=position,
         agent_actionable=agent_actionable,
         action_type=action_type,
+        autonomy_tier=autonomy_tier,
     )
     db.add(todo)
     await db.flush()
@@ -522,11 +610,10 @@ async def create_todo(
 @router.get("/{todo_id}")
 async def get_todo(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
-    """Get a todo by ID with its subtasks."""
-    breakpoint()
+    """Get a todo by ID with its subtasks and dependencies."""
     # Verify todo exists and belongs to user, get with project info
     result = await db.execute(
         select(
@@ -552,12 +639,44 @@ async def get_todo(
     )
     subtasks = list(subtasks_result.scalars().all())
 
+    # Fetch dependencies (tasks this todo depends on)
+    dependencies_result = await db.execute(
+        select(Todo, Project.name.label("project_name"))
+        .outerjoin(Project, Todo.project_id == Project.id)
+        .join(
+            task_dependencies,
+            Todo.id == task_dependencies.c.dependency_id,
+        )
+        .where(
+            task_dependencies.c.dependent_id == todo_id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    dependencies = [(row[0], row.project_name) for row in dependencies_result.all()]
+
+    # Fetch dependents (tasks that depend on this todo)
+    dependents_result = await db.execute(
+        select(Todo, Project.name.label("project_name"))
+        .outerjoin(Project, Todo.project_id == Project.id)
+        .join(
+            task_dependencies,
+            Todo.id == task_dependencies.c.dependent_id,
+        )
+        .where(
+            task_dependencies.c.dependency_id == todo_id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    dependents = [(row[0], row.project_name) for row in dependents_result.all()]
+
     return {
         "data": _build_todo_response(
             todo,
             project_name=row.project_name,
             project_color=row.project_color,
             subtasks=subtasks,
+            dependencies=dependencies,
+            dependents=dependents,
         )
     }
 
@@ -566,7 +685,7 @@ async def get_todo(
 async def update_todo(
     todo_id: int,
     request: TodoUpdate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Update a todo."""
@@ -619,7 +738,7 @@ async def update_todo(
 @router.put("")
 async def bulk_update_todos(
     request: BulkUpdateRequest,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Bulk update todos."""
@@ -650,7 +769,7 @@ async def bulk_update_todos(
 @router.delete("/{todo_id}")
 async def delete_todo(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Soft delete a todo."""
@@ -666,7 +785,7 @@ async def delete_todo(
 @router.post("/{todo_id}/complete")
 async def complete_todo(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Mark a todo as complete."""
@@ -694,7 +813,7 @@ class SubtaskCreate(BaseModel):
 @router.get("/{todo_id}/subtasks")
 async def list_subtasks(
     todo_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> ListResponse[SubtaskResponse]:
     """List all subtasks for a todo."""
@@ -719,7 +838,7 @@ async def list_subtasks(
 async def create_subtask(
     todo_id: int,
     request: SubtaskCreate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Create a subtask for a todo."""
@@ -766,7 +885,7 @@ class TodoReorderRequest(BaseModel):
 @router.post("/reorder")
 async def reorder_todos(
     request: TodoReorderRequest,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Reorder todos by providing the new order of todo IDs."""
@@ -783,3 +902,185 @@ async def reorder_todos(
         todos[todo_id].position = position
 
     return {"data": {"reordered": len(todos)}}
+
+
+# Dependency endpoints
+class DependencyCreate(BaseModel):
+    """Add dependency request."""
+
+    dependency_id: int = Field(..., description="ID of the task this task depends on")
+
+
+async def _check_circular_dependency(
+    db: DbSession, dependent_id: int, dependency_id: int
+) -> bool:
+    """Check if adding this dependency would create a circular dependency.
+
+    Uses breadth-first search to traverse the dependency graph and check if
+    the dependent task is reachable from the dependency task (which would
+    create a cycle).
+
+    This implementation fetches the entire dependency graph upfront in a single
+    query to avoid N+1 query performance issues.
+
+    Args:
+        db: Database session
+        dependent_id: The task that will depend on another
+        dependency_id: The task being depended upon
+
+    Returns:
+        True if adding this dependency would create a cycle, False otherwise
+    """
+    # Fetch entire dependency graph in a single query
+    result = await db.execute(select(task_dependencies))
+    all_deps = result.all()
+
+    # Build adjacency list: dependent_id -> [dependency_ids]
+    graph: dict[int, list[int]] = {}
+    for row in all_deps:
+        dep_id = row.dependent_id
+        if dep_id not in graph:
+            graph[dep_id] = []
+        graph[dep_id].append(row.dependency_id)
+
+    # BFS to find if dependent_id is reachable from dependency_id
+    visited: set[int] = set()
+    queue = [dependency_id]
+
+    while queue:
+        current_id = queue.pop(0)
+        if current_id == dependent_id:
+            return True  # Found a cycle
+
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+
+        # Get all tasks that the current task depends on (from in-memory graph)
+        for next_id in graph.get(current_id, []):
+            if next_id not in visited:
+                queue.append(next_id)
+
+    return False
+
+
+@router.get("/{todo_id}/dependencies")
+async def list_dependencies(
+    todo_id: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> ListResponse[DependencyResponse]:
+    """List all dependencies for a todo (tasks it depends on)."""
+    # Verify todo exists and belongs to user
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
+
+    # Fetch dependencies
+    result = await db.execute(
+        select(Todo, Project.name.label("project_name"))
+        .outerjoin(Project, Todo.project_id == Project.id)
+        .join(
+            task_dependencies,
+            Todo.id == task_dependencies.c.dependency_id,
+        )
+        .where(
+            task_dependencies.c.dependent_id == todo_id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    dependencies = [
+        _build_dependency_response(row[0], row.project_name) for row in result.all()
+    ]
+
+    return ListResponse(data=dependencies, meta={"count": len(dependencies)})
+
+
+@router.post("/{todo_id}/dependencies", status_code=201)
+async def add_dependency(
+    todo_id: int,
+    request: DependencyCreate,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> dict:
+    """Add a dependency to a todo.
+
+    The dependency_id specifies the task that must be completed before this task.
+
+    This endpoint handles race conditions by:
+    1. Relying on database primary key constraint for duplicate detection
+    2. Checking circular dependencies before insert (best effort)
+    3. Catching IntegrityError to return appropriate error responses
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    # Verify todo exists and belongs to user
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
+
+    # Verify dependency todo exists and belongs to user
+    dependency = await get_resource_for_user(
+        db, Todo, request.dependency_id, user.id, errors.todo_not_found
+    )
+
+    # Prevent self-dependency
+    if todo_id == request.dependency_id:
+        raise errors.self_dependency()
+
+    # Check for circular dependency before attempting insert
+    # Note: There's still a small race window, but circular deps are caught
+    # at query time and don't corrupt data (just create invalid state)
+    if await _check_circular_dependency(db, todo_id, request.dependency_id):
+        raise errors.circular_dependency()
+
+    # Try to add the dependency - rely on DB constraint for duplicate detection
+    try:
+        await db.execute(
+            task_dependencies.insert().values(
+                dependent_id=todo_id,
+                dependency_id=request.dependency_id,
+            )
+        )
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise errors.dependency_exists() from None
+
+    # Get project name for response
+    project_name = None
+    if dependency.project_id:
+        project_result = await db.execute(
+            select(Project.name).where(Project.id == dependency.project_id)
+        )
+        project_name = project_result.scalar_one_or_none()
+
+    return {"data": _build_dependency_response(dependency, project_name)}
+
+
+@router.delete("/{todo_id}/dependencies/{dependency_id}")
+async def remove_dependency(
+    todo_id: int,
+    dependency_id: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> dict:
+    """Remove a dependency from a todo."""
+    # Verify todo exists and belongs to user
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
+
+    # Check if dependency exists
+    existing = await db.execute(
+        select(task_dependencies).where(
+            task_dependencies.c.dependent_id == todo_id,
+            task_dependencies.c.dependency_id == dependency_id,
+        )
+    )
+    if not existing.first():
+        raise errors.dependency_not_found()
+
+    # Remove the dependency
+    await db.execute(
+        task_dependencies.delete().where(
+            task_dependencies.c.dependent_id == todo_id,
+            task_dependencies.c.dependency_id == dependency_id,
+        )
+    )
+
+    return {"data": {"deleted": True, "dependency_id": dependency_id}}

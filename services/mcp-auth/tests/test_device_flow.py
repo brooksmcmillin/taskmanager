@@ -238,6 +238,8 @@ class TestDeviceCodeTokenExchange:
         with (
             patch("mcp_auth.auth_server.api_client") as mock_api_client,
             patch("mcp_auth.auth_server.aiohttp.ClientSession") as mock_session_class,
+            patch("mcp_auth.auth_server.get_cimd_fetcher") as mock_cimd_fetcher_getter,
+            patch("mcp_auth.taskmanager_oauth_provider.get_cimd_fetcher") as mock_provider_cimd,
             patch.dict(
                 "os.environ",
                 {
@@ -249,6 +251,14 @@ class TestDeviceCodeTokenExchange:
             ),
         ):
             mock_api_client.get_oauth_clients.return_value = MagicMock(success=True, data=[])
+            # Set up mock API client with proper token_expires_at to avoid TypeError
+            mock_api_client.token_expires_at = None  # None means no token validation
+
+            # Mock CIMD fetcher to return False for all client_ids (traditional clients)
+            mock_cimd_fetcher = MagicMock()
+            mock_cimd_fetcher.is_cimd_client_id.return_value = False
+            mock_cimd_fetcher_getter.return_value = mock_cimd_fetcher
+            mock_provider_cimd.return_value = mock_cimd_fetcher
 
             # Mock TaskManager returning authorization_pending
             mock_response = MagicMock()
@@ -309,6 +319,8 @@ class TestDeviceCodeTokenExchange:
         with (
             patch("mcp_auth.auth_server.api_client") as mock_api_client,
             patch("mcp_auth.auth_server.aiohttp.ClientSession") as mock_session_class,
+            patch("mcp_auth.auth_server.get_cimd_fetcher") as mock_cimd_fetcher_getter,
+            patch("mcp_auth.taskmanager_oauth_provider.get_cimd_fetcher") as mock_provider_cimd,
             patch.dict(
                 "os.environ",
                 {
@@ -320,6 +332,14 @@ class TestDeviceCodeTokenExchange:
             ),
         ):
             mock_api_client.get_oauth_clients.return_value = MagicMock(success=True, data=[])
+            # Set up mock API client with proper token_expires_at to avoid TypeError
+            mock_api_client.token_expires_at = None  # None means no token validation
+
+            # Mock CIMD fetcher to return False for all client_ids (traditional clients)
+            mock_cimd_fetcher = MagicMock()
+            mock_cimd_fetcher.is_cimd_client_id.return_value = False
+            mock_cimd_fetcher_getter.return_value = mock_cimd_fetcher
+            mock_provider_cimd.return_value = mock_cimd_fetcher
 
             # Mock TaskManager returning successful token
             mock_response = MagicMock()

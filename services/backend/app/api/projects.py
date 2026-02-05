@@ -12,7 +12,7 @@ from app.db.queries import (
     get_resource_for_user,
     get_resources_for_user,
 )
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.project import Project
 from app.schemas import ListResponse
 
@@ -60,7 +60,7 @@ class ProjectResponse(BaseModel):
 
 @router.get("")
 async def list_projects(
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
     include_archived: bool = False,
 ) -> ListResponse[ProjectResponse]:
@@ -83,7 +83,7 @@ async def list_projects(
 @router.post("", status_code=201)
 async def create_project(
     request: ProjectCreate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Create a new project."""
@@ -108,7 +108,7 @@ async def create_project(
 @router.get("/{project_id}")
 async def get_project(
     project_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Get a project by ID."""
@@ -123,7 +123,7 @@ async def get_project(
 async def update_project(
     project_id: int,
     request: ProjectUpdate,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Update a project."""
@@ -141,7 +141,7 @@ async def update_project(
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Delete a project."""
@@ -157,7 +157,7 @@ async def delete_project(
 @router.post("/{project_id}/archive")
 async def archive_project(
     project_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Archive a project."""
@@ -173,7 +173,7 @@ async def archive_project(
 @router.post("/{project_id}/unarchive")
 async def unarchive_project(
     project_id: int,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Unarchive a project."""
@@ -195,7 +195,7 @@ class ReorderRequest(BaseModel):
 @router.post("/reorder")
 async def reorder_projects(
     request: ReorderRequest,
-    user: CurrentUser,
+    user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
     """Reorder projects by providing the new order of project IDs."""

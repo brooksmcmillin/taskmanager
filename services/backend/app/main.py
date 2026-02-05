@@ -18,6 +18,7 @@ from app.api import (
     search,
     todos,
     trash,
+    webauthn,
 )
 from app.api.oauth import authorize, clients, device, token
 from app.config import settings
@@ -68,6 +69,7 @@ app.include_router(token.router)
 app.include_router(clients.router)
 app.include_router(device.router)
 app.include_router(api_keys.router)
+app.include_router(webauthn.router)
 
 
 @app.get("/health")

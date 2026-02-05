@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from app.models.registration_code import RegistrationCode
     from app.models.session import Session
     from app.models.todo import Todo
+    from app.models.webauthn_credential import WebAuthnCredential
 
 
 class User(Base):
@@ -64,4 +65,7 @@ class User(Base):
     )
     api_keys: Mapped[list[ApiKey]] = relationship(
         "ApiKey", back_populates="user", cascade="all, delete-orphan"
+    )
+    webauthn_credentials: Mapped[list[WebAuthnCredential]] = relationship(
+        "WebAuthnCredential", back_populates="user", cascade="all, delete-orphan"
     )
