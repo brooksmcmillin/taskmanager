@@ -159,7 +159,7 @@ async def github_callback(
     request: Request,
     response: Response,
     db: DbSession,
-    code: str = Query(..., description="Authorization code from GitHub"),
+    code: str | None = Query(None, description="Authorization code from GitHub"),
     state: str = Query(..., description="State parameter for CSRF protection"),
     error: str | None = Query(None, description="Error from GitHub"),
     error_description: str | None = Query(None, description="Error description"),
@@ -180,6 +180,10 @@ async def github_callback(
     if error:
         error_msg = error_description or error
         return _redirect_with_error(error_msg)
+
+    # Validate that code is present (required when no error)
+    if not code:
+        return _redirect_with_error("Missing authorization code")
 
     # Validate and consume state (checks expiration)
     state_data = _validate_and_consume_state(state)
