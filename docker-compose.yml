@@ -121,6 +121,31 @@ services:
       - taskmanager_network
     restart: unless-stopped
 
+  mcp-email:
+    build:
+      context: .
+      dockerfile: services/mcp-email/Dockerfile
+    container_name: taskmanager-mcp-email
+    command: uv run python -m mcp_email.server --port 8002 --auth-server http://mcp-auth:9000 --auth-server-public-url ${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
+    ports:
+      - '8002:8002'
+    environment:
+      - TASKMANAGER_CLIENT_ID=${TASKMANAGER_CLIENT_ID}
+      - TASKMANAGER_CLIENT_SECRET=${TASKMANAGER_CLIENT_SECRET}
+      - MCP_AUTH_SERVER=http://mcp-auth:9000
+      - MCP_EMAIL_SERVER_URL=${MCP_EMAIL_SERVER_URL:-http://localhost:8002}
+      - MCP_AUTH_SERVER_PUBLIC_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
+      - FASTMAIL_API_TOKEN=${FASTMAIL_API_TOKEN}
+      - ALLOWED_EMAIL_RECIPIENTS=${ALLOWED_EMAIL_RECIPIENTS}
+      - ADMIN_EMAIL_ADDRESS=${ADMIN_EMAIL_ADDRESS}
+    env_file:
+      - .env
+    depends_on:
+      - mcp-auth
+    networks:
+      - taskmanager_network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     external: true
