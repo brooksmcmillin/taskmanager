@@ -20,7 +20,7 @@ from app.api import (
     trash,
     webauthn,
 )
-from app.api.oauth import authorize, clients, device, token
+from app.api.oauth import authorize, clients, device, github, token
 from app.config import settings
 from app.db.database import init_db
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -70,6 +70,7 @@ app.include_router(clients.router)
 app.include_router(device.router)
 app.include_router(api_keys.router)
 app.include_router(webauthn.router)
+app.include_router(github.router)
 
 
 @app.get("/health")

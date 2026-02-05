@@ -352,6 +352,43 @@ class Errors:
         return ApiError("OAUTH_010", 400, "Device code has expired")
 
     # =========================================================================
+    # GitHub OAuth Errors (GITHUB_001 - GITHUB_005)
+    # =========================================================================
+
+    @staticmethod
+    def github_not_configured() -> ApiError:
+        """GITHUB_001: GitHub OAuth not configured."""
+        return ApiError("GITHUB_001", 503, "GitHub OAuth is not configured")
+
+    @staticmethod
+    def github_invalid_state() -> ApiError:
+        """GITHUB_002: Invalid or expired OAuth state."""
+        return ApiError("GITHUB_002", 400, "Invalid or expired OAuth state")
+
+    @staticmethod
+    def github_auth_failed(message: str = "GitHub authentication failed") -> ApiError:
+        """GITHUB_003: GitHub authentication failed."""
+        return ApiError("GITHUB_003", 400, message)
+
+    @staticmethod
+    def github_email_required() -> ApiError:
+        """GITHUB_004: GitHub account has no verified email."""
+        return ApiError(
+            "GITHUB_004",
+            400,
+            "Your GitHub account must have a verified email address",
+        )
+
+    @staticmethod
+    def github_account_linked() -> ApiError:
+        """GITHUB_005: GitHub account already linked to another user."""
+        return ApiError(
+            "GITHUB_005",
+            409,
+            "This GitHub account is already linked to another user",
+        )
+
+    # =========================================================================
     # Server Errors (SERVER_001 - SERVER_003)
     # =========================================================================
 

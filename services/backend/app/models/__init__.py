@@ -6,6 +6,7 @@ from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.attachment import Attachment
 from app.models.feed_source import FeedSource, FeedType
 from app.models.oauth import AccessToken, AuthorizationCode, DeviceCode, OAuthClient
+from app.models.oauth_provider import UserOAuthProvider
 from app.models.project import Project
 from app.models.recurring_task import Frequency, RecurringTask
 from app.models.registration_code import RegistrationCode
@@ -27,6 +28,7 @@ __all__ = [
     "AuthorizationCode",
     "AccessToken",
     "DeviceCode",
+    "UserOAuthProvider",
     "RecurringTask",
     "Frequency",
     "RegistrationCode",
