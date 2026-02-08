@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 
 from app.core.errors import errors
 from app.db.queries import (
@@ -14,6 +14,7 @@ from app.db.queries import (
 )
 from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.project import Project
+from app.models.todo import Status, Todo
 from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -58,13 +59,130 @@ class ProjectResponse(BaseModel):
     updated_at: datetime | None
 
 
+class ProjectStats(BaseModel):
+    """Statistics for a project."""
+
+    total_tasks: int
+    completed_tasks: int
+    pending_tasks: int
+    in_progress_tasks: int
+    cancelled_tasks: int
+    completion_percentage: float
+    total_estimated_hours: float | None
+    total_actual_hours: float | None
+    overdue_tasks: int
+
+
+class ProjectWithStats(ProjectResponse):
+    """Project response with statistics."""
+
+    stats: ProjectStats | None = None
+
+
+async def _get_project_stats(
+    db: DbSession, project_ids: list[int]
+) -> dict[int, ProjectStats]:
+    """Get statistics for multiple projects in a single query.
+
+    Only counts top-level tasks (parent_id IS NULL) to avoid double-counting subtasks.
+    """
+    # Use UTC for consistent date comparison across timezones
+    today = datetime.now(UTC).date()
+
+    # Build the aggregation query
+    stats_query = (
+        select(
+            Todo.project_id,
+            func.count(Todo.id).label("total_tasks"),
+            func.sum(case((Todo.status == Status.completed, 1), else_=0)).label(
+                "completed_tasks"
+            ),
+            func.sum(case((Todo.status == Status.pending, 1), else_=0)).label(
+                "pending_tasks"
+            ),
+            func.sum(case((Todo.status == Status.in_progress, 1), else_=0)).label(
+                "in_progress_tasks"
+            ),
+            func.sum(case((Todo.status == Status.cancelled, 1), else_=0)).label(
+                "cancelled_tasks"
+            ),
+            func.sum(Todo.estimated_hours).label("total_estimated_hours"),
+            func.sum(Todo.actual_hours).label("total_actual_hours"),
+            func.sum(
+                case(
+                    (
+                        (Todo.due_date < today)
+                        & (Todo.status.in_([Status.pending, Status.in_progress])),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("overdue_tasks"),
+        )
+        .where(
+            Todo.project_id.in_(project_ids),
+            Todo.deleted_at.is_(None),
+            Todo.parent_id.is_(None),  # Only top-level tasks
+        )
+        .group_by(Todo.project_id)
+    )
+
+    result = await db.execute(stats_query)
+    rows = result.all()
+
+    stats_by_project: dict[int, ProjectStats] = {}
+    for row in rows:
+        total = row.total_tasks or 0
+        completed = row.completed_tasks or 0
+        percentage = (completed / total * 100) if total > 0 else 0.0
+
+        stats_by_project[row.project_id] = ProjectStats(
+            total_tasks=total,
+            completed_tasks=completed,
+            pending_tasks=row.pending_tasks or 0,
+            in_progress_tasks=row.in_progress_tasks or 0,
+            cancelled_tasks=row.cancelled_tasks or 0,
+            completion_percentage=round(percentage, 1),
+            total_estimated_hours=(
+                float(row.total_estimated_hours) if row.total_estimated_hours else None
+            ),
+            total_actual_hours=(
+                float(row.total_actual_hours) if row.total_actual_hours else None
+            ),
+            overdue_tasks=row.overdue_tasks or 0,
+        )
+
+    # Add empty stats for projects with no tasks
+    for project_id in project_ids:
+        if project_id not in stats_by_project:
+            stats_by_project[project_id] = ProjectStats(
+                total_tasks=0,
+                completed_tasks=0,
+                pending_tasks=0,
+                in_progress_tasks=0,
+                cancelled_tasks=0,
+                completion_percentage=0.0,
+                total_estimated_hours=None,
+                total_actual_hours=None,
+                overdue_tasks=0,
+            )
+
+    return stats_by_project
+
+
 @router.get("")
 async def list_projects(
     user: CurrentUserFlexible,
     db: DbSession,
     include_archived: bool = False,
-) -> ListResponse[ProjectResponse]:
-    """List all projects for the user, ordered by position."""
+    include_stats: bool = False,
+) -> ListResponse[ProjectWithStats]:
+    """List all projects for the user, ordered by position.
+
+    Args:
+        include_archived: Include archived projects in the response.
+        include_stats: Include task statistics (counts, completion %) for each project.
+    """
     query = select(Project).where(Project.user_id == user.id)
 
     if not include_archived:
@@ -74,8 +192,21 @@ async def list_projects(
     result = await db.execute(query)
     projects = result.scalars().all()
 
+    # Get stats if requested, otherwise stats will be None
+    stats_by_project: dict[int, ProjectStats] = {}
+    if include_stats:
+        project_ids = [p.id for p in projects]
+        if project_ids:
+            stats_by_project = await _get_project_stats(db, project_ids)
+
     return ListResponse(
-        data=[ProjectResponse.model_validate(p) for p in projects],
+        data=[
+            ProjectWithStats(
+                **ProjectResponse.model_validate(p).model_dump(),
+                stats=stats_by_project.get(p.id) if include_stats else None,
+            )
+            for p in projects
+        ],
         meta={"count": len(projects)},
     )
 
@@ -110,13 +241,43 @@ async def get_project(
     project_id: int,
     user: CurrentUserFlexible,
     db: DbSession,
+    include_stats: bool = False,
 ) -> dict:
-    """Get a project by ID."""
+    """Get a project by ID.
+
+    Args:
+        include_stats: Include task statistics for this project.
+    """
     project = await get_resource_for_user(
         db, Project, project_id, user.id, errors.project_not_found, check_deleted=False
     )
 
+    if include_stats:
+        stats_by_project = await _get_project_stats(db, [project_id])
+        return {
+            "data": ProjectWithStats(
+                **ProjectResponse.model_validate(project).model_dump(),
+                stats=stats_by_project.get(project_id),
+            )
+        }
+
     return {"data": ProjectResponse.model_validate(project)}
+
+
+@router.get("/{project_id}/stats")
+async def get_project_stats(
+    project_id: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> dict:
+    """Get task statistics for a project."""
+    # Verify project exists and belongs to user
+    await get_resource_for_user(
+        db, Project, project_id, user.id, errors.project_not_found, check_deleted=False
+    )
+
+    stats_by_project = await _get_project_stats(db, [project_id])
+    return {"data": stats_by_project.get(project_id)}
 
 
 @router.put("/{project_id}")
