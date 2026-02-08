@@ -69,6 +69,18 @@ export interface Todo {
 	project_color?: string;
 }
 
+export interface ProjectStats {
+	total_tasks: number;
+	completed_tasks: number;
+	pending_tasks: number;
+	in_progress_tasks: number;
+	cancelled_tasks: number;
+	completion_percentage: number;
+	total_estimated_hours: number | null;
+	total_actual_hours: number | null;
+	overdue_tasks: number;
+}
+
 export interface Project {
 	id: number;
 	user_id: number;
@@ -80,6 +92,7 @@ export interface Project {
 	archived_at: string | null;
 	created_at: string;
 	updated_at: string;
+	stats?: ProjectStats;
 }
 
 export interface TodoFilters {
