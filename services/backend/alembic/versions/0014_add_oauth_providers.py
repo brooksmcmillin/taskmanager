@@ -5,8 +5,8 @@ This migration adds:
 2. Indexes on user_id and provider for efficient queries
 3. Unique constraints to prevent duplicate provider connections
 
-Revision ID: 0013_add_oauth_providers
-Revises: 0012_add_webauthn_credentials
+Revision ID: 0014_add_oauth_providers
+Revises: 0013_add_project_stats_index
 Create Date: 2026-01-30
 
 """
@@ -18,8 +18,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0013_add_oauth_providers"
-down_revision: str | None = "0012_add_webauthn_credentials"
+revision: str = "0014_add_oauth_providers"
+down_revision: str | None = "0013_add_project_stats_index"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
