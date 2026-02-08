@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     # Registration
     registration_code_required: bool = True
 
+    # GitHub OAuth
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_oauth_redirect_uri: str = ""  # Will default to {frontend_url}/oauth/github/callback
+
     # Validation constants
     min_password_length: int = 8
     min_client_secret_length: int = 32
