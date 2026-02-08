@@ -5,8 +5,8 @@ This migration adds:
 2. Indexes on user_id and provider for efficient queries
 3. Unique constraints to prevent duplicate provider connections
 
-Revision ID: 0006_add_oauth_providers
-Revises: 0005_add_attachments
+Revision ID: 0013_add_oauth_providers
+Revises: 0012_add_webauthn_credentials
 Create Date: 2026-01-30
 
 """
@@ -18,8 +18,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0006_add_oauth_providers"
-down_revision: str | None = "0005_add_attachments"
+revision: str = "0013_add_oauth_providers"
+down_revision: str | None = "0012_add_webauthn_credentials"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -60,8 +60,12 @@ def upgrade() -> None:
         sa.UniqueConstraint("user_id", "provider", name="uq_user_oauth_provider"),
         sa.UniqueConstraint("provider", "provider_user_id", name="uq_provider_user_id"),
     )
-    op.create_index("ix_user_oauth_providers_user_id", "user_oauth_providers", ["user_id"])
-    op.create_index("ix_user_oauth_providers_provider", "user_oauth_providers", ["provider"])
+    op.create_index(
+        "ix_user_oauth_providers_user_id", "user_oauth_providers", ["user_id"]
+    )
+    op.create_index(
+        "ix_user_oauth_providers_provider", "user_oauth_providers", ["provider"]
+    )
 
 
 def downgrade() -> None:
