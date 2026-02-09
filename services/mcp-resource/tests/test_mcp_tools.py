@@ -855,3 +855,222 @@ class TestCompleteTaskTool:
         task_id = "123"
         numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
         assert int(numeric_id) == 123
+
+
+class TestCreateProjectTool:
+    """Tests for create_project MCP tool."""
+
+    @pytest.mark.asyncio
+    async def test_create_project_success(self) -> None:
+        """Test create_project creates a project with all fields."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={"id": 1, "name": "Phase 1", "description": "First phase", "color": "#FF5733"},
+            status_code=201,
+        )
+
+        response = mock_client._make_request("POST", "/projects")
+        project, error = validate_dict_response(response, "created project")
+
+        assert error is None
+        assert project is not None
+        assert project["id"] == 1
+        assert project["name"] == "Phase 1"
+
+    @pytest.mark.asyncio
+    async def test_create_project_minimal(self) -> None:
+        """Test create_project with only required name field."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={"id": 2, "name": "My Project"},
+            status_code=201,
+        )
+
+        response = mock_client._make_request("POST", "/projects")
+        project, error = validate_dict_response(response, "created project")
+
+        assert error is None
+        assert project is not None
+        assert project["id"] == 2
+
+    @pytest.mark.asyncio
+    async def test_create_project_error(self) -> None:
+        """Test create_project handles API errors."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=False,
+            error="Project name already exists",
+            status_code=400,
+        )
+
+        response = mock_client._make_request("POST", "/projects")
+        project, error = validate_dict_response(response, "created project")
+
+        assert error == "Project name already exists"
+        assert project is None
+
+
+class TestDependencyTools:
+    """Tests for task dependency MCP tools."""
+
+    @pytest.mark.asyncio
+    async def test_list_dependencies_success(self) -> None:
+        """Test list_dependencies returns dependency tasks."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data=[
+                {
+                    "id": 5,
+                    "title": "Blocking Task",
+                    "status": "pending",
+                    "priority": "high",
+                    "due_date": "2026-03-01",
+                    "project_id": 1,
+                    "project_name": "Phase 1",
+                },
+            ],
+            status_code=200,
+        )
+
+        response = mock_client._make_request("GET", "/todos/10/dependencies")
+        dependencies, error = validate_list_response(response, "dependencies")
+
+        assert error is None
+        assert len(dependencies) == 1
+        assert dependencies[0]["id"] == 5
+        assert dependencies[0]["title"] == "Blocking Task"
+        assert dependencies[0]["status"] == "pending"
+
+    @pytest.mark.asyncio
+    async def test_list_dependencies_empty(self) -> None:
+        """Test list_dependencies with no dependencies."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data=[],
+            status_code=200,
+        )
+
+        response = mock_client._make_request("GET", "/todos/10/dependencies")
+        dependencies, error = validate_list_response(response, "dependencies")
+
+        assert error is None
+        assert len(dependencies) == 0
+
+    @pytest.mark.asyncio
+    async def test_add_dependency_success(self) -> None:
+        """Test add_dependency creates a dependency relationship."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={"id": 5, "title": "Blocking Task", "status": "pending"},
+            status_code=201,
+        )
+
+        response = mock_client._make_request("POST", "/todos/10/dependencies", {"dependency_id": 5})
+
+        assert response.success is True
+        assert response.data is not None
+        assert response.data["id"] == 5
+
+    @pytest.mark.asyncio
+    async def test_add_dependency_circular_error(self) -> None:
+        """Test add_dependency handles circular dependency error."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=False,
+            error="Circular dependency detected",
+            status_code=400,
+        )
+
+        response = mock_client._make_request("POST", "/todos/10/dependencies", {"dependency_id": 5})
+
+        assert response.success is False
+        assert "Circular dependency" in (response.error or "")
+
+    @pytest.mark.asyncio
+    async def test_add_dependency_self_error(self) -> None:
+        """Test add_dependency handles self-dependency error."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=False,
+            error="A task cannot depend on itself",
+            status_code=400,
+        )
+
+        response = mock_client._make_request(
+            "POST", "/todos/10/dependencies", {"dependency_id": 10}
+        )
+
+        assert response.success is False
+        assert response.error is not None
+
+    @pytest.mark.asyncio
+    async def test_remove_dependency_success(self) -> None:
+        """Test remove_dependency removes a dependency relationship."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=True,
+            data={"deleted": True, "dependency_id": 5},
+            status_code=200,
+        )
+
+        response = mock_client._make_request("DELETE", "/todos/10/dependencies/5")
+
+        assert response.success is True
+        assert response.data is not None
+        assert response.data.get("deleted") is True
+
+    @pytest.mark.asyncio
+    async def test_remove_dependency_not_found(self) -> None:
+        """Test remove_dependency handles missing dependency."""
+        mock_client = MagicMock()
+        mock_client._make_request.return_value = ApiResponse(
+            success=False,
+            error="Dependency not found",
+            status_code=404,
+        )
+
+        response = mock_client._make_request("DELETE", "/todos/10/dependencies/999")
+
+        assert response.success is False
+        assert response.error == "Dependency not found"
+
+    def test_dependency_id_parsing(self) -> None:
+        """Test parsing dependency IDs in task_N format."""
+        # With prefix
+        dep_id = "task_42"
+        numeric_id = dep_id.replace("task_", "") if dep_id.startswith("task_") else dep_id
+        assert int(numeric_id) == 42
+
+        # Without prefix
+        dep_id = "42"
+        numeric_id = dep_id.replace("task_", "") if dep_id.startswith("task_") else dep_id
+        assert int(numeric_id) == 42
+
+    def test_dependency_response_transformation(self) -> None:
+        """Test transforming dependency response to MCP format."""
+        dep = {
+            "id": 5,
+            "title": "Blocking Task",
+            "status": "pending",
+            "priority": "high",
+            "due_date": "2026-03-01",
+            "project_name": "Phase 1",
+        }
+
+        transformed = {
+            "id": f"task_{dep.get('id')}",
+            "title": dep.get("title", ""),
+            "status": dep.get("status", "pending"),
+            "priority": dep.get("priority", "medium"),
+            "due_date": dep.get("due_date"),
+            "project_name": dep.get("project_name"),
+        }
+
+        assert transformed["id"] == "task_5"
+        assert transformed["title"] == "Blocking Task"
+        assert transformed["project_name"] == "Phase 1"

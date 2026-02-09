@@ -530,6 +530,51 @@ class TaskManagerClient:
             "DELETE", f"/todos/{todo_id}/attachments/{attachment_id}"
         )
 
+    # Dependency methods
+    def get_dependencies(self, todo_id: int) -> ApiResponse:
+        """
+        Get all dependencies for a todo (tasks it depends on).
+
+        Args:
+            todo_id: Todo ID
+
+        Returns:
+            ApiResponse with list of dependency tasks
+        """
+        return self._make_request("GET", f"/todos/{todo_id}/dependencies")
+
+    def add_dependency(self, todo_id: int, dependency_id: int) -> ApiResponse:
+        """
+        Add a dependency to a todo.
+
+        The dependency_id specifies the task that must be completed before this task.
+
+        Args:
+            todo_id: Todo ID (the dependent task)
+            dependency_id: ID of the task this task depends on
+
+        Returns:
+            ApiResponse with created dependency data
+        """
+        return self._make_request(
+            "POST", f"/todos/{todo_id}/dependencies", {"dependency_id": dependency_id}
+        )
+
+    def remove_dependency(self, todo_id: int, dependency_id: int) -> ApiResponse:
+        """
+        Remove a dependency from a todo.
+
+        Args:
+            todo_id: Todo ID (the dependent task)
+            dependency_id: ID of the dependency task to remove
+
+        Returns:
+            ApiResponse with deletion result
+        """
+        return self._make_request(
+            "DELETE", f"/todos/{todo_id}/dependencies/{dependency_id}"
+        )
+
     # Category methods
     def get_categories(self) -> ApiResponse:
         """

@@ -776,6 +776,64 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
+    @guard_tool(input_params=["name", "description"], screen_output=True)
+    async def create_project(
+        name: str,
+        description: str | None = None,
+        color: str | None = None,
+    ) -> str:
+        """
+        Create a new project for organizing tasks.
+
+        Projects group related tasks together and appear as categories.
+        Use this to set up organizational structure before creating tasks.
+
+        Args:
+            name: Project name (required)
+            description: Project description (optional)
+            color: Project color in hex format, e.g., "#FF5733" (optional)
+
+        Returns:
+            JSON object with id, name, and status fields confirming project creation
+        """
+        logger.info(f"=== create_project called: name='{name}', color={color} ===")
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            response = api_client.create_project(
+                name=name,
+                description=description,
+                color=color,
+            )
+            logger.info(
+                f"create_project response: success={response.success}, status={response.status_code}"
+            )
+
+            project, project_error = validate_dict_response(response, "created project")
+            if project_error:
+                logger.error(f"Failed to create project: {project_error}")
+                return json.dumps({"error": project_error})
+
+            logger.info(f"Created project: {project}")
+
+            project_id = project.get("id") if project is not None else None
+            if project_id is None:
+                logger.warning("Project data missing 'id' field")
+                return json.dumps({"error": "Created project has no ID"})
+
+            result = {
+                "id": project_id,
+                "name": project.get("name", name) if project is not None else name,
+                "status": "created",
+                "current_time": datetime.datetime.now().isoformat(),
+            }
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Exception in create_project: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
     @guard_tool(input_params=["query", "category"], screen_output=True)
     async def search_tasks(
         query: str,
@@ -1317,9 +1375,7 @@ def create_resource_server(
             # Validate autonomy_tier if provided
             if autonomy_tier is not None:
                 if not isinstance(autonomy_tier, int):
-                    return json.dumps(
-                        {"error": "autonomy_tier must be an integer"}
-                    )
+                    return json.dumps({"error": "autonomy_tier must be an integer"})
                 if autonomy_tier < 1 or autonomy_tier > 4:
                     return json.dumps(
                         {"error": f"Invalid autonomy_tier: {autonomy_tier}. Must be 1-4."}
@@ -1552,6 +1608,197 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in complete_task: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def list_dependencies(task_id: str) -> str:
+        """
+        List all dependencies for a task (tasks it depends on).
+
+        Returns tasks that must be completed before this task can start.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+
+        Returns:
+            JSON object with "dependencies" array containing dependency task objects
+            with fields: id, title, status, priority, due_date, project_id, project_name
+        """
+        logger.info(f"=== list_dependencies called: task_id='{task_id}' ===")
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            # Extract numeric ID from task_id
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            response = api_client.get_dependencies(todo_id)
+            logger.info(
+                f"get_dependencies response: success={response.success}, status={response.status_code}"
+            )
+
+            dependencies, dep_error = validate_list_response(response, "dependencies")
+            if dep_error:
+                logger.error(f"Failed to get dependencies: {dep_error}")
+                return json.dumps({"error": dep_error})
+
+            # Transform dependency IDs to task_N format
+            result_deps = []
+            for dep in dependencies:
+                dep_id = dep.get("id")
+                if dep_id is None:
+                    continue
+                result_deps.append(
+                    {
+                        "id": f"task_{dep_id}",
+                        "title": dep.get("title", ""),
+                        "status": dep.get("status", "pending"),
+                        "priority": dep.get("priority", "medium"),
+                        "due_date": dep.get("due_date"),
+                        "project_name": dep.get("project_name"),
+                    }
+                )
+
+            logger.info(f"Returning {len(result_deps)} dependencies for task {task_id}")
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "dependencies": result_deps,
+                    "count": len(result_deps),
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in list_dependencies: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def add_dependency(task_id: str, dependency_id: str) -> str:
+        """
+        Add a dependency to a task.
+
+        Declares that the task identified by dependency_id must be completed
+        before the task identified by task_id can start. Prevents circular
+        dependencies and self-dependencies.
+
+        Args:
+            task_id: The dependent task ID - format "task_123" or just "123"
+            dependency_id: The task this depends on - format "task_123" or just "123"
+
+        Returns:
+            JSON object confirming the dependency was created
+        """
+        logger.info(
+            f"=== add_dependency called: task_id='{task_id}', dependency_id='{dependency_id}' ==="
+        )
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            # Extract numeric IDs
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            dep_numeric_id = (
+                dependency_id.replace("task_", "")
+                if dependency_id.startswith("task_")
+                else dependency_id
+            )
+            try:
+                dep_id = int(dep_numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid dependency_id format: {dependency_id}"})
+
+            response = api_client.add_dependency(todo_id, dep_id)
+            logger.info(
+                f"add_dependency response: success={response.success}, status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to add dependency: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Added dependency: task {task_id} depends on {dependency_id}")
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "dependency_id": dependency_id,
+                    "status": "created",
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in add_dependency: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def remove_dependency(task_id: str, dependency_id: str) -> str:
+        """
+        Remove a dependency from a task.
+
+        Removes the relationship where task_id depends on dependency_id.
+
+        Args:
+            task_id: The dependent task ID - format "task_123" or just "123"
+            dependency_id: The dependency task to remove - format "task_123" or just "123"
+
+        Returns:
+            JSON object confirming the dependency was removed
+        """
+        logger.info(
+            f"=== remove_dependency called: task_id='{task_id}', dependency_id='{dependency_id}' ==="
+        )
+        try:
+            api_client = get_api_client()
+            logger.debug("API client created successfully")
+
+            # Extract numeric IDs
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            dep_numeric_id = (
+                dependency_id.replace("task_", "")
+                if dependency_id.startswith("task_")
+                else dependency_id
+            )
+            try:
+                dep_id = int(dep_numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid dependency_id format: {dependency_id}"})
+
+            response = api_client.remove_dependency(todo_id, dep_id)
+            logger.info(
+                f"remove_dependency response: success={response.success}, status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to remove dependency: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Removed dependency: task {task_id} no longer depends on {dependency_id}")
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "dependency_id": dependency_id,
+                    "status": "removed",
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in remove_dependency: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     return app
