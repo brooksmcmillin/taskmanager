@@ -15,6 +15,7 @@ This implementation handles the MCP-specific parts of the OAuth flow while
 delegating the actual OAuth logic to your existing taskmanager endpoints.
 """
 
+import json
 import logging
 import os
 import secrets
@@ -499,13 +500,33 @@ class TaskManagerOAuthProvider(
             )
             self.auth_codes[mcp_code] = auth_code
 
-            # Store the taskmanager access token for later use
-            # Token validation/introspection could be added here — see #186
+            # Validate the token with TaskManager to confirm it's genuine
+            # and extract accurate metadata (scopes, expiration, user info)
+            token_info = await self._validate_taskmanager_token(access_token)
+
+            # Parse scopes from validated response (JSON string from DB)
+            validated_scopes = token_info.get("scopes", "[]")
+            if isinstance(validated_scopes, str):
+                try:
+                    validated_scopes = json.loads(validated_scopes)
+                except (json.JSONDecodeError, TypeError):
+                    validated_scopes = [self.settings.mcp_scope]
+            if not isinstance(validated_scopes, list):
+                validated_scopes = [self.settings.mcp_scope]
+
+            # Use actual expiration from the validated token
+            validated_expires_in = token_info.get("expires_in")
+            if validated_expires_in and isinstance(validated_expires_in, int):
+                expires_at = int(time.time()) + validated_expires_in
+            else:
+                expires_at = int(time.time()) + TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS
+
+            # Store the validated taskmanager access token
             self.tokens[f"tm_{access_token}"] = AccessToken(
                 token=f"tm_{access_token}",
                 client_id=state_data["client_id"] or "",
-                scopes=[self.settings.mcp_scope],
-                expires_at=int(time.time()) + TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS,
+                scopes=validated_scopes,
+                expires_at=expires_at,
                 resource=state_data.get("resource"),
             )
 
@@ -521,6 +542,48 @@ class TaskManagerOAuthProvider(
         except Exception as e:
             logger.error(f"Error handling OAuth callback: {e}")
             raise HTTPException(500, "Internal server error during OAuth callback") from e
+
+    async def _validate_taskmanager_token(self, access_token: str) -> dict[str, Any]:
+        """
+        Validate a TaskManager access token via the verify endpoint.
+
+        Calls GET /api/oauth/verify with the token as a Bearer token to confirm
+        it is genuine and extract accurate metadata (scopes, expiration, user info).
+
+        Args:
+            access_token: The access token received from TaskManager's token exchange
+
+        Returns:
+            Verified token metadata dict with keys: valid, client_id, user_id,
+            scopes, expires_in, token_type
+
+        Raises:
+            HTTPException: If the token is invalid or verification fails
+        """
+        session = await self._get_session()
+        verify_url = f"{self.settings.base_url}/api/oauth/verify"
+
+        logger.info(f"Validating TaskManager token at {verify_url}")
+
+        async with session.get(
+            verify_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+        ) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"Token validation failed: {response.status} - {error_text}")
+                raise HTTPException(
+                    400,
+                    "Token validation failed: received token is not valid",
+                )
+
+            token_info = await response.json()
+            logger.info(
+                f"Token validated: client_id={token_info.get('client_id')}, "
+                f"user_id={token_info.get('user_id')}, "
+                f"expires_in={token_info.get('expires_in')}"
+            )
+            return dict(token_info)
 
     async def _exchange_code_with_taskmanager(self, code: str, state: str) -> str:
         """
