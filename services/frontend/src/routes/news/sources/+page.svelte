@@ -15,12 +15,8 @@
 		try {
 			loading = true;
 			const response = await api.get<ApiResponse<FeedSource[]>>('/api/news/sources');
-			console.log('Sources API response:', response);
 			if (response.data) {
 				sources = response.data;
-				console.log('Sources loaded:', sources.length);
-			} else {
-				console.log('No data field in response');
 			}
 		} catch (error) {
 			console.error('Error loading sources:', error);
