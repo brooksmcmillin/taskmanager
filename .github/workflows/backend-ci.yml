@@ -54,6 +54,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      - name: Run pyright
+        run: uv run pyright app/
+
       - name: Run database migrations
         env:
           POSTGRES_USER: taskmanager
