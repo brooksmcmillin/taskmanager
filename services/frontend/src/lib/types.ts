@@ -101,6 +101,7 @@ export interface TodoFilters {
 	priority?: string;
 	start_date?: string;
 	end_date?: string;
+	no_due_date?: boolean;
 }
 
 export interface TodoCreate {

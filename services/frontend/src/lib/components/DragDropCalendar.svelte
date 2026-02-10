@@ -7,7 +7,9 @@
 	import { hexTo50Shade } from '$lib/utils/colors';
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
-	import type { Todo } from '$lib/types';
+	import type { Todo, TodoFilters } from '$lib/types';
+
+	export let filters: TodoFilters = {};
 
 	const DEFAULT_PROJECT_COLOR = '#6b7280';
 	const dispatch = createEventDispatcher<{ editTodo: Todo }>();
@@ -113,7 +115,7 @@
 			} catch (error) {
 				logger.error('Failed to update todo date:', error);
 				// Reload all todos to revert the change
-				await todos.load({ status: 'pending' });
+				await todos.load({ status: 'pending', ...filters });
 				const currentTodos = get(pendingTodos);
 				todosByDate = groupTodosByDate(currentTodos);
 
@@ -157,7 +159,7 @@
 		});
 
 		// Load initial todos
-		todos.load({ status: 'pending' });
+		todos.load({ status: 'pending', ...filters });
 
 		return unsubscribe;
 	});

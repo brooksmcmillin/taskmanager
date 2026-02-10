@@ -8,8 +8,10 @@
 	import TaskDetailPanel from '$lib/components/TaskDetailPanel.svelte';
 	import DragDropCalendar from '$lib/components/DragDropCalendar.svelte';
 	import ProjectFilter from '$lib/components/ProjectFilter.svelte';
+	import DueDateFilter from '$lib/components/DueDateFilter.svelte';
+	import type { DueDateOption, DueDateFilterValue } from '$lib/components/DueDateFilter.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
-	import { formatDateDisplay } from '$lib/utils/dates';
+	import { formatDateDisplay, formatDateForInput, getStartOfWeek } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
 	import type { Todo } from '$lib/types';
 
@@ -18,10 +20,40 @@
 	let taskDetailPanel: TaskDetailPanel;
 	let initialLoadComplete = false;
 
-	// Extract filter from URL
+	// Extract filters from URL
 	$: selectedProjectId = $page.url.searchParams.get('project_id')
 		? parseInt($page.url.searchParams.get('project_id')!)
 		: null;
+
+	$: selectedDueDate = ($page.url.searchParams.get('due_date') as DueDateOption) || 'all';
+
+	function computeDueDateFilters(option: DueDateOption): Record<string, string | boolean> {
+		const today = new Date();
+		const todayStr = formatDateForInput(today);
+
+		switch (option) {
+			case 'today':
+				return { start_date: todayStr, end_date: todayStr };
+			case 'this_week': {
+				const weekStart = getStartOfWeek(today);
+				const weekEnd = new Date(weekStart);
+				weekEnd.setDate(weekEnd.getDate() + 6);
+				return {
+					start_date: formatDateForInput(weekStart),
+					end_date: formatDateForInput(weekEnd)
+				};
+			}
+			case 'next_two_weeks': {
+				const twoWeeksEnd = new Date(today);
+				twoWeeksEnd.setDate(twoWeeksEnd.getDate() + 14);
+				return { start_date: todayStr, end_date: formatDateForInput(twoWeeksEnd) };
+			}
+			case 'no_due_date':
+				return { no_due_date: true };
+			default:
+				return {};
+		}
+	}
 
 	function getProjectId(projectName: string): string {
 		return `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
@@ -31,10 +63,11 @@
 		// Load projects first
 		await projects.load();
 
-		// Load todos with filter if present
+		// Load todos with filters if present
 		await todos.load({
 			status: 'pending',
-			...(selectedProjectId && { project_id: selectedProjectId })
+			...(selectedProjectId && { project_id: selectedProjectId }),
+			...computeDueDateFilters(selectedDueDate)
 		});
 
 		// Load minimized state from localStorage
@@ -74,6 +107,18 @@
 		goto(url, { replaceState: true, keepFocus: true });
 	}
 
+	function handleDueDateFilterChange(event: CustomEvent<DueDateFilterValue>) {
+		const url = new URL($page.url);
+
+		if (event.detail.option !== 'all') {
+			url.searchParams.set('due_date', event.detail.option);
+		} else {
+			url.searchParams.delete('due_date');
+		}
+
+		goto(url, { replaceState: true, keepFocus: true });
+	}
+
 	function openTaskDetail(todo: Todo) {
 		taskDetailPanel.open(todo);
 	}
@@ -85,10 +130,11 @@
 	async function handleCompleteTodo(todoId: number) {
 		try {
 			await todos.complete(todoId);
-			// Reload todos after completion with current filter
+			// Reload todos after completion with current filters
 			await todos.load({
 				status: 'pending',
-				...(selectedProjectId && { project_id: selectedProjectId })
+				...(selectedProjectId && { project_id: selectedProjectId }),
+				...computeDueDateFilters(selectedDueDate)
 			});
 		} catch (error) {
 			logger.error('Failed to complete todo:', error);
@@ -99,15 +145,17 @@
 	async function handleFormSuccess() {
 		await todos.load({
 			status: 'pending',
-			...(selectedProjectId && { project_id: selectedProjectId })
+			...(selectedProjectId && { project_id: selectedProjectId }),
+			...computeDueDateFilters(selectedDueDate)
 		});
 	}
 
 	// Reload todos when filter changes (only in browser, after initial load)
-	$: if (browser && initialLoadComplete && selectedProjectId !== undefined) {
+	$: if (browser && initialLoadComplete && selectedProjectId !== undefined && selectedDueDate !== undefined) {
 		todos.load({
 			status: 'pending',
-			...(selectedProjectId && { project_id: selectedProjectId })
+			...(selectedProjectId && { project_id: selectedProjectId }),
+			...computeDueDateFilters(selectedDueDate)
 		});
 	}
 
@@ -149,8 +197,11 @@
 			</button>
 		</div>
 
-		<!-- Project Filter (Right) -->
-		<ProjectFilter {selectedProjectId} on:change={handleFilterChange} />
+		<!-- Filters (Right) -->
+		<div class="flex gap-4 items-center">
+			<DueDateFilter selected={selectedDueDate} on:change={handleDueDateFilterChange} />
+			<ProjectFilter {selectedProjectId} on:change={handleFilterChange} />
+		</div>
 	</div>
 
 	<!-- Task Detail Panel -->
@@ -229,7 +280,13 @@
 	<!-- Calendar View -->
 	{#if currentView === 'calendar'}
 		<div id="calendar-view">
-			<DragDropCalendar on:editTodo={(e) => openTaskDetail(e.detail)} />
+			<DragDropCalendar
+				filters={{
+					...(selectedProjectId ? { project_id: selectedProjectId } : {}),
+					...computeDueDateFilters(selectedDueDate)
+				}}
+				on:editTodo={(e) => openTaskDetail(e.detail)}
+			/>
 		</div>
 	{/if}
 </main>
