@@ -39,6 +39,7 @@ jobs:
       working-directory: services/mcp-auth
       python-versions: '["3.13"]'
       skip-install-test: true
+      run-type-check: true
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -50,6 +51,7 @@ jobs:
       working-directory: services/mcp-resource
       python-versions: '["3.13"]'
       skip-install-test: true
+      run-type-check: true
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -60,5 +62,6 @@ jobs:
       package-name: taskmanager_sdk
       working-directory: packages/taskmanager-sdk
       python-versions: '["3.12", "3.13"]'
+      run-type-check: true
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

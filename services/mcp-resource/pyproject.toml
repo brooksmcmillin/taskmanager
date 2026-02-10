@@ -79,6 +79,10 @@ unfixable = []
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
 
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+
 [tool.mypy]
 python_version = "3.13"
 warn_return_any = true

@@ -59,6 +59,10 @@ taskmanager_sdk = ["py.typed"]
 [tool.ruff]
 exclude = ["build"]
 
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
