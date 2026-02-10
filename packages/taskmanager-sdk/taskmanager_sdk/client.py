@@ -597,7 +597,7 @@ class TaskManagerClient:
         Returns:
             ApiResponse with TaskSearchResponse data
         """
-        params: dict[str, str] = {"query": query}
+        params: dict[str, str] = {"q": query}
         if category is not None:
             params["category"] = category
         return self._make_request("GET", "/tasks/search", params=params)

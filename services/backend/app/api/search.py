@@ -38,7 +38,7 @@ async def search_tasks(
         .where(
             Todo.user_id == user.id,
             Todo.deleted_at.is_(None),
-            search_vector.match(search_query),
+            search_vector.bool_op("@@")(search_query),
         )
     )
 
@@ -55,8 +55,8 @@ async def search_tasks(
             "id": row[0].id,
             "title": row[0].title,
             "description": row[0].description,
-            "status": row[0].status.value,
-            "priority": row[0].priority.value,
+            "status": row[0].status,
+            "priority": row[0].priority,
             "due_date": row[0].due_date.isoformat() if row[0].due_date else None,
             "project_name": row.project_name,
             "project_color": row.project_color,

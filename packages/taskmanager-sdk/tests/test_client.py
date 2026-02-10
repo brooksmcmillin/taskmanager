@@ -478,7 +478,7 @@ class TestTodos:
 
         assert result.success is True
         call_args = mock_session.get.call_args
-        assert call_args.kwargs["params"]["query"] == "test"
+        assert call_args.kwargs["params"]["q"] == "test"
         assert call_args.kwargs["params"]["category"] == "Work"
 
 
