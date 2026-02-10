@@ -38,6 +38,9 @@ class TodoCreate(BaseModel):
     status: Status = Status.pending
     due_date: date | None = None
     project_id: int | None = None
+    category: str | None = Field(
+        None, description="Project name (resolved to project_id)"
+    )
     tags: list[str] = Field(default_factory=list)
     context: str | None = None
     estimated_hours: float | None = None
@@ -60,6 +63,9 @@ class TodoUpdate(BaseModel):
     status: Status | None = None
     due_date: date | None = None
     project_id: int | None = None
+    category: str | None = Field(
+        None, description="Project name (resolved to project_id)"
+    )
     tags: list[str] | None = None
     context: str | None = None
     estimated_hours: float | None = None
@@ -476,7 +482,7 @@ async def list_todos(
         query = query.where(Todo.project_id == project_id)
 
     if category:
-        query = query.join(Project).where(Project.name == category)
+        query = query.where(Project.name == category)
 
     if start_date:
         query = query.where(Todo.due_date >= start_date)
@@ -538,6 +544,17 @@ async def create_todo(
 
     To create a subtask, provide the parent_id of the parent todo.
     """
+    # Resolve category name to project_id
+    if request.category and not request.project_id:
+        result = await db.execute(
+            select(Project).where(
+                Project.name == request.category, Project.user_id == user.id
+            )
+        )
+        project = result.scalar_one_or_none()
+        if project:
+            request.project_id = project.id
+
     # Verify parent todo exists and belongs to user if parent_id is provided
     if request.parent_id:
         await get_resource_for_user(
@@ -690,8 +707,21 @@ async def update_todo(
         db, Todo, todo_id, user.id, errors.todo_not_found, check_deleted=False
     )
 
-    # Verify parent_id authorization if being updated
+    # Resolve category name to project_id
     update_data = request.model_dump(exclude_unset=True)
+    if "category" in update_data:
+        category = update_data.pop("category")
+        if category and "project_id" not in update_data:
+            result = await db.execute(
+                select(Project).where(
+                    Project.name == category, Project.user_id == user.id
+                )
+            )
+            project = result.scalar_one_or_none()
+            if project:
+                update_data["project_id"] = project.id
+
+    # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
         parent = await get_resource_for_user(
             db, Todo, update_data["parent_id"], user.id, errors.todo_not_found
@@ -742,8 +772,21 @@ async def bulk_update_todos(
     todos_dict = await get_resources_for_user(db, Todo, request.ids, user.id)
     todos = list(todos_dict.values())
 
-    # Verify parent_id authorization if being updated
+    # Resolve category name to project_id
     update_data = request.updates.model_dump(exclude_unset=True)
+    if "category" in update_data:
+        category = update_data.pop("category")
+        if category and "project_id" not in update_data:
+            result = await db.execute(
+                select(Project).where(
+                    Project.name == category, Project.user_id == user.id
+                )
+            )
+            project = result.scalar_one_or_none()
+            if project:
+                update_data["project_id"] = project.id
+
+    # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
         parent = await get_resource_for_user(
             db, Todo, update_data["parent_id"], user.id, errors.todo_not_found
