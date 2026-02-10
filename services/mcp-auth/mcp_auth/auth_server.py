@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from mcp.server.auth.provider import AccessTokenT, AuthorizationCodeT, RefreshTokenT
 from mcp.server.auth.routes import cors_middleware, create_auth_routes
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
+from mcp_auth_framework.cors import build_cors_headers, parse_allowed_origins
 from mcp_auth_framework.rate_limiting import SlidingWindowRateLimiter
 from mcp_auth_framework.responses import (
     backend_connection_error,
@@ -52,34 +53,7 @@ templates = Jinja2Templates(directory=str(templates_dir))
 # Constants for device flow
 DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 
-# CORS allowed origins for OAuth discovery endpoints
-# Parse from comma-separated environment variable, or use empty list to block all origins
-ALLOWED_MCP_ORIGINS = (
-    os.getenv("ALLOWED_MCP_ORIGINS", "").split(",") if os.getenv("ALLOWED_MCP_ORIGINS") else []
-)
-# Remove empty strings and strip whitespace
-ALLOWED_MCP_ORIGINS = [origin.strip() for origin in ALLOWED_MCP_ORIGINS if origin.strip()]
-
-
-def get_cors_origin(request: Request) -> str:
-    """
-    Get CORS origin header value based on request origin.
-
-    Only returns the origin if it's in the allowed list, otherwise returns empty string
-    to deny CORS access.
-
-    Args:
-        request: The incoming request
-
-    Returns:
-        Origin value for Access-Control-Allow-Origin header
-    """
-    request_origin = request.headers.get("origin", "")
-    if request_origin in ALLOWED_MCP_ORIGINS:
-        return request_origin
-    # If no allowed origins configured, deny all CORS (return empty string)
-    # If origin not in allowed list, deny (return empty string)
-    return ""
+ALLOWED_MCP_ORIGINS = parse_allowed_origins()
 
 
 def transform_backend_error_to_oauth(backend_response: dict[str, Any]) -> dict[str, str]:
@@ -1202,11 +1176,7 @@ def create_authorization_server(
                 "code_challenge_methods_supported": ["S256"],
                 "scopes_supported": [auth_settings.mcp_scope],
             },
-            headers={
-                "Access-Control-Allow-Origin": get_cors_origin(request),
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            },
+            headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS),
         )
 
     # Add OAuth metadata routes - insert at beginning to override MCP defaults

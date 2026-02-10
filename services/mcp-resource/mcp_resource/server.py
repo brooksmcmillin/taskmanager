@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp.server import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp_auth_framework.cors import build_cors_headers, parse_allowed_origins
 from mcp_resource_framework.auth import IntrospectionTokenVerifier
 from mcp_resource_framework.middleware import NormalizePathMiddleware
 from mcp_resource_framework.security import guard_tool
@@ -35,34 +36,7 @@ TASKMANAGER_URL = os.environ.get("TASKMANAGER_OAUTH_HOST", "http://localhost:432
 # API key for TaskManager API access (replaces username/password auth)
 API_KEY = os.environ.get("TASKMANAGER_API_KEY")
 
-# CORS allowed origins for OAuth discovery endpoints
-# Parse from comma-separated environment variable, or use empty list to block all origins
-ALLOWED_MCP_ORIGINS = (
-    os.getenv("ALLOWED_MCP_ORIGINS", "").split(",") if os.getenv("ALLOWED_MCP_ORIGINS") else []
-)
-# Remove empty strings and strip whitespace
-ALLOWED_MCP_ORIGINS = [origin.strip() for origin in ALLOWED_MCP_ORIGINS if origin.strip()]
-
-
-def get_cors_origin(request: Request) -> str:
-    """
-    Get CORS origin header value based on request origin.
-
-    Only returns the origin if it's in the allowed list, otherwise returns empty string
-    to deny CORS access.
-
-    Args:
-        request: The incoming request
-
-    Returns:
-        Origin value for Access-Control-Allow-Origin header
-    """
-    request_origin = request.headers.get("origin", "")
-    if request_origin in ALLOWED_MCP_ORIGINS:
-        return request_origin
-    # If no allowed origins configured, deny all CORS (return empty string)
-    # If origin not in allowed list, deny (return empty string)
-    return ""
+ALLOWED_MCP_ORIGINS = parse_allowed_origins()
 
 
 def get_api_client() -> TaskManagerClient:
@@ -178,105 +152,58 @@ def create_resource_server(
             }
         )
 
+    def _build_oauth_metadata(auth_base: str, **extra: Any) -> dict[str, Any]:
+        """Build standard OAuth 2.0 Authorization Server Metadata dict."""
+        metadata: dict[str, Any] = {
+            "issuer": auth_base,
+            "authorization_endpoint": f"{auth_base}/authorize",
+            "token_endpoint": f"{auth_base}/token",
+            "introspection_endpoint": f"{auth_base}/introspect",
+            "registration_endpoint": f"{auth_base}/register",
+            "scopes_supported": DEFAULT_SCOPE,
+            "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code"],
+            "token_endpoint_auth_methods_supported": ["client_secret_post"],
+            "code_challenge_methods_supported": ["S256"],
+        }
+        metadata.update(extra)
+        return metadata
+
     @app.custom_route("/.well-known/openid-configuration", methods=["GET", "OPTIONS"])
     async def openid_configuration(request: Request) -> JSONResponse:
         """OpenID Connect Discovery (aliases to OAuth Authorization Server Metadata)"""
-        # Handle CORS preflight with origin validation
         if request.method == "OPTIONS":
-            return JSONResponse(
-                {},
-                headers={
-                    "Access-Control-Allow-Origin": get_cors_origin(request),
-                    "Access-Control-Allow-Methods": "GET, OPTIONS",
-                    "Access-Control-Allow-Headers": "*",
-                },
-            )
+            return JSONResponse({}, headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS))
 
-        # OpenID Connect discovery - return same metadata as OAuth
         auth_base = str(auth_server_public_url).rstrip("/")
-
-        logger.info("=== OpenID Configuration Request ===")
-        logger.info(f"Request URL: {request.url}")
-        logger.info(f"Host header: {request.headers.get('host')}")
-        logger.info(f"Returning issuer: {auth_base}")
+        logger.info(f"OpenID Configuration request, issuer: {auth_base}")
 
         return JSONResponse(
-            {
-                "issuer": auth_base,
-                "authorization_endpoint": f"{auth_base}/authorize",
-                "token_endpoint": f"{auth_base}/token",
-                "introspection_endpoint": f"{auth_base}/introspect",
-                "registration_endpoint": f"{auth_base}/register",
-                "scopes_supported": DEFAULT_SCOPE,
-                "response_types_supported": ["code"],
-                "grant_types_supported": ["authorization_code"],
-                "token_endpoint_auth_methods_supported": ["client_secret_post"],
-                "code_challenge_methods_supported": ["S256"],
-            },
-            headers={
-                "Access-Control-Allow-Origin": get_cors_origin(request),
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            },
+            _build_oauth_metadata(auth_base),
+            headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS),
         )
 
     @app.custom_route("/.well-known/oauth-authorization-server", methods=["GET", "OPTIONS"])
     async def oauth_authorization_server_metadata(request: Request) -> JSONResponse:
         """OAuth 2.0 Authorization Server Metadata (RFC 8414)"""
-        # Handle CORS preflight with origin validation
         if request.method == "OPTIONS":
-            return JSONResponse(
-                {},
-                headers={
-                    "Access-Control-Allow-Origin": get_cors_origin(request),
-                    "Access-Control-Allow-Methods": "GET, OPTIONS",
-                    "Access-Control-Allow-Headers": "*",
-                },
-            )
+            return JSONResponse({}, headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS))
 
-        # Use public auth server URL for client-facing OAuth metadata
-        # Remove trailing slash for OAuth spec compliance
         auth_base = str(auth_server_public_url).rstrip("/")
-
-        logger.info("=== OAuth Authorization Server Metadata Request ===")
-        logger.info(f"Request URL: {request.url}")
-        logger.info(f"Host header: {request.headers.get('host')}")
-        logger.info(f"X-Forwarded-Proto: {request.headers.get('x-forwarded-proto')}")
-        logger.info(f"X-Forwarded-For: {request.headers.get('x-forwarded-for')}")
-        logger.info(f"Returning auth_base: {auth_base}")
+        logger.info(f"OAuth Authorization Server Metadata request, auth_base: {auth_base}")
 
         return JSONResponse(
-            {
-                "issuer": auth_base,
-                "authorization_endpoint": f"{auth_base}/authorize",
-                "token_endpoint": f"{auth_base}/token",
-                "introspection_endpoint": f"{auth_base}/introspect",
-                "registration_endpoint": f"{auth_base}/register",
-                "scopes_supported": DEFAULT_SCOPE,
-                "response_types_supported": ["code"],
-                "grant_types_supported": ["authorization_code"],
-                "token_endpoint_auth_methods_supported": ["client_secret_post"],
-                "code_challenge_methods_supported": ["S256"],
-            },
-            headers={
-                "Access-Control-Allow-Origin": get_cors_origin(request),
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            },
+            _build_oauth_metadata(auth_base),
+            headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS),
         )
 
     @app.custom_route("/mcp/.well-known/oauth-protected-resource", methods=["GET"])
     async def oauth_protected_resource_metadata(request: Request) -> JSONResponse:
         """OAuth 2.0 Protected Resource Metadata (RFC 9908)"""
-        logger.info("=== OAuth Protected Resource Metadata Request (MCP-specific) ===")
-        logger.info(f"Request URL: {request.url}")
-        logger.info(f"Host header: {request.headers.get('host')}")
-        logger.info(f"Returning resource: {server_url}")
-        logger.info(f"Returning auth_servers: {auth_server_public_url}")
-
-        # Remove trailing slashes for OAuth spec compliance
         resource_url = str(server_url).rstrip("/")
         auth_server_url_no_slash = str(auth_server_public_url).rstrip("/")
+
+        logger.info(f"OAuth Protected Resource Metadata request, resource: {resource_url}")
 
         return JSONResponse(
             {
@@ -293,26 +220,10 @@ def create_resource_server(
         request: Request,
     ) -> JSONResponse:
         """Resource-specific OAuth 2.0 Authorization Server Metadata for /mcp resource"""
-        # Use public auth server URL for client-facing OAuth metadata
-        # Remove trailing slash for OAuth spec compliance
         auth_base = str(auth_server_public_url).rstrip("/")
         resource_url = str(server_url).rstrip("/")
 
-        return JSONResponse(
-            {
-                "issuer": auth_base,
-                "authorization_endpoint": f"{auth_base}/authorize",
-                "token_endpoint": f"{auth_base}/token",
-                "introspection_endpoint": f"{auth_base}/introspect",
-                "registration_endpoint": f"{auth_base}/register",
-                "scopes_supported": DEFAULT_SCOPE,
-                "response_types_supported": ["code"],
-                "grant_types_supported": ["authorization_code"],
-                "token_endpoint_auth_methods_supported": ["client_secret_post"],
-                "code_challenge_methods_supported": ["S256"],
-                "resource": resource_url,  # Resource-specific binding
-            }
-        )
+        return JSONResponse(_build_oauth_metadata(auth_base, resource=resource_url))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
