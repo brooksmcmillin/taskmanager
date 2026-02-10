@@ -482,6 +482,76 @@ class TestTodos:
         assert call_args.kwargs["params"]["category"] == "Work"
 
 
+class TestDependencies:
+    """Test dependency management methods."""
+
+    def test_get_dependencies(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test getting dependencies for a todo."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [
+                {
+                    "id": 2,
+                    "title": "Blocking Task",
+                    "status": "pending",
+                    "priority": "high",
+                },
+            ],
+            "meta": {"count": 1},
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.get_dependencies(1)
+
+        assert result.success is True
+        mock_session.get.assert_called_once()
+        call_args = mock_session.get.call_args
+        assert "/todos/1/dependencies" in call_args.args[0]
+
+    def test_add_dependency(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test adding a dependency to a todo."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 2, "title": "Blocking Task", "status": "pending"},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.add_dependency(1, 2)
+
+        assert result.success is True
+        mock_session.post.assert_called_once()
+        call_args = mock_session.post.call_args
+        assert "/todos/1/dependencies" in call_args.args[0]
+        assert call_args.kwargs["json"]["dependency_id"] == 2
+
+    def test_remove_dependency(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test removing a dependency from a todo."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"deleted": True, "dependency_id": 2},
+        }
+        mock_session.delete.return_value = mock_response
+
+        result = client.remove_dependency(1, 2)
+
+        assert result.success is True
+        mock_session.delete.assert_called_once()
+        call_args = mock_session.delete.call_args
+        assert "/todos/1/dependencies/2" in call_args.args[0]
+
+
 class TestCategories:
     """Test category methods."""
 
