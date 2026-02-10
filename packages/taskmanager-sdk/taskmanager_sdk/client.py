@@ -81,26 +81,22 @@ class TaskManagerClient:
             headers["Authorization"] = f"Bearer {self.access_token}"
 
         try:
-            if method.upper() == "GET":
-                response = self.session.get(
-                    url, params=params, cookies=self.cookies, headers=headers
-                )
-            elif method.upper() == "POST":
-                response = self.session.post(
-                    url, json=data, params=params, cookies=self.cookies, headers=headers
-                )
-            elif method.upper() == "PUT":
-                response = self.session.put(
-                    url, json=data, params=params, cookies=self.cookies, headers=headers
-                )
-            elif method.upper() == "DELETE":
-                response = self.session.delete(
-                    url, params=params, cookies=self.cookies, headers=headers
-                )
-            else:
+            method_name = method.upper()
+            request_func = getattr(self.session, method_name.lower(), None)
+            if request_func is None:
                 return ApiResponse(
                     success=False, error=f"Unsupported HTTP method: {method}"
                 )
+
+            kwargs: dict[str, Any] = {
+                "params": params,
+                "cookies": self.cookies,
+                "headers": headers,
+            }
+            if method_name in ("POST", "PUT", "PATCH"):
+                kwargs["json"] = data
+
+            response = request_func(url, **kwargs)
 
             # Handle cookie authentication
             if "set-cookie" in response.headers:

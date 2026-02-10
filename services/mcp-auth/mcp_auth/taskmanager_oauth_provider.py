@@ -393,7 +393,7 @@ class TaskManagerOAuthProvider(
         self.clients[client_info.client_id] = client_info
         logger.info(f"Registered OAuth client: {client_info.client_id}")
 
-        # TODO: Optionally register with taskmanager if admin session available
+        # See #185 for auto-registration with taskmanager backend
         if self.settings.admin_session_cookie:
             await self._register_with_taskmanager(client_info)
 
@@ -405,8 +405,7 @@ class TaskManagerOAuthProvider(
         taskmanager system. You'll need to implement the admin authentication
         part based on your needs.
         """
-        # TODO: Implement client registration with taskmanager
-        # This would POST to /api/oauth/clients with admin credentials
+        # Not yet implemented — see #185
         logger.info("Auto-registration with taskmanager not yet implemented")
         pass
 
@@ -501,7 +500,7 @@ class TaskManagerOAuthProvider(
             self.auth_codes[mcp_code] = auth_code
 
             # Store the taskmanager access token for later use
-            # TODO: You might want to validate/introspect the token here
+            # Token validation/introspection could be added here — see #186
             self.tokens[f"tm_{access_token}"] = AccessToken(
                 token=f"tm_{access_token}",
                 client_id=state_data["client_id"] or "",
