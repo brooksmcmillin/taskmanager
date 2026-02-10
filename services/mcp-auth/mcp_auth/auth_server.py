@@ -1198,12 +1198,9 @@ def create_authorization_server(
                 "token_endpoint_auth_methods_supported": [
                     "client_secret_post",
                     "none",
-                    "private_key_jwt",  # For CIMD confidential clients
                 ],
                 "code_challenge_methods_supported": ["S256"],
                 "scopes_supported": [auth_settings.mcp_scope],
-                # CIMD support (draft-ietf-oauth-client-id-metadata-document)
-                "client_id_metadata_document_supported": True,
             },
             headers={
                 "Access-Control-Allow-Origin": get_cors_origin(request),

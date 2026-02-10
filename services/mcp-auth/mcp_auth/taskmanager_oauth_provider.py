@@ -178,32 +178,16 @@ class TaskManagerOAuthProvider(
         Get OAuth client information.
 
         This method supports three types of client identification:
-        1. CIMD (Client ID Metadata Document) - URL-based client_ids
-        2. Local cache and registered clients
-        3. Backend API lookup
+        1. Local cache and registered clients
+        2. Backend API lookup
+        3. CIMD (Client ID Metadata Document) - URL-based client_ids (fallback)
 
         For CIMD clients, the client_id is a URL pointing to a JSON metadata document.
-        This is checked first to support the draft-ietf-oauth-client-id-metadata-document spec.
+        Registered/known clients are checked first so pre-registered clients (even with
+        URL-based client_ids) take priority over CIMD discovery.
         """
         logger.info("=== GET CLIENT ===")
         logger.info(f"Looking for client: {client_id}")
-
-        # Check if this is a CIMD (URL-based) client_id
-        if self.cimd_fetcher.is_cimd_client_id(client_id):
-            logger.info(f"Detected CIMD client_id (URL-based): {client_id}")
-            try:
-                client_info = await self.cimd_fetcher.get_client_info(client_id)
-                if client_info:
-                    # Cache the CIMD client for this session
-                    self.clients[client_id] = client_info
-                    logger.info(f"Successfully loaded CIMD client: {client_id}")
-                    logger.info(
-                        f"CIMD client auth method: {client_info.token_endpoint_auth_method}"
-                    )
-                    return client_info
-            except CIMDError as e:
-                logger.error(f"Failed to fetch CIMD metadata for {client_id}: {e}")
-                return None
 
         logger.info(f"Local cache clients: {list(self.clients.keys())}")
 
@@ -268,6 +252,22 @@ class TaskManagerOAuthProvider(
             }
             logger.info(f"Successfully loaded and cached client {client_id} from backend")
             return client_info
+
+        # Fall back to CIMD discovery for unknown URL-based client_ids
+        if self.cimd_fetcher.is_cimd_client_id(client_id):
+            logger.info(f"Detected CIMD client_id (URL-based): {client_id}")
+            try:
+                client_info = await self.cimd_fetcher.get_client_info(client_id)
+                if client_info:
+                    self.clients[client_id] = client_info
+                    logger.info(f"Successfully loaded CIMD client: {client_id}")
+                    logger.info(
+                        f"CIMD client auth method: {client_info.token_endpoint_auth_method}"
+                    )
+                    return client_info
+            except CIMDError as e:
+                logger.error(f"Failed to fetch CIMD metadata for {client_id}: {e}")
+                return None
 
         logger.error(f"Client {client_id} not found in cache, registered_clients, or backend API")
         return None

@@ -345,10 +345,10 @@ class TestCIMDClientInfo:
 
 
 class TestOAuthMetadataWithCIMD:
-    """Test that OAuth metadata advertises CIMD support."""
+    """Test that OAuth metadata does not advertise CIMD support (disabled for now)."""
 
-    def test_metadata_includes_cimd_support(self) -> None:
-        """Test that OAuth metadata advertises CIMD support."""
+    def test_metadata_does_not_advertise_cimd(self) -> None:
+        """Test that OAuth metadata does not advertise CIMD support."""
         with (
             patch("mcp_auth.auth_server.api_client") as mock_api_client,
             patch.dict(
@@ -387,11 +387,11 @@ class TestOAuthMetadataWithCIMD:
             assert response.status_code == 200
             metadata = response.json()
 
-            # Verify CIMD support is advertised
-            assert metadata.get("client_id_metadata_document_supported") is True
-
-            # Verify private_key_jwt is supported for CIMD confidential clients
-            assert "private_key_jwt" in metadata.get("token_endpoint_auth_methods_supported", [])
+            # CIMD is not advertised (disabled until flow issues are resolved)
+            assert "client_id_metadata_document_supported" not in metadata
+            assert "private_key_jwt" not in metadata.get(
+                "token_endpoint_auth_methods_supported", []
+            )
 
 
 class TestCIMDIntegrationWithProvider:
@@ -399,7 +399,7 @@ class TestCIMDIntegrationWithProvider:
 
     @pytest.mark.asyncio
     async def test_provider_get_client_uses_cimd_for_url_client_id(self) -> None:
-        """Test that the provider uses CIMD fetcher for URL-based client_ids."""
+        """Test that the provider falls back to CIMD for unknown URL-based client_ids."""
         from mcp_auth.taskmanager_oauth_provider import (
             TaskManagerAuthSettings,
             TaskManagerOAuthProvider,
@@ -429,7 +429,7 @@ class TestCIMDIntegrationWithProvider:
             cimd_fetcher=mock_cimd_fetcher,
         )
 
-        # Get client using CIMD URL
+        # URL client_id not in registered_clients should fall back to CIMD
         client = await provider.get_client("https://example.com/oauth/metadata.json")
 
         assert client is not None
@@ -440,6 +440,48 @@ class TestCIMDIntegrationWithProvider:
         mock_cimd_fetcher.get_client_info.assert_called_with(
             "https://example.com/oauth/metadata.json"
         )
+
+    @pytest.mark.asyncio
+    async def test_provider_prefers_registered_client_over_cimd(self) -> None:
+        """Test that pre-registered clients take priority over CIMD discovery."""
+        from mcp_auth.taskmanager_oauth_provider import (
+            TaskManagerAuthSettings,
+            TaskManagerOAuthProvider,
+        )
+
+        settings = TaskManagerAuthSettings(
+            base_url="http://localhost:4321",
+            client_id="server-client",
+            client_secret="server-secret",  # pragma: allowlist secret
+        )
+
+        mock_cimd_fetcher = MagicMock()
+        mock_cimd_fetcher.is_cimd_client_id.return_value = True
+
+        provider = TaskManagerOAuthProvider(
+            settings=settings,
+            server_url="http://localhost:9000",
+            cimd_fetcher=mock_cimd_fetcher,
+        )
+
+        # Pre-register a client with a URL-based client_id
+        url_client_id = "https://claude.ai/oauth/mcp-oauth-client-metadata"
+        provider.registered_clients[url_client_id] = {
+            "client_id": url_client_id,
+            "client_secret": None,
+            "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
+            "response_types": ["code"],
+            "grant_types": ["authorization_code"],
+            "token_endpoint_auth_method": "none",
+            "scope": "read",
+        }
+
+        client = await provider.get_client(url_client_id)
+
+        assert client is not None
+        assert client.client_id == url_client_id
+        # CIMD should NOT have been consulted
+        mock_cimd_fetcher.get_client_info.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_provider_falls_back_for_traditional_client_id(self) -> None:
@@ -481,5 +523,6 @@ class TestCIMDIntegrationWithProvider:
 
         assert client is not None
         assert client.client_id == "traditional-client"
-        mock_cimd_fetcher.is_cimd_client_id.assert_called_with("traditional-client")
+        # CIMD is only checked as a fallback, and since the client was found
+        # in registered_clients, CIMD should not have been consulted
         mock_cimd_fetcher.get_client_info.assert_not_called()
