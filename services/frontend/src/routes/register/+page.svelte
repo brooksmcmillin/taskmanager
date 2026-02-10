@@ -150,7 +150,6 @@
 			});
 
 			const data = await response.json();
-			console.log('Registration response:', { status: response.status, data });
 
 			if (response.ok) {
 				// Redirect immediately to login page

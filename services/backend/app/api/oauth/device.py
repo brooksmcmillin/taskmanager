@@ -65,7 +65,7 @@ async def device_authorization(
     await db.commit()
 
     # Build verification URI
-    base_url = "https://todo.brooksmcmillin.com"  # TODO: Get from settings
+    base_url = settings.frontend_url
     verification_uri = f"{base_url}/oauth/device"
 
     return {

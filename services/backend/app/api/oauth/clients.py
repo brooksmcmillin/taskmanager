@@ -138,6 +138,43 @@ async def get_client_info(
     }
 
 
+async def _create_oauth_client(
+    db: DbSession,
+    request: ClientCreate,
+    user_id: int | None = None,
+) -> dict:
+    """Create an OAuth client and return the response dict."""
+    client_id = generate_token(16)
+
+    if request.is_public:
+        client_secret = None
+        client_secret_hash = None
+    else:
+        client_secret = request.client_secret or generate_token(32)
+        client_secret_hash = hash_password(client_secret)
+
+    client = OAuthClient(
+        user_id=user_id,
+        client_id=client_id,
+        client_secret_hash=client_secret_hash,
+        name=request.name,
+        redirect_uris=json.dumps(request.redirect_uris),
+        grant_types=json.dumps(request.grant_types),
+        scopes=json.dumps(request.scopes),
+        is_public=request.is_public,
+    )
+    db.add(client)
+    await db.flush()
+
+    return {
+        "data": ClientCreateResponse(
+            client_id=client_id,
+            client_secret=client_secret,
+            name=request.name,
+        )
+    }
+
+
 @router.post("/system", status_code=201)
 async def create_system_client(
     request: ClientCreate,
@@ -153,36 +190,7 @@ async def create_system_client(
 
     System clients have user_id set to NULL since they're not owned by a specific user.
     """
-    client_id = generate_token(16)
-
-    # Generate or use provided secret
-    if request.is_public:
-        client_secret = None
-        client_secret_hash = None
-    else:
-        client_secret = request.client_secret or generate_token(32)
-        client_secret_hash = hash_password(client_secret)
-
-    client = OAuthClient(
-        user_id=None,  # System clients don't have a user_id
-        client_id=client_id,
-        client_secret_hash=client_secret_hash,
-        name=request.name,
-        redirect_uris=json.dumps(request.redirect_uris),
-        grant_types=json.dumps(request.grant_types),
-        scopes=json.dumps(request.scopes),
-        is_public=request.is_public,
-    )
-    db.add(client)
-    await db.flush()
-
-    return {
-        "data": ClientCreateResponse(
-            client_id=client_id,
-            client_secret=client_secret,
-            name=request.name,
-        )
-    }
+    return await _create_oauth_client(db, request, user_id=None)
 
 
 @router.post("", status_code=201)
@@ -192,36 +200,7 @@ async def create_client(
     db: DbSession,
 ) -> dict:
     """Create a new OAuth client."""
-    client_id = generate_token(16)
-
-    # Generate or use provided secret
-    if request.is_public:
-        client_secret = None
-        client_secret_hash = None
-    else:
-        client_secret = request.client_secret or generate_token(32)
-        client_secret_hash = hash_password(client_secret)
-
-    client = OAuthClient(
-        user_id=user.id,
-        client_id=client_id,
-        client_secret_hash=client_secret_hash,
-        name=request.name,
-        redirect_uris=json.dumps(request.redirect_uris),
-        grant_types=json.dumps(request.grant_types),
-        scopes=json.dumps(request.scopes),
-        is_public=request.is_public,
-    )
-    db.add(client)
-    await db.flush()
-
-    return {
-        "data": ClientCreateResponse(
-            client_id=client_id,
-            client_secret=client_secret,
-            name=request.name,
-        )
-    }
+    return await _create_oauth_client(db, request, user_id=user.id)
 
 
 @router.put("/{client_id}")
