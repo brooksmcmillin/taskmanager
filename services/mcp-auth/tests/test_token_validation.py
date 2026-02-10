@@ -179,7 +179,7 @@ class TestOAuthCallbackTokenValidation:
         mock_validate.assert_called_once_with("tm-access-token-abc")
 
         # Check the stored token uses validated metadata
-        stored_token = provider.tokens.get("tm_tm-access-token-abc")
+        stored_token = provider.tokens.get("tm-access-token-abc")
         assert stored_token is not None
         assert stored_token.scopes == ["read", "write"]
         # Expiry should be based on validated expires_in (7200), not the default
@@ -233,7 +233,7 @@ class TestOAuthCallbackTokenValidation:
         ):
             await provider.handle_oauth_callback(mock_request)
 
-        stored_token = provider.tokens.get("tm_tm-access-token-def")
+        stored_token = provider.tokens.get("tm-access-token-def")
         assert stored_token is not None
         # Should fall back to default MCP scope
         assert stored_token.scopes == ["read"]
@@ -283,7 +283,7 @@ class TestOAuthCallbackTokenValidation:
         ):
             await provider.handle_oauth_callback(mock_request)
 
-        stored_token = provider.tokens.get("tm_tm-access-token-ghi")
+        stored_token = provider.tokens.get("tm-access-token-ghi")
         assert stored_token is not None
         # Should fall back to default MCP TTL
         assert stored_token.expires_at is not None
@@ -374,6 +374,6 @@ class TestOAuthCallbackTokenValidation:
         ):
             await provider.handle_oauth_callback(mock_request)
 
-        stored_token = provider.tokens.get("tm_tm-access-token-list")
+        stored_token = provider.tokens.get("tm-access-token-list")
         assert stored_token is not None
         assert stored_token.scopes == ["read", "admin"]

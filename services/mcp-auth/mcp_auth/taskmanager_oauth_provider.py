@@ -510,7 +510,7 @@ class TaskManagerOAuthProvider(
                 try:
                     validated_scopes = json.loads(validated_scopes)
                 except (json.JSONDecodeError, TypeError):
-                    validated_scopes = [self.settings.mcp_scope]
+                    validated_scopes = None
             if not isinstance(validated_scopes, list):
                 validated_scopes = [self.settings.mcp_scope]
 
@@ -522,8 +522,8 @@ class TaskManagerOAuthProvider(
                 expires_at = int(time.time()) + TokenConfig.MCP_ACCESS_TOKEN_TTL_SECONDS
 
             # Store the validated taskmanager access token
-            self.tokens[f"tm_{access_token}"] = AccessToken(
-                token=f"tm_{access_token}",
+            self.tokens[access_token] = AccessToken(
+                token=access_token,
                 client_id=state_data["client_id"] or "",
                 scopes=validated_scopes,
                 expires_at=expires_at,
