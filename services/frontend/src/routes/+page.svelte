@@ -9,9 +9,10 @@
 	import DragDropCalendar from '$lib/components/DragDropCalendar.svelte';
 	import ProjectFilter from '$lib/components/ProjectFilter.svelte';
 	import DueDateFilter from '$lib/components/DueDateFilter.svelte';
-	import type { DueDateOption, DueDateFilterValue } from '$lib/components/DueDateFilter.svelte';
+	import { computeDueDateFilters } from '$lib/utils/dueDateFilter';
+	import type { DueDateOption, DueDateFilterValue } from '$lib/utils/dueDateFilter';
 	import { getPriorityColor } from '$lib/utils/priority';
-	import { formatDateDisplay, formatDateForInput, getStartOfWeek } from '$lib/utils/dates';
+	import { formatDateDisplay } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
 	import type { Todo } from '$lib/types';
 
@@ -26,34 +27,6 @@
 		: null;
 
 	$: selectedDueDate = ($page.url.searchParams.get('due_date') as DueDateOption) || 'all';
-
-	function computeDueDateFilters(option: DueDateOption): Record<string, string | boolean> {
-		const today = new Date();
-		const todayStr = formatDateForInput(today);
-
-		switch (option) {
-			case 'today':
-				return { start_date: todayStr, end_date: todayStr };
-			case 'this_week': {
-				const weekStart = getStartOfWeek(today);
-				const weekEnd = new Date(weekStart);
-				weekEnd.setDate(weekEnd.getDate() + 6);
-				return {
-					start_date: formatDateForInput(weekStart),
-					end_date: formatDateForInput(weekEnd)
-				};
-			}
-			case 'next_two_weeks': {
-				const twoWeeksEnd = new Date(today);
-				twoWeeksEnd.setDate(twoWeeksEnd.getDate() + 14);
-				return { start_date: todayStr, end_date: formatDateForInput(twoWeeksEnd) };
-			}
-			case 'no_due_date':
-				return { no_due_date: true };
-			default:
-				return {};
-		}
-	}
 
 	function getProjectId(projectName: string): string {
 		return `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
@@ -150,12 +123,16 @@
 		});
 	}
 
-	// Reload todos when filter changes (only in browser, after initial load)
-	$: if (browser && initialLoadComplete && selectedProjectId !== undefined && selectedDueDate !== undefined) {
+	// Reload todos when filters change (only in browser, after initial load)
+	// selectedProjectId and selectedDueDate are reactive via URL params, triggering this block
+	$: if (browser && initialLoadComplete) {
+		// Reference both reactive values to establish dependencies
+		const _projectId = selectedProjectId;
+		const _dueDate = selectedDueDate;
 		todos.load({
 			status: 'pending',
-			...(selectedProjectId && { project_id: selectedProjectId }),
-			...computeDueDateFilters(selectedDueDate)
+			...(_projectId ? { project_id: _projectId } : {}),
+			...computeDueDateFilters(_dueDate)
 		});
 	}
 

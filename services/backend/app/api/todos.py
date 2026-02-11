@@ -487,12 +487,11 @@ async def list_todos(
 
     if no_due_date:
         query = query.where(Todo.due_date.is_(None))
-
-    if start_date:
-        query = query.where(Todo.due_date >= start_date)
-
-    if end_date:
-        query = query.where(Todo.due_date <= end_date)
+    else:
+        if start_date:
+            query = query.where(Todo.due_date >= start_date)
+        if end_date:
+            query = query.where(Todo.due_date <= end_date)
 
     # Apply ordering
     if order_by == "position":
