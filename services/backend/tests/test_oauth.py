@@ -275,6 +275,76 @@ async def test_authorization_code_grant_invalid_pkce(
 
 
 @pytest.mark.asyncio
+async def test_authorization_code_grant_wrong_client(
+    client: AsyncClient, oauth_client, public_oauth_client, test_user, db_session
+):
+    """Test auth code exchange fails when code belongs to a different client."""
+    auth_code = AuthorizationCode(
+        code="other-client-code",
+        client_id=public_oauth_client.client_id,  # belongs to public client
+        user_id=test_user.id,
+        redirect_uri="http://localhost:3000/callback",
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+    )
+    db_session.add(auth_code)
+    await db_session.commit()
+
+    # Try to exchange using oauth_client (confidential), not the public client
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+            "code": "other-client-code",
+            "redirect_uri": "http://localhost:3000/callback",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "OAUTH_004"
+
+
+@pytest.mark.asyncio
+async def test_authorization_code_grant_with_pkce_plain(
+    client: AsyncClient, public_oauth_client, test_user, db_session
+):
+    """Test authorization code exchange with PKCE plain method."""
+    code_verifier = "plain-verifier-value"
+    code_challenge = code_verifier  # plain method: challenge == verifier
+
+    auth_code = AuthorizationCode(
+        code="test-pkce-plain-code",
+        client_id=public_oauth_client.client_id,
+        user_id=test_user.id,
+        redirect_uri="http://localhost:3000/callback",
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        code_challenge=code_challenge,
+        code_challenge_method="plain",
+    )
+    db_session.add(auth_code)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": public_oauth_client.client_id,
+            "code": "test-pkce-plain-code",
+            "redirect_uri": "http://localhost:3000/callback",
+            "code_verifier": code_verifier,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["scope"] == "read"
+
+
+@pytest.mark.asyncio
 async def test_authorization_code_grant_missing_code(client: AsyncClient, oauth_client):
     """Test token endpoint without authorization code."""
     response = await client.post(
@@ -419,6 +489,38 @@ async def test_refresh_token_grant_success(
         select(AccessToken).where(AccessToken.token == "old-access-token")
     )
     assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_grant_wrong_client(
+    client: AsyncClient, oauth_client, public_oauth_client, test_user, db_session
+):
+    """Test refresh token exchange fails when token belongs to a different client."""
+    old_token = AccessToken(
+        token="wrong-client-access",
+        client_id=public_oauth_client.client_id,  # belongs to public client
+        user_id=test_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) - timedelta(hours=1),
+        refresh_token="wrong-client-refresh",  # pragma: allowlist secret
+        refresh_token_expires_at=datetime.now(UTC) + timedelta(days=30),
+    )
+    db_session.add(old_token)
+    await db_session.commit()
+
+    # Try to refresh using oauth_client (confidential), not the public client
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+            "refresh_token": "wrong-client-refresh",  # pragma: allowlist secret
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "OAUTH_004"
 
 
 @pytest.mark.asyncio
@@ -737,6 +839,86 @@ async def test_device_code_grant_slow_down(
 
 
 @pytest.mark.asyncio
+async def test_device_code_grant_missing_device_code(client: AsyncClient, oauth_client):
+    """Test device code grant without device_code parameter."""
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "OAUTH_004"
+
+
+@pytest.mark.asyncio
+async def test_device_code_grant_wrong_client(
+    client: AsyncClient, oauth_client, public_oauth_client, test_user, db_session
+):
+    """Test device code grant fails when code belongs to a different client."""
+    device_code_entry = DeviceCode(
+        device_code="other-client-device-code",
+        user_code="XYZ789",
+        client_id=public_oauth_client.client_id,  # belongs to public client
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        interval=5,
+        status="approved",
+        user_id=test_user.id,
+    )
+    db_session.add(device_code_entry)
+    await db_session.commit()
+
+    # Try with oauth_client (confidential), not the public client
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+            "device_code": "other-client-device-code",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "OAUTH_004"
+
+
+@pytest.mark.asyncio
+async def test_device_code_grant_unexpected_status(
+    client: AsyncClient, oauth_client, db_session
+):
+    """Test device code grant with an unexpected status value."""
+    device_code_entry = DeviceCode(
+        device_code="weird-status-device-code",
+        user_code="QRS456",
+        client_id=oauth_client.client_id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        interval=5,
+        status="unknown_status",
+    )
+    db_session.add(device_code_entry)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+            "device_code": "weird-status-device-code",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "OAUTH_004"
+
+
+@pytest.mark.asyncio
 async def test_device_code_grant_invalid_code(client: AsyncClient, oauth_client):
     """Test device code grant with invalid device code."""
     response = await client.post(
@@ -756,6 +938,67 @@ async def test_device_code_grant_invalid_code(client: AsyncClient, oauth_client)
 # =============================================================================
 # Token Endpoint - Client Validation
 # =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_token_endpoint_inactive_client(client: AsyncClient, db_session):
+    """Test token endpoint rejects an existing but inactive client."""
+    inactive = OAuthClient(
+        client_id="inactive-client-id",
+        client_secret_hash=hash_password(TEST_CLIENT_SECRET),
+        name="Inactive Client",
+        redirect_uris=json.dumps(["http://localhost:3000/callback"]),
+        grant_types=json.dumps(["client_credentials"]),
+        scopes=json.dumps(["read"]),
+        is_public=False,
+        is_active=False,
+    )
+    db_session.add(inactive)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": "inactive-client-id",
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "OAUTH_001"
+
+
+@pytest.mark.asyncio
+async def test_token_endpoint_public_client_skips_secret(
+    client: AsyncClient, public_oauth_client, test_user, db_session
+):
+    """Test that public clients can use token endpoint without a client secret."""
+    auth_code = AuthorizationCode(
+        code="public-client-code",
+        client_id=public_oauth_client.client_id,
+        user_id=test_user.id,
+        redirect_uri="http://localhost:3000/callback",
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+    )
+    db_session.add(auth_code)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": public_oauth_client.client_id,
+            "code": "public-client-code",
+            "redirect_uri": "http://localhost:3000/callback",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["token_type"] == "Bearer"
 
 
 @pytest.mark.asyncio
@@ -861,6 +1104,18 @@ async def test_verify_token_success(
 async def test_verify_token_missing_authorization(client: AsyncClient):
     """Test token verification without Authorization header."""
     response = await client.get("/api/oauth/verify")
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "AUTH_002"
+
+
+@pytest.mark.asyncio
+async def test_verify_token_non_bearer_auth(client: AsyncClient):
+    """Test token verification with non-Bearer authorization header."""
+    response = await client.get(
+        "/api/oauth/verify",
+        headers={"Authorization": "Basic dXNlcjpwYXNz"},
+    )
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "AUTH_002"
