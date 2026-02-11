@@ -438,6 +438,7 @@ async def list_todos(
     category: str | None = Query(None),
     start_date: date | None = Query(None),  # noqa: B008
     end_date: date | None = Query(None),  # noqa: B008
+    no_due_date: bool = Query(False),
     parent_id: int | None = Query(None),
     include_subtasks: bool = Query(False),
     order_by: str | None = Query(None, description="Order by: position or due_date"),
@@ -484,11 +485,13 @@ async def list_todos(
     if category:
         query = query.where(Project.name == category)
 
-    if start_date:
-        query = query.where(Todo.due_date >= start_date)
-
-    if end_date:
-        query = query.where(Todo.due_date <= end_date)
+    if no_due_date:
+        query = query.where(Todo.due_date.is_(None))
+    else:
+        if start_date:
+            query = query.where(Todo.due_date >= start_date)
+        if end_date:
+            query = query.where(Todo.due_date <= end_date)
 
     # Apply ordering
     if order_by == "position":
