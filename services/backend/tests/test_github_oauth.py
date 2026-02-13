@@ -256,7 +256,7 @@ async def test_github_callback_creates_new_user(
     )
     user = result.scalar_one_or_none()
     assert user is not None
-    assert user.username == "githubuser"
+    assert user.email == "github@example.com"
 
     # Verify OAuth provider was linked
     result = await db_session.execute(
@@ -326,7 +326,6 @@ async def test_github_callback_existing_github_user_login(
     """Test callback logs in existing user with linked GitHub account."""
     # First, create a user with linked GitHub
     user = User(
-        username="linkeduser",
         email="linked@example.com",
         password_hash="$2b$12$test",  # pragma: allowlist secret
     )
@@ -510,63 +509,6 @@ async def test_disconnect_github_not_connected(authenticated_client: AsyncClient
     response = await authenticated_client.delete("/api/auth/github/disconnect")
 
     assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_unique_username_generation(
-    client: AsyncClient, db_session: AsyncSession
-):
-    """Test that unique usernames are generated when GitHub username is taken."""
-    # Create a user with the same username as we'll get from GitHub
-    existing_user = User(
-        username="duplicateuser",
-        email="existing@example.com",
-        password_hash="$2b$12$test",  # pragma: allowlist secret
-    )
-    db_session.add(existing_user)
-    await db_session.commit()
-
-    mock_github_user = GitHubUser(
-        id="55555",
-        login="duplicateuser",  # Same username as existing user
-        email="new@example.com",
-        avatar_url=None,
-        name=None,
-    )
-
-    from app.api.oauth import github as github_module
-
-    _create_valid_state(github_module, "dup_state", "/")
-
-    with (
-        patch("app.api.oauth.github.is_github_configured", return_value=True),
-        patch(
-            "app.api.oauth.github.exchange_code_for_token",
-            new_callable=AsyncMock,
-            return_value="mock_access_token",
-        ),
-        patch(
-            "app.api.oauth.github.get_user_info",
-            new_callable=AsyncMock,
-            return_value=mock_github_user,
-        ),
-    ):
-        response = await client.get(
-            "/api/auth/github/callback",
-            params={"code": "test_code", "state": "dup_state"},
-            follow_redirects=False,
-        )
-
-        assert response.status_code == 302
-
-    # Verify new user was created with a different username
-    result = await db_session.execute(
-        select(User).where(User.email == "new@example.com")
-    )
-    new_user = result.scalar_one_or_none()
-    assert new_user is not None
-    assert new_user.username != "duplicateuser"
-    assert new_user.username.startswith("duplicateuser")
 
 
 # =============================================================================

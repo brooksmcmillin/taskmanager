@@ -1,6 +1,5 @@
 """Authentication API routes."""
 
-import re
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Request, Response
@@ -32,17 +31,9 @@ account_update_rate_limiter = RateLimiter(max_attempts=5, window_ms=300000)
 class RegisterRequest(BaseModel):
     """User registration request."""
 
-    username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(..., min_length=8)
     registration_code: str | None = Field(None, min_length=1)
-
-    @field_validator("username")
-    @classmethod
-    def username_valid(cls, v: str) -> str:
-        if not re.match(r"^[a-zA-Z][a-zA-Z0-9_-]*$", v):
-            raise ValueError("Username must start with a letter")
-        return v
 
     @field_validator("password")
     @classmethod
@@ -58,7 +49,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     """Login request."""
 
-    username: str
+    email: str
     password: str
 
 
@@ -66,7 +57,6 @@ class UserResponse(BaseModel):
     """User data in response."""
 
     id: int
-    username: str
     email: str
     is_admin: bool = False
 
@@ -107,21 +97,16 @@ async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
     from app.api.registration_codes import validate_and_use_registration_code
 
     # Atomically validate and use registration code if required
-    # IMPORTANT: This MUST happen first before username/email checks to:
+    # IMPORTANT: This MUST happen first before email check to:
     # 1. Prevent race conditions via SELECT FOR UPDATE row locking
     # 2. Prevent using registration codes to enumerate existing accounts
-    # Note: If username/email check fails after this, the code usage is still
+    # Note: If email check fails after this, the code usage is still
     # incremented. This is intentional to prevent enumeration attacks.
     if settings.registration_code_required:
         if not request.registration_code:
             raise errors.validation("Registration code is required")
         # Lock the registration code row and atomically check + increment usage
         await validate_and_use_registration_code(db, request.registration_code)
-
-    # Check if username exists
-    result = await db.execute(select(User).where(User.username == request.username))
-    if result.scalar_one_or_none():
-        raise errors.username_exists()
 
     # Check if email exists
     result = await db.execute(select(User).where(User.email == request.email))
@@ -130,7 +115,6 @@ async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
 
     # Create user
     user = User(
-        username=request.username,
         email=request.email,
         password_hash=hash_password(request.password),
     )
@@ -139,9 +123,7 @@ async def register(request: RegisterRequest, db: DbSession) -> AuthResponse:
 
     return AuthResponse(
         message="Registration successful",
-        user=UserResponse(
-            id=user.id, username=user.username, email=user.email, is_admin=user.is_admin
-        ),
+        user=UserResponse(id=user.id, email=user.email, is_admin=user.is_admin),
     )
 
 
@@ -158,14 +140,14 @@ async def login(
     # Determine content type and parse accordingly
     content_type = request.headers.get("content-type", "")
 
-    username: str
+    email: str
     password: str
     return_to: str | None
 
     if "application/json" in content_type:
         # JSON request
         body = await request.json()
-        username = str(body.get("username", ""))
+        email = str(body.get("email", ""))
         password = str(body.get("password", ""))
         return_to = None
     elif (
@@ -174,29 +156,29 @@ async def login(
     ):
         # Form request
         form = await request.form()
-        username = str(form.get("username", ""))
+        email = str(form.get("email", ""))
         password = str(form.get("password", ""))
         return_to_val = form.get("return_to")
         return_to = str(return_to_val) if return_to_val else None
     else:
         raise errors.invalid_credentials()
 
-    if not username or not password:
+    if not email or not password:
         raise errors.invalid_credentials()
 
-    # Rate limiting by username
-    login_rate_limiter.check(username)
+    # Rate limiting by email
+    login_rate_limiter.check(email)
 
     # Find user
-    result = await db.execute(select(User).where(User.username == username))
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(password, user.password_hash):
-        login_rate_limiter.record(username)
+        login_rate_limiter.record(email)
         raise errors.invalid_credentials()
 
     # Reset rate limit on success
-    login_rate_limiter.reset(username)
+    login_rate_limiter.reset(email)
 
     # Create session
     session = Session(
@@ -238,9 +220,7 @@ async def login(
     # For JSON requests, return user info
     return AuthResponse(
         message="Login successful",
-        user=UserResponse(
-            id=user.id, username=user.username, email=user.email, is_admin=user.is_admin
-        ),
+        user=UserResponse(id=user.id, email=user.email, is_admin=user.is_admin),
     )
 
 
@@ -266,7 +246,6 @@ async def get_session(user: CurrentUser) -> dict:
     return {
         "user": {
             "id": user.id,
-            "username": user.username,
             "email": user.email,
             "is_admin": user.is_admin,
         }
@@ -279,7 +258,6 @@ async def get_me(user: CurrentUser) -> dict:
     return {
         "user": {
             "id": user.id,
-            "username": user.username,
             "email": user.email,
             "is_admin": user.is_admin,
         }
@@ -318,9 +296,7 @@ async def update_email(
 
     return AuthResponse(
         message="Email updated successfully",
-        user=UserResponse(
-            id=user.id, username=user.username, email=user.email, is_admin=user.is_admin
-        ),
+        user=UserResponse(id=user.id, email=user.email, is_admin=user.is_admin),
     )
 
 

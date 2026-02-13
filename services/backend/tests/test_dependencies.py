@@ -27,7 +27,6 @@ from app.models.user import User
 async def test_user(db_session: AsyncSession) -> User:
     """Create a test user."""
     user = User(
-        username="testuser",
         email="test@example.com",
         password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
         is_admin=False,
@@ -42,7 +41,6 @@ async def test_user(db_session: AsyncSession) -> User:
 async def admin_user(db_session: AsyncSession) -> User:
     """Create an admin test user."""
     user = User(
-        username="adminuser",
         email="admin@example.com",
         password_hash=hash_password("AdminPass123!"),  # pragma: allowlist secret
         is_admin=True,
@@ -181,7 +179,7 @@ async def test_get_current_user_success(
     user = await get_current_user(request, db_session)
 
     assert user.id == test_user.id
-    assert user.username == test_user.username
+    assert user.email == test_user.email
 
 
 @pytest.mark.asyncio
@@ -284,7 +282,7 @@ async def test_get_current_user_oauth_success(
     user = await get_current_user_oauth(request, db_session)
 
     assert user.id == test_user.id
-    assert user.username == test_user.username
+    assert user.email == test_user.email
 
 
 @pytest.mark.asyncio

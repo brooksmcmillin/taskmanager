@@ -120,7 +120,6 @@ TEST_USER_PASSWORD = "TestPass123!"  # pragma: allowlist secret
 async def test_user(db_session: AsyncSession) -> User:
     """Create a test user."""
     user = User(
-        username="testuser",
         email="test@example.com",
         password_hash=hash_password(TEST_USER_PASSWORD),
     )
@@ -138,7 +137,7 @@ async def authenticated_client(
     """Create authenticated test client."""
     response = await client.post(
         "/api/auth/login",
-        json={"username": "testuser", "password": TEST_USER_PASSWORD},
+        json={"email": "test@example.com", "password": TEST_USER_PASSWORD},
     )
     assert response.status_code == 200
 

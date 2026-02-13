@@ -233,8 +233,8 @@
 										Copy
 									</button>
 								</div>
-								{#if code.created_by_username}
-									<p class="text-xs text-gray-500 mt-1">Created by: {code.created_by_username}</p>
+								{#if code.created_by_email}
+									<p class="text-xs text-gray-500 mt-1">Created by: {code.created_by_email}</p>
 								{/if}
 							</div>
 							<div class="flex space-x-2">

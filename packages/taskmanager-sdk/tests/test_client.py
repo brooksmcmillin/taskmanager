@@ -58,7 +58,7 @@ class TestAuthentication:
         mock_response.json.return_value = {"success": True, "user": sample_user}
         mock_session.post.return_value = mock_response
 
-        result = client.login("testuser", "password123")
+        result = client.login("test@example.com", "password123")
 
         assert result.success is True
         assert result.data == {"success": True, "user": sample_user}
@@ -73,7 +73,7 @@ class TestAuthentication:
         mock_session.post.return_value = mock_response
 
         with pytest.raises(AuthenticationError):
-            client.login("testuser", "wrongpassword")
+            client.login("test@example.com", "wrongpassword")
 
     def test_register_success(
         self, client: TaskManagerClient, mock_session: Mock
@@ -89,7 +89,7 @@ class TestAuthentication:
         }
         mock_session.post.return_value = mock_response
 
-        result = client.register("newuser", "new@example.com", "password123")
+        result = client.register("new@example.com", "password123")
 
         assert result.success is True
         assert result.data is not None
@@ -124,7 +124,7 @@ class TestAuthentication:
             mock_session_class.return_value = mock_session
             mock_session.post.return_value = mock_response
 
-            client = create_authenticated_client("testuser", "password123")
+            client = create_authenticated_client("test@example.com", "password123")
             assert isinstance(client, TaskManagerClient)
 
 
@@ -801,7 +801,7 @@ class TestErrorHandling:
         mock_response.json.return_value = {"success": True}
         mock_session.post.return_value = mock_response
 
-        result = client.login("testuser", "password123")
+        result = client.login("test@example.com", "password123")
 
         assert result.success is True
         assert "session" in client.cookies

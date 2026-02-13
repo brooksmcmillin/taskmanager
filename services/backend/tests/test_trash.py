@@ -154,7 +154,6 @@ async def test_restore_todo_wrong_user(
     from app.core.security import hash_password
 
     other_user = User(
-        username="otheruser",
         email="other@example.com",
         password_hash=hash_password("OtherPass123!"),  # pragma: allowlist secret
     )
@@ -165,7 +164,7 @@ async def test_restore_todo_wrong_user(
     response = await client.post(
         "/api/auth/login",
         json={
-            "username": "otheruser",
+            "email": "other@example.com",
             "password": "OtherPass123!",  # pragma: allowlist secret
         },
     )

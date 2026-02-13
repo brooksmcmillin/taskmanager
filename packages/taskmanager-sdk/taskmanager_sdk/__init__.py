@@ -9,10 +9,10 @@ Basic usage:
     >>>
     >>> # Method 1: Create client and authenticate manually
     >>> client = TaskManagerClient("http://localhost:8000/api")
-    >>> response = client.login("username", "password")
+    >>> response = client.login("user@example.com", "password")
     >>>
     >>> # Method 2: Create pre-authenticated client (session-based)
-    >>> client = create_authenticated_client("username", "password")
+    >>> client = create_authenticated_client("user@example.com", "password")
     >>>
     >>> # Method 3: Create client with OAuth2 Client Credentials (recommended for S2S)
     >>> from taskmanager_sdk import create_client_credentials_client

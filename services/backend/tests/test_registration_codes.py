@@ -45,11 +45,10 @@ async def test_registration_code_race_condition_prevention(
 
     try:
         # Create 5 concurrent registration requests using the same code (max_uses=1)
-        async def register_user(username: str, email: str):
+        async def register_user(email: str):
             return await client.post(
                 "/api/auth/register",
                 json={
-                    "username": username,
                     "email": email,
                     "password": TEST_PASSWORD,
                     "registration_code": registration_code.code,
@@ -57,7 +56,7 @@ async def test_registration_code_race_condition_prevention(
             )
 
         # Run 5 concurrent registrations
-        tasks = [register_user(f"user{i}", f"user{i}@example.com") for i in range(5)]
+        tasks = [register_user(f"user{i}@example.com") for i in range(5)]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Count successful registrations (201) vs failed (400/409/422)
@@ -85,7 +84,7 @@ async def test_registration_code_race_condition_prevention(
         result = await db_session.execute(select(User))
         users = result.scalars().all()
         new_users = [
-            u for u in users if u.username.startswith("user")
+            u for u in users if u.email.startswith("user")
         ]  # Filter to our test users
         assert len(new_users) == 1, f"Expected 1 user created, got {len(new_users)}"
 
@@ -109,7 +108,6 @@ async def test_registration_code_required_when_enabled(
         response = await client.post(
             "/api/auth/register",
             json={
-                "username": "testuser",
                 "email": "test@example.com",
                 "password": TEST_PASSWORD,
             },
@@ -134,7 +132,6 @@ async def test_registration_code_not_required_when_disabled(client: AsyncClient)
         response = await client.post(
             "/api/auth/register",
             json={
-                "username": "testuser2",
                 "email": "test2@example.com",
                 "password": TEST_PASSWORD,
             },
@@ -142,7 +139,7 @@ async def test_registration_code_not_required_when_disabled(client: AsyncClient)
 
         assert response.status_code == 201
         data = response.json()
-        assert data["user"]["username"] == "testuser2"
+        assert data["user"]["email"] == "test2@example.com"
 
     finally:
         settings.registration_code_required = original_value
@@ -163,7 +160,6 @@ async def test_registration_code_validates_correctly(
         response = await client.post(
             "/api/auth/register",
             json={
-                "username": "validuser",
                 "email": "valid@example.com",
                 "password": TEST_PASSWORD,
                 "registration_code": registration_code.code,
@@ -175,7 +171,6 @@ async def test_registration_code_validates_correctly(
         response = await client.post(
             "/api/auth/register",
             json={
-                "username": "invaliduser",
                 "email": "invalid@example.com",
                 "password": TEST_PASSWORD,
                 "registration_code": registration_code.code,
@@ -187,7 +182,6 @@ async def test_registration_code_validates_correctly(
         response = await client.post(
             "/api/auth/register",
             json={
-                "username": "noneuser",
                 "email": "none@example.com",
                 "password": TEST_PASSWORD,
                 "registration_code": "NONEXISTENT",

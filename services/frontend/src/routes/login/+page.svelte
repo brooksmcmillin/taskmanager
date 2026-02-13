@@ -5,7 +5,7 @@
 	import { authenticateWithPasskey, isWebAuthnSupported } from '$lib/api/webauthn';
 	import { onMount } from 'svelte';
 
-	let username = $state('');
+	let email = $state('');
 	let password = $state('');
 	let error = $state('');
 	let returnTo = $state('/');
@@ -80,7 +80,7 @@
 					'Content-Type': 'application/json'
 				},
 				credentials: 'include',
-				body: JSON.stringify({ username, password })
+				body: JSON.stringify({ email, password })
 			});
 
 			const data = await response.json();
@@ -108,8 +108,8 @@
 		passkeyLoading = true;
 
 		try {
-			// Pass username if entered, otherwise use discoverable credentials
-			await authenticateWithPasskey(username || undefined);
+			// Pass email if entered, otherwise use discoverable credentials
+			await authenticateWithPasskey(email || undefined);
 			// Use full page reload to ensure layout re-runs and fetches user data
 			window.location.href = returnTo;
 		} catch (err) {
@@ -143,13 +143,13 @@
 
 		<form onsubmit={handleSubmit}>
 			<div class="form-group">
-				<label for="username">Username:</label>
+				<label for="email">Email:</label>
 				<input
-					type="text"
-					id="username"
-					name="username"
+					type="email"
+					id="email"
+					name="email"
 					class="form-input"
-					bind:value={username}
+					bind:value={email}
 					required
 				/>
 			</div>

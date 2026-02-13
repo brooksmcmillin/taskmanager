@@ -41,7 +41,7 @@ def mock_response() -> Mock:
 @pytest.fixture
 def sample_user() -> dict[str, str | int]:
     """Sample user data."""
-    return {"id": 1, "username": "testuser", "email": "test@example.com"}
+    return {"id": 1, "email": "test@example.com"}
 
 
 @pytest.fixture

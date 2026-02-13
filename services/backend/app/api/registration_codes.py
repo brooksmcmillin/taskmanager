@@ -41,7 +41,7 @@ class RegistrationCodeResponse(BaseModel):
     is_active: bool
     expires_at: datetime | None
     created_at: datetime
-    created_by_username: str | None = None
+    created_by_email: str | None = None
 
 
 @router.get("")
@@ -53,7 +53,7 @@ async def list_registration_codes(
     from app.models.user import User
 
     result = await db.execute(
-        select(RegistrationCode, User.username)
+        select(RegistrationCode, User.email)
         .outerjoin(User, RegistrationCode.created_by_id == User.id)
         .order_by(RegistrationCode.created_at.desc())
     )
@@ -68,9 +68,9 @@ async def list_registration_codes(
             is_active=code.is_active,
             expires_at=code.expires_at,
             created_at=code.created_at,
-            created_by_username=username,
+            created_by_email=email,
         )
-        for code, username in rows
+        for code, email in rows
     ]
 
     return ListResponse(
@@ -114,7 +114,7 @@ async def create_registration_code(
             is_active=registration_code.is_active,
             expires_at=registration_code.expires_at,
             created_at=registration_code.created_at,
-            created_by_username=admin.username,
+            created_by_email=admin.email,
         )
     }
 

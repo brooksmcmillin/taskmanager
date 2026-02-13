@@ -2,7 +2,6 @@
 
 export interface User {
 	id: number;
-	username: string;
 	email: string;
 	is_admin: boolean;
 	created_at: string;
@@ -163,7 +162,7 @@ export interface RegistrationCode {
 	is_active: boolean;
 	expires_at: string | null;
 	created_at: string;
-	created_by_username: string | null;
+	created_by_email: string | null;
 }
 
 export type ArticleRating = 'good' | 'bad' | 'not_interested';

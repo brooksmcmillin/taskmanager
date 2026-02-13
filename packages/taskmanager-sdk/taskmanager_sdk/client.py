@@ -161,27 +161,26 @@ class TaskManagerClient:
             raise NetworkError(str(e)) from e
 
     # Authentication methods
-    def login(self, username: str, password: str) -> ApiResponse:
+    def login(self, email: str, password: str) -> ApiResponse:
         """
-        Authenticate user with username and password.
+        Authenticate user with email and password.
 
         Args:
-            username: User's username
+            email: User's email address
             password: User's password
 
         Returns:
             ApiResponse with authentication result
         """
         return self._make_request(
-            "POST", "/auth/login", {"username": username, "password": password}
+            "POST", "/auth/login", {"email": email, "password": password}
         )
 
-    def register(self, username: str, email: str, password: str) -> ApiResponse:
+    def register(self, email: str, password: str) -> ApiResponse:
         """
         Register a new user account.
 
         Args:
-            username: Desired username
             email: User's email address
             password: User's password
 
@@ -191,7 +190,7 @@ class TaskManagerClient:
         return self._make_request(
             "POST",
             "/auth/register",
-            {"username": username, "email": email, "password": password},
+            {"email": email, "password": password},
         )
 
     def logout(self) -> ApiResponse:
@@ -1071,13 +1070,13 @@ class TaskManagerClient:
 
 
 def create_authenticated_client(
-    username: str, password: str, base_url: str = "http://localhost:8000/api"
+    email: str, password: str, base_url: str = "http://localhost:8000/api"
 ) -> TaskManagerClient:
     """
     Create and authenticate a TaskManager client using session-based login.
 
     Args:
-        username: Username for authentication
+        email: Email for authentication
         password: Password for authentication
         base_url: Base URL for the TaskManager API
 
@@ -1088,7 +1087,7 @@ def create_authenticated_client(
         AuthenticationError: If authentication fails
     """
     client = TaskManagerClient(base_url)
-    response = client.login(username, password)
+    response = client.login(email, password)
 
     if not response.success:
         raise AuthenticationError(f"Authentication failed: {response.error}")

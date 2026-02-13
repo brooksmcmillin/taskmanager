@@ -137,8 +137,7 @@ async def test_cannot_access_other_users_todo_attachments(
     from app.models.user import User
 
     user2 = User(
-        username="testuser2",
-        email="test2@example.com",
+        email="testuser2@example.com",
         password_hash=hash_password("TestPass123!"),
     )
     db_session.add(user2)
@@ -159,7 +158,7 @@ async def test_cannot_access_other_users_todo_attachments(
         response = await user2_client.post(
             "/api/auth/login",
             json={
-                "username": "testuser2",
+                "email": "testuser2@example.com",
                 "password": "TestPass123!",  # pragma: allowlist secret
             },
         )

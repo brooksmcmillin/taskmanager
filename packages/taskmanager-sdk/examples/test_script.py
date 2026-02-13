@@ -8,7 +8,7 @@ including authentication, project management, todo management, and OAuth.
 Setup:
 1. Create a .env file in the same directory with:
    TASKMANAGER_URL=http://localhost:4321/api
-   TASKMANAGER_USERNAME=your_username
+   TASKMANAGER_EMAIL=your_email@example.com
    TASKMANAGER_PASSWORD=your_password
 
 2. Install dependencies:
@@ -32,22 +32,22 @@ app = typer.Typer(help="TaskManager SDK Test Script")
 
 # Configuration from environment
 BASE_URL = os.getenv("TASKMANAGER_URL", "http://localhost:4321") + "/api"
-USERNAME = os.getenv("TASKMANAGER_USERNAME")
+EMAIL = os.getenv("TASKMANAGER_EMAIL")
 PASSWORD = os.getenv("TASKMANAGER_PASSWORD")
 
 
 def get_client() -> TaskManagerClient:
     """Create and return authenticated client."""
-    if not USERNAME or not PASSWORD:
+    if not EMAIL or not PASSWORD:
         typer.echo(
-            "ERROR: TASKMANAGER_USERNAME and TASKMANAGER_PASSWORD must be set in .env file",
+            "ERROR: TASKMANAGER_EMAIL and TASKMANAGER_PASSWORD must be set in .env file",
             err=True,
         )
         raise typer.Exit(1)
 
     try:
-        client = create_authenticated_client(USERNAME, PASSWORD, BASE_URL)
-        typer.echo(f"✅ Successfully authenticated as {USERNAME}")
+        client = create_authenticated_client(EMAIL, PASSWORD, BASE_URL)
+        typer.echo(f"✅ Successfully authenticated as {EMAIL}")
         return client
     except TaskManagerError as e:
         typer.echo(f"❌ Authentication failed: {e}", err=True)
@@ -59,9 +59,9 @@ def auth_test():
     """Test authentication methods."""
     typer.echo("🔐 Testing Authentication...")
 
-    if not USERNAME or not PASSWORD:
+    if not EMAIL or not PASSWORD:
         typer.echo(
-            "ERROR: TASKMANAGER_USERNAME and TASKMANAGER_PASSWORD must be set in .env file",
+            "ERROR: TASKMANAGER_EMAIL and TASKMANAGER_PASSWORD must be set in .env file",
             err=True,
         )
         raise typer.Exit(1)
@@ -69,7 +69,7 @@ def auth_test():
     try:
         # Test manual authentication
         client = TaskManagerClient(BASE_URL)
-        response = client.login(USERNAME, PASSWORD)
+        response = client.login(EMAIL, PASSWORD)
 
         if response.success:
             typer.echo("✅ Manual login successful")
@@ -84,7 +84,7 @@ def auth_test():
             typer.echo(f"❌ Manual login failed: {response.error}")
 
         # Test convenience function
-        create_authenticated_client(USERNAME, PASSWORD, BASE_URL)
+        create_authenticated_client(EMAIL, PASSWORD, BASE_URL)
         typer.echo("✅ Convenience authentication successful")
 
     except TaskManagerError as e:

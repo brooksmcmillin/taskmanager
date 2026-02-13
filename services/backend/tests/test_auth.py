@@ -16,7 +16,6 @@ async def test_register_success(client: AsyncClient):
     response = await client.post(
         "/api/auth/register",
         json={
-            "username": "newuser",
             "email": "new@example.com",
             "password": TEST_PASSWORD,
         },
@@ -25,23 +24,22 @@ async def test_register_success(client: AsyncClient):
     assert response.status_code == 201
     data = response.json()
     assert data["message"] == "Registration successful"
-    assert data["user"]["username"] == "newuser"
+    assert data["user"]["email"] == "new@example.com"
 
 
 @pytest.mark.asyncio
-async def test_register_duplicate_username(client: AsyncClient, test_user):
-    """Test registration with existing username."""
+async def test_register_duplicate_email(client: AsyncClient, test_user):
+    """Test registration with existing email."""
     response = await client.post(
         "/api/auth/register",
         json={
-            "username": "testuser",  # Already exists
-            "email": "another@example.com",
+            "email": "test@example.com",  # Already exists
             "password": TEST_PASSWORD,
         },
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "CONFLICT_001"
+    assert response.json()["detail"]["code"] == "CONFLICT_002"
 
 
 @pytest.mark.asyncio
@@ -50,7 +48,6 @@ async def test_register_weak_password(client: AsyncClient):
     response = await client.post(
         "/api/auth/register",
         json={
-            "username": "newuser",
             "email": "new@example.com",
             "password": TEST_PASSWORD_WEAK,  # No uppercase or special chars
         },
@@ -64,14 +61,14 @@ async def test_login_success(client: AsyncClient, test_user):
     """Test successful login."""
     response = await client.post(
         "/api/auth/login",
-        json={"username": "testuser", "password": TEST_PASSWORD_LOGIN},
+        json={"email": "test@example.com", "password": TEST_PASSWORD_LOGIN},
     )
 
     assert response.status_code == 200
     assert "session" in response.cookies
     data = response.json()
     assert data["message"] == "Login successful"
-    assert data["user"]["username"] == "testuser"
+    assert data["user"]["email"] == "test@example.com"
 
 
 @pytest.mark.asyncio
@@ -79,7 +76,7 @@ async def test_login_invalid_credentials(client: AsyncClient, test_user):
     """Test login with wrong password."""
     response = await client.post(
         "/api/auth/login",
-        json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+        json={"email": "test@example.com", "password": TEST_PASSWORD_WRONG},
     )
 
     assert response.status_code == 401
@@ -101,20 +98,20 @@ async def test_login_rate_limit_triggers(client: AsyncClient, test_user):
     from app.core.rate_limit import login_rate_limiter
 
     # Ensure clean state for this test
-    login_rate_limiter.reset("testuser")
+    login_rate_limiter.reset("test@example.com")
 
     # Make 5 failed login attempts
     for _ in range(5):
         response = await client.post(
             "/api/auth/login",
-            json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+            json={"email": "test@example.com", "password": TEST_PASSWORD_WRONG},
         )
         assert response.status_code == 401
 
     # 6th attempt should be rate limited
     response = await client.post(
         "/api/auth/login",
-        json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+        json={"email": "test@example.com", "password": TEST_PASSWORD_WRONG},
     )
 
     assert response.status_code == 429
@@ -130,14 +127,14 @@ async def test_login_rate_limit_resets_on_success(client: AsyncClient, test_user
     for _ in range(3):
         response = await client.post(
             "/api/auth/login",
-            json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+            json={"email": "test@example.com", "password": TEST_PASSWORD_WRONG},
         )
         assert response.status_code == 401
 
     # Successful login should reset the counter
     response = await client.post(
         "/api/auth/login",
-        json={"username": "testuser", "password": TEST_PASSWORD_LOGIN},
+        json={"email": "test@example.com", "password": TEST_PASSWORD_LOGIN},
     )
     assert response.status_code == 200
 
@@ -145,58 +142,35 @@ async def test_login_rate_limit_resets_on_success(client: AsyncClient, test_user
     for _ in range(3):
         response = await client.post(
             "/api/auth/login",
-            json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+            json={"email": "test@example.com", "password": TEST_PASSWORD_WRONG},
         )
         assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_login_rate_limit_per_username(client: AsyncClient, test_user):
-    """Test that rate limiting is per username, not global."""
-    # Make 5 failed attempts for testuser
+async def test_login_rate_limit_per_email(client: AsyncClient, test_user):
+    """Test that rate limiting is per email, not global."""
+    # Make 5 failed attempts for test@example.com
     for _ in range(5):
         response = await client.post(
             "/api/auth/login",
-            json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+            json={"email": "test@example.com", "password": TEST_PASSWORD_WRONG},
         )
         assert response.status_code == 401
 
-    # testuser should be rate limited
+    # test@example.com should be rate limited
     response = await client.post(
         "/api/auth/login",
-        json={"username": "testuser", "password": TEST_PASSWORD_WRONG},
+        json={"email": "test@example.com", "password": TEST_PASSWORD_WRONG},
     )
     assert response.status_code == 429
 
-    # But a different username should not be rate limited
+    # But a different email should not be rate limited
     response = await client.post(
         "/api/auth/login",
-        json={"username": "otheruser", "password": TEST_PASSWORD_WRONG},
+        json={"email": "other@example.com", "password": TEST_PASSWORD_WRONG},
     )
     assert response.status_code == 401  # Invalid credentials, not rate limited
-
-
-# =============================================================================
-# Email Validation Tests
-# =============================================================================
-
-
-@pytest.mark.asyncio
-async def test_register_duplicate_email_different_username(
-    client: AsyncClient, test_user
-):
-    """Test registration with duplicate email but different username."""
-    response = await client.post(
-        "/api/auth/register",
-        json={
-            "username": "differentuser",  # Different username
-            "email": "test@example.com",  # Same email as test_user
-            "password": TEST_PASSWORD,
-        },
-    )
-
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "CONFLICT_002"  # email_exists
 
 
 # =============================================================================
@@ -210,7 +184,7 @@ async def test_login_form_data_success(client: AsyncClient, test_user):
     response = await client.post(
         "/api/auth/login",
         data={
-            "username": "testuser",
+            "email": "test@example.com",
             "password": TEST_PASSWORD_LOGIN,
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
@@ -220,7 +194,7 @@ async def test_login_form_data_success(client: AsyncClient, test_user):
     assert "session" in response.cookies
     data = response.json()
     assert data["message"] == "Login successful"
-    assert data["user"]["username"] == "testuser"
+    assert data["user"]["email"] == "test@example.com"
 
 
 @pytest.mark.asyncio
@@ -229,7 +203,7 @@ async def test_login_form_data_with_return_to(client: AsyncClient, test_user):
     response = await client.post(
         "/api/auth/login",
         data={
-            "username": "testuser",
+            "email": "test@example.com",
             "password": TEST_PASSWORD_LOGIN,
             "return_to": "http://localhost:3000/oauth/callback?code=abc123",
         },
@@ -256,7 +230,7 @@ async def test_login_form_data_return_to_prevents_open_redirect(
     response = await client.post(
         "/api/auth/login",
         data={
-            "username": "testuser",
+            "email": "test@example.com",
             "password": TEST_PASSWORD_LOGIN,
             "return_to": "https://evil.com/phishing",
         },
@@ -277,7 +251,7 @@ async def test_login_form_data_return_to_allows_subdomain(
     response = await client.post(
         "/api/auth/login",
         data={
-            "username": "testuser",
+            "email": "test@example.com",
             "password": TEST_PASSWORD_LOGIN,
             "return_to": "http://localhost:3000/dashboard",
         },
@@ -295,7 +269,7 @@ async def test_login_form_data_return_to_relative_path(client: AsyncClient, test
     response = await client.post(
         "/api/auth/login",
         data={
-            "username": "testuser",
+            "email": "test@example.com",
             "password": TEST_PASSWORD_LOGIN,
             "return_to": "/oauth/callback",
         },
@@ -313,7 +287,7 @@ async def test_login_unsupported_content_type(client: AsyncClient, test_user):
     """Test login with unsupported content type."""
     response = await client.post(
         "/api/auth/login",
-        content=b"username=testuser&password=test",
+        content=b"email=test@example.com&password=test",
         headers={"Content-Type": "text/plain"},
     )
 

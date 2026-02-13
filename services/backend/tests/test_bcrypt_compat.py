@@ -58,7 +58,6 @@ async def test_python_created_user_can_login(
 
     # Create user with Python bcrypt
     user = User(
-        username="new_python_user",
         email="python@example.com",
         password_hash=hash_password(password),
     )
@@ -69,7 +68,7 @@ async def test_python_created_user_can_login(
     response = await client.post(
         "/api/auth/login",
         json={
-            "username": "new_python_user",
+            "email": "python@example.com",
             "password": password,
         },
     )
@@ -77,7 +76,7 @@ async def test_python_created_user_can_login(
     # Login should succeed
     assert response.status_code == 200
     data = response.json()
-    assert data["user"]["username"] == "new_python_user"
+    assert data["user"]["email"] == "python@example.com"
 
 
 @pytest.mark.asyncio

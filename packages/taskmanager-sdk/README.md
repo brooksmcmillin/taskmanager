@@ -22,14 +22,14 @@ from taskmanager_sdk import TaskManagerClient, create_authenticated_client
 
 # Method 1: Manual authentication
 client = TaskManagerClient("http://localhost:8000/api")
-response = client.login("your_username", "your_password")
+response = client.login("user@example.com", "your_password")
 
 if response.success:
     print("Authenticated successfully!")
 
 # Method 2: Create pre-authenticated client (recommended)
 try:
-    client = create_authenticated_client("your_username", "your_password")
+    client = create_authenticated_client("user@example.com", "your_password")
 except AuthenticationError as e:
     print(f"Authentication failed: {e}")
 ```
@@ -131,8 +131,8 @@ TaskManagerClient(base_url="http://localhost:8000/api", session=None, access_tok
 
 | Method | Description |
 |--------|-------------|
-| `login(username, password)` | Authenticate with username/password |
-| `register(username, email, password)` | Register a new user account |
+| `login(email, password)` | Authenticate with email/password |
+| `register(email, password)` | Register a new user account |
 | `logout()` | Log out the current session |
 
 #### Project Methods
@@ -170,7 +170,7 @@ TaskManagerClient(base_url="http://localhost:8000/api", session=None, access_tok
 
 | Function | Description |
 |----------|-------------|
-| `create_authenticated_client(username, password, base_url)` | Create session-authenticated client |
+| `create_authenticated_client(email, password, base_url)` | Create session-authenticated client |
 | `create_client_credentials_client(client_id, client_secret, base_url)` | Create OAuth-authenticated client |
 
 ## Models

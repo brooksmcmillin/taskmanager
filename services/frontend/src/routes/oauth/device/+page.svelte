@@ -182,7 +182,7 @@
 					{#if user}
 						<div class="user-info">
 							<p>
-								Signed in as: <strong>{user.username}</strong>
+								Signed in as: <strong>{user.email}</strong>
 							</p>
 						</div>
 					{/if}

@@ -7,19 +7,16 @@
 	// Check if registration code is required (default to true if not set)
 	const registrationCodeRequired = PUBLIC_REGISTRATION_CODE_REQUIRED !== 'false';
 
-	let username = '';
 	let email = '';
 	let password = '';
 	let registrationCode = '';
 	let error = '';
 	let fieldErrors = {
-		username: '',
 		email: '',
 		password: '',
 		registrationCode: ''
 	};
 	let touched = {
-		username: false,
 		email: false,
 		password: false,
 		registrationCode: false
@@ -41,16 +38,6 @@
 			}
 		}
 	});
-
-	function validateUsername(): string {
-		if (!username.trim()) {
-			return 'Username is required';
-		}
-		if (username.length < 3) {
-			return 'Username must be at least 3 characters';
-		}
-		return '';
-	}
 
 	function validateEmail(): string {
 		if (!email.trim()) {
@@ -93,11 +80,9 @@
 		return '';
 	}
 
-	function validateField(field: 'username' | 'email' | 'password' | 'registrationCode') {
+	function validateField(field: 'email' | 'password' | 'registrationCode') {
 		touched[field] = true;
-		if (field === 'username') {
-			fieldErrors.username = validateUsername();
-		} else if (field === 'email') {
+		if (field === 'email') {
 			fieldErrors.email = validateEmail();
 		} else if (field === 'password') {
 			fieldErrors.password = validatePassword();
@@ -107,21 +92,14 @@
 	}
 
 	function validateAllFields(): boolean {
-		fieldErrors.username = validateUsername();
 		fieldErrors.email = validateEmail();
 		fieldErrors.password = validatePassword();
 		fieldErrors.registrationCode = validateRegistrationCode();
-		touched.username = true;
 		touched.email = true;
 		touched.password = true;
 		touched.registrationCode = true;
 
-		return (
-			!fieldErrors.username &&
-			!fieldErrors.email &&
-			!fieldErrors.password &&
-			!fieldErrors.registrationCode
-		);
+		return !fieldErrors.email && !fieldErrors.password && !fieldErrors.registrationCode;
 	}
 
 	async function handleSubmit(e: Event) {
@@ -135,7 +113,7 @@
 
 		try {
 			// Build request body - only include registration_code if required or provided
-			const requestBody: any = { username, email, password };
+			const requestBody: any = { email, password };
 			if (registrationCodeRequired || registrationCode.trim()) {
 				requestBody.registration_code = registrationCode;
 			}
@@ -232,28 +210,6 @@
 					{/if}
 				</div>
 			{/if}
-
-			<div class="form-group">
-				<label for="username">Username:</label>
-				<input
-					type="text"
-					id="username"
-					name="username"
-					class="form-input"
-					bind:value={username}
-					on:blur={() => validateField('username')}
-					required
-				/>
-				{#if touched.username && fieldErrors.username}
-					<div
-						data-error="username"
-						class="field-error"
-						style="color: var(--error-color, #e53e3e); font-size: 0.875rem; margin-top: 0.25rem;"
-					>
-						{fieldErrors.username}
-					</div>
-				{/if}
-			</div>
 
 			<div class="form-group">
 				<label for="email">Email:</label>
