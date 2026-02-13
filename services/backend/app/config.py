@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -60,10 +61,10 @@ class Settings(BaseSettings):
     device_code_expiry: int = 1800  # 30 minutes in seconds
     device_poll_interval: int = 5  # seconds
 
-    # WebAuthn
-    webauthn_rp_id: str = "localhost"
+    # WebAuthn (rp_id and origin are derived from frontend_url if not set)
+    webauthn_rp_id: str = ""
     webauthn_rp_name: str = "TaskManager"
-    webauthn_origin: str = "http://localhost:3000"
+    webauthn_origin: str = ""
     webauthn_challenge_timeout: int = 300  # 5 minutes in seconds
 
     # Frontend URL (for OAuth consent page redirects)
@@ -129,6 +130,17 @@ class Settings(BaseSettings):
     def allowed_image_types_list(self) -> list[str]:
         """Parse allowed image types from comma-separated string."""
         return [t.strip() for t in self.allowed_image_types.split(",") if t.strip()]
+
+    @model_validator(mode="after")
+    def set_webauthn_defaults(self) -> "Settings":
+        """Derive WebAuthn rp_id and origin from frontend_url if not explicitly set."""
+        if not self.webauthn_rp_id:
+            parsed = urlparse(self.frontend_url)
+            self.webauthn_rp_id = parsed.hostname or "localhost"
+        if not self.webauthn_origin:
+            parsed = urlparse(self.frontend_url)
+            self.webauthn_origin = f"{parsed.scheme}://{parsed.netloc}"
+        return self
 
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":
