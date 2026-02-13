@@ -17,16 +17,27 @@
 
 	const dispatch = createEventDispatcher();
 
-	export function open(selectedTodo: Todo) {
+	export async function open(selectedTodo: Todo) {
 		todo = selectedTodo;
 		mode = 'view';
 		show = true;
+		// Fetch full todo with subtasks, dependencies, attachments
+		try {
+			todo = await todos.getById(selectedTodo.id);
+		} catch (error) {
+			// Fall back to the passed-in todo
+		}
 	}
 
-	export function openEdit(selectedTodo: Todo) {
+	export async function openEdit(selectedTodo: Todo) {
 		todo = selectedTodo;
 		mode = 'edit';
 		show = true;
+		try {
+			todo = await todos.getById(selectedTodo.id);
+		} catch (error) {
+			// Fall back to the passed-in todo
+		}
 	}
 
 	export function openCreate() {
@@ -127,6 +138,11 @@
 
 			{#if mode === 'view' && todo}
 				<div class="panel-body">
+					<!-- Task ID -->
+					<div class="detail-section">
+						<a href="/task/{todo.id}" class="task-id-link">#{todo.id}</a>
+					</div>
+
 					<!-- Title -->
 					<div class="detail-section">
 						<div class="flex items-center gap-2 mb-2">
@@ -400,6 +416,20 @@
 		font-size: 0.875rem;
 		line-height: 1.5;
 		white-space: pre-wrap;
+	}
+
+	.task-id-link {
+		font-size: 1.5rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		text-decoration: none;
+		font-family: monospace;
+		transition: color var(--transition-fast);
+	}
+
+	.task-id-link:hover {
+		color: var(--primary-600);
+		text-decoration: underline;
 	}
 
 	.tag {

@@ -142,6 +142,9 @@
 					{/if}
 				</button>
 				<div class="subtask-content">
+					<a href="/task/{subtask.id}" class="subtask-id" title="Open task #{subtask.id}"
+						>#{subtask.id}</a
+					>
 					<span class="subtask-text">{subtask.title}</span>
 					<span
 						class="priority-dot"
@@ -375,6 +378,21 @@
 		align-items: center;
 		gap: 0.5rem;
 		min-width: 0;
+	}
+
+	.subtask-id {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		text-decoration: none;
+		font-family: monospace;
+		flex-shrink: 0;
+		transition: color var(--transition-fast);
+	}
+
+	.subtask-id:hover {
+		color: var(--primary-600);
+		text-decoration: underline;
 	}
 
 	.subtask-text {
