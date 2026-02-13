@@ -241,7 +241,7 @@
 						{#if userDropdownOpen}
 							<div class="dropdown-menu dropdown-menu-right">
 								<div class="dropdown-header">
-									<span class="text-sm font-semibold">{user.username}</span>
+									<span class="text-sm font-semibold">{user.email}</span>
 								</div>
 								<div class="dropdown-divider"></div>
 								<a

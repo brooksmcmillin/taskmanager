@@ -246,14 +246,10 @@ async def github_callback(
                 db.add(oauth_provider)
             else:
                 # Create new user
-                # Generate a unique username based on GitHub username
-                username = await _generate_unique_username(db, github_user.login)
-
                 # Generate a random password (user can set one later if they want)
                 random_password = secrets.token_urlsafe(32)
 
                 user = User(
-                    username=username,
                     email=github_user.email,
                     password_hash=hash_password(random_password),
                 )
@@ -339,30 +335,6 @@ async def disconnect_github(
     await db.delete(provider)
 
     return {"message": "GitHub disconnected successfully"}
-
-
-async def _generate_unique_username(db: DbSession, base_username: str) -> str:
-    """Generate a unique username based on the GitHub username.
-
-    If the username is taken, append a number until we find a unique one.
-    """
-    # Clean the username (GitHub usernames are already pretty clean)
-    username = base_username.lower()
-
-    # Check if it's available
-    result = await db.execute(select(User).where(User.username == username))
-    if not result.scalar_one_or_none():
-        return username
-
-    # Try with numbers
-    for i in range(1, 1000):
-        candidate = f"{username}{i}"
-        result = await db.execute(select(User).where(User.username == candidate))
-        if not result.scalar_one_or_none():
-            return candidate
-
-    # Fallback to random suffix
-    return f"{username}_{secrets.token_hex(4)}"
 
 
 def _redirect_with_error(error_message: str) -> RedirectResponse:

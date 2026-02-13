@@ -99,12 +99,13 @@ class Settings(BaseSettings):
     # GitHub OAuth
     github_client_id: str = ""
     github_client_secret: str = ""
-    github_oauth_redirect_uri: str = ""  # Will default to {frontend_url}/oauth/github/callback
+    github_oauth_redirect_uri: str = (
+        ""  # Will default to {frontend_url}/oauth/github/callback
+    )
 
     # Validation constants
     min_password_length: int = 8
     min_client_secret_length: int = 32
-    max_username_length: int = 50
     max_email_length: int = 255
     max_project_name_length: int = 100
     max_todo_title_length: int = 255

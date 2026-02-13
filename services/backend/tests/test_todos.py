@@ -146,12 +146,10 @@ async def test_cannot_update_subtask_to_other_users_parent(
 
     # Create two users
     user1 = User(
-        username="user1",
         email="user1@example.com",
         password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
     )
     user2 = User(
-        username="user2",
         email="user2@example.com",
         password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
     )
@@ -163,9 +161,9 @@ async def test_cannot_update_subtask_to_other_users_parent(
     login1 = await client.post(
         "/api/auth/login",
         json={
-            "username": "user1",
-            "password": "TestPass123!",
-        },  # pragma: allowlist secret
+            "email": "user1@example.com",
+            "password": "TestPass123!",  # pragma: allowlist secret
+        },
     )
     assert login1.status_code == 200
 
@@ -182,9 +180,9 @@ async def test_cannot_update_subtask_to_other_users_parent(
     login2 = await client.post(
         "/api/auth/login",
         json={
-            "username": "user2",
-            "password": "TestPass123!",
-        },  # pragma: allowlist secret
+            "email": "user2@example.com",
+            "password": "TestPass123!",  # pragma: allowlist secret
+        },
     )
     assert login2.status_code == 200
 
@@ -225,12 +223,10 @@ async def test_cannot_bulk_update_subtask_to_other_users_parent(
 
     # Create two users
     user1 = User(
-        username="user1_bulk",
         email="user1_bulk@example.com",
         password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
     )
     user2 = User(
-        username="user2_bulk",
         email="user2_bulk@example.com",
         password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
     )
@@ -242,9 +238,9 @@ async def test_cannot_bulk_update_subtask_to_other_users_parent(
     login1 = await client.post(
         "/api/auth/login",
         json={
-            "username": "user1_bulk",
-            "password": "TestPass123!",
-        },  # pragma: allowlist secret
+            "email": "user1_bulk@example.com",
+            "password": "TestPass123!",  # pragma: allowlist secret
+        },
     )
     assert login1.status_code == 200
 
@@ -261,9 +257,9 @@ async def test_cannot_bulk_update_subtask_to_other_users_parent(
     login2 = await client.post(
         "/api/auth/login",
         json={
-            "username": "user2_bulk",
-            "password": "TestPass123!",
-        },  # pragma: allowlist secret
+            "email": "user2_bulk@example.com",
+            "password": "TestPass123!",  # pragma: allowlist secret
+        },
     )
     assert login2.status_code == 200
 

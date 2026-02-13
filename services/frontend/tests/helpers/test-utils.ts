@@ -36,11 +36,11 @@ export function getTodayDate(): string {
 }
 
 /**
- * Generate a unique username for testing
+ * Generate a unique email for testing
  * Avoids conflicts when tests create users
  */
-export function getUniqueUsername(): string {
-	return `testuser-${Date.now()}`;
+export function getUniqueEmail(): string {
+	return `testuser-${Date.now()}@example.com`;
 }
 
 /**
@@ -88,16 +88,16 @@ export async function fillFutureDate(page: Page, selector: string, daysFromNow: 
 /**
  * Login helper to reduce code duplication
  * @param page - Playwright page object
- * @param username - Username (defaults to testuser)
+ * @param email - Email (defaults to test@example.com)
  * @param password - Password (defaults to test password)
  */
 export async function login(
 	page: Page,
-	username: string = 'testuser',
+	email: string = 'test@example.com',
 	password: string = 'TestPass123!' // pragma: allowlist secret
 ) {
 	await page.goto('/login');
-	await page.fill('[name=username]', username);
+	await page.fill('[name=email]', email);
 	await page.fill('[name=password]', password);
 	await page.click('button[type=submit]');
 
@@ -109,27 +109,26 @@ export async function login(
  * Register and login helper - creates a new user and logs them in
  * Useful when test database is reset between runs
  * @param page - Playwright page object
- * @param username - Username (defaults to unique testuser with timestamp)
+ * @param email - Email (defaults to unique email with timestamp)
  * @param password - Password (defaults to test password)
  */
 export async function registerAndLogin(
 	page: Page,
-	username?: string,
+	email?: string,
 	password: string = 'TestPass123!' // pragma: allowlist secret
 ) {
-	// Use unique username if not provided to avoid conflicts between tests
-	const actualUsername = username ?? getUniqueUsername();
+	// Use unique email if not provided to avoid conflicts between tests
+	const actualEmail = email ?? getUniqueEmail();
 
 	// Register the user
 	await page.goto('/register');
-	await page.fill('[name=username]', actualUsername);
-	await page.fill('[name=email]', `${actualUsername}@example.com`);
+	await page.fill('[name=email]', actualEmail);
 	await page.fill('[name=password]', password);
 	await page.click('button[type=submit]');
 	await page.waitForURL('/login', { timeout: 10000 });
 
 	// Login
-	await login(page, actualUsername, password);
+	await login(page, actualEmail, password);
 }
 
 /**

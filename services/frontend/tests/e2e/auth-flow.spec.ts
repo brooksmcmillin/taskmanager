@@ -19,9 +19,8 @@ test.describe('Authentication Flow', () => {
 	test('should register a new user', async ({ page }) => {
 		await page.goto('/register');
 
-		// Fill registration form with unique username to avoid conflicts
+		// Fill registration form with unique email to avoid conflicts
 		const timestamp = Date.now();
-		await page.fill('[name=username]', `testuser${timestamp}`);
 		await page.fill('[name=email]', `test${timestamp}@example.com`);
 		await page.fill('[name=password]', 'TestPass123!');
 
@@ -37,18 +36,17 @@ test.describe('Authentication Flow', () => {
 	});
 
 	test('should login with valid credentials', async ({ page }) => {
-		// Register a test user first with unique username to avoid conflicts
+		// Register a test user first with unique email to avoid conflicts
 		const timestamp = Date.now();
-		const username = `loginuser${timestamp}`;
+		const email = `loginuser${timestamp}@example.com`;
 		await page.goto('/register');
-		await page.fill('[name=username]', username);
-		await page.fill('[name=email]', `${username}@example.com`);
+		await page.fill('[name=email]', email);
 		await page.fill('[name=password]', 'TestPass123!');
 		await page.click('button[type=submit]');
 		await page.waitForURL('/login', { timeout: 10000 });
 
 		// Fill login form
-		await page.fill('[name=username]', username);
+		await page.fill('[name=email]', email);
 		await page.fill('[name=password]', 'TestPass123!');
 
 		// Submit form
@@ -65,7 +63,7 @@ test.describe('Authentication Flow', () => {
 		await page.goto('/login');
 
 		// Fill with invalid credentials
-		await page.fill('[name=username]', 'nonexistent');
+		await page.fill('[name=email]', 'nonexistent@example.com');
 		await page.fill('[name=password]', 'wrongpass');
 
 		// Submit form
@@ -73,22 +71,21 @@ test.describe('Authentication Flow', () => {
 
 		// Should stay on login page and show error
 		await expect(page).toHaveURL('/login');
-		await expect(page.locator('.error-message')).toContainText('Invalid username or password');
+		await expect(page.locator('.error-message')).toContainText('Invalid email or password');
 	});
 
 	test('should logout successfully', async ({ page }) => {
-		// Register a test user first with unique username to avoid conflicts
+		// Register a test user first with unique email to avoid conflicts
 		const timestamp = Date.now();
-		const username = `logoutuser${timestamp}`;
+		const email = `logoutuser${timestamp}@example.com`;
 		await page.goto('/register');
-		await page.fill('[name=username]', username);
-		await page.fill('[name=email]', `${username}@example.com`);
+		await page.fill('[name=email]', email);
 		await page.fill('[name=password]', 'TestPass123!');
 		await page.click('button[type=submit]');
 		await page.waitForURL('/login', { timeout: 10000 });
 
 		// Login
-		await page.fill('[name=username]', username);
+		await page.fill('[name=email]', email);
 		await page.fill('[name=password]', 'TestPass123!');
 		await page.click('button[type=submit]');
 
@@ -120,7 +117,6 @@ test.describe('Authentication Flow', () => {
 		await page.click('button[type=submit]');
 
 		// Should show validation errors
-		await expect(page.locator('[data-error=username]')).toBeVisible();
 		await expect(page.locator('[data-error=email]')).toBeVisible();
 		await expect(page.locator('[data-error=password]')).toBeVisible();
 

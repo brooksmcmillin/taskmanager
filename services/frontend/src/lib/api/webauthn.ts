@@ -186,7 +186,7 @@ export async function registerPasskey(deviceName?: string): Promise<WebAuthnCred
  * Authenticate with a passkey.
  */
 export async function authenticateWithPasskey(
-	username?: string
+	email?: string
 ): Promise<{ message: string; user: Record<string, unknown> }> {
 	if (!isWebAuthnSupported()) {
 		throw new Error('WebAuthn is not supported in this browser');
@@ -196,7 +196,7 @@ export async function authenticateWithPasskey(
 	const { challenge_id, options } = await api.post<{
 		challenge_id: string;
 		options: Record<string, unknown>;
-	}>('/api/auth/webauthn/authenticate/options', { username });
+	}>('/api/auth/webauthn/authenticate/options', { email });
 
 	// Get assertion using browser API
 	const assertion = (await navigator.credentials.get({

@@ -32,14 +32,9 @@ paths:
             schema:
               type: object
               required:
-                - username
                 - email
                 - password
               properties:
-                username:
-                  type: string
-                  minLength: 3
-                  maxLength: 50
                 email:
                   type: string
                   format: email
@@ -77,10 +72,10 @@ paths:
             schema:
               type: object
               required:
-                - username
+                - email
                 - password
               properties:
-                username:
+                email:
                   type: string
                 password:
                   type: string
@@ -1119,8 +1114,6 @@ components:
       properties:
         id:
           type: integer
-        username:
-          type: string
         email:
           type: string
           format: email

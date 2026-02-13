@@ -30,7 +30,6 @@ from app.models.user import User
 
 # Test data configuration
 DEFAULT_TEST_EMAIL = "test@example.com"
-DEFAULT_TEST_USERNAME = "testuser"
 DEFAULT_TEST_PASSWORD = "TestPass123!"  # pragma: allowlist secret
 
 # Project names and colors
@@ -178,7 +177,6 @@ async def create_test_user(session: AsyncSession, email: str) -> User:
     print(f"\n👤 Creating test user: {email}")
 
     user = User(
-        username=DEFAULT_TEST_USERNAME,
         email=email,
         password_hash=hash_password(DEFAULT_TEST_PASSWORD),
         is_active=True,
@@ -189,7 +187,7 @@ async def create_test_user(session: AsyncSession, email: str) -> User:
     await session.flush()  # Get the user ID
 
     print(f"   ✅ Created user (ID: {user.id})")
-    print(f"   👤 Username: {DEFAULT_TEST_USERNAME}")
+    print(f"   📧 Email: {email}")
     print(f"   📧 Email: {email}")
     print(f"   🔐 Password: {DEFAULT_TEST_PASSWORD}")
 
@@ -388,10 +386,8 @@ async def seed_data(user_email: str, skip_confirm: bool = False) -> None:
             print("✅ Test data seeded successfully!")
             print("=" * 70)
             print("\n🔑 Login credentials:")
-            print(f"   Username: {user.username}")
+            print(f"   Email: {user.email}")
             print(f"   Password: {DEFAULT_TEST_PASSWORD}")
-            print(f"   (Email: {user.email})")
-            print("\n⚠️  IMPORTANT: Login with USERNAME, not email!")
             print("💡 Tip: Use the project filter dropdown to filter tasks by project!")
 
         except Exception as e:

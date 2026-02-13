@@ -17,7 +17,6 @@ class User:
     """User model."""
 
     id: int
-    username: str
     email: str
 
 

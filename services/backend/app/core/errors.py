@@ -35,8 +35,8 @@ class Errors:
 
     @staticmethod
     def invalid_credentials() -> ApiError:
-        """AUTH_001: Invalid username or password."""
-        return ApiError("AUTH_001", 401, "Invalid username or password")
+        """AUTH_001: Invalid email or password."""
+        return ApiError("AUTH_001", 401, "Invalid email or password")
 
     @staticmethod
     def auth_required() -> ApiError:
@@ -223,11 +223,6 @@ class Errors:
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
     # =========================================================================
-
-    @staticmethod
-    def username_exists() -> ApiError:
-        """CONFLICT_001: Username already exists."""
-        return ApiError("CONFLICT_001", 409, "Username already exists")
 
     @staticmethod
     def email_exists() -> ApiError:

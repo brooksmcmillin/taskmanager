@@ -108,7 +108,7 @@ class CredentialResponse(BaseModel):
 class AuthenticateOptionsRequest(BaseModel):
     """Request for authentication options."""
 
-    username: str | None = None
+    email: str | None = None
 
 
 class AuthenticateOptionsResponse(BaseModel):
@@ -143,7 +143,7 @@ async def get_registration_options(
     rate_limit_key = f"webauthn_register_{user.id}"
     webauthn_register_rate_limiter.check(rate_limit_key)
 
-    logger.info("WebAuthn registration options requested for user %s", user.username)
+    logger.info("WebAuthn registration options requested for user %s", user.email)
 
     # Get existing credentials to exclude
     result = await db.execute(
@@ -160,8 +160,8 @@ async def get_registration_options(
         rp_id=settings.webauthn_rp_id,
         rp_name=settings.webauthn_rp_name,
         user_id=str(user.id).encode(),
-        user_name=user.username,
-        user_display_name=user.username,
+        user_name=user.email,
+        user_display_name=user.email,
         exclude_credentials=exclude_credentials,
         authenticator_selection=AuthenticatorSelectionCriteria(
             resident_key=ResidentKeyRequirement.PREFERRED,
@@ -217,14 +217,14 @@ async def verify_registration(
     challenge_data = _get_challenge(request.challenge_id)
     if not challenge_data:
         logger.warning(
-            "WebAuthn registration failed: invalid challenge for user %s", user.username
+            "WebAuthn registration failed: invalid challenge for user %s", user.email
         )
         raise errors.validation("Invalid or expired challenge")
 
     if challenge_data["user_id"] != user.id:
         logger.warning(
             "WebAuthn registration failed: challenge mismatch for user %s",
-            user.username,
+            user.email,
         )
         raise errors.validation("Challenge does not match user")
 
@@ -242,7 +242,7 @@ async def verify_registration(
     except Exception as e:
         logger.warning(
             "WebAuthn registration verification failed for user %s: %s",
-            user.username,
+            user.email,
             e,
         )
         raise errors.validation(f"Registration verification failed: {e}") from e
@@ -275,7 +275,7 @@ async def verify_registration(
 
     logger.info(
         "WebAuthn credential registered successfully for user %s (credential_id=%s)",
-        user.username,
+        user.email,
         webauthn_cred.id,
     )
 
@@ -306,13 +306,11 @@ async def get_authentication_options(
     allow_credentials = None
     user_id_for_challenge = None
 
-    if request.username:
+    if request.email:
         # Find user and their credentials
         # Note: We always generate options regardless of whether user exists
         # to prevent user enumeration attacks
-        result = await db.execute(
-            select(User).where(User.username == request.username)
-        )
+        result = await db.execute(select(User).where(User.email == request.email))
         user = result.scalar_one_or_none()
 
         if user:
@@ -325,9 +323,7 @@ async def get_authentication_options(
             if credentials:
                 allow_credentials = []
                 for cred in credentials:
-                    transports = (
-                        cred.transports.split(",") if cred.transports else None
-                    )
+                    transports = cred.transports.split(",") if cred.transports else None
                     allow_credentials.append(
                         PublicKeyCredentialDescriptor(
                             id=cred.credential_id,
@@ -421,9 +417,7 @@ async def verify_authentication(
             raise errors.invalid_credentials()
 
         # Get the user
-        result = await db.execute(
-            select(User).where(User.id == webauthn_cred.user_id)
-        )
+        result = await db.execute(select(User).where(User.id == webauthn_cred.user_id))
         user = result.scalar_one_or_none()
 
         if not user or not user.is_active:
@@ -452,7 +446,7 @@ async def verify_authentication(
             logger.warning(
                 "WebAuthn sign count rollback detected for user %s (credential %s): "
                 "stored=%d, received=%d. Possible cloned authenticator.",
-                user.username,
+                user.email,
                 webauthn_cred.id,
                 webauthn_cred.sign_count,
                 verification.new_sign_count,
@@ -494,7 +488,7 @@ async def verify_authentication(
 
     logger.info(
         "WebAuthn authentication successful for user %s (credential_id=%s)",
-        user.username,
+        user.email,
         webauthn_cred.id,
     )
 
@@ -502,7 +496,6 @@ async def verify_authentication(
         message="Login successful",
         user={
             "id": user.id,
-            "username": user.username,
             "email": user.email,
             "is_admin": user.is_admin,
         },
@@ -557,7 +550,7 @@ async def delete_credential(
         logger.warning(
             "WebAuthn credential deletion failed: credential %s not found for user %s",
             credential_id,
-            user.username,
+            user.email,
         )
         raise errors.not_found("Credential")
 
@@ -567,7 +560,7 @@ async def delete_credential(
 
     logger.info(
         "WebAuthn credential deleted for user %s (credential_id=%s)",
-        user.username,
+        user.email,
         credential_id,
     )
 

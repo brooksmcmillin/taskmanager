@@ -45,14 +45,12 @@ class TestUser:
         """Test creating a User instance."""
         user = User(**sample_user)  # type: ignore[arg-type]
         assert user.id == 1
-        assert user.username == "testuser"
         assert user.email == "test@example.com"
 
     def test_user_type_hints(self) -> None:
         """Test User type annotations."""
-        user = User(id=1, username="testuser", email="test@example.com")
+        user = User(id=1, email="test@example.com")
         assert isinstance(user.id, int)
-        assert isinstance(user.username, str)
         assert isinstance(user.email, str)
 
 

@@ -22,7 +22,6 @@ from app.models.user import User
 async def test_user(db_session):
     """Create a test user."""
     user = User(
-        username="testuser",
         email="test@example.com",
         password_hash="hashed",  # pragma: allowlist secret
     )
@@ -35,7 +34,6 @@ async def test_user(db_session):
 async def other_user(db_session):
     """Create another test user for authorization tests."""
     user = User(
-        username="otheruser",
         email="other@example.com",
         password_hash="hashed",  # pragma: allowlist secret
     )
