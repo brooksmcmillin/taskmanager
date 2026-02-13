@@ -18,6 +18,7 @@ ENV PATH="/root/.local/bin:$PATH"
 
 # Copy SDK and framework packages first (needed for local dependencies)
 COPY packages/taskmanager-sdk /packages/taskmanager-sdk
+COPY packages/mcp-auth-framework /packages/mcp-auth-framework
 COPY packages/mcp-resource-framework /packages/mcp-resource-framework
 
 # Copy dependency files
@@ -25,6 +26,7 @@ COPY services/mcp-resource/pyproject.toml ./
 
 # Update pyproject.toml to use absolute paths for Docker build, then install dependencies
 RUN sed -i 's|path = "../../packages/taskmanager-sdk"|path = "/packages/taskmanager-sdk"|' pyproject.toml \
+    && sed -i 's|path = "../../packages/mcp-auth-framework"|path = "/packages/mcp-auth-framework"|' pyproject.toml \
     && sed -i 's|path = "../../packages/mcp-resource-framework"|path = "/packages/mcp-resource-framework"|' pyproject.toml \
     && uv sync --no-dev
 
