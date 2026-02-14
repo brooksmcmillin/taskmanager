@@ -31,7 +31,7 @@ uv run python scripts/seed_test_data.py
 This will:
 - ✅ Check that you're using a development database (not production)
 - 🧹 Clean up any existing test data
-- 👤 Create a test user: username `testuser` / password `TestPass123!`
+- 👤 Create a test user: email `testuser@example.com` / password `TestPass123!`
 - 📁 Create 5 projects (Work, Personal, Learning, Health, Home)
 - 📝 Create 50 tasks (10 per project) with realistic data:
   - 90% have due dates (0-14 days from now)
@@ -54,7 +54,7 @@ npm run dev
 
 1. Open http://localhost:3000/ in your browser
 2. Login with:
-   - **Username**: `testuser` (⚠️ Use username, not email!)
+   - **Email**: `testuser@example.com`
    - **Password**: `TestPass123!`
 3. You'll see the new **Filter by Project** dropdown between the view toggle and the task list
 4. Test filtering:

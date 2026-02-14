@@ -15,26 +15,21 @@ Both backend and frontend are fully implemented and production-ready:
 ### Option 1: Run with Docker (Recommended)
 
 ```bash
-# Start all services (legacy + new stack)
+# Start all services
 docker compose up -d
-
-# Or start just the new stack
-docker compose up -d backend frontend postgres
 
 # View logs
 docker compose logs -f backend frontend
 ```
 
 **Access Points (Local Development):**
-- **New SvelteKit App**: http://localhost:3000
-- **New FastAPI Backend**: http://localhost:8000
+- **SvelteKit App**: http://localhost:3000
+- **FastAPI Backend**: http://localhost:8000
 - **API Docs (Swagger)**: http://localhost:8000/docs
-- **Legacy Astro App**: http://localhost:4321
 
 **Production URLs (via Nginx):**
-- **New SvelteKit App**: https://todo2.brooksmcmillin.com
-- **New FastAPI Backend**: https://api.brooksmcmillin.com
-- **Legacy Astro App**: https://todo.brooksmcmillin.com
+- **SvelteKit App**: https://todo2.brooksmcmillin.com
+- **FastAPI Backend**: https://api.brooksmcmillin.com
 
 ### Option 2: Run Locally (Development)
 
@@ -61,7 +56,7 @@ npm install
 
 # Start development server
 npm run dev
-# Frontend runs on http://localhost:5173 by default
+# Frontend runs on http://localhost:5173 in dev mode (Vite default)
 ```
 
 ## 📁 Project Structure
