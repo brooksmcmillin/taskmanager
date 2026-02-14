@@ -361,6 +361,132 @@ async def test_cannot_create_nested_subtasks_via_update(
     assert "nesting" in response.json()["detail"]["message"].lower()
 
 
+# Parent Task Link Tests
+
+
+@pytest.mark.asyncio
+async def test_get_subtask_includes_parent_task(authenticated_client: AsyncClient):
+    """Test that getting a subtask includes parent_task details in the response."""
+    # Create parent todo
+    parent_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Parent Task", "priority": "high"},
+    )
+    parent_id = parent_response.json()["data"]["id"]
+
+    # Create subtask
+    subtask_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Child Task", "parent_id": parent_id},
+    )
+    subtask_id = subtask_response.json()["data"]["id"]
+
+    # Get the subtask and verify parent_task is included
+    response = await authenticated_client.get(f"/api/todos/{subtask_id}")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["parent_id"] == parent_id
+    assert data["parent_task"] is not None
+    assert data["parent_task"]["id"] == parent_id
+    assert data["parent_task"]["title"] == "Parent Task"
+    assert data["parent_task"]["priority"] == "high"
+    assert data["parent_task"]["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_get_root_task_has_no_parent_task(authenticated_client: AsyncClient):
+    """Test that a root-level task has parent_task as null."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Root Task"},
+    )
+    todo_id = response.json()["data"]["id"]
+
+    response = await authenticated_client.get(f"/api/todos/{todo_id}")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["parent_id"] is None
+    assert data["parent_task"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_subtask_does_not_leak_other_users_parent_task(
+    client: AsyncClient,
+    db_session,
+):
+    """Test that parent_task data is not returned if the parent belongs to another user.
+
+    This is a security test (IDOR prevention): even if a subtask somehow references
+    a parent owned by a different user, the API must not expose that parent's data.
+    """
+    from app.core.security import hash_password
+    from app.models.todo import Todo
+    from app.models.user import User
+
+    # Create two users
+    user1 = User(
+        email="parent_owner@example.com",
+        password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
+    )
+    user2 = User(
+        email="subtask_owner@example.com",
+        password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
+    )
+    db_session.add(user1)
+    db_session.add(user2)
+    await db_session.commit()
+    await db_session.refresh(user1)
+    await db_session.refresh(user2)
+
+    # Create a task owned by user1
+    user1_task = Todo(
+        user_id=user1.id,
+        title="User1 Secret Task",
+        priority="high",
+        status="pending",
+        tags=[],
+        position=0,
+    )
+    db_session.add(user1_task)
+    await db_session.flush()
+    await db_session.refresh(user1_task)
+
+    # Create a task owned by user2 that references user1's task as parent
+    # (simulating a data integrity issue or direct DB manipulation)
+    user2_task = Todo(
+        user_id=user2.id,
+        title="User2 Task",
+        priority="medium",
+        status="pending",
+        parent_id=user1_task.id,
+        tags=[],
+        position=0,
+    )
+    db_session.add(user2_task)
+    await db_session.commit()
+    await db_session.refresh(user2_task)
+
+    # Login as user2
+    login_response = await client.post(
+        "/api/auth/login",
+        json={
+            "email": "subtask_owner@example.com",
+            "password": "TestPass123!",  # pragma: allowlist secret
+        },
+    )
+    assert login_response.status_code == 200
+
+    # parent_task must not be returned since parent belongs to user1
+    response = await client.get(f"/api/todos/{user2_task.id}")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["parent_id"] == user1_task.id  # parent_id is still set
+    assert data["parent_task"] is None  # but parent_task details must not be leaked
+
+
 # Autonomy Tier Tests
 
 

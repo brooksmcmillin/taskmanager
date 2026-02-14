@@ -664,7 +664,11 @@ async def get_todo(
     parent_task = None
     if todo.parent_id:
         parent_result = await db.execute(
-            select(Todo).where(Todo.id == todo.parent_id, Todo.deleted_at.is_(None))
+            select(Todo).where(
+                Todo.id == todo.parent_id,
+                Todo.user_id == user.id,
+                Todo.deleted_at.is_(None),
+            )
         )
         parent_task = parent_result.scalar_one_or_none()
 

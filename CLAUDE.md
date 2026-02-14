@@ -316,6 +316,10 @@ make test-sdk          # Python SDK (pytest)
 - Component testing with Svelte Testing Library
 - Test specs in `tests/` directory
 
+## Development Guidelines
+
+- **Unit tests are required for all new features and bug fixes.** Add tests that cover the happy path, edge cases, and security-relevant behavior (e.g., authorization checks). Place backend tests in `services/backend/tests/` and frontend tests in `services/frontend/tests/`.
+
 ## Python Development Notes
 
 - Use `uv` for package management (not pip directly)
