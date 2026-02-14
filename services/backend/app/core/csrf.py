@@ -10,9 +10,10 @@ and are skipped.
 
 from urllib.parse import urlparse
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 
@@ -20,11 +21,13 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 class CSRFMiddleware(BaseHTTPMiddleware):
     """Validate Origin header on session-authenticated state-changing requests."""
 
-    def __init__(self, app, allowed_origins: list[str]) -> None:  # type: ignore[type-arg]
+    def __init__(self, app: ASGIApp, allowed_origins: list[str]) -> None:
         super().__init__(app)
         self.allowed_origins = set(allowed_origins)
 
-    async def dispatch(self, request: Request, call_next) -> Response:  # type: ignore[type-arg]
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         # Skip safe methods
         if request.method in SAFE_METHODS:
             return await call_next(request)
@@ -50,6 +53,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         referer = request.headers.get("referer")
         if referer:
             parsed = urlparse(referer)
+            if not parsed.scheme or not parsed.netloc:
+                return self._csrf_error()
             referer_origin = f"{parsed.scheme}://{parsed.netloc}"
             if referer_origin not in self.allowed_origins:
                 return self._csrf_error()
