@@ -16,6 +16,19 @@ export interface Attachment {
 	created_at: string;
 }
 
+export interface Comment {
+	id: number;
+	todo_id: number;
+	user_id: number;
+	content: string;
+	created_at: string;
+	updated_at: string | null;
+}
+
+export interface CommentCreate {
+	content: string;
+}
+
 export interface Subtask {
 	id: number;
 	title: string;
@@ -61,6 +74,7 @@ export interface Todo {
 	dependencies?: TaskDependency[];
 	dependents?: TaskDependency[];
 	attachments?: Attachment[];
+	comments?: Comment[];
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;

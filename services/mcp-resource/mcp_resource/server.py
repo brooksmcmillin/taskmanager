@@ -35,6 +35,7 @@ def _past_due_date_warning(due_date: str | None) -> str | None:
         pass
     return None
 
+
 DEFAULT_SCOPE = ["read"]
 
 load_dotenv()
@@ -965,6 +966,147 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in delete_task_attachment: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def list_task_comments(task_id: str) -> str:
+        """
+        List all comments for a specific task.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+
+        Returns:
+            JSON object with "comments" array containing comment objects with fields:
+            id, todo_id, user_id, content, created_at, updated_at
+        """
+        logger.info(f"=== list_task_comments called: task_id='{task_id}' ===")
+        try:
+            api_client = get_api_client()
+
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            response = api_client.get_comments(todo_id)
+            logger.info(
+                f"list_comments response: success={response.success}, status={response.status_code}"
+            )
+
+            comments, comments_error = validate_list_response(response, "comments")
+            if comments_error:
+                logger.error(f"Failed to get comments: {comments_error}")
+                return json.dumps({"error": comments_error})
+
+            logger.info(f"Returning {len(comments)} comments")
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "comments": comments,
+                    "count": len(comments),
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in list_task_comments: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["content"], screen_output=True)
+    async def add_task_comment(task_id: str, content: str) -> str:
+        """
+        Add a comment to a task.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+            content: Comment text content (required)
+
+        Returns:
+            JSON object confirming comment creation with id, content, and status
+        """
+        logger.info(f"=== add_task_comment called: task_id='{task_id}' ===")
+        try:
+            api_client = get_api_client()
+
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            response = api_client.create_comment(todo_id, content)
+            logger.info(
+                f"create_comment response: success={response.success}, status={response.status_code}"
+            )
+
+            comment, comment_error = validate_dict_response(response, "created comment")
+            if comment_error:
+                logger.error(f"Failed to create comment: {comment_error}")
+                return json.dumps({"error": comment_error})
+
+            logger.info(f"Created comment: {comment}")
+            comment_id = comment.get("id") if comment is not None else None
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "comment_id": comment_id,
+                    "content": content,
+                    "status": "created",
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in add_task_comment: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def delete_task_comment(task_id: str, comment_id: int) -> str:
+        """
+        Delete a comment from a task.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+            comment_id: Comment ID to delete
+
+        Returns:
+            JSON object confirming deletion with deleted status and id
+        """
+        logger.info(
+            f"=== delete_task_comment called: task_id='{task_id}', comment_id={comment_id} ==="
+        )
+        try:
+            api_client = get_api_client()
+
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            response = api_client.delete_comment(todo_id, comment_id)
+            logger.info(
+                f"delete_comment response: success={response.success}, status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to delete comment: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Deleted comment {comment_id} from task {task_id}")
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "comment_id": comment_id,
+                    "status": "deleted",
+                    "current_time": datetime.datetime.now().isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in delete_task_comment: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     @app.tool()

@@ -510,6 +510,65 @@ class TaskManagerClient:
         """
         return self._make_request("GET", f"/todos/{todo_id}/attachments")
 
+    # Comment methods
+    def get_comments(self, todo_id: int) -> ApiResponse:
+        """
+        Get all comments for a todo.
+
+        Args:
+            todo_id: Todo ID
+
+        Returns:
+            ApiResponse with list of comments
+        """
+        return self._make_request("GET", f"/todos/{todo_id}/comments")
+
+    def create_comment(self, todo_id: int, content: str) -> ApiResponse:
+        """
+        Create a comment on a todo.
+
+        Args:
+            todo_id: Todo ID
+            content: Comment text content
+
+        Returns:
+            ApiResponse with created comment data
+        """
+        return self._make_request(
+            "POST", f"/todos/{todo_id}/comments", {"content": content}
+        )
+
+    def update_comment(
+        self, todo_id: int, comment_id: int, content: str
+    ) -> ApiResponse:
+        """
+        Update a comment's content.
+
+        Args:
+            todo_id: Todo ID
+            comment_id: Comment ID to update
+            content: New comment text content
+
+        Returns:
+            ApiResponse with updated comment data
+        """
+        return self._make_request(
+            "PUT", f"/todos/{todo_id}/comments/{comment_id}", {"content": content}
+        )
+
+    def delete_comment(self, todo_id: int, comment_id: int) -> ApiResponse:
+        """
+        Delete a comment from a todo (soft-delete).
+
+        Args:
+            todo_id: Todo ID
+            comment_id: Comment ID to delete
+
+        Returns:
+            ApiResponse with deletion result
+        """
+        return self._make_request("DELETE", f"/todos/{todo_id}/comments/{comment_id}")
+
     def delete_attachment(self, todo_id: int, attachment_id: int) -> ApiResponse:
         """
         Delete an attachment from a todo.

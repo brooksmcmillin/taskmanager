@@ -7,6 +7,8 @@ import type {
 	Subtask,
 	SubtaskCreate,
 	Attachment,
+	Comment,
+	CommentCreate,
 	TaskDependency
 } from '$lib/types';
 import { api } from '$lib/api/client';
@@ -15,7 +17,7 @@ import { createCrudStore } from './createCrudStore';
 
 // --- Store update helpers ---
 
-type TodoArrayKey = 'subtasks' | 'attachments' | 'dependencies';
+type TodoArrayKey = 'subtasks' | 'attachments' | 'dependencies' | 'comments';
 
 /** Set a field on a specific todo by ID. */
 function setTodoField(todos: Todo[], todoId: number, field: TodoArrayKey, value: unknown): Todo[] {
@@ -216,6 +218,63 @@ function createTodoStore() {
 				store.update((todos) => removeFromTodoArray(todos, todoId, 'dependencies', dependencyId));
 			} catch (error) {
 				logger.error('Failed to remove dependency:', error);
+				throw error;
+			}
+		},
+		// Comment methods
+		loadComments: async (todoId: number): Promise<Comment[]> => {
+			try {
+				const response = await api.get<{ data: Comment[] }>(`/api/todos/${todoId}/comments`);
+				store.update((todos) => setTodoField(todos, todoId, 'comments', response.data));
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to load comments:', error);
+				throw error;
+			}
+		},
+		addComment: async (todoId: number, comment: CommentCreate): Promise<Comment> => {
+			try {
+				const response = await api.post<{ data: Comment }>(
+					`/api/todos/${todoId}/comments`,
+					comment
+				);
+				store.update((todos) => appendToTodoArray(todos, todoId, 'comments', response.data));
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to add comment:', error);
+				throw error;
+			}
+		},
+		updateComment: async (todoId: number, commentId: number, content: string): Promise<Comment> => {
+			try {
+				const response = await api.put<{ data: Comment }>(
+					`/api/todos/${todoId}/comments/${commentId}`,
+					{ content }
+				);
+				store.update((todos) =>
+					todos.map((t) =>
+						t.id === todoId
+							? {
+									...t,
+									comments: ((t.comments as Comment[] | undefined) || []).map((c) =>
+										c.id === commentId ? response.data : c
+									)
+								}
+							: t
+					)
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to update comment:', error);
+				throw error;
+			}
+		},
+		removeComment: async (todoId: number, commentId: number): Promise<void> => {
+			try {
+				await api.delete(`/api/todos/${todoId}/comments/${commentId}`);
+				store.update((todos) => removeFromTodoArray(todos, todoId, 'comments', commentId));
+			} catch (error) {
+				logger.error('Failed to remove comment:', error);
 				throw error;
 			}
 		}

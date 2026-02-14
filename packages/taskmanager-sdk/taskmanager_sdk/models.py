@@ -99,6 +99,18 @@ class DeviceAuthorizationResponse:
 
 
 @dataclass
+class Comment:
+    """Comment on a task."""
+
+    id: int
+    todo_id: int
+    user_id: int
+    content: str
+    created_at: str
+    updated_at: str | None = None
+
+
+@dataclass
 class Task:
     """Task object returned by API endpoints."""
 

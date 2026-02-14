@@ -4,6 +4,7 @@ from app.models.api_key import ApiKey
 from app.models.article import Article
 from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.attachment import Attachment
+from app.models.comment import Comment
 from app.models.feed_source import FeedSource, FeedType
 from app.models.oauth import AccessToken, AuthorizationCode, DeviceCode, OAuthClient
 from app.models.oauth_provider import UserOAuthProvider
@@ -38,5 +39,6 @@ __all__ = [
     "ArticleInteraction",
     "ArticleRating",
     "Attachment",
+    "Comment",
     "WebAuthnCredential",
 ]

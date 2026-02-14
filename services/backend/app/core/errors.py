@@ -220,6 +220,11 @@ class Errors:
         """NOT_FOUND_010: Task dependency not found."""
         return ApiError("NOT_FOUND_010", 404, "Task dependency not found")
 
+    @staticmethod
+    def comment_not_found() -> ApiError:
+        """NOT_FOUND_011: Comment not found."""
+        return ApiError("NOT_FOUND_011", 404, "Comment not found")
+
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
     # =========================================================================
