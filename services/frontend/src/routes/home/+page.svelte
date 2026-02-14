@@ -93,9 +93,10 @@
 				tasksLoading = false;
 			});
 
-		api.get<ApiResponse<Article[]>>('/api/news', {
-			params: { limit: '30', unread_only: 'true' }
-		})
+		api
+			.get<ApiResponse<Article[]>>('/api/news', {
+				params: { limit: '30', unread_only: 'true' }
+			})
 			.then((result) => {
 				if (!mounted) return;
 				articles = result.data || [];
@@ -157,9 +158,7 @@
 									<div class="task-content">
 										<div class="task-title">{task.title}</div>
 										<div class="task-meta">
-											<span class="task-status {task.status}"
-												>{task.status.replace('_', ' ')}</span
-											>
+											<span class="task-status {task.status}">{task.status.replace('_', ' ')}</span>
 											{#if task.project_name}
 												<span class="task-project">{task.project_name}</span>
 											{/if}
@@ -187,9 +186,7 @@
 								<div class="task-content">
 									<div class="task-title">{task.title}</div>
 									<div class="task-meta">
-										<span class="task-status {task.status}"
-											>{task.status.replace('_', ' ')}</span
-										>
+										<span class="task-status {task.status}">{task.status.replace('_', ' ')}</span>
 										{#if task.project_name}
 											<span class="task-project">{task.project_name}</span>
 										{/if}
