@@ -341,6 +341,7 @@ class TestDeleteFeedSource:
         data = response.json()["data"]
         assert data["deleted"] is True
         assert data["id"] == sample_source.id
+        assert data["articles_deleted"] == 0
 
         # Verify source is gone
         response = await admin_client.get("/api/news/sources")
@@ -374,6 +375,7 @@ class TestDeleteFeedSource:
 
         response = await admin_client.delete(f"/api/news/sources/{sample_source.id}")
         assert response.status_code == 200
+        assert response.json()["data"]["articles_deleted"] == 1
 
         # Verify article is also deleted
         from sqlalchemy import select

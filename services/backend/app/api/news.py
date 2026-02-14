@@ -157,6 +157,18 @@ async def create_feed_source(
     db: DbSession,
 ) -> dict[str, FeedSourceResponse]:
     """Create a new feed source (admin only)."""
+    # Check for duplicate name
+    existing = await db.execute(
+        select(FeedSource).where(FeedSource.name == source.name)
+    )
+    if existing.scalar_one_or_none():
+        raise errors.validation("A feed source with this name already exists")
+
+    # Check for duplicate URL
+    existing = await db.execute(select(FeedSource).where(FeedSource.url == source.url))
+    if existing.scalar_one_or_none():
+        raise errors.validation("A feed source with this URL already exists")
+
     feed_source = FeedSource(**source.model_dump())
     db.add(feed_source)
     try:
@@ -229,10 +241,23 @@ async def delete_feed_source(
     if not feed_source:
         raise errors.not_found("Feed source")
 
+    article_count = (
+        await db.scalar(
+            select(func.count(Article.id)).where(Article.feed_source_id == source_id)
+        )
+        or 0
+    )
+
     await db.delete(feed_source)
     await db.commit()
 
-    return {"data": {"deleted": True, "id": source_id}}
+    return {
+        "data": {
+            "deleted": True,
+            "id": source_id,
+            "articles_deleted": article_count,
+        }
+    }
 
 
 # Article endpoints

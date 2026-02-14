@@ -7,6 +7,7 @@
 
 	let sources: FeedSource[] = $state([]);
 	let loading = $state(true);
+	let error = $state<string | null>(null);
 	let showFeaturedOnly = $state(true);
 	let sourceModal: FeedSourceModal;
 
@@ -16,6 +17,7 @@
 
 	async function loadSources() {
 		try {
+			error = null;
 			loading = true;
 			const params: Record<string, string> = {};
 			if (showFeaturedOnly) {
@@ -27,9 +29,9 @@
 			if (response.data) {
 				sources = response.data;
 			}
-		} catch (error) {
-			console.error('Error loading sources:', error);
-			toasts.show('Failed to load feed sources: ' + (error as Error).message, 'error');
+		} catch (e) {
+			error = (e as Error).message;
+			toasts.show('Failed to load feed sources: ' + error, 'error');
 		} finally {
 			loading = false;
 		}
@@ -141,6 +143,12 @@
 		<div class="text-center py-12">
 			<div class="spinner"></div>
 			<p class="text-gray-600 mt-2">Loading sources...</p>
+		</div>
+	{:else if error}
+		<div class="text-center py-12 bg-red-50 rounded-lg">
+			<p class="text-red-600 font-medium mb-2">Failed to load feed sources</p>
+			<p class="text-red-500 text-sm mb-4">{error}</p>
+			<button class="btn btn-primary" onclick={loadSources}>Retry</button>
 		</div>
 	{:else}
 		<!-- Active Sources -->
