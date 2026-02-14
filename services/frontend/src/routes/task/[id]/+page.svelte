@@ -58,6 +58,17 @@
 		}
 	}
 
+	async function handleUncomplete() {
+		if (!todo) return;
+		try {
+			await todos.updateTodo(todo.id, { status: 'pending' });
+			toasts.show('Task marked as incomplete', 'success');
+			await loadTodo();
+		} catch (e) {
+			toasts.show('Failed to update task', 'error');
+		}
+	}
+
 	async function handleFormSuccess() {
 		await loadTodo();
 		mode = 'view';
@@ -264,6 +275,8 @@
 						<button class="btn btn-secondary" on:click={handleEdit}>Edit Task</button>
 						{#if todo.status === 'pending' || todo.status === 'in_progress'}
 							<button class="btn btn-success" on:click={handleComplete}>Mark Complete</button>
+						{:else if todo.status === 'completed'}
+							<button class="btn btn-warning" on:click={handleUncomplete}>Mark Incomplete</button>
 						{/if}
 					</div>
 				</div>

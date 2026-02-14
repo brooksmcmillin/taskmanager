@@ -729,6 +729,10 @@ async def update_todo(
     for field, value in update_data.items():
         setattr(todo, field, value)
 
+    # Clear completed_date when status changes away from completed
+    if "status" in update_data and update_data["status"] != Status.completed:
+        todo.completed_date = None
+
     # Commit the changes
     await db.commit()
     await db.refresh(todo)
