@@ -100,23 +100,17 @@
 	</div>
 
 	<!-- Filter Toggle -->
-	<div class="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
+	<div class="filter-toggle">
 		<button
-			class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-			class:bg-white={showFeaturedOnly}
-			class:shadow-sm={showFeaturedOnly}
-			class:text-gray-900={showFeaturedOnly}
-			class:text-gray-600={!showFeaturedOnly}
+			class="filter-toggle-btn"
+			class:active={showFeaturedOnly}
 			onclick={() => toggleFilter(true)}
 		>
 			Featured
 		</button>
 		<button
-			class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-			class:bg-white={!showFeaturedOnly}
-			class:shadow-sm={!showFeaturedOnly}
-			class:text-gray-900={!showFeaturedOnly}
-			class:text-gray-600={showFeaturedOnly}
+			class="filter-toggle-btn"
+			class:active={!showFeaturedOnly}
 			onclick={() => toggleFilter(false)}
 		>
 			All Sources
@@ -351,6 +345,34 @@
 <FeedSourceModal bind:this={sourceModal} on:success={loadSources} />
 
 <style>
+	.filter-toggle {
+		display: flex;
+		gap: 0.25rem;
+		margin-bottom: 1.5rem;
+		background-color: var(--bg-input);
+		border-radius: var(--radius-lg);
+		padding: 0.25rem;
+		width: fit-content;
+	}
+
+	.filter-toggle-btn {
+		padding: 0.5rem 1rem;
+		border-radius: var(--radius-md);
+		font-size: 0.875rem;
+		font-weight: 500;
+		transition: all 0.15s ease;
+		color: var(--text-muted);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+	}
+
+	.filter-toggle-btn.active {
+		background-color: var(--bg-card);
+		color: var(--text-primary);
+		box-shadow: var(--shadow-sm);
+	}
+
 	.spinner {
 		width: 48px;
 		height: 48px;

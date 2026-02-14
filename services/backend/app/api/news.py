@@ -246,6 +246,7 @@ async def list_articles(
     unread_only: bool = Query(False),
     search: str | None = Query(None),
     feed_type: str | None = Query(None),
+    featured: bool | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> ListResponse[ArticleResponse]:
@@ -268,6 +269,10 @@ async def list_articles(
             ),
         )
     )
+
+    # Filter by featured sources
+    if featured is not None:
+        query = query.where(FeedSource.is_featured == featured)
 
     # Filter by feed type
     if feed_type and feed_type in ["paper", "article"]:

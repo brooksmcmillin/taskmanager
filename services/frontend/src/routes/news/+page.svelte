@@ -6,6 +6,7 @@
 
 	let articles: Article[] = $state([]);
 	let loading = $state(true);
+	let showFeaturedOnly = $state(true);
 	let showUnreadOnly = $state(false);
 	let feedTypeFilter = $state<'all' | 'paper' | 'article'>('all');
 	let searchQuery = $state('');
@@ -33,6 +34,10 @@
 				limit: String(limit),
 				offset: String(offset)
 			};
+
+			if (showFeaturedOnly) {
+				params.featured = 'true';
+			}
 
 			if (showUnreadOnly) {
 				params.unread_only = 'true';
@@ -133,6 +138,30 @@
 		</p>
 	</header>
 
+	<!-- Source Toggle -->
+	<div class="filter-toggle">
+		<button
+			class="filter-toggle-btn"
+			class:active={showFeaturedOnly}
+			onclick={() => {
+				showFeaturedOnly = true;
+				loadArticles(true);
+			}}
+		>
+			Featured
+		</button>
+		<button
+			class="filter-toggle-btn"
+			class:active={!showFeaturedOnly}
+			onclick={() => {
+				showFeaturedOnly = false;
+				loadArticles(true);
+			}}
+		>
+			All Sources
+		</button>
+	</div>
+
 	<!-- Filters and Search -->
 	<div class="flex gap-4 mb-6 items-center flex-wrap">
 		<label class="flex items-center gap-2 cursor-pointer">
@@ -211,11 +240,12 @@
 	{:else if articles.length === 0}
 		<div class="empty-state">
 			<p>No articles found.</p>
-			{#if searchQuery || showUnreadOnly}
+			{#if searchQuery || showUnreadOnly || showFeaturedOnly}
 				<button
 					onclick={() => {
 						searchQuery = '';
 						showUnreadOnly = false;
+						showFeaturedOnly = false;
 						loadArticles(true);
 					}}
 					class="btn btn-outline mt-4"
@@ -353,6 +383,35 @@
 		font-size: 1rem;
 		line-height: 1.5;
 		margin: 0;
+	}
+
+	/* Filter Toggle */
+	.filter-toggle {
+		display: flex;
+		gap: 0.25rem;
+		margin-bottom: 1.5rem;
+		background-color: var(--bg-input);
+		border-radius: var(--radius-lg);
+		padding: 0.25rem;
+		width: fit-content;
+	}
+
+	.filter-toggle-btn {
+		padding: 0.5rem 1rem;
+		border-radius: var(--radius-md);
+		font-size: 0.875rem;
+		font-weight: 500;
+		transition: all 0.15s ease;
+		color: var(--text-muted);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+	}
+
+	.filter-toggle-btn.active {
+		background-color: var(--bg-card);
+		color: var(--text-primary);
+		box-shadow: var(--shadow-sm);
 	}
 
 	/* Article count */
