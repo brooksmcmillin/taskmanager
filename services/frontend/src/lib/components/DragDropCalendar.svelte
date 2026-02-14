@@ -7,6 +7,8 @@
 	import { hexTo50Shade } from '$lib/utils/colors';
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
+	import { getPriorityColor } from '$lib/utils/priority';
+	import { goto } from '$app/navigation';
 	import type { Todo, TodoFilters } from '$lib/types';
 
 	export let filters: TodoFilters = {};
@@ -149,6 +151,11 @@
 		dispatch('editTodo', todo);
 	}
 
+	function navigateToSubtask(event: MouseEvent, subtaskId: number) {
+		event.stopPropagation();
+		goto(`/task/${subtaskId}`);
+	}
+
 	onMount(() => {
 		// Subscribe to pendingTodos and rebuild the calendar whenever it changes
 		// But don't update during drag operations to avoid interfering with the drag
@@ -202,6 +209,9 @@
 						on:finalize={(e) => handleFinalize(dateStr, e)}
 					>
 						{#each todosByDate[dateStr] || [] as todo (todo.id)}
+							{@const subtasks = todo.subtasks || []}
+							{@const pendingSubtasks = subtasks.filter((s) => s.status !== 'completed')}
+							{@const completedSubtaskCount = subtasks.length - pendingSubtasks.length}
 							<div
 								class="calendar-task {todo.priority}-priority"
 								style="background-color: {hexTo50Shade(
@@ -217,6 +227,31 @@
 								}}
 							>
 								<div class="task-title">{todo.title}</div>
+								{#if subtasks.length > 0}
+									<div class="calendar-subtask-indicator">
+										<span class="calendar-subtask-count"
+											>{completedSubtaskCount}/{subtasks.length}</span
+										>
+									</div>
+									{#each pendingSubtasks as subtask}
+										<div
+											class="calendar-subtask-row"
+											role="button"
+											tabindex="0"
+											on:click|stopPropagation={(e) => navigateToSubtask(e, subtask.id)}
+											on:dblclick|stopPropagation
+											on:keydown|stopPropagation={(e) => {
+												if (e.key === 'Enter') goto(`/task/${subtask.id}`);
+											}}
+										>
+											<span
+												class="cal-subtask-dot"
+												style="background-color: {getPriorityColor(subtask.priority)}"
+											></span>
+											<span class="cal-subtask-title">{subtask.title}</span>
+										</div>
+									{/each}
+								{/if}
 							</div>
 						{/each}
 					</div>

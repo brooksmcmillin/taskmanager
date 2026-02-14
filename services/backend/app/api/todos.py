@@ -535,6 +535,7 @@ async def list_todos(
             subtasks_query = (
                 select(Todo)
                 .where(Todo.parent_id.in_(todo_ids))
+                .where(Todo.user_id == user.id)
                 .where(Todo.deleted_at.is_(None))
                 .order_by(Todo.position, Todo.created_at.asc())
             )

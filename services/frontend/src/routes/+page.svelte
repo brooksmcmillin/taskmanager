@@ -205,46 +205,78 @@
 						</div>
 						<div class="space-y-3">
 							{#each projectTodos as todo}
-								<div
-									class="flex items-center justify-between p-4 border rounded border-l-4 hover:shadow-md transition-shadow cursor-pointer"
-									style="border-left-color: {todo.project_color || '#6b7280'}"
-									on:click={() => openTaskDetail(todo)}
-									role="button"
-									tabindex="0"
-									on:keydown={(e) => e.key === 'Enter' && openTaskDetail(todo)}
-								>
-									<div class="flex-1">
-										<div class="flex items-center gap-2">
-											<span
-												class="w-2 h-2 rounded-full flex-shrink-0"
-												style="background-color: {getPriorityColor(todo.priority)}"
-												title="{todo.priority} priority"
-											></span>
-											<div class="text-base font-medium text-gray-900">{todo.title}</div>
+								{@const subtasks = todo.subtasks || []}
+								{@const pendingSubtasks = subtasks.filter((s) => s.status !== 'completed')}
+								{@const completedSubtaskCount = subtasks.length - pendingSubtasks.length}
+								<div class="todo-with-subtasks">
+									<div
+										class="flex items-center justify-between p-4 border rounded border-l-4 hover:shadow-md transition-shadow cursor-pointer"
+										style="border-left-color: {todo.project_color || '#6b7280'}"
+										on:click={() => openTaskDetail(todo)}
+										role="button"
+										tabindex="0"
+										on:keydown={(e) => e.key === 'Enter' && openTaskDetail(todo)}
+									>
+										<div class="flex-1">
+											<div class="flex items-center gap-2">
+												<span
+													class="w-2 h-2 rounded-full flex-shrink-0"
+													style="background-color: {getPriorityColor(todo.priority)}"
+													title="{todo.priority} priority"
+												></span>
+												<div class="text-base font-medium text-gray-900">{todo.title}</div>
+												{#if subtasks.length > 0}
+													<span
+														class="subtask-badge"
+														title="{pendingSubtasks.length} pending of {subtasks.length} subtasks"
+													>
+														{completedSubtaskCount}/{subtasks.length}
+													</span>
+												{/if}
+											</div>
+											<div class="text-xs text-gray-500 mt-1.5 ml-4">
+												{todo.priority.charAt(0).toUpperCase() + todo.priority.slice(1)}
+												{#if todo.due_date}
+													• Due: {formatDateDisplay(todo.due_date)}
+												{/if}
+											</div>
 										</div>
-										<div class="text-xs text-gray-500 mt-1.5 ml-4">
-											{todo.priority.charAt(0).toUpperCase() + todo.priority.slice(1)}
-											{#if todo.due_date}
-												• Due: {formatDateDisplay(todo.due_date)}
-											{/if}
+										<div class="flex gap-2 ml-4">
+											<button
+												on:click|stopPropagation={() => openEditPanel(todo)}
+												class="btn btn-secondary btn-sm"
+												title="Edit todo"
+											>
+												✏️
+											</button>
+											<button
+												on:click|stopPropagation={() => handleCompleteTodo(todo.id)}
+												class="btn btn-success btn-sm"
+												title="Mark as complete"
+											>
+												✓
+											</button>
 										</div>
 									</div>
-									<div class="flex gap-2 ml-4">
-										<button
-											on:click|stopPropagation={() => openEditPanel(todo)}
-											class="btn btn-secondary btn-sm"
-											title="Edit todo"
-										>
-											✏️
-										</button>
-										<button
-											on:click|stopPropagation={() => handleCompleteTodo(todo.id)}
-											class="btn btn-success btn-sm"
-											title="Mark as complete"
-										>
-											✓
-										</button>
-									</div>
+									{#if pendingSubtasks.length > 0}
+										<div class="subtask-list-inline">
+											{#each pendingSubtasks as subtask}
+												<a class="subtask-row" href="/task/{subtask.id}">
+													<span class="subtask-connector"></span>
+													<span
+														class="subtask-priority-dot"
+														style="background-color: {getPriorityColor(subtask.priority)}"
+														title="{subtask.priority} priority"
+													></span>
+													<span class="subtask-key">#{subtask.id}</span>
+													<span class="subtask-title-text">{subtask.title}</span>
+													<span class="subtask-status-pill {subtask.status}">
+														{subtask.status.replace('_', ' ')}
+													</span>
+												</a>
+											{/each}
+										</div>
+									{/if}
 								</div>
 							{/each}
 						</div>
@@ -287,6 +319,95 @@
 		align-items: center;
 	}
 
+	/* Subtask badge on parent task row */
+	.subtask-badge {
+		font-size: 0.625rem;
+		font-weight: 600;
+		background-color: var(--gray-100, #f3f4f6);
+		color: var(--text-secondary, #6b7280);
+		padding: 0.125rem 0.375rem;
+		border-radius: 999px;
+		white-space: nowrap;
+		line-height: 1;
+	}
+
+	/* Subtask list under parent in list view */
+	.subtask-list-inline {
+		margin-left: 1.5rem;
+		border-left: 2px solid var(--border-color, #e5e7eb);
+		padding-left: 0;
+	}
+
+	.subtask-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.375rem 0.75rem;
+		font-size: 0.8125rem;
+		color: var(--text-primary, #1f2937);
+		text-decoration: none;
+		border-bottom: 1px solid var(--border-light, #f3f4f6);
+		transition: background-color 0.15s ease;
+		position: relative;
+	}
+
+	.subtask-row:last-child {
+		border-bottom: none;
+	}
+
+	.subtask-row:hover {
+		background-color: var(--bg-hover, #f9fafb);
+	}
+
+	.subtask-connector {
+		width: 0.75rem;
+		height: 1px;
+		background-color: var(--border-color, #e5e7eb);
+		flex-shrink: 0;
+	}
+
+	.subtask-priority-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.subtask-key {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--text-muted, #9ca3af);
+		font-family: monospace;
+		flex-shrink: 0;
+	}
+
+	.subtask-title-text {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.subtask-status-pill {
+		font-size: 0.625rem;
+		font-weight: 500;
+		padding: 0.0625rem 0.375rem;
+		border-radius: 999px;
+		text-transform: capitalize;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
+	.subtask-status-pill.pending {
+		background-color: var(--gray-100, #f3f4f6);
+		color: var(--text-secondary, #6b7280);
+	}
+
+	.subtask-status-pill.in_progress {
+		background-color: #dbeafe;
+		color: #1d4ed8;
+	}
+
 	@media (max-width: 768px) {
 		/* $breakpoint-md */
 		.toolbar {
@@ -310,6 +431,10 @@
 		.toolbar-filters :global(.due-date-filter-container) {
 			max-width: 100%;
 			width: 100%;
+		}
+
+		.subtask-list-inline {
+			margin-left: 1rem;
 		}
 	}
 </style>
