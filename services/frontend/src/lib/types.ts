@@ -123,6 +123,7 @@ export interface TodoFilters {
 	start_date?: string;
 	end_date?: string;
 	no_due_date?: boolean;
+	include_subtasks?: boolean;
 }
 
 export interface TodoCreate {

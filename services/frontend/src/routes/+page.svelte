@@ -205,6 +205,9 @@
 						</div>
 						<div class="space-y-3">
 							{#each projectTodos as todo}
+								{@const subtasks = todo.subtasks || []}
+								{@const pendingSubtasks = subtasks.filter(s => s.status !== 'completed')}
+								{@const completedSubtaskCount = subtasks.length - pendingSubtasks.length}
 								<div class="todo-with-subtasks">
 									<div
 										class="flex items-center justify-between p-4 border rounded border-l-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -222,9 +225,9 @@
 													title="{todo.priority} priority"
 												></span>
 												<div class="text-base font-medium text-gray-900">{todo.title}</div>
-												{#if todo.subtasks && todo.subtasks.length > 0}
-													<span class="subtask-badge" title="{todo.subtasks.filter(s => s.status === 'completed').length}/{todo.subtasks.length} subtasks done">
-														{todo.subtasks.filter(s => s.status === 'completed').length}/{todo.subtasks.length}
+												{#if subtasks.length > 0}
+													<span class="subtask-badge" title="{pendingSubtasks.length} pending of {subtasks.length} subtasks">
+														{completedSubtaskCount}/{subtasks.length}
 													</span>
 												{/if}
 											</div>
@@ -252,9 +255,9 @@
 											</button>
 										</div>
 									</div>
-									{#if todo.subtasks && todo.subtasks.length > 0}
+									{#if pendingSubtasks.length > 0}
 										<div class="subtask-list-inline">
-											{#each todo.subtasks.filter(s => s.status !== 'completed') as subtask}
+											{#each pendingSubtasks as subtask}
 												<a
 													class="subtask-row"
 													href="/task/{subtask.id}"

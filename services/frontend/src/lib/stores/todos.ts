@@ -61,7 +61,7 @@ function createTodoStore() {
 
 	return {
 		subscribe: store.subscribe,
-		load: async (filters?: TodoFilters & { include_subtasks?: boolean }) => {
+		load: async (filters?: TodoFilters) => {
 			try {
 				// Always include subtasks by default
 				const mergedFilters = { include_subtasks: true, ...filters };

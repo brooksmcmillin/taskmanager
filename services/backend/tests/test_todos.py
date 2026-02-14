@@ -689,3 +689,221 @@ async def test_update_todo_rejects_invalid_autonomy_tier(
     )
 
     assert response.status_code == 422  # Validation error
+
+
+# Include Subtasks Tests
+
+
+@pytest.mark.asyncio
+async def test_list_todos_include_subtasks(authenticated_client: AsyncClient):
+    """Test that include_subtasks=true returns subtasks with parent todos."""
+    # Create parent todo
+    parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Parent Task", "priority": "high"},
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    # Create subtasks
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Subtask 1", "parent_id": parent_id, "priority": "medium"},
+    )
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Subtask 2", "parent_id": parent_id, "priority": "low"},
+    )
+
+    # List with include_subtasks=true
+    response = await authenticated_client.get(
+        "/api/todos",
+        params={"include_subtasks": "true"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    # Should only return the parent (subtasks are not root-level)
+    assert len(data) == 1
+    assert data[0]["title"] == "Parent Task"
+
+    # Subtasks should be nested under the parent
+    assert len(data[0]["subtasks"]) == 2
+    subtask_titles = {s["title"] for s in data[0]["subtasks"]}
+    assert subtask_titles == {"Subtask 1", "Subtask 2"}
+
+
+@pytest.mark.asyncio
+async def test_list_todos_without_include_subtasks(authenticated_client: AsyncClient):
+    """Test that without include_subtasks, subtasks array is empty."""
+    # Create parent todo
+    parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Parent Task"},
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    # Create subtask
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Subtask 1", "parent_id": parent_id},
+    )
+
+    # List without include_subtasks
+    response = await authenticated_client.get("/api/todos")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert len(data) == 1
+    assert data[0]["subtasks"] == []
+
+
+@pytest.mark.asyncio
+async def test_include_subtasks_does_not_leak_other_users_subtasks(
+    client: AsyncClient,
+    db_session,
+):
+    """Test that include_subtasks only returns subtasks owned by the requesting user.
+
+    This is a BOLA/IDOR security test: if a user's todo happens to share an ID
+    that another user's subtask references as parent_id, the subtask query must
+    still only return subtasks belonging to the requesting user.
+    """
+    from app.core.security import hash_password
+    from app.models.todo import Todo
+    from app.models.user import User
+
+    # Create two users
+    user1 = User(
+        email="subtask_user1@example.com",
+        password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
+    )
+    user2 = User(
+        email="subtask_user2@example.com",
+        password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
+    )
+    db_session.add(user1)
+    db_session.add(user2)
+    await db_session.commit()
+    await db_session.refresh(user1)
+    await db_session.refresh(user2)
+
+    # Create a parent task for user1
+    user1_parent = Todo(
+        user_id=user1.id,
+        title="User1 Parent",
+        priority="high",
+        status="pending",
+        tags=[],
+        position=0,
+    )
+    db_session.add(user1_parent)
+    await db_session.flush()
+    await db_session.refresh(user1_parent)
+
+    # Create a subtask for user1 under user1's parent
+    user1_subtask = Todo(
+        user_id=user1.id,
+        title="User1 Secret Subtask",
+        priority="medium",
+        status="pending",
+        parent_id=user1_parent.id,
+        tags=[],
+        position=0,
+    )
+    db_session.add(user1_subtask)
+
+    # Create a parent task for user2
+    user2_parent = Todo(
+        user_id=user2.id,
+        title="User2 Parent",
+        priority="medium",
+        status="pending",
+        tags=[],
+        position=0,
+    )
+    db_session.add(user2_parent)
+
+    # Create a subtask owned by user2 that references user1's parent_id
+    # (simulating direct DB manipulation or data integrity issue)
+    user2_subtask_cross_ref = Todo(
+        user_id=user2.id,
+        title="User2 Subtask Referencing User1 Parent",
+        priority="low",
+        status="pending",
+        parent_id=user1_parent.id,
+        tags=[],
+        position=1,
+    )
+    db_session.add(user2_subtask_cross_ref)
+    await db_session.commit()
+
+    # Login as user1 and request with include_subtasks
+    login1 = await client.post(
+        "/api/auth/login",
+        json={
+            "email": "subtask_user1@example.com",
+            "password": "TestPass123!",  # pragma: allowlist secret
+        },
+    )
+    assert login1.status_code == 200
+
+    response = await client.get(
+        "/api/todos",
+        params={"include_subtasks": "true"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    # Find user1's parent task
+    parent_task = next((t for t in data if t["title"] == "User1 Parent"), None)
+    assert parent_task is not None
+
+    # Subtasks must only contain user1's subtask, NOT user2's cross-referenced subtask
+    subtask_titles = [s["title"] for s in parent_task["subtasks"]]
+    assert "User1 Secret Subtask" in subtask_titles
+    assert "User2 Subtask Referencing User1 Parent" not in subtask_titles
+    assert len(parent_task["subtasks"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_include_subtasks_excludes_deleted_subtasks(
+    authenticated_client: AsyncClient,
+):
+    """Test that deleted subtasks are not included even with include_subtasks=true."""
+    # Create parent
+    parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Parent Task"},
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    # Create two subtasks
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Subtask Keep", "parent_id": parent_id},
+    )
+
+    sub2 = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Subtask Delete", "parent_id": parent_id},
+    )
+    sub2_id = sub2.json()["data"]["id"]
+
+    # Delete one subtask
+    await authenticated_client.delete(f"/api/todos/{sub2_id}")
+
+    # List with include_subtasks
+    response = await authenticated_client.get(
+        "/api/todos",
+        params={"include_subtasks": "true"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    parent_data = next(t for t in data if t["title"] == "Parent Task")
+
+    # Only the non-deleted subtask should appear
+    assert len(parent_data["subtasks"]) == 1
+    assert parent_data["subtasks"][0]["title"] == "Subtask Keep"
