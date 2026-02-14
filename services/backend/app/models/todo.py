@@ -46,6 +46,7 @@ task_dependencies = Table(
 
 if TYPE_CHECKING:
     from app.models.attachment import Attachment
+    from app.models.comment import Comment
     from app.models.project import Project
     from app.models.recurring_task import RecurringTask
     from app.models.user import User
@@ -227,6 +228,9 @@ class Todo(Base):
     )
     attachments: Mapped[list[Attachment]] = relationship(
         "Attachment", back_populates="todo", cascade="all, delete-orphan"
+    )
+    comments: Mapped[list[Comment]] = relationship(
+        "Comment", back_populates="todo", cascade="all, delete-orphan"
     )
 
     # Task dependencies: tasks this task depends on (must be completed first)

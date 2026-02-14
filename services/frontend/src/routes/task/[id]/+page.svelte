@@ -6,6 +6,7 @@
 	import SubtaskList from '$lib/components/SubtaskList.svelte';
 	import DependencyList from '$lib/components/DependencyList.svelte';
 	import AttachmentList from '$lib/components/AttachmentList.svelte';
+	import CommentList from '$lib/components/CommentList.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { todos } from '$lib/stores/todos';
@@ -253,6 +254,9 @@
 
 						<!-- Attachments -->
 						<AttachmentList todoId={todo.id} attachments={todo.attachments || []} />
+
+						<!-- Comments -->
+						<CommentList todoId={todo.id} comments={todo.comments || []} />
 					</div>
 
 					<!-- Actions -->

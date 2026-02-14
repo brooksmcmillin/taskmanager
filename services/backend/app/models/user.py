@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.api_key import ApiKey
     from app.models.article_interaction import ArticleInteraction
     from app.models.attachment import Attachment
+    from app.models.comment import Comment
     from app.models.oauth import OAuthClient
     from app.models.oauth_provider import UserOAuthProvider
     from app.models.project import Project
@@ -62,6 +63,9 @@ class User(Base):
     )
     attachments: Mapped[list[Attachment]] = relationship(
         "Attachment", back_populates="user", cascade="all, delete-orphan"
+    )
+    comments: Mapped[list[Comment]] = relationship(
+        "Comment", back_populates="user", cascade="all, delete-orphan"
     )
     api_keys: Mapped[list[ApiKey]] = relationship(
         "ApiKey", back_populates="user", cascade="all, delete-orphan"

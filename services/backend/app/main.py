@@ -11,6 +11,7 @@ from app.api import (
     attachments,
     auth,
     categories,
+    comments,
     news,
     projects,
     recurring_tasks,
@@ -64,6 +65,7 @@ app.include_router(recurring_tasks.router)
 app.include_router(registration_codes.router)
 app.include_router(news.router)
 app.include_router(attachments.router)
+app.include_router(comments.router)
 app.include_router(authorize.router)
 app.include_router(token.router)
 app.include_router(clients.router)
