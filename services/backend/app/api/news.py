@@ -1,6 +1,6 @@
 """News feed API routes."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,6 +13,7 @@ from app.models.article import Article
 from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.feed_source import FeedSource, FeedType
 from app.schemas import ListResponse
+from app.services.news_fetcher import fetch_feed_since
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -70,6 +71,12 @@ class ToggleFeedSourceRequest(BaseModel):
     """Toggle feed source active status."""
 
     is_active: bool
+
+
+class FetchFeedRequest(BaseModel):
+    """Force-fetch articles from a feed source."""
+
+    hours: int = Field(default=168, ge=1, le=720)
 
 
 class FeedSourceCreate(BaseModel):
@@ -160,6 +167,24 @@ async def toggle_feed_source(
     await db.commit()
 
     return {"data": {"id": source_id, "is_active": request.is_active}}
+
+
+@router.post("/sources/{source_id}/fetch")
+async def force_fetch_feed(
+    source_id: int,
+    request: FetchFeedRequest,
+    user: AdminUser,
+    db: DbSession,
+) -> dict:
+    """Force-fetch articles from a feed source (admin only)."""
+    source = await db.get(FeedSource, source_id)
+    if not source:
+        raise errors.not_found("Feed source")
+
+    since = datetime.now(UTC) - timedelta(hours=request.hours)
+    count = await fetch_feed_since(source, db, since)
+
+    return {"data": {"source_id": source_id, "articles_added": count}}
 
 
 @router.post("/sources", status_code=201, response_model=dict[str, FeedSourceResponse])
