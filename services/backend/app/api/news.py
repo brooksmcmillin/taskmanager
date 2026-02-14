@@ -96,15 +96,27 @@ class FeedSourceUpdate(BaseModel):
     fetch_interval_hours: int | None = Field(default=None, ge=1, le=168)
 
 
+def _get_constraint_name(exc: IntegrityError) -> str:
+    """Extract the database constraint name from an IntegrityError.
+
+    Handles both psycopg2 (constraint_name on orig) and asyncpg
+    (constraint_name on orig.__cause__) driver differences.
+    """
+    constraint = getattr(exc.orig, "constraint_name", None)
+    if not constraint:
+        cause = getattr(exc.orig, "__cause__", None)
+        if cause:
+            constraint = getattr(cause, "constraint_name", None)
+    return constraint or ""
+
+
 def _raise_duplicate_error(exc: IntegrityError) -> None:
     """Raise a user-friendly validation error from an IntegrityError.
 
-    Uses the database constraint name for reliable field identification
-    instead of parsing the full error message string.
+    Uses the database constraint name for reliable field identification.
+    Only matches against known constraint names — never parses raw error text.
     """
-    constraint = getattr(exc.orig, "constraint_name", None) or ""
-    if not constraint and exc.orig:
-        constraint = str(exc.orig)
+    constraint = _get_constraint_name(exc)
     if "name" in constraint:
         raise errors.validation("A feed source with this name already exists") from None
     if "url" in constraint:
@@ -157,26 +169,13 @@ async def create_feed_source(
     db: DbSession,
 ) -> dict[str, FeedSourceResponse]:
     """Create a new feed source (admin only)."""
-    # Check for duplicate name
-    existing = await db.execute(
-        select(FeedSource).where(FeedSource.name == source.name)
-    )
-    if existing.scalar_one_or_none():
-        raise errors.validation("A feed source with this name already exists")
-
-    # Check for duplicate URL
-    existing = await db.execute(select(FeedSource).where(FeedSource.url == source.url))
-    if existing.scalar_one_or_none():
-        raise errors.validation("A feed source with this URL already exists")
-
     feed_source = FeedSource(**source.model_dump())
     db.add(feed_source)
     try:
-        await db.flush()
+        await db.commit()
     except IntegrityError as e:
         await db.rollback()
         _raise_duplicate_error(e)
-    await db.commit()
     await db.refresh(feed_source)
 
     return {"data": FeedSourceResponse.model_validate(feed_source)}
@@ -190,41 +189,19 @@ async def update_feed_source(
     db: DbSession,
 ) -> dict[str, FeedSourceResponse]:
     """Update a feed source (admin only, partial update)."""
-    result = await db.execute(
-        select(FeedSource).where(FeedSource.id == source_id).with_for_update()
-    )
-    feed_source = result.scalar_one_or_none()
+    feed_source = await db.get(FeedSource, source_id)
     if not feed_source:
         raise errors.not_found("Feed source")
 
     update_data = source.model_dump(exclude_unset=True)
-
-    # Check for duplicate name if name is being changed
-    if "name" in update_data and update_data["name"] != feed_source.name:
-        existing = await db.execute(
-            select(FeedSource).where(
-                FeedSource.name == update_data["name"],
-                FeedSource.id != source_id,
-            )
-        )
-        if existing.scalar_one_or_none():
-            raise errors.validation("A feed source with this name already exists")
-
-    # Check for duplicate URL if URL is being changed
-    if "url" in update_data and update_data["url"] != feed_source.url:
-        existing = await db.execute(
-            select(FeedSource).where(
-                FeedSource.url == update_data["url"],
-                FeedSource.id != source_id,
-            )
-        )
-        if existing.scalar_one_or_none():
-            raise errors.validation("A feed source with this URL already exists")
-
     for key, value in update_data.items():
         setattr(feed_source, key, value)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        _raise_duplicate_error(e)
     await db.refresh(feed_source)
 
     return {"data": FeedSourceResponse.model_validate(feed_source)}
@@ -252,11 +229,8 @@ async def delete_feed_source(
     await db.commit()
 
     return {
-        "data": {
-            "deleted": True,
-            "id": source_id,
-            "articles_deleted": article_count,
-        }
+        "data": {"deleted": True, "id": source_id},
+        "meta": {"articles_deleted": article_count},
     }
 
 

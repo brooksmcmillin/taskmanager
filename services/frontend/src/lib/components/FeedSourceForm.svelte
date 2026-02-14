@@ -70,8 +70,7 @@
 			dispatch('success');
 		} catch (error) {
 			toasts.show(
-				`Error ${isEditing ? 'updating' : 'creating'} feed source: ` +
-					(error as Error).message,
+				`Error ${isEditing ? 'updating' : 'creating'} feed source: ` + (error as Error).message,
 				'error'
 			);
 		}
@@ -125,9 +124,7 @@
 		</div>
 
 		<div class="form-group">
-			<label for="description" class="block text-sm font-medium text-gray-700"
-				>Description</label
-			>
+			<label for="description" class="block text-sm font-medium text-gray-700">Description</label>
 			<textarea
 				id="description"
 				name="description"

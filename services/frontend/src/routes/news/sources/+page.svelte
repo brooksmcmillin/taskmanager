@@ -90,8 +90,8 @@
 		<div>
 			<h1 class="text-3xl font-bold mb-2">Feed Sources</h1>
 			<p class="text-gray-600">
-				Manage RSS feed sources for AI/LLM security news. Quality scores are automatically
-				adjusted based on your article ratings.
+				Manage RSS feed sources for AI/LLM security news. Quality scores are automatically adjusted
+				based on your article ratings.
 			</p>
 		</div>
 		<button class="btn btn-primary shrink-0" onclick={() => sourceModal.open()}>
@@ -147,7 +147,7 @@
 	{:else if error}
 		<div class="text-center py-12 bg-red-50 rounded-lg">
 			<p class="text-red-600 font-medium mb-2">Failed to load feed sources</p>
-			<p class="text-red-500 text-sm mb-4">{error}</p>
+			<p class="text-red-500 text-sm mb-4">Something went wrong. Please try again.</p>
 			<button class="btn btn-primary" onclick={loadSources}>Retry</button>
 		</div>
 	{:else}
@@ -157,7 +157,9 @@
 			{#if activeSources.length === 0}
 				<div class="text-center py-8 bg-gray-50 rounded-lg">
 					<p class="text-gray-600">
-						{showFeaturedOnly ? 'No featured sources. Switch to "All Sources" or add a new source.' : 'No active feed sources'}
+						{showFeaturedOnly
+							? 'No featured sources. Switch to "All Sources" or add a new source.'
+							: 'No active feed sources'}
 					</p>
 				</div>
 			{:else}
@@ -260,9 +262,7 @@
 				</h2>
 				<div class="space-y-4">
 					{#each inactiveSources as source (source.id)}
-						<div
-							class="card p-6 bg-gray-50 opacity-75 hover:opacity-100 transition-opacity"
-						>
+						<div class="card p-6 bg-gray-50 opacity-75 hover:opacity-100 transition-opacity">
 							<div class="flex justify-between items-start gap-6">
 								<div class="flex-1">
 									<div class="flex items-center gap-3 mb-3">
@@ -283,9 +283,7 @@
 										>
 											{source.type === 'paper' ? 'Paper' : 'Article'}
 										</span>
-										<span class="badge badge-sm bg-gray-200 text-gray-700"
-											>Inactive</span
-										>
+										<span class="badge badge-sm bg-gray-200 text-gray-700">Inactive</span>
 										{#if source.is_featured}
 											<span
 												class="badge badge-sm bg-amber-100 text-amber-800"
