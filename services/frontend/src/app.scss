@@ -677,6 +677,16 @@ h6 {
 		}
 	}
 
+	&.btn-warning {
+		background-color: var(--warning-600);
+		color: white;
+
+		&:hover:not(:disabled) {
+			background-color: var(--warning-700);
+			@include button-hover-effect;
+		}
+	}
+
 	&.btn-outline {
 		background-color: transparent;
 		color: var(--text-secondary);
