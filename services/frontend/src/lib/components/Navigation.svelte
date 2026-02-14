@@ -1,10 +1,13 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import ThemeToggle from './ThemeToggle.svelte';
 	import { api } from '$lib/api/client';
 	import { toasts } from '$lib/stores/ui';
 	import type { User } from '$lib/types';
+
+	const MOBILE_BREAKPOINT = 768;
 
 	let { user = null }: { user: User | null } = $props();
 
@@ -13,6 +16,8 @@
 	let userDropdownOpen = $state(false);
 	let mobileMenuOpen = $state(false);
 	let closeTimeout: ReturnType<typeof setTimeout> | null = null;
+	let hamburgerBtnRef: HTMLButtonElement | undefined = $state(undefined);
+	let mobileMenuRef: HTMLDivElement | undefined = $state(undefined);
 
 	async function handleLogout() {
 		try {
@@ -68,6 +73,17 @@
 		}, 200);
 	}
 
+	function closeAllMenus() {
+		newsDropdownOpen = false;
+		tasksDropdownOpen = false;
+		userDropdownOpen = false;
+		mobileMenuOpen = false;
+		if (closeTimeout) {
+			clearTimeout(closeTimeout);
+			closeTimeout = null;
+		}
+	}
+
 	function closeDropdowns() {
 		newsDropdownOpen = false;
 		tasksDropdownOpen = false;
@@ -82,13 +98,72 @@
 		mobileMenuOpen = !mobileMenuOpen;
 		if (!mobileMenuOpen) {
 			closeDropdowns();
+		} else {
+			// Focus first menu item after the menu renders
+			requestAnimationFrame(() => {
+				const firstItem = mobileMenuRef?.querySelector<HTMLElement>('a, button');
+				firstItem?.focus();
+			});
 		}
 	}
 
 	function closeMobileMenu() {
 		mobileMenuOpen = false;
 		closeDropdowns();
+		// Return focus to the hamburger button
+		hamburgerBtnRef?.focus();
 	}
+
+	// Focus trap: keep Tab cycling within the mobile menu
+	function handleMobileMenuKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			closeMobileMenu();
+			return;
+		}
+
+		if (event.key !== 'Tab' || !mobileMenuRef) return;
+
+		const focusable = mobileMenuRef.querySelectorAll<HTMLElement>(
+			'a[href], button:not([disabled])'
+		);
+		if (focusable.length === 0) return;
+
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
+
+	// Close mobile menu when resizing past breakpoint (issue #1)
+	function handleResize() {
+		if (window.innerWidth > MOBILE_BREAKPOINT && mobileMenuOpen) {
+			closeAllMenus();
+		}
+	}
+
+	// Body scroll lock when mobile menu is open (issue #3)
+	$effect(() => {
+		if (mobileMenuOpen) {
+			document.body.style.overflow = 'hidden';
+		} else {
+			document.body.style.overflow = '';
+		}
+	});
+
+	onMount(() => {
+		window.addEventListener('resize', handleResize);
+		return () => {
+			window.removeEventListener('resize', handleResize);
+			// Ensure scroll is restored on unmount
+			document.body.style.overflow = '';
+		};
+	});
 
 	let currentPath = $derived($page.url.pathname);
 	let isNewsActive = $derived(currentPath.startsWith('/news'));
@@ -311,17 +386,34 @@
 					<!-- Mobile Hamburger Button -->
 					<button
 						class="mobile-menu-btn"
+						bind:this={hamburgerBtnRef}
 						onclick={toggleMobileMenu}
 						aria-label="Toggle menu"
 						aria-expanded={mobileMenuOpen}
 					>
 						{#if mobileMenuOpen}
-							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
 								<line x1="18" y1="6" x2="6" y2="18"></line>
 								<line x1="6" y1="6" x2="18" y2="18"></line>
 							</svg>
 						{:else}
-							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
 								<line x1="3" y1="12" x2="21" y2="12"></line>
 								<line x1="3" y1="6" x2="21" y2="6"></line>
 								<line x1="3" y1="18" x2="21" y2="18"></line>
@@ -337,32 +429,69 @@
 	<!-- Mobile Menu Drawer -->
 	{#if user && mobileMenuOpen}
 		<div class="mobile-menu-backdrop" onclick={closeMobileMenu} role="presentation"></div>
-		<div class="mobile-menu">
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="mobile-menu"
+			bind:this={mobileMenuRef}
+			onkeydown={handleMobileMenuKeydown}
+			role="navigation"
+			aria-label="Mobile navigation"
+		>
 			<div class="mobile-menu-section">
 				<div class="mobile-menu-label">Tasks</div>
-				<a href="/" class="mobile-menu-item" class:active={currentPath === '/'} onclick={closeMobileMenu}>
+				<a
+					href="/"
+					class="mobile-menu-item"
+					class:active={currentPath === '/'}
+					onclick={closeMobileMenu}
+				>
 					Todos
 				</a>
-				<a href="/projects" class="mobile-menu-item" class:active={currentPath === '/projects'} onclick={closeMobileMenu}>
+				<a
+					href="/projects"
+					class="mobile-menu-item"
+					class:active={currentPath === '/projects'}
+					onclick={closeMobileMenu}
+				>
 					Projects
 				</a>
-				<a href="/recurring-tasks" class="mobile-menu-item" class:active={currentPath === '/recurring-tasks'} onclick={closeMobileMenu}>
+				<a
+					href="/recurring-tasks"
+					class="mobile-menu-item"
+					class:active={currentPath === '/recurring-tasks'}
+					onclick={closeMobileMenu}
+				>
 					Recurring
 				</a>
 			</div>
 
 			<div class="mobile-menu-section">
 				<div class="mobile-menu-label">News</div>
-				<a href="/news" class="mobile-menu-item" class:active={currentPath === '/news'} onclick={closeMobileMenu}>
+				<a
+					href="/news"
+					class="mobile-menu-item"
+					class:active={currentPath === '/news'}
+					onclick={closeMobileMenu}
+				>
 					Feed
 				</a>
-				<a href="/news/sources" class="mobile-menu-item" class:active={currentPath === '/news/sources'} onclick={closeMobileMenu}>
+				<a
+					href="/news/sources"
+					class="mobile-menu-item"
+					class:active={currentPath === '/news/sources'}
+					onclick={closeMobileMenu}
+				>
 					Sources
 				</a>
 			</div>
 
 			<div class="mobile-menu-section">
-				<a href="/trash" class="mobile-menu-item" class:active={currentPath === '/trash'} onclick={closeMobileMenu}>
+				<a
+					href="/trash"
+					class="mobile-menu-item"
+					class:active={currentPath === '/trash'}
+					onclick={closeMobileMenu}
+				>
 					Trash
 				</a>
 			</div>
@@ -371,17 +500,37 @@
 
 			<div class="mobile-menu-section">
 				<div class="mobile-menu-label">{user.email}</div>
-				<a href="/settings" class="mobile-menu-item" class:active={currentPath === '/settings'} onclick={closeMobileMenu}>
+				<a
+					href="/settings"
+					class="mobile-menu-item"
+					class:active={currentPath === '/settings'}
+					onclick={closeMobileMenu}
+				>
 					Settings
 				</a>
-				<a href="/oauth-clients" class="mobile-menu-item" class:active={currentPath === '/oauth-clients'} onclick={closeMobileMenu}>
+				<a
+					href="/oauth-clients"
+					class="mobile-menu-item"
+					class:active={currentPath === '/oauth-clients'}
+					onclick={closeMobileMenu}
+				>
 					OAuth Clients
 				</a>
-				<a href="/api-keys" class="mobile-menu-item" class:active={currentPath === '/api-keys'} onclick={closeMobileMenu}>
+				<a
+					href="/api-keys"
+					class="mobile-menu-item"
+					class:active={currentPath === '/api-keys'}
+					onclick={closeMobileMenu}
+				>
 					API Keys
 				</a>
 				{#if user.is_admin}
-					<a href="/admin/registration-codes" class="mobile-menu-item" class:active={currentPath === '/admin/registration-codes'} onclick={closeMobileMenu}>
+					<a
+						href="/admin/registration-codes"
+						class="mobile-menu-item"
+						class:active={currentPath === '/admin/registration-codes'}
+						onclick={closeMobileMenu}
+					>
 						Registration Codes
 					</a>
 				{/if}
@@ -640,6 +789,7 @@
 
 	/* Show mobile elements / hide desktop elements on small screens */
 	@media (max-width: 768px) {
+		/* $breakpoint-md */
 		.desktop-nav {
 			display: none !important;
 		}

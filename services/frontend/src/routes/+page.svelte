@@ -288,6 +288,7 @@
 	}
 
 	@media (max-width: 768px) {
+		/* $breakpoint-md */
 		.toolbar {
 			flex-direction: column;
 			align-items: stretch;

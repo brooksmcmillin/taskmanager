@@ -150,6 +150,13 @@ $success-color: #059669;
 $error-color: #dc2626;
 $warning-color: #f59e0b;
 
+// Breakpoints
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+$breakpoint-phone: 480px;
+
 // Mixins
 @mixin button-hover-effect {
 	transform: translateY(-1px);
@@ -349,18 +356,18 @@ h6 {
 	padding-left: var(--space-4);
 	padding-right: var(--space-4);
 
-	@media (min-width: 640px) {
+	@media (min-width: $breakpoint-sm) {
 		max-width: 640px;
 	}
-	@media (min-width: 768px) {
+	@media (min-width: $breakpoint-md) {
 		max-width: 768px;
 	}
-	@media (min-width: 1024px) {
+	@media (min-width: $breakpoint-lg) {
 		max-width: 1024px;
 		padding-left: var(--space-6);
 		padding-right: var(--space-6);
 	}
-	@media (min-width: 1280px) {
+	@media (min-width: $breakpoint-xl) {
 		max-width: 1280px;
 	}
 }
@@ -492,13 +499,13 @@ h6 {
 	gap: var(--space-8);
 }
 
-@media (min-width: 768px) {
+@media (min-width: $breakpoint-md) {
 	.md\:grid-cols-2 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
-@media (min-width: 1024px) {
+@media (min-width: $breakpoint-lg) {
 	.lg\:grid-cols-2 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -871,7 +878,7 @@ h6 {
 	grid-template-columns: 1fr 1fr;
 	gap: 16px;
 
-	@media (max-width: 640px) {
+	@media (max-width: $breakpoint-sm) {
 		grid-template-columns: 1fr;
 	}
 }
@@ -879,7 +886,7 @@ h6 {
 .form-full-width {
 	grid-column: span 2;
 
-	@media (max-width: 640px) {
+	@media (max-width: $breakpoint-sm) {
 		grid-column: span 1;
 	}
 }
@@ -980,10 +987,6 @@ h6 {
 	font-weight: 600;
 	color: var(--text-secondary);
 	padding: 8px 4px;
-
-	.day-short {
-		display: none;
-	}
 }
 
 #calendar-grid {
@@ -1052,8 +1055,13 @@ h6 {
 	}
 }
 
-// Mobile calendar improvements
-@media (max-width: 768px) {
+// Calendar day header: full name on desktop, abbreviated on mobile
+.day-short {
+	display: none;
+}
+
+@media (max-width: $breakpoint-md) {
+	// Mobile calendar improvements
 	.calendar-headers {
 		min-width: 500px;
 		grid-template-columns: repeat(7, minmax(68px, 1fr));
@@ -1063,14 +1071,14 @@ h6 {
 	.calendar-header-day {
 		padding: 6px 2px;
 		font-size: 0.8125rem;
+	}
 
-		.day-full {
-			display: none;
-		}
+	.day-full {
+		display: none;
+	}
 
-		.day-short {
-			display: inline;
-		}
+	.day-short {
+		display: inline;
 	}
 
 	#calendar-grid {
@@ -1355,7 +1363,7 @@ h6 {
 }
 
 // Mobile responsive styles
-@media (max-width: 768px) {
+@media (max-width: $breakpoint-md) {
 	// Better container padding on mobile
 	.container {
 		padding-left: var(--space-3);
@@ -1411,7 +1419,7 @@ h6 {
 }
 
 // Small phone screens
-@media (max-width: 480px) {
+@media (max-width: $breakpoint-phone) {
 	.container {
 		padding-left: var(--space-2);
 		padding-right: var(--space-2);
