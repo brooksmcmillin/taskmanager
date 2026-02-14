@@ -11,10 +11,10 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.core.errors import errors
-from app.core.security import generate_session_id, get_session_expiry, hash_password
+from app.core.security import hash_password
+from app.core.session import create_session_and_set_cookie
 from app.dependencies import CurrentUser, DbSession
 from app.models.oauth_provider import UserOAuthProvider
-from app.models.session import Session
 from app.models.user import User
 from app.services.github_oauth import (
     GitHubOAuthError,
@@ -268,24 +268,9 @@ async def github_callback(
                 )
                 db.add(oauth_provider)
 
-        # Create session
-        session = Session(
-            id=generate_session_id(),
-            user_id=user.id,
-            expires_at=get_session_expiry(),
-        )
-        db.add(session)
-
-        # Redirect to frontend with session cookie
+        # Create session and redirect with cookie
         redirect_response = RedirectResponse(url=return_to, status_code=302)
-        redirect_response.set_cookie(
-            key="session",
-            value=session.id,
-            httponly=True,
-            samesite="lax",
-            max_age=settings.session_duration_days * 24 * 60 * 60,
-            secure=settings.is_production,
-        )
+        await create_session_and_set_cookie(db, redirect_response, user.id)
         return redirect_response
 
     except GitHubOAuthError as e:

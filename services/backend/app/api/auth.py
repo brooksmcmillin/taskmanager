@@ -11,12 +11,11 @@ from app.config import settings
 from app.core.errors import errors
 from app.core.rate_limit import RateLimiter, login_rate_limiter
 from app.core.security import (
-    generate_session_id,
-    get_session_expiry,
     hash_password,
     validate_password_strength,
     verify_password,
 )
+from app.core.session import create_session_and_set_cookie, set_session_cookie
 from app.dependencies import CurrentUser, DbSession
 from app.models.session import Session
 from app.models.user import User
@@ -180,23 +179,8 @@ async def login(
     # Reset rate limit on success
     login_rate_limiter.reset(email)
 
-    # Create session
-    session = Session(
-        id=generate_session_id(),
-        user_id=user.id,
-        expires_at=get_session_expiry(),
-    )
-    db.add(session)
-
-    # Set cookie
-    response.set_cookie(
-        key="session",
-        value=session.id,
-        httponly=True,
-        samesite="lax",
-        max_age=settings.session_duration_days * 24 * 60 * 60,
-        secure=settings.is_production,
-    )
+    # Create session and set cookie
+    session = await create_session_and_set_cookie(db, response, user.id)
 
     # For form submissions with return_to, redirect
     if return_to:
@@ -207,14 +191,7 @@ async def login(
 
         redirect_response = RedirectResponse(url=return_to, status_code=302)
         # Copy the session cookie to the redirect response
-        redirect_response.set_cookie(
-            key="session",
-            value=session.id,
-            httponly=True,
-            samesite="lax",
-            max_age=settings.session_duration_days * 24 * 60 * 60,
-            secure=settings.is_production,
-        )
+        set_session_cookie(redirect_response, session.id)
         return redirect_response
 
     # For JSON requests, return user info

@@ -77,14 +77,21 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         """Parse CORS origins from comma-separated string."""
         if self.allowed_origins:
-            return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
-        # Default origins
-        return [
-            "https://todo.brooksmcmillin.com",
-            "https://todo2.brooksmcmillin.com",
-            "http://localhost:4321",
-            "http://localhost:3000",
-        ]
+            origins = [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+        else:
+            # Default origins
+            origins = [
+                "https://todo.brooksmcmillin.com",
+                "https://todo2.brooksmcmillin.com",
+                "http://localhost:4321",
+                "http://localhost:3000",
+            ]
+        # Always include the configured frontend URL origin
+        parsed = urlparse(self.frontend_url)
+        frontend_origin = f"{parsed.scheme}://{parsed.netloc}"
+        if frontend_origin not in origins:
+            origins.append(frontend_origin)
+        return origins
 
     # Environment
     environment: str = "development"
