@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ApiError
+from app.models.project import Project
 
 
 async def get_resource_for_user(
@@ -179,6 +180,33 @@ async def verify_resource_exists(
     return await get_resource_for_user(
         db, model, resource_id, user_id, error_factory, check_deleted=check_deleted
     )
+
+
+async def get_project_info(
+    db: AsyncSession,
+    project_id: int | None,
+    user_id: int,
+) -> tuple[str | None, str | None]:
+    """Get project name and color, with authorization check.
+
+    Args:
+        db: Database session
+        project_id: Project ID (returns (None, None) if None)
+        user_id: User ID for authorization check
+
+    Returns:
+        Tuple of (project_name, project_color), or (None, None) if no project
+    """
+    if not project_id:
+        return None, None
+    result = await db.execute(
+        select(Project.name, Project.color).where(
+            Project.id == project_id,
+            Project.user_id == user_id,
+        )
+    )
+    row = result.one_or_none()
+    return (row.name, row.color) if row else (None, None)
 
 
 async def get_resources_for_user(

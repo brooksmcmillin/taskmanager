@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { derived } from 'svelte/store';
 import type {
 	Todo,
 	TodoFilters,
@@ -11,6 +11,7 @@ import type {
 } from '$lib/types';
 import { api } from '$lib/api/client';
 import { logger } from '$lib/utils/logger';
+import { createCrudStore } from './createCrudStore';
 
 // --- Store update helpers ---
 
@@ -50,10 +51,14 @@ function removeFromTodoArray(
 // --- Store ---
 
 function createTodoStore() {
-	const { subscribe, set, update } = writable<Todo[]>([]);
+	const store = createCrudStore<Todo, TodoCreate, TodoUpdate>({
+		endpoint: '/api/todos',
+		entityName: 'todo',
+		reorderKey: 'todo_ids'
+	});
 
 	return {
-		subscribe,
+		subscribe: store.subscribe,
 		load: async (filters?: TodoFilters & { include_subtasks?: boolean }) => {
 			try {
 				// Convert filter values to strings properly
@@ -68,58 +73,25 @@ function createTodoStore() {
 				const response = await api.get<{ data: Todo[]; meta: { count: number } }>('/api/todos', {
 					params
 				});
-				set(response.data || []);
+				store.set(response.data || []);
 			} catch (error) {
 				logger.error('Failed to load todos:', error);
 				throw error;
 			}
 		},
-		add: async (todo: TodoCreate) => {
-			try {
-				const created = await api.post<{ data: Todo }>('/api/todos', todo);
-				update((todos) => [...todos, created.data]);
-				return created.data;
-			} catch (error) {
-				logger.error('Failed to add todo:', error);
-				throw error;
-			}
-		},
-		updateTodo: async (id: number, updates: TodoUpdate) => {
-			try {
-				const updated = await api.put<{ data: Todo }>(`/api/todos/${id}`, updates);
-				update((todos) => todos.map((t) => (t.id === id ? updated.data : t)));
-				return updated.data;
-			} catch (error) {
-				logger.error('Failed to update todo:', error);
-				throw error;
-			}
-		},
+		add: store.add,
+		updateTodo: store.updateItem,
+		remove: store.remove,
+		getById: store.getById,
+		reorder: store.reorder,
 		complete: async (id: number) => {
 			try {
 				await api.post(`/api/todos/${id}/complete`, {});
-				update((todos) =>
+				store.update((todos) =>
 					todos.map((t) => (t.id === id ? { ...t, status: 'completed' as const } : t))
 				);
 			} catch (error) {
 				logger.error('Failed to complete todo:', error);
-				throw error;
-			}
-		},
-		remove: async (id: number) => {
-			try {
-				await api.delete(`/api/todos/${id}`);
-				update((todos) => todos.filter((t) => t.id !== id));
-			} catch (error) {
-				logger.error('Failed to remove todo:', error);
-				throw error;
-			}
-		},
-		getById: async (id: number): Promise<Todo> => {
-			try {
-				const response = await api.get<{ data: Todo }>(`/api/todos/${id}`);
-				return response.data;
-			} catch (error) {
-				logger.error('Failed to get todo:', error);
 				throw error;
 			}
 		},
@@ -130,7 +102,7 @@ function createTodoStore() {
 					`/api/todos/${todoId}/subtasks`,
 					subtask
 				);
-				update((todos) => appendToTodoArray(todos, todoId, 'subtasks', response.data));
+				store.update((todos) => appendToTodoArray(todos, todoId, 'subtasks', response.data));
 				return response.data;
 			} catch (error) {
 				logger.error('Failed to add subtask:', error);
@@ -140,7 +112,7 @@ function createTodoStore() {
 		completeSubtask: async (todoId: number, subtaskId: number) => {
 			try {
 				await api.post(`/api/todos/${subtaskId}/complete`, {});
-				update((todos) =>
+				store.update((todos) =>
 					todos.map((t) =>
 						t.id === todoId
 							? {
@@ -160,7 +132,7 @@ function createTodoStore() {
 		removeSubtask: async (todoId: number, subtaskId: number) => {
 			try {
 				await api.delete(`/api/todos/${subtaskId}`);
-				update((todos) => removeFromTodoArray(todos, todoId, 'subtasks', subtaskId));
+				store.update((todos) => removeFromTodoArray(todos, todoId, 'subtasks', subtaskId));
 			} catch (error) {
 				logger.error('Failed to remove subtask:', error);
 				throw error;
@@ -169,7 +141,7 @@ function createTodoStore() {
 		loadSubtasks: async (todoId: number): Promise<Subtask[]> => {
 			try {
 				const response = await api.get<{ data: Subtask[] }>(`/api/todos/${todoId}/subtasks`);
-				update((todos) => setTodoField(todos, todoId, 'subtasks', response.data));
+				store.update((todos) => setTodoField(todos, todoId, 'subtasks', response.data));
 				return response.data;
 			} catch (error) {
 				logger.error('Failed to load subtasks:', error);
@@ -180,7 +152,7 @@ function createTodoStore() {
 		loadAttachments: async (todoId: number): Promise<Attachment[]> => {
 			try {
 				const response = await api.get<{ data: Attachment[] }>(`/api/todos/${todoId}/attachments`);
-				update((todos) => setTodoField(todos, todoId, 'attachments', response.data));
+				store.update((todos) => setTodoField(todos, todoId, 'attachments', response.data));
 				return response.data;
 			} catch (error) {
 				logger.error('Failed to load attachments:', error);
@@ -193,7 +165,7 @@ function createTodoStore() {
 					`/api/todos/${todoId}/attachments`,
 					file
 				);
-				update((todos) => appendToTodoArray(todos, todoId, 'attachments', response.data));
+				store.update((todos) => appendToTodoArray(todos, todoId, 'attachments', response.data));
 				return response.data;
 			} catch (error) {
 				logger.error('Failed to upload attachment:', error);
@@ -203,7 +175,7 @@ function createTodoStore() {
 		removeAttachment: async (todoId: number, attachmentId: number) => {
 			try {
 				await api.delete(`/api/todos/${todoId}/attachments/${attachmentId}`);
-				update((todos) => removeFromTodoArray(todos, todoId, 'attachments', attachmentId));
+				store.update((todos) => removeFromTodoArray(todos, todoId, 'attachments', attachmentId));
 			} catch (error) {
 				logger.error('Failed to remove attachment:', error);
 				throw error;
@@ -218,7 +190,7 @@ function createTodoStore() {
 				const response = await api.get<{ data: TaskDependency[] }>(
 					`/api/todos/${todoId}/dependencies`
 				);
-				update((todos) => setTodoField(todos, todoId, 'dependencies', response.data));
+				store.update((todos) => setTodoField(todos, todoId, 'dependencies', response.data));
 				return response.data;
 			} catch (error) {
 				logger.error('Failed to load dependencies:', error);
@@ -231,7 +203,7 @@ function createTodoStore() {
 					`/api/todos/${todoId}/dependencies`,
 					{ dependency_id: dependencyId }
 				);
-				update((todos) => appendToTodoArray(todos, todoId, 'dependencies', response.data));
+				store.update((todos) => appendToTodoArray(todos, todoId, 'dependencies', response.data));
 				return response.data;
 			} catch (error) {
 				logger.error('Failed to add dependency:', error);
@@ -241,31 +213,9 @@ function createTodoStore() {
 		removeDependency: async (todoId: number, dependencyId: number): Promise<void> => {
 			try {
 				await api.delete(`/api/todos/${todoId}/dependencies/${dependencyId}`);
-				update((todos) => removeFromTodoArray(todos, todoId, 'dependencies', dependencyId));
+				store.update((todos) => removeFromTodoArray(todos, todoId, 'dependencies', dependencyId));
 			} catch (error) {
 				logger.error('Failed to remove dependency:', error);
-				throw error;
-			}
-		},
-		reorder: async (todoIds: number[]) => {
-			try {
-				await api.post('/api/todos/reorder', { todo_ids: todoIds });
-				// Update local positions
-				update((todos) => {
-					const todoMap = new Map(todos.map((t) => [t.id, t]));
-					return todoIds
-						.map((id, index) => {
-							const todo = todoMap.get(id);
-							if (todo) {
-								return { ...todo, position: index };
-							}
-							return null;
-						})
-						.filter((t): t is Todo => t !== null)
-						.concat(todos.filter((t) => !todoIds.includes(t.id)));
-				});
-			} catch (error) {
-				logger.error('Failed to reorder todos:', error);
 				throw error;
 			}
 		}

@@ -9,6 +9,7 @@ from sqlalchemy import and_, select
 from app.core.errors import errors
 from app.db.queries import (
     get_next_position,
+    get_project_info,
     get_resource_for_user,
     get_resources_for_user,
 )
@@ -607,20 +608,7 @@ async def create_todo(
     await db.flush()
     await db.refresh(todo)
 
-    # Fetch project info if todo has a project
-    project_name = None
-    project_color = None
-    if todo.project_id:
-        project_result = await db.execute(
-            select(Project).where(
-                Project.id == todo.project_id, Project.user_id == user.id
-            )
-        )
-        project = project_result.scalar_one_or_none()
-        if project:
-            project_name = project.name
-            project_color = project.color
-
+    project_name, project_color = await get_project_info(db, todo.project_id, user.id)
     return {"data": _build_todo_response(todo, project_name, project_color)}
 
 
@@ -745,23 +733,7 @@ async def update_todo(
     await db.commit()
     await db.refresh(todo)
 
-    # Fetch project info if todo has a project
-    project_name = None
-    project_color = None
-    if todo.project_id:
-        project_result = await db.execute(
-            select(Project).where(
-                Project.id == todo.project_id,
-                Project.user_id
-                == user.id,  # Authorization check: verify project belongs to user
-            )
-        )
-        project = project_result.scalar_one_or_none()
-        if project:
-            project_name = project.name
-            project_color = project.color
-
-    # Return full todo object
+    project_name, project_color = await get_project_info(db, todo.project_id, user.id)
     return {"data": _build_todo_response(todo, project_name, project_color)}
 
 
@@ -1086,14 +1058,7 @@ async def add_dependency(
         await db.rollback()
         raise errors.dependency_exists() from None
 
-    # Get project name for response
-    project_name = None
-    if dependency.project_id:
-        project_result = await db.execute(
-            select(Project.name).where(Project.id == dependency.project_id)
-        )
-        project_name = project_result.scalar_one_or_none()
-
+    project_name, _ = await get_project_info(db, dependency.project_id, user.id)
     return {"data": _build_dependency_response(dependency, project_name)}
 
 

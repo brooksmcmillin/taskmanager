@@ -1,7 +1,7 @@
-import { writable } from 'svelte/store';
 import type { Project, ProjectCreate, ProjectUpdate } from '$lib/types';
 import { api } from '$lib/api/client';
 import { logger } from '$lib/utils/logger';
+import { createCrudStore } from './createCrudStore';
 
 interface LoadOptions {
 	includeStats?: boolean;
@@ -9,10 +9,14 @@ interface LoadOptions {
 }
 
 function createProjectStore() {
-	const { subscribe, set, update } = writable<Project[]>([]);
+	const store = createCrudStore<Project, ProjectCreate, ProjectUpdate>({
+		endpoint: '/api/projects',
+		entityName: 'project',
+		reorderKey: 'project_ids'
+	});
 
 	return {
-		subscribe,
+		subscribe: store.subscribe,
 		load: async (options: LoadOptions = {}) => {
 			try {
 				const params = new URLSearchParams();
@@ -24,46 +28,20 @@ function createProjectStore() {
 				}
 				const url = `/api/projects${params.toString() ? `?${params}` : ''}`;
 				const response = await api.get<{ data: Project[]; meta: { count: number } }>(url);
-				set(response.data || []);
+				store.set(response.data || []);
 			} catch (error) {
 				logger.error('Failed to load projects:', error);
-				set([]); // Reset to empty on error for consistent UI state
+				store.set([]); // Reset to empty on error for consistent UI state
 				throw error;
 			}
 		},
-		add: async (project: ProjectCreate) => {
-			try {
-				const created = await api.post<{ data: Project }>('/api/projects', project);
-				update((projects) => [...projects, created.data]);
-				return created.data;
-			} catch (error) {
-				logger.error('Failed to add project:', error);
-				throw error;
-			}
-		},
-		updateProject: async (id: number, updates: ProjectUpdate) => {
-			try {
-				const updated = await api.put<{ data: Project }>(`/api/projects/${id}`, updates);
-				update((projects) => projects.map((p) => (p.id === id ? updated.data : p)));
-				return updated.data;
-			} catch (error) {
-				logger.error('Failed to update project:', error);
-				throw error;
-			}
-		},
-		remove: async (id: number) => {
-			try {
-				await api.delete(`/api/projects/${id}`);
-				update((projects) => projects.filter((p) => p.id !== id));
-			} catch (error) {
-				logger.error('Failed to remove project:', error);
-				throw error;
-			}
-		},
+		add: store.add,
+		updateProject: store.updateItem,
+		remove: store.remove,
 		archive: async (id: number) => {
 			try {
 				const updated = await api.post<{ data: Project }>(`/api/projects/${id}/archive`);
-				update((projects) => projects.map((p) => (p.id === id ? updated.data : p)));
+				store.update((projects) => projects.map((p) => (p.id === id ? updated.data : p)));
 				return updated.data;
 			} catch (error) {
 				logger.error('Failed to archive project:', error);
@@ -73,35 +51,14 @@ function createProjectStore() {
 		unarchive: async (id: number) => {
 			try {
 				const updated = await api.post<{ data: Project }>(`/api/projects/${id}/unarchive`);
-				update((projects) => projects.map((p) => (p.id === id ? updated.data : p)));
+				store.update((projects) => projects.map((p) => (p.id === id ? updated.data : p)));
 				return updated.data;
 			} catch (error) {
 				logger.error('Failed to unarchive project:', error);
 				throw error;
 			}
 		},
-		reorder: async (projectIds: number[]) => {
-			try {
-				await api.post('/api/projects/reorder', { project_ids: projectIds });
-				// Update local positions
-				update((projects) => {
-					const projectMap = new Map(projects.map((p) => [p.id, p]));
-					return projectIds
-						.map((id, index) => {
-							const project = projectMap.get(id);
-							if (project) {
-								return { ...project, position: index };
-							}
-							return null;
-						})
-						.filter((p): p is Project => p !== null)
-						.concat(projects.filter((p) => !projectIds.includes(p.id)));
-				});
-			} catch (error) {
-				logger.error('Failed to reorder projects:', error);
-				throw error;
-			}
-		}
+		reorder: store.reorder
 	};
 }
 

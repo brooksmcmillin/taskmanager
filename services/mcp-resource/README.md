@@ -24,7 +24,7 @@ The resource server provides MCP tools for task management, protected by OAuth 2
 | `MCP_AUTH_SERVER` | Internal URL of auth server | `http://mcp-auth:9000` |
 | `MCP_AUTH_SERVER_PUBLIC_URL` | Public URL of auth server | Required |
 | `MCP_SERVER_URL` | Public URL of this server | Required |
-| `TASKMANAGER_OAUTH_HOST` | TaskManager API URL | `http://app:4321` |
+| `TASKMANAGER_OAUTH_HOST` | TaskManager API URL | `http://backend:8000` |
 
 ### Command Line Options
 

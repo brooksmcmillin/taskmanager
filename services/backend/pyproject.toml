@@ -26,11 +26,11 @@ dependencies = [
     # News aggregation
     "feedparser>=6.0.11",
     "apscheduler>=3.10.4",
-    "cryptography==46.0.4",
+    "cryptography==46.0.5",
     # File uploads
     "aiofiles>=24.1.0",
     "filetype>=1.2.0",
-    "pillow>=11.0.0",
+    "pillow>=12.1.1",
     # WebAuthn
     "webauthn>=2.0.0",
 ]

@@ -27,7 +27,7 @@ The authorization server acts as an intermediary between MCP clients and TaskMan
 |----------|-------------|---------|
 | `TASKMANAGER_CLIENT_ID` | OAuth client ID registered in TaskManager | Required |
 | `TASKMANAGER_CLIENT_SECRET` | OAuth client secret | Required |
-| `TASKMANAGER_OAUTH_HOST` | TaskManager base URL | `http://app:4321` |
+| `TASKMANAGER_OAUTH_HOST` | TaskManager API URL | `http://backend:8000` |
 | `MCP_AUTH_SERVER_URL` | Public URL of this auth server | Required |
 | `MCP_SERVER` | URL of the MCP resource server | `http://mcp-resource:8001` |
 | `DATABASE_URL` | PostgreSQL connection string (for persistent token storage) | Optional |
@@ -82,7 +82,7 @@ cd services/mcp-auth
 uv sync
 uv run python -m mcp_auth.auth_server \
   --port 9000 \
-  --taskmanager-url http://localhost:4321
+  --taskmanager-url http://localhost:8000
 ```
 
 ### Running with Docker
