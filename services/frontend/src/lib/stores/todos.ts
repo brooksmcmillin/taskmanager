@@ -63,14 +63,14 @@ function createTodoStore() {
 		subscribe: store.subscribe,
 		load: async (filters?: TodoFilters & { include_subtasks?: boolean }) => {
 			try {
+				// Always include subtasks by default
+				const mergedFilters = { include_subtasks: true, ...filters };
 				// Convert filter values to strings properly
-				const params = filters
-					? (Object.fromEntries(
-							Object.entries(filters)
-								.filter(([, value]) => value !== undefined)
-								.map(([key, value]) => [key, String(value)])
-						) as Record<string, string>)
-					: undefined;
+				const params = Object.fromEntries(
+					Object.entries(mergedFilters)
+						.filter(([, value]) => value !== undefined)
+						.map(([key, value]) => [key, String(value)])
+				) as Record<string, string>;
 
 				const response = await api.get<{ data: Todo[]; meta: { count: number } }>('/api/todos', {
 					params

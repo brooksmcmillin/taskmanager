@@ -7,6 +7,7 @@
 	import { hexTo50Shade } from '$lib/utils/colors';
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
+	import { getPriorityColor } from '$lib/utils/priority';
 	import type { Todo, TodoFilters } from '$lib/types';
 
 	export let filters: TodoFilters = {};
@@ -217,6 +218,20 @@
 								}}
 							>
 								<div class="task-title">{todo.title}</div>
+								{#if todo.subtasks && todo.subtasks.length > 0}
+									<div class="calendar-subtask-indicator">
+										<span class="calendar-subtask-count">{todo.subtasks.filter(s => s.status === 'completed').length}/{todo.subtasks.length}</span>
+									</div>
+									{#each todo.subtasks.filter(s => s.status !== 'completed') as subtask}
+										<a class="calendar-subtask-row" href="/task/{subtask.id}" on:click|stopPropagation on:dblclick|stopPropagation>
+											<span
+												class="cal-subtask-dot"
+												style="background-color: {getPriorityColor(subtask.priority)}"
+											></span>
+											<span class="cal-subtask-title">{subtask.title}</span>
+										</a>
+									{/each}
+								{/if}
 							</div>
 						{/each}
 					</div>
