@@ -7,6 +7,8 @@
 	import { getPriorityColor } from '$lib/utils/priority';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { todos } from '$lib/stores/todos';
+	import { toasts } from '$lib/stores/ui';
+	import { logger } from '$lib/utils/logger';
 	import type { Todo } from '$lib/types';
 
 	export let show = false;
@@ -21,11 +23,11 @@
 		todo = selectedTodo;
 		mode = 'view';
 		show = true;
-		// Fetch full todo with subtasks, dependencies, attachments
 		try {
 			todo = await todos.getById(selectedTodo.id);
 		} catch (error) {
-			// Fall back to the passed-in todo
+			logger.error('Failed to load full task details:', error);
+			toasts.show('Could not load full task details', 'warning');
 		}
 	}
 
@@ -36,7 +38,8 @@
 		try {
 			todo = await todos.getById(selectedTodo.id);
 		} catch (error) {
-			// Fall back to the passed-in todo
+			logger.error('Failed to load full task details:', error);
+			toasts.show('Could not load full task details', 'warning');
 		}
 	}
 
