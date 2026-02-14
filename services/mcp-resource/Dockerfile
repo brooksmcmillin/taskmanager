@@ -42,4 +42,4 @@ USER appuser
 EXPOSE 8001
 
 # Default command
-CMD ["uv", "run", "python", "-m", "mcp_resource.server"]
+CMD ["uv", "run", "--no-sync", "python", "-m", "mcp_resource.server"]

@@ -40,4 +40,4 @@ USER appuser
 EXPOSE 9000
 
 # Default command
-CMD ["uv", "run", "python", "-m", "mcp_auth.auth_server"]
+CMD ["uv", "run", "--no-sync", "python", "-m", "mcp_auth.auth_server"]
