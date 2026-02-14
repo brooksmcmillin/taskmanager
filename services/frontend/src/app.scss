@@ -150,6 +150,13 @@ $success-color: #059669;
 $error-color: #dc2626;
 $warning-color: #f59e0b;
 
+// Breakpoints
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+$breakpoint-phone: 480px;
+
 // Mixins
 @mixin button-hover-effect {
 	transform: translateY(-1px);
@@ -349,18 +356,18 @@ h6 {
 	padding-left: var(--space-4);
 	padding-right: var(--space-4);
 
-	@media (min-width: 640px) {
+	@media (min-width: $breakpoint-sm) {
 		max-width: 640px;
 	}
-	@media (min-width: 768px) {
+	@media (min-width: $breakpoint-md) {
 		max-width: 768px;
 	}
-	@media (min-width: 1024px) {
+	@media (min-width: $breakpoint-lg) {
 		max-width: 1024px;
 		padding-left: var(--space-6);
 		padding-right: var(--space-6);
 	}
-	@media (min-width: 1280px) {
+	@media (min-width: $breakpoint-xl) {
 		max-width: 1280px;
 	}
 }
@@ -492,15 +499,18 @@ h6 {
 	gap: var(--space-8);
 }
 
-@media (min-width: 768px) {
+@media (min-width: $breakpoint-md) {
 	.md\:grid-cols-2 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
-@media (min-width: 1024px) {
+@media (min-width: $breakpoint-lg) {
 	.lg\:grid-cols-2 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.lg\:grid-cols-3 {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 }
 
@@ -696,6 +706,8 @@ h6 {
 	background-color: var(--bg-nav);
 	box-shadow: var(--shadow);
 	border-bottom: 1px solid var(--border-color);
+	position: relative;
+	z-index: 50;
 }
 
 .nav-link {
@@ -866,7 +878,7 @@ h6 {
 	grid-template-columns: 1fr 1fr;
 	gap: 16px;
 
-	@media (max-width: 640px) {
+	@media (max-width: $breakpoint-sm) {
 		grid-template-columns: 1fr;
 	}
 }
@@ -874,7 +886,7 @@ h6 {
 .form-full-width {
 	grid-column: span 2;
 
-	@media (max-width: 640px) {
+	@media (max-width: $breakpoint-sm) {
 		grid-column: span 1;
 	}
 }
@@ -959,6 +971,7 @@ h6 {
 // Calendar specific styles (from DragDropCalendar)
 #calendar-container {
 	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
 }
 
 .calendar-headers {
@@ -1039,6 +1052,58 @@ h6 {
 		gap: 6px;
 		min-height: 80px; /* Make drop zone always available */
 		flex: 1; /* Take up remaining space in calendar day */
+	}
+}
+
+// Calendar day header: full name on desktop, abbreviated on mobile
+.day-short {
+	display: none;
+}
+
+@media (max-width: $breakpoint-md) {
+	// Mobile calendar improvements
+	.calendar-headers {
+		min-width: 500px;
+		grid-template-columns: repeat(7, minmax(68px, 1fr));
+		gap: 4px;
+	}
+
+	.calendar-header-day {
+		padding: 6px 2px;
+		font-size: 0.8125rem;
+	}
+
+	.day-full {
+		display: none;
+	}
+
+	.day-short {
+		display: inline;
+	}
+
+	#calendar-grid {
+		min-width: 500px;
+		grid-template-columns: repeat(7, minmax(68px, 1fr));
+		gap: 4px;
+	}
+
+	.calendar-day {
+		min-height: 90px;
+		padding: 4px;
+
+		.calendar-date {
+			font-size: 0.75rem;
+		}
+
+		.tasks-container {
+			min-height: 60px;
+			gap: 4px;
+		}
+	}
+
+	.calendar-task {
+		font-size: 0.6875rem;
+		padding: 3px 4px;
 	}
 }
 
@@ -1254,6 +1319,31 @@ h6 {
 	min-width: 0;
 }
 
+// Due Date Filter
+.due-date-filter-container {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.75rem 1rem;
+	background-color: var(--bg-card);
+	border-radius: var(--radius-md);
+	border: 1px solid var(--border-color);
+	box-shadow: var(--shadow-sm);
+	max-width: 300px;
+}
+
+.due-date-filter-label {
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--text-secondary);
+	white-space: nowrap;
+}
+
+.due-date-filter-select {
+	flex: 1;
+	min-width: 0;
+}
+
 // Shared detail styles (used in TaskDetailPanel, TodoForm, etc.)
 .detail-label {
 	display: block;
@@ -1270,6 +1360,78 @@ h6 {
 	font-size: 0.875rem;
 	line-height: 1.5;
 	white-space: pre-wrap;
+}
+
+// Mobile responsive styles
+@media (max-width: $breakpoint-md) {
+	// Better container padding on mobile
+	.container {
+		padding-left: var(--space-3);
+		padding-right: var(--space-3);
+	}
+
+	// Reduce page padding on mobile
+	.py-8 {
+		padding-top: var(--space-4);
+		padding-bottom: var(--space-4);
+	}
+
+	// Ensure minimum touch target sizes (44x44px per WCAG)
+	.btn {
+		min-height: 2.75rem;
+		padding: var(--space-2) var(--space-4);
+	}
+
+	.btn.btn-sm {
+		min-height: 2.25rem;
+		padding: var(--space-1) var(--space-3);
+	}
+
+	// Responsive cards
+	.card {
+		padding: var(--space-4);
+	}
+
+	// Floating action button adjustments
+	.add-todo-btn,
+	.add-project-btn {
+		bottom: 16px;
+		right: 16px;
+	}
+
+	// Stack list items vertically if needed
+	.md\:grid-cols-2 {
+		grid-template-columns: repeat(1, minmax(0, 1fr));
+	}
+
+	// Modal responsive
+	.modal-content {
+		padding: 20px;
+		width: 95%;
+		border-radius: var(--radius-md);
+	}
+
+	// Filter containers full width
+	.project-filter-container,
+	.due-date-filter-container {
+		max-width: 100%;
+	}
+}
+
+// Small phone screens
+@media (max-width: $breakpoint-phone) {
+	.container {
+		padding-left: var(--space-2);
+		padding-right: var(--space-2);
+	}
+
+	h1.text-xl {
+		font-size: 1.125rem;
+	}
+
+	.text-2xl {
+		font-size: 1.25rem;
+	}
 }
 
 // Print styles

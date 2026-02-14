@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount, tick } from 'svelte';
+	import { slide } from 'svelte/transition';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import ThemeToggle from './ThemeToggle.svelte';
@@ -6,12 +8,18 @@
 	import { toasts } from '$lib/stores/ui';
 	import type { User } from '$lib/types';
 
+	// Must match $breakpoint-md in app.scss
+	const MOBILE_BREAKPOINT = 768;
+
 	let { user = null }: { user: User | null } = $props();
 
 	let newsDropdownOpen = $state(false);
 	let tasksDropdownOpen = $state(false);
 	let userDropdownOpen = $state(false);
+	let mobileMenuOpen = $state(false);
 	let closeTimeout: ReturnType<typeof setTimeout> | null = null;
+	let hamburgerBtnRef: HTMLButtonElement | undefined = $state(undefined);
+	let mobileMenuRef: HTMLDivElement | undefined = $state(undefined);
 
 	async function handleLogout() {
 		try {
@@ -67,6 +75,17 @@
 		}, 200);
 	}
 
+	function closeAllMenus() {
+		newsDropdownOpen = false;
+		tasksDropdownOpen = false;
+		userDropdownOpen = false;
+		mobileMenuOpen = false;
+		if (closeTimeout) {
+			clearTimeout(closeTimeout);
+			closeTimeout = null;
+		}
+	}
+
 	function closeDropdowns() {
 		newsDropdownOpen = false;
 		tasksDropdownOpen = false;
@@ -76,6 +95,76 @@
 			closeTimeout = null;
 		}
 	}
+
+	async function toggleMobileMenu() {
+		mobileMenuOpen = !mobileMenuOpen;
+		if (!mobileMenuOpen) {
+			closeDropdowns();
+		} else {
+			// Wait for Svelte to render the menu DOM before focusing
+			await tick();
+			const firstItem = mobileMenuRef?.querySelector<HTMLElement>('a, button');
+			firstItem?.focus();
+		}
+	}
+
+	function closeMobileMenu() {
+		mobileMenuOpen = false;
+		closeDropdowns();
+		// Return focus to the hamburger button
+		hamburgerBtnRef?.focus();
+	}
+
+	// Focus trap: keep Tab cycling within the mobile menu
+	function handleMobileMenuKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			closeMobileMenu();
+			return;
+		}
+
+		if (event.key !== 'Tab' || !mobileMenuRef) return;
+
+		const focusable = mobileMenuRef.querySelectorAll<HTMLElement>(
+			'a[href], button:not([disabled])'
+		);
+		if (focusable.length === 0) return;
+
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+
+		if (event.shiftKey && document.activeElement === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
+
+	// Close mobile menu when resizing past breakpoint (issue #1)
+	function handleResize() {
+		if (window.innerWidth > MOBILE_BREAKPOINT && mobileMenuOpen) {
+			closeAllMenus();
+		}
+	}
+
+	// Body scroll lock when mobile menu is open (issue #3)
+	$effect(() => {
+		if (mobileMenuOpen) {
+			document.body.style.overflow = 'hidden';
+		} else {
+			document.body.style.overflow = '';
+		}
+	});
+
+	onMount(() => {
+		window.addEventListener('resize', handleResize);
+		return () => {
+			window.removeEventListener('resize', handleResize);
+			// Ensure scroll is restored on unmount
+			document.body.style.overflow = '';
+		};
+	});
 
 	let currentPath = $derived($page.url.pathname);
 	let isNewsActive = $derived(currentPath.startsWith('/news'));
@@ -91,8 +180,10 @@
 		<div class="flex items-center justify-between h-16">
 			<div class="flex items-center space-x-8">
 				<h1 class="text-xl font-bold text-gray-900">Task Manager</h1>
+
+				<!-- Desktop Navigation -->
 				{#if user}
-					<div class="flex space-x-4">
+					<div class="desktop-nav flex space-x-4">
 						<!-- Tasks Dropdown -->
 						<div
 							class="nav-dropdown"
@@ -212,9 +303,9 @@
 
 			<div class="flex items-center space-x-4">
 				{#if user}
-					<!-- User Dropdown -->
+					<!-- Desktop User Dropdown -->
 					<div
-						class="nav-dropdown user-dropdown"
+						class="nav-dropdown user-dropdown desktop-nav"
 						onmouseenter={openUserDropdown}
 						onmouseleave={scheduleCloseUserDropdown}
 					>
@@ -292,11 +383,178 @@
 							</div>
 						{/if}
 					</div>
+
+					<!-- Mobile Hamburger Button -->
+					<button
+						class="mobile-menu-btn"
+						bind:this={hamburgerBtnRef}
+						onclick={toggleMobileMenu}
+						aria-label="Toggle menu"
+						aria-expanded={mobileMenuOpen}
+					>
+						{#if mobileMenuOpen}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<line x1="18" y1="6" x2="6" y2="18"></line>
+								<line x1="6" y1="6" x2="18" y2="18"></line>
+							</svg>
+						{:else}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<line x1="3" y1="12" x2="21" y2="12"></line>
+								<line x1="3" y1="6" x2="21" y2="6"></line>
+								<line x1="3" y1="18" x2="21" y2="18"></line>
+							</svg>
+						{/if}
+					</button>
 				{/if}
 				<ThemeToggle />
 			</div>
 		</div>
 	</div>
+
+	<!-- Screen reader announcement for menu state -->
+	<div class="sr-only" aria-live="polite">
+		{#if mobileMenuOpen}Navigation menu opened{/if}
+	</div>
+
+	<!-- Mobile Menu Drawer -->
+	{#if user && mobileMenuOpen}
+		<div class="mobile-menu-backdrop" onclick={closeMobileMenu} role="presentation"></div>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="mobile-menu"
+			bind:this={mobileMenuRef}
+			onkeydown={handleMobileMenuKeydown}
+			role="navigation"
+			aria-label="Mobile navigation"
+			transition:slide={{ duration: 200 }}
+		>
+			<div class="mobile-menu-section">
+				<div class="mobile-menu-label">Tasks</div>
+				<a
+					href="/"
+					class="mobile-menu-item"
+					class:active={currentPath === '/'}
+					onclick={closeMobileMenu}
+				>
+					Todos
+				</a>
+				<a
+					href="/projects"
+					class="mobile-menu-item"
+					class:active={currentPath === '/projects'}
+					onclick={closeMobileMenu}
+				>
+					Projects
+				</a>
+				<a
+					href="/recurring-tasks"
+					class="mobile-menu-item"
+					class:active={currentPath === '/recurring-tasks'}
+					onclick={closeMobileMenu}
+				>
+					Recurring
+				</a>
+			</div>
+
+			<div class="mobile-menu-section">
+				<div class="mobile-menu-label">News</div>
+				<a
+					href="/news"
+					class="mobile-menu-item"
+					class:active={currentPath === '/news'}
+					onclick={closeMobileMenu}
+				>
+					Feed
+				</a>
+				<a
+					href="/news/sources"
+					class="mobile-menu-item"
+					class:active={currentPath === '/news/sources'}
+					onclick={closeMobileMenu}
+				>
+					Sources
+				</a>
+			</div>
+
+			<div class="mobile-menu-section">
+				<a
+					href="/trash"
+					class="mobile-menu-item"
+					class:active={currentPath === '/trash'}
+					onclick={closeMobileMenu}
+				>
+					Trash
+				</a>
+			</div>
+
+			<div class="mobile-menu-divider"></div>
+
+			<div class="mobile-menu-section">
+				<!-- Email is validated by Pydantic EmailStr on backend; Svelte auto-escapes output -->
+				<div class="mobile-menu-label">{user.email}</div>
+				<a
+					href="/settings"
+					class="mobile-menu-item"
+					class:active={currentPath === '/settings'}
+					onclick={closeMobileMenu}
+				>
+					Settings
+				</a>
+				<a
+					href="/oauth-clients"
+					class="mobile-menu-item"
+					class:active={currentPath === '/oauth-clients'}
+					onclick={closeMobileMenu}
+				>
+					OAuth Clients
+				</a>
+				<a
+					href="/api-keys"
+					class="mobile-menu-item"
+					class:active={currentPath === '/api-keys'}
+					onclick={closeMobileMenu}
+				>
+					API Keys
+				</a>
+				{#if user.is_admin}
+					<a
+						href="/admin/registration-codes"
+						class="mobile-menu-item"
+						class:active={currentPath === '/admin/registration-codes'}
+						onclick={closeMobileMenu}
+					>
+						Registration Codes
+					</a>
+				{/if}
+				<button
+					class="mobile-menu-item mobile-logout-btn"
+					onclick={() => {
+						closeMobileMenu();
+						handleLogout();
+					}}
+					data-testid="mobile-logout-button"
+				>
+					Logout
+				</button>
+			</div>
+		</div>
+	{/if}
 </nav>
 
 <style>
@@ -421,5 +679,140 @@
 	.user-icon {
 		width: 1.75rem;
 		height: 1.75rem;
+	}
+
+	/* Mobile hamburger button - hidden on desktop */
+	.mobile-menu-btn {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		padding: 0.375rem;
+		border: none;
+		background: none;
+		cursor: pointer;
+		border-radius: var(--radius);
+		color: var(--text-secondary);
+		transition: all var(--transition-fast);
+	}
+
+	.mobile-menu-btn:hover {
+		background-color: var(--bg-hover);
+		color: var(--text-primary);
+	}
+
+	.mobile-menu-btn svg {
+		width: 1.5rem;
+		height: 1.5rem;
+	}
+
+	/* Mobile menu backdrop */
+	.mobile-menu-backdrop {
+		display: none;
+		position: fixed;
+		top: 4rem;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: var(--bg-overlay);
+		z-index: 40;
+	}
+
+	/* Screen reader only - visually hidden but accessible */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border-width: 0;
+	}
+
+	/* Mobile slide-down menu (open/close animated via Svelte transition:slide) */
+	.mobile-menu {
+		display: none;
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		background-color: var(--bg-card);
+		border-bottom: 1px solid var(--border-color);
+		box-shadow: var(--shadow-lg);
+		z-index: 50;
+		max-height: calc(100vh - 4rem);
+		overflow-y: auto;
+	}
+
+	.mobile-menu-section {
+		padding: 0.5rem 0;
+	}
+
+	.mobile-menu-label {
+		padding: 0.5rem 1.25rem;
+		font-size: 0.6875rem;
+		font-weight: 700;
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+
+	.mobile-menu-item {
+		display: block;
+		padding: 0.75rem 1.25rem;
+		font-size: 0.9375rem;
+		color: var(--text-secondary);
+		text-decoration: none;
+		transition: background-color var(--transition-fast);
+	}
+
+	.mobile-menu-item:hover {
+		background-color: var(--bg-hover);
+		text-decoration: none;
+	}
+
+	.mobile-menu-item.active {
+		background-color: var(--primary-50);
+		color: var(--primary-600);
+		font-weight: 500;
+	}
+
+	.mobile-logout-btn {
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: none;
+		cursor: pointer;
+		font-family: inherit;
+		color: var(--error-600);
+	}
+
+	.mobile-menu-divider {
+		height: 1px;
+		margin: 0.25rem 1rem;
+		background-color: var(--border-color);
+	}
+
+	/* Show mobile elements / hide desktop elements on small screens */
+	@media (max-width: 768px) {
+		/* $breakpoint-md */
+		.desktop-nav {
+			display: none !important;
+		}
+
+		.mobile-menu-btn {
+			display: flex;
+		}
+
+		.mobile-menu-backdrop {
+			display: block;
+		}
+
+		.mobile-menu {
+			display: block;
+		}
 	}
 </style>
