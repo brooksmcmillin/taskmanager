@@ -320,6 +320,20 @@ make test-sdk          # Python SDK (pytest)
 
 - **Unit tests are required for all new features and bug fixes.** Add tests that cover the happy path, edge cases, and security-relevant behavior (e.g., authorization checks). Place backend tests in `services/backend/tests/` and frontend tests in `services/frontend/tests/`.
 
+### Date and Timezone Handling
+
+Dates in this project are **date-only strings** (`YYYY-MM-DD`) for due dates and scheduling, and **ISO 8601 timestamps** for created/updated fields. Follow these rules to avoid timezone bugs:
+
+**Frontend (JavaScript/TypeScript):**
+- To parse a `YYYY-MM-DD` date for comparison, use `new Date(year, month - 1, day)` to get **local midnight**. Do NOT use `new Date("2026-02-14")` — the Date constructor interprets date-only strings as UTC, which shifts the date backward for users west of Greenwich.
+- When comparing dates, ensure both sides use the same timezone basis (both local or both UTC). Mixing UTC-parsed dates with `new Date()` (local) causes off-by-one errors.
+- To get today's date as a `YYYY-MM-DD` string, derive from `new Date()` using `getFullYear()`/`getMonth()`/`getDate()` (local). Do not use `toISOString().slice(0,10)` which returns the UTC date.
+- See `localMidnight()` in `src/routes/home/+page.svelte` for the canonical pattern.
+
+**Backend (Python):**
+- Store due dates as `date` objects (not `datetime`). Comparisons use `date.today()` which is server-local.
+- Store timestamps as timezone-aware `datetime` (UTC). Use `datetime.now(timezone.utc)`.
+
 ## Python Development Notes
 
 - Use `uv` for package management (not pip directly)

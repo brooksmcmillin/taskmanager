@@ -32,17 +32,25 @@
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 	}
 
+	function localMidnight(dateStr: string): Date {
+		// Parse YYYY-MM-DD as local midnight (not UTC) so date comparisons
+		// reflect the user's timezone. Do NOT use new Date(dateStr) or
+		// append 'T00:00:00Z' — both interpret as UTC which shifts the
+		// date for users west of Greenwich.
+		const [y, m, d] = dateStr.split('-').map(Number);
+		return new Date(y, m - 1, d);
+	}
+
 	function formatDueDate(dateStr: string | null): string {
 		if (!dateStr) return '';
-		const parts = dateStr.split('-');
-		const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+		const due = localMidnight(dateStr);
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
-		const diff = Math.floor((d.getTime() - today.getTime()) / 86400000);
+		const diff = Math.floor((due.getTime() - today.getTime()) / 86400000);
 		if (diff < 0) return `${Math.abs(diff)}d overdue`;
 		if (diff === 0) return 'today';
 		if (diff === 1) return 'tomorrow';
-		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+		return due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
 	function timeAgo(dateStr: string | null): string {
@@ -60,7 +68,8 @@
 		return then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
-	onMount(async () => {
+	onMount(() => {
+		let mounted = true;
 		const today = todayStr();
 
 		Promise.all([
@@ -70,11 +79,16 @@
 			api.get<ApiResponse<Todo[]>>('/api/todos', { params: { status: 'overdue' } })
 		])
 			.then(([todayResult, overdueResult]) => {
+				if (!mounted) return;
 				tasks = todayResult.data || [];
+				// The backend's "overdue" query can include tasks due today that
+				// aren't completed yet. Since those already appear in todayResult,
+				// filter them out to avoid duplicates.
 				overdueTasks = (overdueResult.data || []).filter((t) => t.due_date !== today);
 				tasksLoading = false;
 			})
 			.catch(() => {
+				if (!mounted) return;
 				tasksError = true;
 				tasksLoading = false;
 			});
@@ -83,13 +97,19 @@
 			params: { limit: '30', unread_only: 'true' }
 		})
 			.then((result) => {
+				if (!mounted) return;
 				articles = result.data || [];
 				articlesLoading = false;
 			})
 			.catch(() => {
+				if (!mounted) return;
 				articlesError = true;
 				articlesLoading = false;
 			});
+
+		return () => {
+			mounted = false;
+		};
 	});
 
 	$: totalTasks = tasks.length + overdueTasks.length;
