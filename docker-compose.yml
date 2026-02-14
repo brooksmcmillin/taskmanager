@@ -78,7 +78,7 @@ services:
       context: .
       dockerfile: services/mcp-auth/Dockerfile
     container_name: taskmanager-mcp-auth
-    command: uv run python -m mcp_auth.auth_server --port 9000 --taskmanager-url http://backend:8000
+    command: uv run --no-sync python -m mcp_auth.auth_server --port 9000 --taskmanager-url http://backend:8000
     ports:
       - '9000:9000'
     environment:
@@ -102,7 +102,7 @@ services:
       context: .
       dockerfile: services/mcp-resource/Dockerfile
     container_name: taskmanager-mcp-resource
-    command: uv run python -m mcp_resource.server --port 8001 --auth-server http://mcp-auth:9000 --auth-server-public-url ${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
+    command: uv run --no-sync python -m mcp_resource.server --port 8001 --auth-server http://mcp-auth:9000 --auth-server-public-url ${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
     ports:
       - '8001:8001'
     environment:
