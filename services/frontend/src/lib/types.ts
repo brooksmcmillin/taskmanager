@@ -190,11 +190,24 @@ export interface FeedSource {
 	description: string | null;
 	type: FeedType;
 	is_active: boolean;
+	is_featured: boolean;
 	fetch_interval_hours: number;
 	last_fetched_at: string | null;
 	quality_score: number;
 	created_at: string;
 }
+
+export interface FeedSourceCreate {
+	name: string;
+	url: string;
+	description?: string;
+	type?: FeedType;
+	is_active?: boolean;
+	is_featured?: boolean;
+	fetch_interval_hours?: number;
+}
+
+export interface FeedSourceUpdate extends Partial<FeedSourceCreate> {}
 
 export type Frequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 

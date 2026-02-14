@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, or_, select
 
 from app.core.errors import errors
@@ -58,6 +58,7 @@ class FeedSourceResponse(BaseModel):
     description: str | None
     type: FeedType
     is_active: bool
+    is_featured: bool
     fetch_interval_hours: int
     last_fetched_at: datetime | None
     quality_score: float
@@ -70,6 +71,30 @@ class ToggleFeedSourceRequest(BaseModel):
     is_active: bool
 
 
+class FeedSourceCreate(BaseModel):
+    """Create a new feed source."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    url: str = Field(..., min_length=1, max_length=500)
+    description: str | None = None
+    type: FeedType = FeedType.article
+    is_active: bool = True
+    is_featured: bool = False
+    fetch_interval_hours: int = Field(default=6, ge=1, le=168)
+
+
+class FeedSourceUpdate(BaseModel):
+    """Update a feed source (partial)."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    url: str | None = Field(default=None, min_length=1, max_length=500)
+    description: str | None = None
+    type: FeedType | None = None
+    is_active: bool | None = None
+    is_featured: bool | None = None
+    fetch_interval_hours: int | None = Field(default=None, ge=1, le=168)
+
+
 # Feed Source Management (must be before /{article_id} routes)
 
 
@@ -77,22 +102,19 @@ class ToggleFeedSourceRequest(BaseModel):
 async def list_feed_sources(
     user: CurrentUser,
     db: DbSession,
+    featured: bool | None = Query(None),
 ) -> ListResponse[FeedSourceResponse]:
-    """List all feed sources."""
-    try:
-        stmt = select(FeedSource).order_by(FeedSource.name)
-        result = await db.execute(stmt)
-        sources = result.scalars().all()
+    """List all feed sources, optionally filtered by featured status."""
+    stmt = select(FeedSource).order_by(FeedSource.name)
+    if featured is not None:
+        stmt = stmt.where(FeedSource.is_featured == featured)
+    result = await db.execute(stmt)
+    sources = result.scalars().all()
 
-        response_data = [
-            FeedSourceResponse.model_validate(source) for source in sources
-        ]
-        return ListResponse(data=response_data, meta={})
-    except Exception:
-        import traceback
-
-        traceback.print_exc()
-        raise
+    response_data = [
+        FeedSourceResponse.model_validate(source) for source in sources
+    ]
+    return ListResponse(data=response_data, meta={})
 
 
 @router.post("/sources/{source_id}/toggle")
@@ -111,6 +133,97 @@ async def toggle_feed_source(
     await db.commit()
 
     return {"data": {"id": source_id, "is_active": request.is_active}}
+
+
+@router.post("/sources", response_model=dict, status_code=201)
+async def create_feed_source(
+    source: FeedSourceCreate,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Create a new feed source."""
+    # Check for duplicate name
+    existing = await db.execute(
+        select(FeedSource).where(FeedSource.name == source.name)
+    )
+    if existing.scalar_one_or_none():
+        raise errors.validation("A feed source with this name already exists")
+
+    # Check for duplicate URL
+    existing = await db.execute(
+        select(FeedSource).where(FeedSource.url == source.url)
+    )
+    if existing.scalar_one_or_none():
+        raise errors.validation("A feed source with this URL already exists")
+
+    feed_source = FeedSource(**source.model_dump())
+    db.add(feed_source)
+    await db.commit()
+    await db.refresh(feed_source)
+
+    return {"data": FeedSourceResponse.model_validate(feed_source)}
+
+
+@router.put("/sources/{source_id}")
+async def update_feed_source(
+    source_id: int,
+    source: FeedSourceUpdate,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Update a feed source (partial update)."""
+    feed_source = await db.get(FeedSource, source_id)
+    if not feed_source:
+        raise errors.not_found("Feed source")
+
+    update_data = source.model_dump(exclude_unset=True)
+
+    # Check for duplicate name if name is being changed
+    if "name" in update_data and update_data["name"] != feed_source.name:
+        existing = await db.execute(
+            select(FeedSource).where(
+                FeedSource.name == update_data["name"],
+                FeedSource.id != source_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise errors.validation("A feed source with this name already exists")
+
+    # Check for duplicate URL if URL is being changed
+    if "url" in update_data and update_data["url"] != feed_source.url:
+        existing = await db.execute(
+            select(FeedSource).where(
+                FeedSource.url == update_data["url"],
+                FeedSource.id != source_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise errors.validation("A feed source with this URL already exists")
+
+    for key, value in update_data.items():
+        setattr(feed_source, key, value)
+
+    await db.commit()
+    await db.refresh(feed_source)
+
+    return {"data": FeedSourceResponse.model_validate(feed_source)}
+
+
+@router.delete("/sources/{source_id}")
+async def delete_feed_source(
+    source_id: int,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Delete a feed source and its articles."""
+    feed_source = await db.get(FeedSource, source_id)
+    if not feed_source:
+        raise errors.not_found("Feed source")
+
+    await db.delete(feed_source)
+    await db.commit()
+
+    return {"data": {"deleted": True, "id": source_id}}
 
 
 # Article endpoints
