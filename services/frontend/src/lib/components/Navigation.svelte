@@ -11,6 +11,7 @@
 	let newsDropdownOpen = $state(false);
 	let tasksDropdownOpen = $state(false);
 	let userDropdownOpen = $state(false);
+	let mobileMenuOpen = $state(false);
 	let closeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	async function handleLogout() {
@@ -77,6 +78,18 @@
 		}
 	}
 
+	function toggleMobileMenu() {
+		mobileMenuOpen = !mobileMenuOpen;
+		if (!mobileMenuOpen) {
+			closeDropdowns();
+		}
+	}
+
+	function closeMobileMenu() {
+		mobileMenuOpen = false;
+		closeDropdowns();
+	}
+
 	let currentPath = $derived($page.url.pathname);
 	let isNewsActive = $derived(currentPath.startsWith('/news'));
 	let isTasksActive = $derived(
@@ -91,8 +104,10 @@
 		<div class="flex items-center justify-between h-16">
 			<div class="flex items-center space-x-8">
 				<h1 class="text-xl font-bold text-gray-900">Task Manager</h1>
+
+				<!-- Desktop Navigation -->
 				{#if user}
-					<div class="flex space-x-4">
+					<div class="desktop-nav flex space-x-4">
 						<!-- Tasks Dropdown -->
 						<div
 							class="nav-dropdown"
@@ -212,9 +227,9 @@
 
 			<div class="flex items-center space-x-4">
 				{#if user}
-					<!-- User Dropdown -->
+					<!-- Desktop User Dropdown -->
 					<div
-						class="nav-dropdown user-dropdown"
+						class="nav-dropdown user-dropdown desktop-nav"
 						onmouseenter={openUserDropdown}
 						onmouseleave={scheduleCloseUserDropdown}
 					>
@@ -292,11 +307,97 @@
 							</div>
 						{/if}
 					</div>
+
+					<!-- Mobile Hamburger Button -->
+					<button
+						class="mobile-menu-btn"
+						onclick={toggleMobileMenu}
+						aria-label="Toggle menu"
+						aria-expanded={mobileMenuOpen}
+					>
+						{#if mobileMenuOpen}
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<line x1="18" y1="6" x2="6" y2="18"></line>
+								<line x1="6" y1="6" x2="18" y2="18"></line>
+							</svg>
+						{:else}
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<line x1="3" y1="12" x2="21" y2="12"></line>
+								<line x1="3" y1="6" x2="21" y2="6"></line>
+								<line x1="3" y1="18" x2="21" y2="18"></line>
+							</svg>
+						{/if}
+					</button>
 				{/if}
 				<ThemeToggle />
 			</div>
 		</div>
 	</div>
+
+	<!-- Mobile Menu Drawer -->
+	{#if user && mobileMenuOpen}
+		<div class="mobile-menu-backdrop" onclick={closeMobileMenu} role="presentation"></div>
+		<div class="mobile-menu">
+			<div class="mobile-menu-section">
+				<div class="mobile-menu-label">Tasks</div>
+				<a href="/" class="mobile-menu-item" class:active={currentPath === '/'} onclick={closeMobileMenu}>
+					Todos
+				</a>
+				<a href="/projects" class="mobile-menu-item" class:active={currentPath === '/projects'} onclick={closeMobileMenu}>
+					Projects
+				</a>
+				<a href="/recurring-tasks" class="mobile-menu-item" class:active={currentPath === '/recurring-tasks'} onclick={closeMobileMenu}>
+					Recurring
+				</a>
+			</div>
+
+			<div class="mobile-menu-section">
+				<div class="mobile-menu-label">News</div>
+				<a href="/news" class="mobile-menu-item" class:active={currentPath === '/news'} onclick={closeMobileMenu}>
+					Feed
+				</a>
+				<a href="/news/sources" class="mobile-menu-item" class:active={currentPath === '/news/sources'} onclick={closeMobileMenu}>
+					Sources
+				</a>
+			</div>
+
+			<div class="mobile-menu-section">
+				<a href="/trash" class="mobile-menu-item" class:active={currentPath === '/trash'} onclick={closeMobileMenu}>
+					Trash
+				</a>
+			</div>
+
+			<div class="mobile-menu-divider"></div>
+
+			<div class="mobile-menu-section">
+				<div class="mobile-menu-label">{user.email}</div>
+				<a href="/settings" class="mobile-menu-item" class:active={currentPath === '/settings'} onclick={closeMobileMenu}>
+					Settings
+				</a>
+				<a href="/oauth-clients" class="mobile-menu-item" class:active={currentPath === '/oauth-clients'} onclick={closeMobileMenu}>
+					OAuth Clients
+				</a>
+				<a href="/api-keys" class="mobile-menu-item" class:active={currentPath === '/api-keys'} onclick={closeMobileMenu}>
+					API Keys
+				</a>
+				{#if user.is_admin}
+					<a href="/admin/registration-codes" class="mobile-menu-item" class:active={currentPath === '/admin/registration-codes'} onclick={closeMobileMenu}>
+						Registration Codes
+					</a>
+				{/if}
+				<button
+					class="mobile-menu-item mobile-logout-btn"
+					onclick={() => {
+						closeMobileMenu();
+						handleLogout();
+					}}
+					data-testid="mobile-logout-button"
+				>
+					Logout
+				</button>
+			</div>
+		</div>
+	{/if}
 </nav>
 
 <style>
@@ -421,5 +522,138 @@
 	.user-icon {
 		width: 1.75rem;
 		height: 1.75rem;
+	}
+
+	/* Mobile hamburger button - hidden on desktop */
+	.mobile-menu-btn {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		padding: 0.375rem;
+		border: none;
+		background: none;
+		cursor: pointer;
+		border-radius: var(--radius);
+		color: var(--text-secondary);
+		transition: all var(--transition-fast);
+	}
+
+	.mobile-menu-btn:hover {
+		background-color: var(--bg-hover);
+		color: var(--text-primary);
+	}
+
+	.mobile-menu-btn svg {
+		width: 1.5rem;
+		height: 1.5rem;
+	}
+
+	/* Mobile menu backdrop */
+	.mobile-menu-backdrop {
+		display: none;
+		position: fixed;
+		top: 4rem;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: var(--bg-overlay);
+		z-index: 40;
+	}
+
+	/* Mobile slide-down menu */
+	.mobile-menu {
+		display: none;
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		background-color: var(--bg-card);
+		border-bottom: 1px solid var(--border-color);
+		box-shadow: var(--shadow-lg);
+		z-index: 50;
+		max-height: calc(100vh - 4rem);
+		overflow-y: auto;
+		animation: mobileSlideDown 0.2s ease-out;
+	}
+
+	@keyframes mobileSlideDown {
+		from {
+			opacity: 0;
+			transform: translateY(-0.5rem);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.mobile-menu-section {
+		padding: 0.5rem 0;
+	}
+
+	.mobile-menu-label {
+		padding: 0.5rem 1.25rem;
+		font-size: 0.6875rem;
+		font-weight: 700;
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+
+	.mobile-menu-item {
+		display: block;
+		padding: 0.75rem 1.25rem;
+		font-size: 0.9375rem;
+		color: var(--text-secondary);
+		text-decoration: none;
+		transition: background-color var(--transition-fast);
+	}
+
+	.mobile-menu-item:hover {
+		background-color: var(--bg-hover);
+		text-decoration: none;
+	}
+
+	.mobile-menu-item.active {
+		background-color: var(--primary-50);
+		color: var(--primary-600);
+		font-weight: 500;
+	}
+
+	.mobile-logout-btn {
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: none;
+		cursor: pointer;
+		font-family: inherit;
+		color: var(--error-600);
+	}
+
+	.mobile-menu-divider {
+		height: 1px;
+		margin: 0.25rem 1rem;
+		background-color: var(--border-color);
+	}
+
+	/* Show mobile elements / hide desktop elements on small screens */
+	@media (max-width: 768px) {
+		.desktop-nav {
+			display: none !important;
+		}
+
+		.mobile-menu-btn {
+			display: flex;
+		}
+
+		.mobile-menu-backdrop {
+			display: block;
+		}
+
+		.mobile-menu {
+			display: block;
+		}
 	}
 </style>

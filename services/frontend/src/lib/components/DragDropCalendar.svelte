@@ -176,8 +176,11 @@
 
 	<div id="calendar-container">
 		<div class="calendar-headers">
-			{#each ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as day}
-				<div class="calendar-header-day">{day}</div>
+			{#each [{ full: 'Monday', short: 'Mon' }, { full: 'Tuesday', short: 'Tue' }, { full: 'Wednesday', short: 'Wed' }, { full: 'Thursday', short: 'Thu' }, { full: 'Friday', short: 'Fri' }, { full: 'Saturday', short: 'Sat' }, { full: 'Sunday', short: 'Sun' }] as day}
+				<div class="calendar-header-day">
+					<span class="day-full">{day.full}</span>
+					<span class="day-short">{day.short}</span>
+				</div>
 			{/each}
 		</div>
 

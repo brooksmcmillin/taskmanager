@@ -157,9 +157,9 @@
 
 <main class="container py-8">
 	<!-- View Toggle and Project Filter -->
-	<div class="flex justify-between items-center mb-6">
+	<div class="toolbar mb-6">
 		<!-- View Toggle (Left) -->
-		<div class="flex gap-4">
+		<div class="toolbar-views">
 			<button
 				class="btn {currentView === 'list' ? 'btn-primary' : 'btn-secondary'} btn-med"
 				on:click={() => (currentView = 'list')}
@@ -175,7 +175,7 @@
 		</div>
 
 		<!-- Filters (Right) -->
-		<div class="flex gap-4 items-center">
+		<div class="toolbar-filters">
 			<DueDateFilter selected={selectedDueDate} on:change={handleDueDateFilterChange} />
 			<ProjectFilter {selectedProjectId} on:change={handleFilterChange} />
 		</div>
@@ -267,3 +267,48 @@
 		</div>
 	{/if}
 </main>
+
+<style>
+	.toolbar {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.toolbar-views {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.toolbar-filters {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	@media (max-width: 768px) {
+		.toolbar {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.toolbar-views {
+			justify-content: stretch;
+		}
+
+		.toolbar-views :global(.btn) {
+			flex: 1;
+		}
+
+		.toolbar-filters {
+			flex-direction: column;
+		}
+
+		.toolbar-filters :global(.project-filter-container),
+		.toolbar-filters :global(.due-date-filter-container) {
+			max-width: 100%;
+			width: 100%;
+		}
+	}
+</style>
