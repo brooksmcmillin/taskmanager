@@ -22,6 +22,19 @@ from taskmanager_sdk import TaskManagerClient
 
 logger = logging.getLogger(__name__)
 
+
+def _past_due_date_warning(due_date: str | None) -> str | None:
+    """Return a warning string if due_date is in the past, else None."""
+    if not due_date:
+        return None
+    try:
+        parsed = datetime.date.fromisoformat(due_date)
+        if parsed < datetime.date.today():
+            return f"Due date {due_date} is in the past"
+    except ValueError:
+        pass
+    return None
+
 DEFAULT_SCOPE = ["read"]
 
 load_dotenv()
@@ -529,13 +542,16 @@ def create_resource_server(
                 logger.warning("Task data missing 'id' field")
                 return json.dumps({"error": "Created task has no ID"})
 
-            result = {
+            result: dict[str, Any] = {
                 "id": f"task_{task_id}",
                 "title": task.get("title", title) if task is not None else title,
                 "status": "created",
                 "parent_id": f"task_{parent_id_int}" if parent_id_int else None,
                 "current_time": datetime.datetime.now().isoformat(),
             }
+            warning = _past_due_date_warning(due_date)
+            if warning:
+                result["warning"] = warning
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Exception in create_task: {e}", exc_info=True)
@@ -637,12 +653,15 @@ def create_resource_server(
                 return json.dumps({"error": response.error})
 
             # Return response in expected format
-            result = {
+            result: dict[str, Any] = {
                 "id": f"task_{todo_id}",
                 "updated_fields": updated_fields,
                 "status": "updated",
                 "current_time": datetime.datetime.now().isoformat(),
             }
+            warning = _past_due_date_warning(due_date)
+            if warning:
+                result["warning"] = warning
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Exception in update_task: {e}", exc_info=True)

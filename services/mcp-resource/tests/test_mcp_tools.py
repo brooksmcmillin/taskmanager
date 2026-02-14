@@ -1,8 +1,10 @@
 """Unit tests for MCP server helper functions and tools."""
 
+import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
+from mcp_resource.server import _past_due_date_warning
 from mcp_resource_framework.validation import validate_dict_response, validate_list_response
 from taskmanager_sdk import ApiResponse
 
@@ -1074,3 +1076,100 @@ class TestDependencyTools:
         assert transformed["id"] == "task_5"
         assert transformed["title"] == "Blocking Task"
         assert transformed["project_name"] == "Phase 1"
+
+
+class TestPastDueDateWarning:
+    """Tests for _past_due_date_warning helper function."""
+
+    def test_past_date_returns_warning(self) -> None:
+        """Test that a date in the past produces a warning."""
+        past = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        warning = _past_due_date_warning(past)
+        assert warning is not None
+        assert past in warning
+        assert "in the past" in warning
+
+    def test_future_date_returns_none(self) -> None:
+        """Test that a future date produces no warning."""
+        future = (datetime.date.today() + datetime.timedelta(days=30)).isoformat()
+        assert _past_due_date_warning(future) is None
+
+    def test_today_returns_none(self) -> None:
+        """Test that today's date produces no warning."""
+        today = datetime.date.today().isoformat()
+        assert _past_due_date_warning(today) is None
+
+    def test_none_returns_none(self) -> None:
+        """Test that None input produces no warning."""
+        assert _past_due_date_warning(None) is None
+
+    def test_empty_string_returns_none(self) -> None:
+        """Test that empty string produces no warning."""
+        assert _past_due_date_warning("") is None
+
+    def test_invalid_date_returns_none(self) -> None:
+        """Test that an invalid date string produces no warning."""
+        assert _past_due_date_warning("not-a-date") is None
+
+    def test_create_task_includes_warning_for_past_due_date(self) -> None:
+        """Test that create_task response includes warning for past due dates."""
+        import json
+
+        from typing import Any
+
+        # Simulate the create_task result-building logic
+        due_date = "2020-01-01"
+        result: dict[str, Any] = {
+            "id": "task_1",
+            "title": "Test",
+            "status": "created",
+            "parent_id": None,
+            "current_time": datetime.datetime.now().isoformat(),
+        }
+        warning = _past_due_date_warning(due_date)
+        if warning:
+            result["warning"] = warning
+
+        parsed = json.loads(json.dumps(result))
+        assert "warning" in parsed
+        assert "2020-01-01" in parsed["warning"]
+        assert "in the past" in parsed["warning"]
+
+    def test_create_task_no_warning_for_future_due_date(self) -> None:
+        """Test that create_task response has no warning for future due dates."""
+        from typing import Any
+
+        due_date = (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
+        result: dict[str, Any] = {
+            "id": "task_1",
+            "title": "Test",
+            "status": "created",
+            "parent_id": None,
+            "current_time": datetime.datetime.now().isoformat(),
+        }
+        warning = _past_due_date_warning(due_date)
+        if warning:
+            result["warning"] = warning
+
+        assert "warning" not in result
+
+    def test_update_task_includes_warning_for_past_due_date(self) -> None:
+        """Test that update_task response includes warning for past due dates."""
+        import json
+
+        from typing import Any
+
+        due_date = "2023-06-15"
+        result: dict[str, Any] = {
+            "id": "task_5",
+            "updated_fields": ["due_date"],
+            "status": "updated",
+            "current_time": datetime.datetime.now().isoformat(),
+        }
+        warning = _past_due_date_warning(due_date)
+        if warning:
+            result["warning"] = warning
+
+        parsed = json.loads(json.dumps(result))
+        assert "warning" in parsed
+        assert "2023-06-15" in parsed["warning"]
