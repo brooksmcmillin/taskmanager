@@ -116,6 +116,17 @@
 			{#if mode === 'view'}
 				<div class="task-content">
 					<div class="task-main">
+						<!-- Parent Task -->
+						{#if todo.parent_task}
+							<div class="detail-section">
+								<label class="detail-label">Parent Task</label>
+								<a href="/task/{todo.parent_task.id}" class="parent-task-link">
+									<span class="parent-task-id">#{todo.parent_task.id}</span>
+									{todo.parent_task.title}
+								</a>
+							</div>
+						{/if}
+
 						<!-- Title -->
 						<div class="detail-section">
 							<div class="flex items-center gap-2 mb-2">
@@ -408,6 +419,30 @@
 
 	.task-form-wrapper {
 		padding: 2rem;
+	}
+
+	.parent-task-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		color: var(--text-primary);
+		text-decoration: none;
+		font-size: 0.875rem;
+		transition: color var(--transition-fast);
+	}
+
+	.parent-task-link:hover {
+		color: var(--primary-600);
+	}
+
+	.parent-task-id {
+		font-family: monospace;
+		color: var(--text-muted);
+		font-weight: 600;
+	}
+
+	.parent-task-link:hover .parent-task-id {
+		color: var(--primary-600);
 	}
 
 	@media (max-width: 640px) {

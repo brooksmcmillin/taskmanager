@@ -53,6 +53,13 @@ export interface TaskDependency {
 	project_name: string | null;
 }
 
+export interface ParentTask {
+	id: number;
+	title: string;
+	status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+	priority: 'low' | 'medium' | 'high' | 'urgent';
+}
+
 export interface Todo {
 	id: number;
 	project_id: number | null;
@@ -69,6 +76,7 @@ export interface Todo {
 	context: string | null;
 	recurring_task_id: number | null;
 	parent_id: number | null;
+	parent_task?: ParentTask | null;
 	position: number;
 	subtasks: Subtask[];
 	dependencies?: TaskDependency[];

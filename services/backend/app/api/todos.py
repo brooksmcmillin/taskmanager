@@ -128,6 +128,17 @@ class DependencyResponse(BaseModel):
     project_name: str | None = None
 
 
+class ParentTaskResponse(BaseModel):
+    """Parent task response (simplified todo for parent link display)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    status: Status
+    priority: Priority
+
+
 class TodoResponse(BaseModel):
     """Todo response."""
 
@@ -148,6 +159,7 @@ class TodoResponse(BaseModel):
     actual_hours: float | None
     position: int
     parent_id: int | None = None
+    parent_task: ParentTaskResponse | None = None
     subtasks: list[SubtaskResponse] = Field(default_factory=list)
     # Task dependencies
     dependencies: list[DependencyResponse] = Field(default_factory=list)
@@ -224,6 +236,7 @@ def _build_todo_response(
     subtasks: list[Todo] | None = None,
     dependencies: list[tuple[Todo, str | None]] | None = None,
     dependents: list[tuple[Todo, str | None]] | None = None,
+    parent_task: Todo | None = None,
 ) -> TodoResponse:
     """Build TodoResponse from Todo model with optional project info.
 
@@ -234,6 +247,7 @@ def _build_todo_response(
         subtasks: Optional list of subtask Todo instances
         dependencies: Optional list of (Todo, project_name) tuples
         dependents: Optional list of (Todo, project_name) tuples
+        parent_task: Optional parent Todo instance
 
     Returns:
         TodoResponse with all fields populated
@@ -260,6 +274,15 @@ def _build_todo_response(
             if dep.deleted_at is None
         ]
 
+    parent_task_response = None
+    if parent_task:
+        parent_task_response = ParentTaskResponse(
+            id=parent_task.id,
+            title=parent_task.title,
+            status=parent_task.status,
+            priority=parent_task.priority,
+        )
+
     return TodoResponse(
         id=todo.id,
         title=todo.title,
@@ -276,6 +299,7 @@ def _build_todo_response(
         actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
         position=todo.position,
         parent_id=todo.parent_id,
+        parent_task=parent_task_response,
         subtasks=subtask_responses,
         dependencies=dependency_responses,
         dependents=dependent_responses,
@@ -636,6 +660,18 @@ async def get_todo(
 
     todo = row[0]
 
+    # Fetch parent task if this is a subtask
+    parent_task = None
+    if todo.parent_id:
+        parent_result = await db.execute(
+            select(Todo).where(
+                Todo.id == todo.parent_id,
+                Todo.user_id == user.id,
+                Todo.deleted_at.is_(None),
+            )
+        )
+        parent_task = parent_result.scalar_one_or_none()
+
     # Fetch subtasks
     subtasks_result = await db.execute(
         select(Todo)
@@ -682,6 +718,7 @@ async def get_todo(
             subtasks=subtasks,
             dependencies=dependencies,
             dependents=dependents,
+            parent_task=parent_task,
         )
     }
 
