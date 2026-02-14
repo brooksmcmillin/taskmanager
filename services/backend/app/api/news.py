@@ -3,11 +3,12 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import errors
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import AdminUser, CurrentUser, DbSession
 from app.models.article import Article
 from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.feed_source import FeedSource, FeedType
@@ -58,6 +59,7 @@ class FeedSourceResponse(BaseModel):
     description: str | None
     type: FeedType
     is_active: bool
+    is_featured: bool
     fetch_interval_hours: int
     last_fetched_at: datetime | None
     quality_score: float
@@ -70,6 +72,58 @@ class ToggleFeedSourceRequest(BaseModel):
     is_active: bool
 
 
+class FeedSourceCreate(BaseModel):
+    """Create a new feed source."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    url: str = Field(..., min_length=1, max_length=500)
+    description: str | None = None
+    type: FeedType = FeedType.article
+    is_active: bool = True
+    is_featured: bool = False
+    fetch_interval_hours: int = Field(default=6, ge=1, le=168)
+
+
+class FeedSourceUpdate(BaseModel):
+    """Update a feed source (partial)."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    url: str | None = Field(default=None, min_length=1, max_length=500)
+    description: str | None = None
+    type: FeedType | None = None
+    is_active: bool | None = None
+    is_featured: bool | None = None
+    fetch_interval_hours: int | None = Field(default=None, ge=1, le=168)
+
+
+def _get_constraint_name(exc: IntegrityError) -> str:
+    """Extract the database constraint name from an IntegrityError.
+
+    Handles both psycopg2 (constraint_name on orig) and asyncpg
+    (constraint_name on orig.__cause__) driver differences.
+    """
+    constraint = getattr(exc.orig, "constraint_name", None)
+    if not constraint:
+        cause = getattr(exc.orig, "__cause__", None)
+        if cause:
+            constraint = getattr(cause, "constraint_name", None)
+    return constraint or ""
+
+
+def _raise_duplicate_error(exc: IntegrityError) -> None:
+    """Raise a user-friendly validation error from an IntegrityError.
+
+    Uses the database constraint name for reliable field identification.
+    Only matches against known constraint names — never parses raw error text.
+    """
+    constraint = _get_constraint_name(exc)
+    if "name" in constraint:
+        raise errors.validation("A feed source with this name already exists") from None
+    if "url" in constraint:
+        raise errors.validation("A feed source with this URL already exists") from None
+    raise exc
+
+
 # Feed Source Management (must be before /{article_id} routes)
 
 
@@ -77,32 +131,27 @@ class ToggleFeedSourceRequest(BaseModel):
 async def list_feed_sources(
     user: CurrentUser,
     db: DbSession,
+    featured: bool | None = Query(None),
 ) -> ListResponse[FeedSourceResponse]:
-    """List all feed sources."""
-    try:
-        stmt = select(FeedSource).order_by(FeedSource.name)
-        result = await db.execute(stmt)
-        sources = result.scalars().all()
+    """List all feed sources, optionally filtered by featured status."""
+    stmt = select(FeedSource).order_by(FeedSource.name)
+    if featured is not None:
+        stmt = stmt.where(FeedSource.is_featured == featured)
+    result = await db.execute(stmt)
+    sources = result.scalars().all()
 
-        response_data = [
-            FeedSourceResponse.model_validate(source) for source in sources
-        ]
-        return ListResponse(data=response_data, meta={})
-    except Exception:
-        import traceback
-
-        traceback.print_exc()
-        raise
+    response_data = [FeedSourceResponse.model_validate(source) for source in sources]
+    return ListResponse(data=response_data, meta={})
 
 
 @router.post("/sources/{source_id}/toggle")
 async def toggle_feed_source(
     source_id: int,
     request: ToggleFeedSourceRequest,
-    user: CurrentUser,
+    user: AdminUser,
     db: DbSession,
 ) -> dict:
-    """Toggle a feed source active status."""
+    """Toggle a feed source active status (admin only)."""
     source = await db.get(FeedSource, source_id)
     if not source:
         raise errors.not_found("Feed source")
@@ -111,6 +160,80 @@ async def toggle_feed_source(
     await db.commit()
 
     return {"data": {"id": source_id, "is_active": request.is_active}}
+
+
+@router.post("/sources", status_code=201, response_model=dict[str, FeedSourceResponse])
+async def create_feed_source(
+    source: FeedSourceCreate,
+    user: AdminUser,
+    db: DbSession,
+) -> dict[str, FeedSourceResponse]:
+    """Create a new feed source (admin only)."""
+    feed_source = FeedSource(**source.model_dump())
+    db.add(feed_source)
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        _raise_duplicate_error(e)
+    await db.refresh(feed_source)
+
+    return {"data": FeedSourceResponse.model_validate(feed_source)}
+
+
+@router.put("/sources/{source_id}", response_model=dict[str, FeedSourceResponse])
+async def update_feed_source(
+    source_id: int,
+    source: FeedSourceUpdate,
+    user: AdminUser,
+    db: DbSession,
+) -> dict[str, FeedSourceResponse]:
+    """Update a feed source (admin only, partial update)."""
+    feed_source = await db.get(FeedSource, source_id)
+    if not feed_source:
+        raise errors.not_found("Feed source")
+
+    update_data = source.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(feed_source, key, value)
+
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        _raise_duplicate_error(e)
+    await db.refresh(feed_source)
+
+    return {"data": FeedSourceResponse.model_validate(feed_source)}
+
+
+@router.delete("/sources/{source_id}", response_model=dict[str, dict])
+async def delete_feed_source(
+    source_id: int,
+    user: AdminUser,
+    db: DbSession,
+) -> dict[str, dict]:
+    """Delete a feed source and its articles (admin only)."""
+    feed_source = await db.get(FeedSource, source_id)
+    if not feed_source:
+        raise errors.not_found("Feed source")
+
+    # Count must happen before deletion — articles are cascade-deleted at the
+    # database level (ForeignKey ondelete="CASCADE"), not by SQLAlchemy.
+    article_count = (
+        await db.scalar(
+            select(func.count(Article.id)).where(Article.feed_source_id == source_id)
+        )
+        or 0
+    )
+
+    await db.delete(feed_source)
+    await db.commit()
+
+    return {
+        "data": {"deleted": True, "id": source_id},
+        "meta": {"articles_deleted": article_count},
+    }
 
 
 # Article endpoints

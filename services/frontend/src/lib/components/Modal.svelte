@@ -7,7 +7,7 @@
 
 	const dispatch = createEventDispatcher();
 
-	function closeModal() {
+	export function closeModal() {
 		show = false;
 		dispatch('close');
 		if (browser) {
