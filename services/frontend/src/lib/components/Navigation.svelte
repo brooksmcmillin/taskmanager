@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { slide } from 'svelte/transition';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import ThemeToggle from './ThemeToggle.svelte';
@@ -7,6 +8,7 @@
 	import { toasts } from '$lib/stores/ui';
 	import type { User } from '$lib/types';
 
+	// Must match $breakpoint-md in app.scss
 	const MOBILE_BREAKPOINT = 768;
 
 	let { user = null }: { user: User | null } = $props();
@@ -94,16 +96,15 @@
 		}
 	}
 
-	function toggleMobileMenu() {
+	async function toggleMobileMenu() {
 		mobileMenuOpen = !mobileMenuOpen;
 		if (!mobileMenuOpen) {
 			closeDropdowns();
 		} else {
-			// Focus first menu item after the menu renders
-			requestAnimationFrame(() => {
-				const firstItem = mobileMenuRef?.querySelector<HTMLElement>('a, button');
-				firstItem?.focus();
-			});
+			// Wait for Svelte to render the menu DOM before focusing
+			await tick();
+			const firstItem = mobileMenuRef?.querySelector<HTMLElement>('a, button');
+			firstItem?.focus();
 		}
 	}
 
@@ -426,6 +427,11 @@
 		</div>
 	</div>
 
+	<!-- Screen reader announcement for menu state -->
+	<div class="sr-only" aria-live="polite">
+		{#if mobileMenuOpen}Navigation menu opened{/if}
+	</div>
+
 	<!-- Mobile Menu Drawer -->
 	{#if user && mobileMenuOpen}
 		<div class="mobile-menu-backdrop" onclick={closeMobileMenu} role="presentation"></div>
@@ -436,6 +442,7 @@
 			onkeydown={handleMobileMenuKeydown}
 			role="navigation"
 			aria-label="Mobile navigation"
+			transition:slide={{ duration: 200 }}
 		>
 			<div class="mobile-menu-section">
 				<div class="mobile-menu-label">Tasks</div>
@@ -499,6 +506,7 @@
 			<div class="mobile-menu-divider"></div>
 
 			<div class="mobile-menu-section">
+				<!-- Email is validated by Pydantic EmailStr on backend; Svelte auto-escapes output -->
 				<div class="mobile-menu-label">{user.email}</div>
 				<a
 					href="/settings"
@@ -711,7 +719,20 @@
 		z-index: 40;
 	}
 
-	/* Mobile slide-down menu */
+	/* Screen reader only - visually hidden but accessible */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border-width: 0;
+	}
+
+	/* Mobile slide-down menu (open/close animated via Svelte transition:slide) */
 	.mobile-menu {
 		display: none;
 		position: absolute;
@@ -724,18 +745,6 @@
 		z-index: 50;
 		max-height: calc(100vh - 4rem);
 		overflow-y: auto;
-		animation: mobileSlideDown 0.2s ease-out;
-	}
-
-	@keyframes mobileSlideDown {
-		from {
-			opacity: 0;
-			transform: translateY(-0.5rem);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
 	}
 
 	.mobile-menu-section {
