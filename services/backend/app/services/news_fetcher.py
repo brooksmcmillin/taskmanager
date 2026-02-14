@@ -160,6 +160,96 @@ async def fetch_feed(feed_source: FeedSource, db: AsyncSession) -> int:
         return 0
 
 
+async def fetch_feed_since(
+    feed_source: FeedSource, db: AsyncSession, since: datetime
+) -> int:
+    """Fetch articles from a feed, skipping entries published before `since`.
+
+    Same logic as fetch_feed() but filters by published date.
+    """
+    try:
+        logger.info(
+            f"Force-fetching feed: {feed_source.name} since {since.isoformat()}"
+        )
+
+        feed = feedparser.parse(feed_source.url)
+
+        if feed.bozo:
+            logger.warning(
+                f"Feed parsing error for {feed_source.name}: {feed.bozo_exception}"
+            )
+
+        new_articles = 0
+
+        for entry in feed.entries:
+            title: str = entry.get("title", "")  # type: ignore
+            url: str = entry.get("link", "")  # type: ignore
+            summary: str = entry.get("summary", "") or entry.get("description", "")  # type: ignore
+
+            content: str = ""
+            content_list = entry.get("content")  # type: ignore
+            if (
+                content_list
+                and isinstance(content_list, list)
+                and len(content_list) > 0
+            ):
+                content = content_list[0].get("value", "")  # type: ignore
+
+            author: str | None = entry.get("author", None)  # type: ignore
+
+            # Parse published date
+            published_at = None
+            if hasattr(entry, "published_parsed") and entry.published_parsed:
+                published_at = parse_feed_datetime(entry.published_parsed)  # type: ignore
+            elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
+                published_at = parse_feed_datetime(entry.updated_parsed)  # type: ignore
+
+            # Skip entries published before the cutoff
+            if published_at and published_at < since:
+                continue
+
+            # Check if article already exists
+            stmt = select(Article).where(Article.url == url)
+            result = await db.execute(stmt)
+            existing_article = result.scalar_one_or_none()
+
+            if existing_article:
+                continue
+
+            # Filter by keywords
+            matches, keywords = article_matches_keywords(title, summary, content)
+            if not matches:
+                logger.debug(f"Article filtered out (no keyword match): {title}")
+                continue
+
+            article = Article(
+                feed_source_id=feed_source.id,
+                title=title,
+                url=url,
+                summary=summary,
+                content=content,
+                author=author,
+                published_at=published_at,
+                keywords=keywords,
+            )
+            db.add(article)
+            new_articles += 1
+            logger.info(f"Added article: {title}")
+
+        feed_source.last_fetched_at = datetime.now(UTC)
+        await db.commit()
+
+        logger.info(
+            f"Force-fetched {new_articles} new articles from {feed_source.name}"
+        )
+        return new_articles
+
+    except Exception as e:
+        logger.error(f"Error force-fetching feed {feed_source.name}: {e}")
+        await db.rollback()
+        return 0
+
+
 async def fetch_all_feeds() -> dict[str, int]:
     """Fetch articles from all active feeds."""
     logger.info("Starting feed fetch job")

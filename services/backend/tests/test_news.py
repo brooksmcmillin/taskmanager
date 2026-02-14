@@ -1,5 +1,7 @@
 """Tests for news feed API endpoints."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -384,3 +386,93 @@ class TestDeleteFeedSource:
             select(Article).where(Article.feed_source_id == sample_source.id)
         )
         assert result.scalar_one_or_none() is None
+
+
+# =============================================================================
+# POST /api/news/sources/{source_id}/fetch - Force-fetch feed
+# =============================================================================
+
+
+class TestForceFetchFeed:
+    @pytest.mark.asyncio
+    async def test_fetch_unauthenticated(
+        self, client: AsyncClient, sample_source: FeedSource
+    ):
+        response = await client.post(
+            f"/api/news/sources/{sample_source.id}/fetch",
+            json={"hours": 24},
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_fetch_non_admin(
+        self, authenticated_client: AsyncClient, sample_source: FeedSource
+    ):
+        response = await authenticated_client.post(
+            f"/api/news/sources/{sample_source.id}/fetch",
+            json={"hours": 24},
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_fetch_not_found(self, admin_client: AsyncClient):
+        response = await admin_client.post(
+            "/api/news/sources/99999/fetch",
+            json={"hours": 24},
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    @patch("app.api.news.fetch_feed_since", new_callable=AsyncMock)
+    async def test_fetch_success_default_hours(
+        self,
+        mock_fetch: AsyncMock,
+        admin_client: AsyncClient,
+        sample_source: FeedSource,
+    ):
+        mock_fetch.return_value = 5
+        response = await admin_client.post(
+            f"/api/news/sources/{sample_source.id}/fetch",
+            json={},
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["source_id"] == sample_source.id
+        assert data["articles_added"] == 5
+        mock_fetch.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.api.news.fetch_feed_since", new_callable=AsyncMock)
+    async def test_fetch_success_custom_hours(
+        self,
+        mock_fetch: AsyncMock,
+        admin_client: AsyncClient,
+        sample_source: FeedSource,
+    ):
+        mock_fetch.return_value = 3
+        response = await admin_client.post(
+            f"/api/news/sources/{sample_source.id}/fetch",
+            json={"hours": 72},
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["articles_added"] == 3
+
+    @pytest.mark.asyncio
+    async def test_fetch_hours_validation_too_high(
+        self, admin_client: AsyncClient, sample_source: FeedSource
+    ):
+        response = await admin_client.post(
+            f"/api/news/sources/{sample_source.id}/fetch",
+            json={"hours": 9999},
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_fetch_hours_validation_too_low(
+        self, admin_client: AsyncClient, sample_source: FeedSource
+    ):
+        response = await admin_client.post(
+            f"/api/news/sources/{sample_source.id}/fetch",
+            json={"hours": 0},
+        )
+        assert response.status_code == 422

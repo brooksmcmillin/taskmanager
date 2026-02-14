@@ -81,6 +81,34 @@
 		return 'Poor';
 	}
 
+	const FETCH_RANGES = [
+		{ label: '1 day', hours: 24 },
+		{ label: '3 days', hours: 72 },
+		{ label: '7 days', hours: 168 },
+		{ label: '14 days', hours: 336 },
+		{ label: '30 days', hours: 720 }
+	];
+
+	let fetchingSourceId = $state<number | null>(null);
+	let fetchDropdownId = $state<number | null>(null);
+
+	async function fetchSource(sourceId: number, hours: number) {
+		fetchDropdownId = null;
+		fetchingSourceId = sourceId;
+		try {
+			const response = await api.post<{ data: { articles_added: number } }>(
+				`/api/news/sources/${sourceId}/fetch`,
+				{ hours }
+			);
+			const count = response.data?.articles_added ?? 0;
+			toasts.show(`Fetched ${count} new article${count === 1 ? '' : 's'}`, 'success');
+		} catch (e) {
+			toasts.show('Failed to fetch articles: ' + (e as Error).message, 'error');
+		} finally {
+			fetchingSourceId = null;
+		}
+	}
+
 	let activeSources = $derived(sources.filter((s) => s.is_active));
 	let inactiveSources = $derived(sources.filter((s) => !s.is_active));
 </script>
@@ -100,23 +128,17 @@
 	</div>
 
 	<!-- Filter Toggle -->
-	<div class="flex gap-1 mb-6 bg-gray-100 rounded-lg p-1 w-fit">
+	<div class="filter-toggle">
 		<button
-			class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-			class:bg-white={showFeaturedOnly}
-			class:shadow-sm={showFeaturedOnly}
-			class:text-gray-900={showFeaturedOnly}
-			class:text-gray-600={!showFeaturedOnly}
+			class="filter-toggle-btn"
+			class:active={showFeaturedOnly}
 			onclick={() => toggleFilter(true)}
 		>
 			Featured
 		</button>
 		<button
-			class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-			class:bg-white={!showFeaturedOnly}
-			class:shadow-sm={!showFeaturedOnly}
-			class:text-gray-900={!showFeaturedOnly}
-			class:text-gray-600={showFeaturedOnly}
+			class="filter-toggle-btn"
+			class:active={!showFeaturedOnly}
 			onclick={() => toggleFilter(false)}
 		>
 			All Sources
@@ -232,6 +254,36 @@
 								</div>
 
 								<div class="flex items-center gap-2 shrink-0">
+									<div class="relative">
+										{#if fetchingSourceId === source.id}
+											<button class="btn btn-sm btn-outline" disabled>
+												<span class="fetch-spinner"></span>
+												Fetching...
+											</button>
+										{:else}
+											<button
+												onclick={() =>
+													(fetchDropdownId = fetchDropdownId === source.id ? null : source.id)}
+												class="btn btn-sm btn-outline"
+												title="Force-fetch articles from this source"
+											>
+												Fetch
+											</button>
+										{/if}
+										{#if fetchDropdownId === source.id}
+											<div class="fetch-dropdown">
+												<div class="fetch-dropdown-label">Fetch articles from:</div>
+												{#each FETCH_RANGES as range}
+													<button
+														class="fetch-dropdown-item"
+														onclick={() => fetchSource(source.id, range.hours)}
+													>
+														Last {range.label}
+													</button>
+												{/each}
+											</div>
+										{/if}
+									</div>
 									<button
 										onclick={() => sourceModal.openEdit(source)}
 										class="btn btn-sm btn-outline"
@@ -351,6 +403,34 @@
 <FeedSourceModal bind:this={sourceModal} on:success={loadSources} />
 
 <style>
+	.filter-toggle {
+		display: flex;
+		gap: 0.25rem;
+		margin-bottom: 1.5rem;
+		background-color: var(--bg-input);
+		border-radius: var(--radius-lg);
+		padding: 0.25rem;
+		width: fit-content;
+	}
+
+	.filter-toggle-btn {
+		padding: 0.5rem 1rem;
+		border-radius: var(--radius-md);
+		font-size: 0.875rem;
+		font-weight: 500;
+		transition: all 0.15s ease;
+		color: var(--text-muted);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+	}
+
+	.filter-toggle-btn.active {
+		background-color: var(--bg-card);
+		color: var(--text-primary);
+		box-shadow: var(--shadow-sm);
+	}
+
 	.spinner {
 		width: 48px;
 		height: 48px;
@@ -359,6 +439,58 @@
 		border-radius: 50%;
 		animation: spin 1s linear infinite;
 		margin: 0 auto;
+	}
+
+	.fetch-spinner {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border: 2px solid #d1d5db;
+		border-top: 2px solid #3b82f6;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+		vertical-align: middle;
+		margin-right: 4px;
+	}
+
+	.fetch-dropdown {
+		position: absolute;
+		top: 100%;
+		right: 0;
+		margin-top: 0.25rem;
+		background: var(--bg-card, white);
+		border: 1px solid var(--border-color, #e5e7eb);
+		border-radius: var(--radius-md, 0.375rem);
+		box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+		z-index: 50;
+		min-width: 180px;
+		padding: 0.25rem 0;
+	}
+
+	.fetch-dropdown-label {
+		padding: 0.5rem 0.75rem 0.25rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--text-muted, #6b7280);
+		text-transform: uppercase;
+		letter-spacing: 0.025em;
+	}
+
+	.fetch-dropdown-item {
+		display: block;
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		text-align: left;
+		font-size: 0.875rem;
+		color: var(--text-primary, #111827);
+		background: none;
+		border: none;
+		cursor: pointer;
+		transition: background-color 0.1s ease;
+	}
+
+	.fetch-dropdown-item:hover {
+		background-color: var(--bg-hover, #f3f4f6);
 	}
 
 	@keyframes spin {
