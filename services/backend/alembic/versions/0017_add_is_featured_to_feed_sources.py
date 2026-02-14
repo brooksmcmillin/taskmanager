@@ -1,7 +1,7 @@
 """Add is_featured column to feed_sources table.
 
-Revision ID: 0016_add_is_featured_to_feed_sources
-Revises: 0015_remove_username
+Revision ID: 0017_add_is_featured_to_feed_sources
+Revises: 0016_add_comments
 Create Date: 2026-02-13
 
 """
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0016_add_is_featured_to_feed_sources"
-down_revision: str | None = "0015_remove_username"
+revision: str = "0017_add_is_featured_to_feed_sources"
+down_revision: str | None = "0016_add_comments"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

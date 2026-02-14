@@ -218,6 +218,8 @@ async def delete_feed_source(
     if not feed_source:
         raise errors.not_found("Feed source")
 
+    # Count must happen before deletion — articles are cascade-deleted at the
+    # database level (ForeignKey ondelete="CASCADE"), not by SQLAlchemy.
     article_count = (
         await db.scalar(
             select(func.count(Article.id)).where(Article.feed_source_id == source_id)
