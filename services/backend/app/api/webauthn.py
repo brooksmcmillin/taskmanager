@@ -26,9 +26,8 @@ from webauthn.helpers.structs import (
 from app.config import settings
 from app.core.errors import ApiError, errors
 from app.core.rate_limit import RateLimiter
-from app.core.security import generate_session_id, get_session_expiry
+from app.core.session import create_session_and_set_cookie
 from app.dependencies import CurrentUser, DbSession
-from app.models.session import Session
 from app.models.user import User
 from app.models.webauthn_credential import WebAuthnCredential
 
@@ -468,23 +467,8 @@ async def verify_authentication(
     # Reset rate limit on success
     webauthn_auth_rate_limiter.reset(rate_limit_key)
 
-    # Create session
-    session = Session(
-        id=generate_session_id(),
-        user_id=user.id,
-        expires_at=get_session_expiry(),
-    )
-    db.add(session)
-
-    # Set cookie
-    response.set_cookie(
-        key="session",
-        value=session.id,
-        httponly=True,
-        samesite="lax",
-        max_age=settings.session_duration_days * 24 * 60 * 60,
-        secure=settings.is_production,
-    )
+    # Create session and set cookie
+    await create_session_and_set_cookie(db, response, user.id)
 
     logger.info(
         "WebAuthn authentication successful for user %s (credential_id=%s)",

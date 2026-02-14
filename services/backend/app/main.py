@@ -23,6 +23,7 @@ from app.api import (
 )
 from app.api.oauth import authorize, clients, device, github, token
 from app.config import settings
+from app.core.csrf import CSRFMiddleware
 from app.db.database import init_db
 from app.services.scheduler import start_scheduler, stop_scheduler
 
@@ -44,6 +45,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# CSRF middleware (must be added before CORS so it runs after CORS in the chain)
+app.add_middleware(CSRFMiddleware, allowed_origins=settings.cors_origins)
 
 # CORS middleware
 app.add_middleware(

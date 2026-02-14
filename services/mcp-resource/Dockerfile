@@ -33,6 +33,11 @@ RUN sed -i 's|path = "../../packages/taskmanager-sdk"|path = "/packages/taskmana
 # Copy application code
 COPY services/mcp-resource/mcp_resource ./mcp_resource
 
+# Move uv to system path and create non-root user
+RUN cp /root/.local/bin/uv /usr/local/bin/uv && \
+    adduser --disabled-password --gecos "" appuser
+USER appuser
+
 # Expose port
 EXPOSE 8001
 

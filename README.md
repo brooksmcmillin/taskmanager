@@ -118,8 +118,9 @@ taskmanager/
 ### Frontend (SvelteKit)
 
 The task management UI built with SvelteKit, featuring:
-- User authentication with session management
-- Project and task management interface
+- User authentication with session management and passkey (WebAuthn) support
+- Project and task management with comments and file attachments
+- News aggregator with RSS/Atom feed management
 - Real-time updates and responsive design
 
 **[View Frontend Documentation](services/frontend/README.md)**
@@ -129,8 +130,10 @@ The task management UI built with SvelteKit, featuring:
 The REST API built with FastAPI, featuring:
 - Async SQLAlchemy ORM with PostgreSQL
 - Full API with Pydantic validation
-- Session-based authentication
-- Rate limiting and security features
+- Multiple auth methods: session cookies, OAuth 2.0, API keys, WebAuthn/passkeys
+- Task comments and image attachments with magic-byte validation
+- News aggregator with feed source management
+- Rate limiting, CSRF protection, and security features
 
 **[View Backend Documentation](services/backend/README.md)**
 

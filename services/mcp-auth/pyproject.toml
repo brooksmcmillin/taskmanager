@@ -19,7 +19,7 @@ dependencies = [
     "taskmanager-sdk",
     "uvicorn>=0.30.0",
     "python-multipart==0.0.22",
-    "cryptography==46.0.4",
+    "cryptography==46.0.5",
 ]
 
 [project.scripts]
@@ -81,7 +81,7 @@ fixable = ["ALL"]
 unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+"tests/*" = ["S101", "S107"]
 
 [tool.pyright]
 pythonVersion = "3.13"
