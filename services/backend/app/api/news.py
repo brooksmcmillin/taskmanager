@@ -5,9 +5,10 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import errors
-from app.dependencies import CurrentUser, DbSession
+from app.dependencies import AdminUser, CurrentUser, DbSession
 from app.models.article import Article
 from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.feed_source import FeedSource, FeedType
@@ -111,9 +112,7 @@ async def list_feed_sources(
     result = await db.execute(stmt)
     sources = result.scalars().all()
 
-    response_data = [
-        FeedSourceResponse.model_validate(source) for source in sources
-    ]
+    response_data = [FeedSourceResponse.model_validate(source) for source in sources]
     return ListResponse(data=response_data, meta={})
 
 
@@ -121,10 +120,10 @@ async def list_feed_sources(
 async def toggle_feed_source(
     source_id: int,
     request: ToggleFeedSourceRequest,
-    user: CurrentUser,
+    user: AdminUser,
     db: DbSession,
 ) -> dict:
-    """Toggle a feed source active status."""
+    """Toggle a feed source active status (admin only)."""
     source = await db.get(FeedSource, source_id)
     if not source:
         raise errors.not_found("Feed source")
@@ -135,29 +134,29 @@ async def toggle_feed_source(
     return {"data": {"id": source_id, "is_active": request.is_active}}
 
 
-@router.post("/sources", response_model=dict, status_code=201)
+@router.post("/sources", status_code=201)
 async def create_feed_source(
     source: FeedSourceCreate,
-    user: CurrentUser,
+    user: AdminUser,
     db: DbSession,
-) -> dict:
-    """Create a new feed source."""
-    # Check for duplicate name
-    existing = await db.execute(
-        select(FeedSource).where(FeedSource.name == source.name)
-    )
-    if existing.scalar_one_or_none():
-        raise errors.validation("A feed source with this name already exists")
-
-    # Check for duplicate URL
-    existing = await db.execute(
-        select(FeedSource).where(FeedSource.url == source.url)
-    )
-    if existing.scalar_one_or_none():
-        raise errors.validation("A feed source with this URL already exists")
-
+) -> dict[str, FeedSourceResponse]:
+    """Create a new feed source (admin only)."""
     feed_source = FeedSource(**source.model_dump())
     db.add(feed_source)
+    try:
+        await db.flush()
+    except IntegrityError as e:
+        await db.rollback()
+        error_msg = str(e)
+        if "name" in error_msg:
+            raise errors.validation(
+                "A feed source with this name already exists"
+            ) from None
+        elif "url" in error_msg:
+            raise errors.validation(
+                "A feed source with this URL already exists"
+            ) from None
+        raise
     await db.commit()
     await db.refresh(feed_source)
 
@@ -168,41 +167,32 @@ async def create_feed_source(
 async def update_feed_source(
     source_id: int,
     source: FeedSourceUpdate,
-    user: CurrentUser,
+    user: AdminUser,
     db: DbSession,
-) -> dict:
-    """Update a feed source (partial update)."""
+) -> dict[str, FeedSourceResponse]:
+    """Update a feed source (admin only, partial update)."""
     feed_source = await db.get(FeedSource, source_id)
     if not feed_source:
         raise errors.not_found("Feed source")
 
     update_data = source.model_dump(exclude_unset=True)
-
-    # Check for duplicate name if name is being changed
-    if "name" in update_data and update_data["name"] != feed_source.name:
-        existing = await db.execute(
-            select(FeedSource).where(
-                FeedSource.name == update_data["name"],
-                FeedSource.id != source_id,
-            )
-        )
-        if existing.scalar_one_or_none():
-            raise errors.validation("A feed source with this name already exists")
-
-    # Check for duplicate URL if URL is being changed
-    if "url" in update_data and update_data["url"] != feed_source.url:
-        existing = await db.execute(
-            select(FeedSource).where(
-                FeedSource.url == update_data["url"],
-                FeedSource.id != source_id,
-            )
-        )
-        if existing.scalar_one_or_none():
-            raise errors.validation("A feed source with this URL already exists")
-
     for key, value in update_data.items():
         setattr(feed_source, key, value)
 
+    try:
+        await db.flush()
+    except IntegrityError as e:
+        await db.rollback()
+        error_msg = str(e)
+        if "name" in error_msg:
+            raise errors.validation(
+                "A feed source with this name already exists"
+            ) from None
+        elif "url" in error_msg:
+            raise errors.validation(
+                "A feed source with this URL already exists"
+            ) from None
+        raise
     await db.commit()
     await db.refresh(feed_source)
 
@@ -212,10 +202,10 @@ async def update_feed_source(
 @router.delete("/sources/{source_id}")
 async def delete_feed_source(
     source_id: int,
-    user: CurrentUser,
+    user: AdminUser,
     db: DbSession,
 ) -> dict:
-    """Delete a feed source and its articles."""
+    """Delete a feed source and its articles (admin only)."""
     feed_source = await db.get(FeedSource, source_id)
     if not feed_source:
         raise errors.not_found("Feed source")

@@ -51,7 +51,7 @@
 			const data = {
 				name: formData.name,
 				url: formData.url,
-				description: formData.description || undefined,
+				description: formData.description.trim() || null,
 				type: formData.type,
 				is_active: formData.is_active,
 				is_featured: formData.is_featured,
