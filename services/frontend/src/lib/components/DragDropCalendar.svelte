@@ -210,7 +210,7 @@
 					>
 						{#each todosByDate[dateStr] || [] as todo (todo.id)}
 							{@const subtasks = todo.subtasks || []}
-							{@const pendingSubtasks = subtasks.filter(s => s.status !== 'completed')}
+							{@const pendingSubtasks = subtasks.filter((s) => s.status !== 'completed')}
 							{@const completedSubtaskCount = subtasks.length - pendingSubtasks.length}
 							<div
 								class="calendar-task {todo.priority}-priority"
@@ -229,7 +229,9 @@
 								<div class="task-title">{todo.title}</div>
 								{#if subtasks.length > 0}
 									<div class="calendar-subtask-indicator">
-										<span class="calendar-subtask-count">{completedSubtaskCount}/{subtasks.length}</span>
+										<span class="calendar-subtask-count"
+											>{completedSubtaskCount}/{subtasks.length}</span
+										>
 									</div>
 									{#each pendingSubtasks as subtask}
 										<div

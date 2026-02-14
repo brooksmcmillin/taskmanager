@@ -206,7 +206,7 @@
 						<div class="space-y-3">
 							{#each projectTodos as todo}
 								{@const subtasks = todo.subtasks || []}
-								{@const pendingSubtasks = subtasks.filter(s => s.status !== 'completed')}
+								{@const pendingSubtasks = subtasks.filter((s) => s.status !== 'completed')}
 								{@const completedSubtaskCount = subtasks.length - pendingSubtasks.length}
 								<div class="todo-with-subtasks">
 									<div
@@ -226,7 +226,10 @@
 												></span>
 												<div class="text-base font-medium text-gray-900">{todo.title}</div>
 												{#if subtasks.length > 0}
-													<span class="subtask-badge" title="{pendingSubtasks.length} pending of {subtasks.length} subtasks">
+													<span
+														class="subtask-badge"
+														title="{pendingSubtasks.length} pending of {subtasks.length} subtasks"
+													>
 														{completedSubtaskCount}/{subtasks.length}
 													</span>
 												{/if}
@@ -258,10 +261,7 @@
 									{#if pendingSubtasks.length > 0}
 										<div class="subtask-list-inline">
 											{#each pendingSubtasks as subtask}
-												<a
-													class="subtask-row"
-													href="/task/{subtask.id}"
-												>
+												<a class="subtask-row" href="/task/{subtask.id}">
 													<span class="subtask-connector"></span>
 													<span
 														class="subtask-priority-dot"
