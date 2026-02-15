@@ -7,6 +7,9 @@ import httpx
 
 from app.config import settings
 
+# Timeout for all GitHub API requests
+GITHUB_TIMEOUT = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0)
+
 # GitHub OAuth endpoints
 GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
@@ -77,7 +80,7 @@ async def exchange_code_for_token(code: str) -> str:
     Raises:
         GitHubOAuthError: If the token exchange fails
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=GITHUB_TIMEOUT) as client:
         response = await client.post(
             GITHUB_TOKEN_URL,
             data={
@@ -118,7 +121,7 @@ async def get_user_info(access_token: str) -> GitHubUser:
     Raises:
         GitHubOAuthError: If fetching user info fails
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=GITHUB_TIMEOUT) as client:
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/vnd.github+json",

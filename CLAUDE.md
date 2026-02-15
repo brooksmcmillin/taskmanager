@@ -32,7 +32,7 @@ make pre-commit      # Run pre-commit hooks on all files
 ### Frontend (`services/frontend/`) - SvelteKit
 
 ```bash
-npm run dev              # Start dev server (localhost:5173)
+npm run dev              # Start dev server (localhost:3000)
 npm run build            # Production build
 npm run preview          # Preview production build
 npm test                 # Run E2E tests with Playwright
@@ -129,7 +129,7 @@ async def create_todo(
     user = Depends(get_current_user),
     db = Depends(get_db)
 ):
-    return await crud.create_todo(db, user_id=user.id, **todo.dict())
+    return await crud.create_todo(db, user_id=user.id, **todo.model_dump())
 ```
 
 **Error handling** - Use standardized errors from `app/core/errors.py`:

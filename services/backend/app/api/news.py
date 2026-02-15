@@ -13,7 +13,7 @@ from app.models.article import Article
 from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.feed_source import FeedSource, FeedType
 from app.schemas import ListResponse
-from app.services.news_fetcher import fetch_feed_since
+from app.services.news_fetcher import fetch_feed_since, validate_feed_url
 
 router = APIRouter(prefix="/api/news", tags=["news"])
 
@@ -194,6 +194,11 @@ async def create_feed_source(
     db: DbSession,
 ) -> dict[str, FeedSourceResponse]:
     """Create a new feed source (admin only)."""
+    try:
+        validate_feed_url(source.url)
+    except ValueError as e:
+        raise errors.validation(str(e)) from None
+
     feed_source = FeedSource(**source.model_dump())
     db.add(feed_source)
     try:
