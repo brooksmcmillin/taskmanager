@@ -2,12 +2,12 @@
 
 import ipaddress
 import logging
-import socket
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
 import feedparser
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,31 +26,37 @@ BLOCKED_NETWORKS = [
     ipaddress.ip_network("169.254.0.0/16"),
     ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
 ]
+
+# Timeout for fetching RSS feeds
+FEED_FETCH_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
+
+
+def _is_ip_blocked(ip_str: str) -> bool:
+    """Check if an IP address falls within any blocked network."""
+    try:
+        ip_addr = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return True  # Unparseable IPs are blocked
+    return any(ip_addr in network for network in BLOCKED_NETWORKS)
 
 
 def validate_feed_url(url: str) -> None:
-    """Validate that a feed URL does not point to internal/private networks.
+    """Validate feed URL scheme and hostname (for use at creation/update time).
+
+    This is a best-effort pre-check. The actual SSRF protection happens at
+    fetch time via _safe_fetch_feed_content(), which validates the resolved
+    IP at connection time to prevent TOCTOU/DNS-rebinding attacks.
 
     Raises:
-        ValueError: If the URL is invalid or points to a blocked network.
+        ValueError: If the URL has an invalid scheme or no hostname.
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise ValueError(f"Invalid URL scheme: {parsed.scheme}")
-
-    hostname = parsed.hostname
-    if not hostname:
+    if not parsed.hostname:
         raise ValueError("URL has no hostname")
-
-    try:
-        ip = socket.gethostbyname(hostname)
-        ip_addr = ipaddress.ip_address(ip)
-        for network in BLOCKED_NETWORKS:
-            if ip_addr in network:
-                raise ValueError(f"URL resolves to blocked network: {ip}")
-    except socket.gaierror as e:
-        raise ValueError(f"Cannot resolve hostname: {hostname}") from e
 
 
 # AI/LLM security keywords to filter articles
@@ -146,12 +152,51 @@ def _parse_feed_entry(
     return title, url, summary, content, author, published_at
 
 
+async def _safe_fetch_feed_content(url: str) -> str:
+    """Fetch feed content via httpx with SSRF protection at connection time.
+
+    Validates the resolved IP address before allowing the connection,
+    preventing TOCTOU and DNS-rebinding attacks. Also enforces timeouts
+    to prevent resource exhaustion from slow/malicious servers.
+
+    Raises:
+        ValueError: If the URL resolves to a blocked network or has
+            an invalid scheme.
+        httpx.TimeoutException: If the request times out.
+        httpx.HTTPStatusError: If the server returns an error status.
+    """
+    validate_feed_url(url)
+
+    transport = httpx.AsyncHTTPTransport()
+    async with httpx.AsyncClient(
+        timeout=FEED_FETCH_TIMEOUT,
+        transport=transport,
+        follow_redirects=True,
+        max_redirects=5,
+    ) as client:
+        response = await client.get(url)
+
+        # Validate the resolved IP from the actual connection
+        if response.extensions.get("network_stream"):
+            server_addr = response.extensions["network_stream"].get_extra_info(
+                "server_addr"
+            )
+            if server_addr and _is_ip_blocked(server_addr[0]):
+                raise ValueError(f"Feed resolved to blocked network: {server_addr[0]}")
+
+        response.raise_for_status()
+        return response.text
+
+
 async def _fetch_feed_entries(
     feed_source: FeedSource,
     db: AsyncSession,
     since: datetime | None = None,
 ) -> int:
     """Fetch and store articles from an RSS feed.
+
+    SSRF protection is enforced at connection time (not just at URL
+    validation time) to prevent TOCTOU and DNS-rebinding attacks.
 
     Args:
         feed_source: The feed source to fetch.
@@ -165,9 +210,8 @@ async def _fetch_feed_entries(
     since_str = f" since {since.isoformat()}" if since else ""
     logger.info(f"{label} feed: {feed_source.name} ({feed_source.url}){since_str}")
 
-    validate_feed_url(feed_source.url)
-
-    feed = feedparser.parse(feed_source.url)
+    content = await _safe_fetch_feed_content(feed_source.url)
+    feed = feedparser.parse(content)
 
     if feed.bozo:
         logger.warning(
@@ -220,8 +264,8 @@ async def fetch_feed(feed_source: FeedSource, db: AsyncSession) -> int:
     """Fetch articles from a single RSS feed."""
     try:
         return await _fetch_feed_entries(feed_source, db)
-    except ValueError as e:
-        logger.error(f"Invalid feed URL for {feed_source.name}: {e}")
+    except (ValueError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+        logger.error(f"Feed fetch failed for {feed_source.name}: {e}")
         return 0
     except Exception as e:
         logger.error(f"Error fetching feed {feed_source.name}: {e}")
@@ -235,8 +279,8 @@ async def fetch_feed_since(
     """Fetch articles from a feed, skipping entries published before `since`."""
     try:
         return await _fetch_feed_entries(feed_source, db, since=since)
-    except ValueError as e:
-        logger.error(f"Invalid feed URL for {feed_source.name}: {e}")
+    except (ValueError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+        logger.error(f"Feed fetch failed for {feed_source.name}: {e}")
         return 0
     except Exception as e:
         logger.error(f"Error force-fetching feed {feed_source.name}: {e}")

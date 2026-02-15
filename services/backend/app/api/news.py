@@ -223,6 +223,13 @@ async def update_feed_source(
     if not feed_source:
         raise errors.not_found("Feed source")
 
+    # Validate URL if being changed
+    if source.url is not None:
+        try:
+            validate_feed_url(source.url)
+        except ValueError as e:
+            raise errors.validation(str(e)) from None
+
     update_data = source.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(feed_source, key, value)
