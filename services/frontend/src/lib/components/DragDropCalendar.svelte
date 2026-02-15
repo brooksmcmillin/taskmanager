@@ -27,6 +27,7 @@
 	let draggedTodoId: number | null = null;
 	let originalDate: string | null = null;
 	let isDragging = false;
+	let isTouchDevice = false;
 
 	interface Day {
 		date: Date;
@@ -151,12 +152,20 @@
 		dispatch('editTodo', todo);
 	}
 
+	function handleTaskClick(todo: Todo) {
+		if (isTouchDevice) {
+			handleEditTodo(todo);
+		}
+	}
+
 	function navigateToSubtask(event: MouseEvent, subtaskId: number) {
 		event.stopPropagation();
 		goto(`/task/${subtaskId}`);
 	}
 
 	onMount(() => {
+		isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
 		// Subscribe to pendingTodos and rebuild the calendar whenever it changes
 		// But don't update during drag operations to avoid interfering with the drag
 		const unsubscribe = pendingTodos.subscribe((value) => {
@@ -217,6 +226,7 @@
 								style="background-color: {hexTo50Shade(
 									todo.project_color || DEFAULT_PROJECT_COLOR
 								)}; border-left: 4px solid {todo.project_color || DEFAULT_PROJECT_COLOR}"
+								on:click={() => handleTaskClick(todo)}
 								on:dblclick={() => handleEditTodo(todo)}
 								role="button"
 								tabindex="0"

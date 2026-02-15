@@ -233,7 +233,7 @@
 								>
 							</div>
 
-							{#if todo.updated_at !== todo.created_at}
+							{#if todo.updated_at && todo.updated_at !== todo.created_at}
 								<div class="detail-section">
 									<label class="detail-label">Last Updated</label>
 									<span class="detail-text text-xs"
