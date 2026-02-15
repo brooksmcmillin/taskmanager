@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
 	registerAndLogin,
-	createTodoViaUI,
+	createTodoViaAPI,
 	getTodayDate,
 	getPastDate
 } from '../helpers/test-utils';
@@ -43,7 +43,7 @@ test.describe('Home Page', () => {
 
 	test('should show task due today', async ({ page }) => {
 		const today = getTodayDate();
-		await createTodoViaUI(page, 'Home Page Test Task', { dueDate: today });
+		await createTodoViaAPI(page, 'Home Page Test Task', { dueDate: today });
 
 		await page.goto('/home');
 		await page.waitForLoadState('networkidle');
@@ -54,7 +54,7 @@ test.describe('Home Page', () => {
 
 	test('should show overdue tasks in separate section', async ({ page }) => {
 		const yesterday = getPastDate(1);
-		await createTodoViaUI(page, 'Overdue Home Task', { dueDate: yesterday });
+		await createTodoViaAPI(page, 'Overdue Home Task', { dueDate: yesterday });
 
 		await page.goto('/home');
 		await page.waitForLoadState('networkidle');
@@ -65,7 +65,7 @@ test.describe('Home Page', () => {
 
 	test('should link tasks to detail page', async ({ page }) => {
 		const today = getTodayDate();
-		await createTodoViaUI(page, 'Linked Task', { dueDate: today });
+		await createTodoViaAPI(page, 'Linked Task', { dueDate: today });
 
 		await page.goto('/home');
 		await page.waitForLoadState('networkidle');

@@ -177,6 +177,33 @@ export async function createTodoViaUI(
 }
 
 /**
+ * Create a todo via the backend API directly
+ * Faster and more reliable than UI-based creation for tests that aren't testing todo creation itself
+ */
+export async function createTodoViaAPI(
+	page: Page,
+	title: string,
+	options: {
+		description?: string;
+		priority?: string;
+		dueDate?: string;
+		status?: string;
+	} = {}
+) {
+	const body: Record<string, string> = { title };
+	if (options.description) body.description = options.description;
+	if (options.priority) body.priority = options.priority;
+	if (options.dueDate) body.due_date = options.dueDate;
+	if (options.status) body.status = options.status;
+
+	const response = await page.request.post('/api/todos', { data: body });
+	if (!response.ok()) {
+		throw new Error(`Failed to create todo: ${response.status()} ${await response.text()}`);
+	}
+	return response.json();
+}
+
+/**
  * Cleanup helper - delete all todos created by a user
  * Useful in afterEach hooks
  */
