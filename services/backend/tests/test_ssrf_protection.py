@@ -1,0 +1,398 @@
+"""Tests for SSRF protection in RSS feed fetching."""
+
+import socket
+from unittest.mock import AsyncMock, patch
+
+import httpx
+import pytest
+import pytest_asyncio
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.security import hash_password
+from app.models.feed_source import FeedSource, FeedType
+from app.models.user import User
+from app.services.news_fetcher import (
+    SSRFProtectionTransport,
+    _is_ip_blocked,
+    _safe_fetch_feed_content,
+    validate_feed_url,
+)
+
+# =============================================================================
+# Unit tests for validate_feed_url
+# =============================================================================
+
+
+class TestValidateFeedUrl:
+    def test_rejects_file_scheme(self):
+        with pytest.raises(ValueError, match="Invalid URL scheme"):
+            validate_feed_url("file:///etc/passwd")
+
+    def test_rejects_ftp_scheme(self):
+        with pytest.raises(ValueError, match="Invalid URL scheme"):
+            validate_feed_url("ftp://example.com/feed.xml")
+
+    def test_rejects_gopher_scheme(self):
+        with pytest.raises(ValueError, match="Invalid URL scheme"):
+            validate_feed_url("gopher://example.com/feed")
+
+    def test_rejects_javascript_scheme(self):
+        with pytest.raises(ValueError, match="Invalid URL scheme"):
+            validate_feed_url("javascript:alert(1)")
+
+    def test_rejects_no_hostname(self):
+        with pytest.raises(ValueError, match="no hostname"):
+            validate_feed_url("http://")
+
+    def test_accepts_http(self):
+        validate_feed_url("http://example.com/feed.xml")
+
+    def test_accepts_https(self):
+        validate_feed_url("https://example.com/feed.xml")
+
+
+# =============================================================================
+# Unit tests for _is_ip_blocked
+# =============================================================================
+
+
+class TestIsIpBlocked:
+    # IPv4 blocked addresses
+    def test_blocks_localhost(self):
+        assert _is_ip_blocked("127.0.0.1") is True
+
+    def test_blocks_localhost_variant(self):
+        assert _is_ip_blocked("127.0.0.2") is True
+
+    def test_blocks_10_network(self):
+        assert _is_ip_blocked("10.0.0.1") is True
+        assert _is_ip_blocked("10.255.255.255") is True
+
+    def test_blocks_172_16_network(self):
+        assert _is_ip_blocked("172.16.0.1") is True
+        assert _is_ip_blocked("172.31.255.255") is True
+
+    def test_blocks_192_168_network(self):
+        assert _is_ip_blocked("192.168.0.1") is True
+        assert _is_ip_blocked("192.168.255.255") is True
+
+    def test_blocks_link_local(self):
+        assert _is_ip_blocked("169.254.0.1") is True
+        assert _is_ip_blocked("169.254.169.254") is True  # AWS metadata
+
+    # IPv6 blocked addresses
+    def test_blocks_ipv6_localhost(self):
+        assert _is_ip_blocked("::1") is True
+
+    def test_blocks_ipv6_unique_local(self):
+        assert _is_ip_blocked("fc00::1") is True
+        assert _is_ip_blocked("fd12:3456::1") is True
+
+    def test_blocks_ipv6_link_local(self):
+        assert _is_ip_blocked("fe80::1") is True
+
+    # Allowed addresses
+    def test_allows_public_ip(self):
+        assert _is_ip_blocked("8.8.8.8") is False
+        assert _is_ip_blocked("1.1.1.1") is False
+
+    def test_allows_public_ipv6(self):
+        assert _is_ip_blocked("2001:4860:4860::8888") is False
+
+    def test_blocks_unparseable_ip(self):
+        assert _is_ip_blocked("not-an-ip") is True
+
+
+# =============================================================================
+# Unit tests for SSRFProtectionTransport
+# =============================================================================
+
+
+class TestSSRFProtectionTransport:
+    """Test that DNS resolution and IP validation happen BEFORE connection."""
+
+    @pytest.mark.asyncio
+    async def test_blocks_localhost_before_connect(self):
+        """Transport must block 127.0.0.1 BEFORE any connection is made."""
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://localhost/feed.xml")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 80)),
+            ]
+            with pytest.raises(ValueError, match="blocked network.*127.0.0.1"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_blocks_internal_10_network(self):
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://evil.com/feed.xml")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.5", 80)),
+            ]
+            with pytest.raises(ValueError, match="blocked network.*10.0.0.5"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_blocks_metadata_endpoint(self):
+        """AWS/GCP metadata endpoint (169.254.169.254) must be blocked."""
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://metadata.google/feed")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("169.254.169.254", 80)),
+            ]
+            with pytest.raises(ValueError, match="blocked network"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_blocks_ipv6_localhost(self):
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://evil.com/feed.xml")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("::1", 80, 0, 0)),
+            ]
+            with pytest.raises(ValueError, match="blocked network"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_blocks_if_any_ip_is_private(self):
+        """If a hostname resolves to both public AND private IPs, block it."""
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://dual-stack.com/feed")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 80)),
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 80)),
+            ]
+            with pytest.raises(ValueError, match="blocked network"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_allows_public_ip(self):
+        """Public IPs should pass validation and delegate to parent transport."""
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "https://example.com/feed.xml")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 443)),
+            ]
+            # Parent transport will fail since there's no real server,
+            # but the DNS validation should pass without raising ValueError
+            with (
+                patch.object(
+                    httpx.AsyncHTTPTransport,
+                    "handle_async_request",
+                    new_callable=AsyncMock,
+                ) as mock_parent,
+            ):
+                mock_parent.return_value = httpx.Response(200, text="<rss/>")
+                response = await transport.handle_async_request(request)
+                assert response.status_code == 200
+                mock_parent.assert_called_once_with(request)
+
+    @pytest.mark.asyncio
+    async def test_raises_on_dns_failure(self):
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://nonexistent.invalid/feed")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.side_effect = socket.gaierror("Name resolution failed")
+            with pytest.raises(ValueError, match="Cannot resolve hostname"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_rejects_empty_hostname(self):
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http:///no-host")
+
+        with pytest.raises(ValueError, match="no hostname"):
+            await transport.handle_async_request(request)
+
+
+# =============================================================================
+# Unit tests for _safe_fetch_feed_content
+# =============================================================================
+
+
+class TestSafeFetchFeedContent:
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_scheme(self):
+        with pytest.raises(ValueError, match="Invalid URL scheme"):
+            await _safe_fetch_feed_content("file:///etc/passwd")
+
+    @pytest.mark.asyncio
+    async def test_timeout_on_slow_server(self):
+        """Verify that feed fetching has a timeout."""
+        with (
+            patch.object(
+                SSRFProtectionTransport,
+                "handle_async_request",
+                side_effect=httpx.ReadTimeout("Read timed out"),
+            ),
+            pytest.raises(httpx.ReadTimeout),
+        ):
+            await _safe_fetch_feed_content("https://slow-server.com/feed")
+
+    @pytest.mark.asyncio
+    async def test_blocked_ip_raises_before_connect(self):
+        """Verify that a URL resolving to localhost is blocked pre-connection."""
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 443)),
+            ]
+            with pytest.raises(ValueError, match="blocked network"):
+                await _safe_fetch_feed_content("https://evil-rebind.com/feed")
+
+    @pytest.mark.asyncio
+    async def test_fetches_content_successfully(self):
+        """Verify successful content fetch returns response text."""
+        with patch.object(
+            SSRFProtectionTransport,
+            "handle_async_request",
+            new_callable=AsyncMock,
+            return_value=httpx.Response(200, text="<rss>test feed</rss>"),
+        ):
+            result = await _safe_fetch_feed_content("https://example.com/feed.xml")
+            assert result == "<rss>test feed</rss>"
+
+
+# =============================================================================
+# API integration tests for SSRF protection
+# =============================================================================
+
+ADMIN_PASSWORD = "AdminPass123!"  # pragma: allowlist secret
+
+
+@pytest_asyncio.fixture
+async def admin_user_ssrf(db_session: AsyncSession) -> User:
+    """Create an admin test user for SSRF tests."""
+    user = User(
+        email="ssrf-admin@example.com",
+        password_hash=hash_password(ADMIN_PASSWORD),
+        is_admin=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def admin_client_ssrf(client: AsyncClient, admin_user_ssrf: User) -> AsyncClient:
+    """Create an authenticated admin client for SSRF tests."""
+    response = await client.post(
+        "/api/auth/login",
+        json={
+            "email": "ssrf-admin@example.com",
+            "password": ADMIN_PASSWORD,
+        },
+    )
+    assert response.status_code == 200
+    return client
+
+
+class TestCreateFeedSourceSsrf:
+    @pytest.mark.asyncio
+    async def test_rejects_file_scheme(self, admin_client_ssrf: AsyncClient):
+        response = await admin_client_ssrf.post(
+            "/api/news/sources",
+            json={
+                "name": "Evil Feed",
+                "url": "file:///etc/passwd",
+            },
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_rejects_ftp_scheme(self, admin_client_ssrf: AsyncClient):
+        response = await admin_client_ssrf.post(
+            "/api/news/sources",
+            json={
+                "name": "FTP Feed",
+                "url": "ftp://internal/feed.xml",
+            },
+        )
+        assert response.status_code == 400
+
+
+class TestUpdateFeedSourceSsrf:
+    @pytest.mark.asyncio
+    async def test_rejects_internal_url_on_update(
+        self,
+        admin_client_ssrf: AsyncClient,
+        db_session: AsyncSession,
+    ):
+        """Updating a feed source URL must also validate for SSRF."""
+        source = FeedSource(
+            name="Safe Feed",
+            url="https://example.com/feed.xml",
+            type=FeedType.article,
+            is_active=True,
+        )
+        db_session.add(source)
+        await db_session.commit()
+        await db_session.refresh(source)
+
+        response = await admin_client_ssrf.put(
+            f"/api/news/sources/{source.id}",
+            json={"url": "file:///etc/passwd"},
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_allows_valid_url_on_update(
+        self,
+        admin_client_ssrf: AsyncClient,
+        db_session: AsyncSession,
+    ):
+        """Updating to a valid URL should succeed."""
+        source = FeedSource(
+            name="Update Test Feed",
+            url="https://example.com/feed.xml",
+            type=FeedType.article,
+            is_active=True,
+        )
+        db_session.add(source)
+        await db_session.commit()
+        await db_session.refresh(source)
+
+        response = await admin_client_ssrf.put(
+            f"/api/news/sources/{source.id}",
+            json={"url": "https://new-safe-url.com/feed.xml"},
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["url"] == "https://new-safe-url.com/feed.xml"
+
+    @pytest.mark.asyncio
+    async def test_non_url_update_skips_validation(
+        self,
+        admin_client_ssrf: AsyncClient,
+        db_session: AsyncSession,
+    ):
+        """Updating non-URL fields should not trigger URL validation."""
+        source = FeedSource(
+            name="No URL Change Feed",
+            url="https://example.com/feed.xml",
+            type=FeedType.article,
+            is_active=True,
+        )
+        db_session.add(source)
+        await db_session.commit()
+        await db_session.refresh(source)
+
+        response = await admin_client_ssrf.put(
+            f"/api/news/sources/{source.id}",
+            json={"name": "Renamed Feed"},
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["name"] == "Renamed Feed"

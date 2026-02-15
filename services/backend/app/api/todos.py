@@ -314,6 +314,21 @@ def _build_todo_response(
     )
 
 
+async def _resolve_category_to_project(
+    db: "DbSession", category: str, user_id: int
+) -> int | None:
+    """Resolve a category name to a project_id for the given user.
+
+    Returns:
+        The project ID if found, None otherwise.
+    """
+    result = await db.execute(
+        select(Project).where(Project.name == category, Project.user_id == user_id)
+    )
+    project = result.scalar_one_or_none()
+    return project.id if project else None
+
+
 # Rule-based action type inference patterns
 # Each entry: action_type -> (keywords, agent_actionable)
 ACTION_PATTERNS: dict[ActionType, tuple[list[str], bool]] = {
@@ -454,6 +469,80 @@ def infer_action_type(
     return None, None, None  # Unknown - agent can classify later
 
 
+def _apply_todo_filters(
+    query,
+    *,
+    status: str | None,
+    project_id: int | None,
+    category: str | None,
+    start_date: date | None,
+    end_date: date | None,
+    no_due_date: bool,
+    parent_id: int | None,
+    order_by: str | None,
+):
+    """Apply filtering and ordering to a todo list query."""
+    # Filter by parent_id - if not specified, only show root-level todos
+    if parent_id is not None:
+        query = query.where(Todo.parent_id == parent_id)
+    else:
+        query = query.where(Todo.parent_id.is_(None))
+
+    if status and status != "all":
+        if status == "overdue":
+            query = query.where(
+                and_(
+                    Todo.due_date < date.today(),
+                    Todo.status != Status.completed,
+                )
+            )
+        else:
+            query = query.where(Todo.status == status)
+
+    if project_id:
+        query = query.where(Todo.project_id == project_id)
+
+    if category:
+        query = query.where(Project.name == category)
+
+    if no_due_date:
+        query = query.where(Todo.due_date.is_(None))
+    else:
+        if start_date:
+            query = query.where(Todo.due_date >= start_date)
+        if end_date:
+            query = query.where(Todo.due_date <= end_date)
+
+    if order_by == "position":
+        query = query.order_by(Todo.position, Todo.created_at)
+    else:
+        query = query.order_by(Todo.due_date.asc().nulls_last(), Todo.priority.desc())
+
+    return query
+
+
+async def _fetch_subtasks_map(
+    db: "DbSession", todo_ids: list[int], user_id: int
+) -> dict[int, list[Todo]]:
+    """Fetch subtasks for a list of todo IDs, grouped by parent_id."""
+    if not todo_ids:
+        return {}
+
+    subtasks_query = (
+        select(Todo)
+        .where(Todo.parent_id.in_(todo_ids))
+        .where(Todo.user_id == user_id)
+        .where(Todo.deleted_at.is_(None))
+        .order_by(Todo.position, Todo.created_at.asc())
+    )
+    subtasks_result = await db.execute(subtasks_query)
+    subtasks_map: dict[int, list[Todo]] = {}
+    for subtask in subtasks_result.scalars().all():
+        if subtask.parent_id is not None:
+            subtasks_map.setdefault(subtask.parent_id, []).append(subtask)
+    return subtasks_map
+
+
 @router.get("")
 async def list_todos(
     user: CurrentUserFlexible,
@@ -486,66 +575,26 @@ async def list_todos(
         .where(Todo.deleted_at.is_(None))
     )
 
-    # Filter by parent_id - if not specified, only show root-level todos
-    if parent_id is not None:
-        query = query.where(Todo.parent_id == parent_id)
-    else:
-        query = query.where(Todo.parent_id.is_(None))
-
-    # Apply filters
-    if status and status != "all":
-        if status == "overdue":
-            query = query.where(
-                and_(
-                    Todo.due_date < date.today(),
-                    Todo.status != Status.completed,
-                )
-            )
-        else:
-            query = query.where(Todo.status == status)
-
-    if project_id:
-        query = query.where(Todo.project_id == project_id)
-
-    if category:
-        query = query.where(Project.name == category)
-
-    if no_due_date:
-        query = query.where(Todo.due_date.is_(None))
-    else:
-        if start_date:
-            query = query.where(Todo.due_date >= start_date)
-        if end_date:
-            query = query.where(Todo.due_date <= end_date)
-
-    # Apply ordering
-    if order_by == "position":
-        query = query.order_by(Todo.position, Todo.created_at)
-    else:
-        query = query.order_by(Todo.due_date.asc().nulls_last(), Todo.priority.desc())
+    query = _apply_todo_filters(
+        query,
+        status=status,
+        project_id=project_id,
+        category=category,
+        start_date=start_date,
+        end_date=end_date,
+        no_due_date=no_due_date,
+        parent_id=parent_id,
+        order_by=order_by,
+    )
 
     result = await db.execute(query)
     rows = result.all()
 
-    # Fetch subtasks for each todo if requested
     subtasks_map: dict[int, list[Todo]] = {}
     if include_subtasks:
-        todo_ids = [row[0].id for row in rows]
-        if todo_ids:
-            subtasks_query = (
-                select(Todo)
-                .where(Todo.parent_id.in_(todo_ids))
-                .where(Todo.user_id == user.id)
-                .where(Todo.deleted_at.is_(None))
-                .order_by(Todo.position, Todo.created_at.asc())
-            )
-            subtasks_result = await db.execute(subtasks_query)
-            for subtask in subtasks_result.scalars().all():
-                parent_id = subtask.parent_id
-                if parent_id is not None:
-                    if parent_id not in subtasks_map:
-                        subtasks_map[parent_id] = []
-                    subtasks_map[parent_id].append(subtask)
+        subtasks_map = await _fetch_subtasks_map(
+            db, [row[0].id for row in rows], user.id
+        )
 
     tasks = []
     for row in rows:
@@ -575,14 +624,9 @@ async def create_todo(
     """
     # Resolve category name to project_id
     if request.category and not request.project_id:
-        result = await db.execute(
-            select(Project).where(
-                Project.name == request.category, Project.user_id == user.id
-            )
-        )
-        project = result.scalar_one_or_none()
-        if project:
-            request.project_id = project.id
+        project_id = await _resolve_category_to_project(db, request.category, user.id)
+        if project_id:
+            request.project_id = project_id
 
     # Verify parent todo exists and belongs to user if parent_id is provided
     if request.parent_id:
@@ -741,14 +785,9 @@ async def update_todo(
     if "category" in update_data:
         category = update_data.pop("category")
         if category and "project_id" not in update_data:
-            result = await db.execute(
-                select(Project).where(
-                    Project.name == category, Project.user_id == user.id
-                )
-            )
-            project = result.scalar_one_or_none()
-            if project:
-                update_data["project_id"] = project.id
+            project_id = await _resolve_category_to_project(db, category, user.id)
+            if project_id:
+                update_data["project_id"] = project_id
 
     # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
@@ -794,14 +833,9 @@ async def bulk_update_todos(
     if "category" in update_data:
         category = update_data.pop("category")
         if category and "project_id" not in update_data:
-            result = await db.execute(
-                select(Project).where(
-                    Project.name == category, Project.user_id == user.id
-                )
-            )
-            project = result.scalar_one_or_none()
-            if project:
-                update_data["project_id"] = project.id
+            project_id = await _resolve_category_to_project(db, category, user.id)
+            if project_id:
+                update_data["project_id"] = project_id
 
     # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
