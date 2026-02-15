@@ -1,6 +1,7 @@
 """Tests for SSRF protection in RSS feed fetching."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+import socket
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -12,6 +13,7 @@ from app.core.security import hash_password
 from app.models.feed_source import FeedSource, FeedType
 from app.models.user import User
 from app.services.news_fetcher import (
+    SSRFProtectionTransport,
     _is_ip_blocked,
     _safe_fetch_feed_content,
     validate_feed_url,
@@ -103,6 +105,121 @@ class TestIsIpBlocked:
 
 
 # =============================================================================
+# Unit tests for SSRFProtectionTransport
+# =============================================================================
+
+
+class TestSSRFProtectionTransport:
+    """Test that DNS resolution and IP validation happen BEFORE connection."""
+
+    @pytest.mark.asyncio
+    async def test_blocks_localhost_before_connect(self):
+        """Transport must block 127.0.0.1 BEFORE any connection is made."""
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://localhost/feed.xml")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 80)),
+            ]
+            with pytest.raises(ValueError, match="blocked network.*127.0.0.1"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_blocks_internal_10_network(self):
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://evil.com/feed.xml")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.5", 80)),
+            ]
+            with pytest.raises(ValueError, match="blocked network.*10.0.0.5"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_blocks_metadata_endpoint(self):
+        """AWS/GCP metadata endpoint (169.254.169.254) must be blocked."""
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://metadata.google/feed")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("169.254.169.254", 80)),
+            ]
+            with pytest.raises(ValueError, match="blocked network"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_blocks_ipv6_localhost(self):
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://evil.com/feed.xml")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("::1", 80, 0, 0)),
+            ]
+            with pytest.raises(ValueError, match="blocked network"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_blocks_if_any_ip_is_private(self):
+        """If a hostname resolves to both public AND private IPs, block it."""
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://dual-stack.com/feed")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 80)),
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 80)),
+            ]
+            with pytest.raises(ValueError, match="blocked network"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_allows_public_ip(self):
+        """Public IPs should pass validation and delegate to parent transport."""
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "https://example.com/feed.xml")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", 443)),
+            ]
+            # Parent transport will fail since there's no real server,
+            # but the DNS validation should pass without raising ValueError
+            with (
+                patch.object(
+                    httpx.AsyncHTTPTransport,
+                    "handle_async_request",
+                    new_callable=AsyncMock,
+                ) as mock_parent,
+            ):
+                mock_parent.return_value = httpx.Response(200, text="<rss/>")
+                response = await transport.handle_async_request(request)
+                assert response.status_code == 200
+                mock_parent.assert_called_once_with(request)
+
+    @pytest.mark.asyncio
+    async def test_raises_on_dns_failure(self):
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http://nonexistent.invalid/feed")
+
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.side_effect = socket.gaierror("Name resolution failed")
+            with pytest.raises(ValueError, match="Cannot resolve hostname"):
+                await transport.handle_async_request(request)
+
+    @pytest.mark.asyncio
+    async def test_rejects_empty_hostname(self):
+        transport = SSRFProtectionTransport()
+        request = httpx.Request("GET", "http:///no-host")
+
+        with pytest.raises(ValueError, match="no hostname"):
+            await transport.handle_async_request(request)
+
+
+# =============================================================================
 # Unit tests for _safe_fetch_feed_content
 # =============================================================================
 
@@ -116,31 +233,35 @@ class TestSafeFetchFeedContent:
     @pytest.mark.asyncio
     async def test_timeout_on_slow_server(self):
         """Verify that feed fetching has a timeout."""
-        with patch("app.services.news_fetcher.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.get.side_effect = httpx.ReadTimeout("Read timed out")
-            mock_client_cls.return_value = mock_client
+        with (
+            patch.object(
+                SSRFProtectionTransport,
+                "handle_async_request",
+                side_effect=httpx.ReadTimeout("Read timed out"),
+            ),
+            pytest.raises(httpx.ReadTimeout),
+        ):
+            await _safe_fetch_feed_content("https://slow-server.com/feed")
 
-            with pytest.raises(httpx.ReadTimeout):
-                await _safe_fetch_feed_content("https://slow-server.com/feed")
+    @pytest.mark.asyncio
+    async def test_blocked_ip_raises_before_connect(self):
+        """Verify that a URL resolving to localhost is blocked pre-connection."""
+        with patch("app.services.news_fetcher.socket.getaddrinfo") as mock_dns:
+            mock_dns.return_value = [
+                (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 443)),
+            ]
+            with pytest.raises(ValueError, match="blocked network"):
+                await _safe_fetch_feed_content("https://evil-rebind.com/feed")
 
     @pytest.mark.asyncio
     async def test_fetches_content_successfully(self):
         """Verify successful content fetch returns response text."""
-        mock_response = MagicMock()
-        mock_response.text = "<rss>test feed</rss>"
-        mock_response.extensions = {}
-        mock_response.raise_for_status = MagicMock()
-
-        with patch("app.services.news_fetcher.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.get.return_value = mock_response
-            mock_client_cls.return_value = mock_client
-
+        with patch.object(
+            SSRFProtectionTransport,
+            "handle_async_request",
+            new_callable=AsyncMock,
+            return_value=httpx.Response(200, text="<rss>test feed</rss>"),
+        ):
             result = await _safe_fetch_feed_content("https://example.com/feed.xml")
             assert result == "<rss>test feed</rss>"
 

@@ -2,6 +2,7 @@
 
 import ipaddress
 import logging
+import socket
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
@@ -29,8 +30,9 @@ BLOCKED_NETWORKS = [
     ipaddress.ip_network("fe80::/10"),
 ]
 
-# Timeout for fetching RSS feeds
-FEED_FETCH_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
+# Timeout for fetching RSS feeds.  Read timeout is higher than GitHub OAuth
+# (15s vs 10s) because RSS feeds can be large and served by slow hosts.
+FEED_FETCH_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=10.0)
 
 
 def _is_ip_blocked(ip_str: str) -> bool:
@@ -42,12 +44,39 @@ def _is_ip_blocked(ip_str: str) -> bool:
     return any(ip_addr in network for network in BLOCKED_NETWORKS)
 
 
+class SSRFProtectionTransport(httpx.AsyncHTTPTransport):
+    """HTTP transport that blocks requests to private/internal networks.
+
+    Resolves DNS and validates ALL resulting IPs BEFORE any connection is
+    made, preventing TOCTOU and DNS-rebinding attacks.
+    """
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        hostname = request.url.host
+        if not hostname:
+            raise ValueError("Request URL has no hostname")
+
+        try:
+            addrinfo = socket.getaddrinfo(
+                hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+            )
+        except socket.gaierror as e:
+            raise ValueError(f"Cannot resolve hostname {hostname}: {e}") from e
+
+        for _family, _type, _proto, _canonname, sockaddr in addrinfo:
+            ip = str(sockaddr[0])
+            if _is_ip_blocked(ip):
+                raise ValueError(f"URL resolves to blocked network: {ip}")
+
+        return await super().handle_async_request(request)
+
+
 def validate_feed_url(url: str) -> None:
     """Validate feed URL scheme and hostname (for use at creation/update time).
 
-    This is a best-effort pre-check. The actual SSRF protection happens at
-    fetch time via _safe_fetch_feed_content(), which validates the resolved
-    IP at connection time to prevent TOCTOU/DNS-rebinding attacks.
+    This is an early rejection of obviously invalid URLs. The actual SSRF
+    protection at fetch time is handled by SSRFProtectionTransport, which
+    validates resolved IPs BEFORE any connection is established.
 
     Raises:
         ValueError: If the URL has an invalid scheme or no hostname.
@@ -153,21 +182,22 @@ def _parse_feed_entry(
 
 
 async def _safe_fetch_feed_content(url: str) -> str:
-    """Fetch feed content via httpx with SSRF protection at connection time.
+    """Fetch feed content via httpx with SSRF protection BEFORE connection.
 
-    Validates the resolved IP address before allowing the connection,
-    preventing TOCTOU and DNS-rebinding attacks. Also enforces timeouts
-    to prevent resource exhaustion from slow/malicious servers.
+    Uses SSRFProtectionTransport to resolve DNS and validate all IPs
+    before any TCP connection is established, preventing TOCTOU and
+    DNS-rebinding attacks. Also enforces timeouts to prevent resource
+    exhaustion from slow/malicious servers.
 
     Raises:
         ValueError: If the URL resolves to a blocked network or has
-            an invalid scheme.
+            an invalid scheme/hostname.
         httpx.TimeoutException: If the request times out.
         httpx.HTTPStatusError: If the server returns an error status.
     """
     validate_feed_url(url)
 
-    transport = httpx.AsyncHTTPTransport()
+    transport = SSRFProtectionTransport()
     async with httpx.AsyncClient(
         timeout=FEED_FETCH_TIMEOUT,
         transport=transport,
@@ -175,15 +205,6 @@ async def _safe_fetch_feed_content(url: str) -> str:
         max_redirects=5,
     ) as client:
         response = await client.get(url)
-
-        # Validate the resolved IP from the actual connection
-        if response.extensions.get("network_stream"):
-            server_addr = response.extensions["network_stream"].get_extra_info(
-                "server_addr"
-            )
-            if server_addr and _is_ip_blocked(server_addr[0]):
-                raise ValueError(f"Feed resolved to blocked network: {server_addr[0]}")
-
         response.raise_for_status()
         return response.text
 

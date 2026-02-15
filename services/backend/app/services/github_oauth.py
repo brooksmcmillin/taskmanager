@@ -7,8 +7,9 @@ import httpx
 
 from app.config import settings
 
-# Timeout for all GitHub API requests
-GITHUB_TIMEOUT = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=5.0)
+# Timeout for GitHub API requests.  Read timeout is lower than RSS feeds
+# (10s vs 15s) because GitHub API responses are small JSON payloads.
+GITHUB_TIMEOUT = httpx.Timeout(connect=5.0, read=10.0, write=5.0, pool=10.0)
 
 # GitHub OAuth endpoints
 GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
