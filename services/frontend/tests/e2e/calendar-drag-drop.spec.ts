@@ -252,6 +252,25 @@ test.describe('Calendar Drag and Drop', () => {
 		await expect(page.locator('.modal')).toBeVisible({ timeout: 5000 });
 	});
 
+	test.skip('should open task on single tap on mobile', async ({ page, isMobile }) => {
+		test.skip(!isMobile, 'Mobile-only test');
+
+		const dueDate = getFutureDate(5);
+		await createTodoViaUI(page, 'Tap Test', { dueDate });
+		await waitForNetworkIdle(page);
+
+		const todoItem = page
+			.locator(`.calendar-day[data-date="${dueDate}"] .calendar-task`)
+			.filter({ hasText: 'Tap Test' });
+
+		// Single tap should open task on mobile
+		await todoItem.tap();
+
+		// Verify edit modal opens
+		await expect(page.locator('.modal')).toBeVisible({ timeout: 5000 });
+		await expect(page.locator('[name=title]')).toHaveValue('Tap Test');
+	});
+
 	test.skip('should show only pending todos on calendar', async ({ page }) => {
 		// Create pending task with dynamic date
 		const dueDate = getFutureDate(5);
