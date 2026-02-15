@@ -907,3 +907,40 @@ async def test_include_subtasks_excludes_deleted_subtasks(
     # Only the non-deleted subtask should appear
     assert len(parent_data["subtasks"]) == 1
     assert parent_data["subtasks"][0]["title"] == "Subtask Keep"
+
+
+# =============================================================================
+# updated_at Timestamp Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_todo_has_updated_at(authenticated_client: AsyncClient):
+    """Test that newly created todos have updated_at populated."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Test Todo", "priority": "medium"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["updated_at"] is not None
+    assert data["updated_at"] == data["created_at"]
+
+
+@pytest.mark.asyncio
+async def test_update_todo_preserves_updated_at(authenticated_client: AsyncClient):
+    """Test that updated_at remains populated after updating a todo."""
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Original Title"},
+    )
+    todo_id = create_response.json()["data"]["id"]
+
+    update_response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"title": "Updated Title"},
+    )
+
+    updated_data = update_response.json()["data"]
+    assert updated_data["updated_at"] is not None

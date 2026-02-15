@@ -252,3 +252,44 @@ async def test_delete_already_deleted_comment(
         f"/api/todos/{test_todo['id']}/comments/{comment_id}"
     )
     assert response.status_code == 404
+
+
+# =============================================================================
+# updated_at Timestamp Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_comment_has_updated_at(
+    authenticated_client: AsyncClient, test_todo
+):
+    """Test that newly created comments have updated_at populated."""
+    response = await authenticated_client.post(
+        f"/api/todos/{test_todo['id']}/comments",
+        json={"content": "Test comment"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["updated_at"] is not None
+    assert data["updated_at"] == data["created_at"]
+
+
+@pytest.mark.asyncio
+async def test_update_comment_preserves_updated_at(
+    authenticated_client: AsyncClient, test_todo
+):
+    """Test that updated_at remains populated after updating a comment."""
+    create_response = await authenticated_client.post(
+        f"/api/todos/{test_todo['id']}/comments",
+        json={"content": "Original content"},
+    )
+    comment_id = create_response.json()["data"]["id"]
+
+    update_response = await authenticated_client.put(
+        f"/api/todos/{test_todo['id']}/comments/{comment_id}",
+        json={"content": "Updated content"},
+    )
+
+    updated_data = update_response.json()["data"]
+    assert updated_data["updated_at"] is not None

@@ -318,7 +318,7 @@ make test-sdk          # Python SDK (pytest)
 
 ## Development Guidelines
 
-- **Unit tests are required for all new features and bug fixes.** Add tests that cover the happy path, edge cases, and security-relevant behavior (e.g., authorization checks). Place backend tests in `services/backend/tests/` and frontend tests in `services/frontend/tests/`.
+- **Unit tests are required for all new features and bug fixes and must be written before creating a PR or commit.** Add tests that cover the happy path, edge cases, and security-relevant behavior (e.g., authorization checks). Place backend tests in `services/backend/tests/` and frontend tests in `services/frontend/tests/`. Run tests and confirm they pass before committing.
 
 ### Date and Timezone Handling
 
