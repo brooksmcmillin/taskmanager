@@ -33,6 +33,7 @@ dependencies = [
     "pillow>=12.1.1",
     # WebAuthn
     "webauthn>=2.0.0",
+    "prometheus-fastapi-instrumentator>=7.1.0",
 ]
 
 [project.optional-dependencies]

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api import (
     api_keys,
@@ -77,6 +78,13 @@ app.include_router(device.router)
 app.include_router(api_keys.router)
 app.include_router(webauthn.router)
 app.include_router(github.router)
+
+
+Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/health", "/metrics"],
+).instrument(app).expose(app, endpoint="/metrics")
 
 
 @app.get("/health")
