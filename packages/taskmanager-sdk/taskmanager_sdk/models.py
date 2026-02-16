@@ -45,6 +45,7 @@ class Todo:
     actual_hours: float | None
     status: str
     due_date: str | None
+    deadline_type: str  # flexible, preferred, firm, hard
     tags: list[str] | None
     created_at: str
     updated_at: str
@@ -120,6 +121,7 @@ class Task:
     priority: str
     description: str | None = None
     due_date: str | None = None
+    deadline_type: str = "preferred"  # flexible, preferred, firm, hard
     category: str | None = None
     project_name: str | None = None
     project_color: str | None = None

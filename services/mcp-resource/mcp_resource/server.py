@@ -478,6 +478,7 @@ def create_resource_server(
         title: str,
         description: str | None = None,
         due_date: str | None = None,
+        deadline_type: str = "preferred",
         category: str | None = None,
         priority: str = "medium",
         tags: list[str] | None = None,
@@ -490,6 +491,9 @@ def create_resource_server(
             title: Task title (required)
             description: Task details (optional)
             due_date: Due date in ISO format, e.g., "2025-12-20" (optional)
+            deadline_type: How strict the due date is - one of "flexible" (reschedule freely),
+                          "preferred" (soft target, default), "firm" (avoid moving),
+                          "hard" (never reschedule)
             category: Task category/project name (optional)
             priority: Priority level - one of "low", "medium", "high", "urgent" (default: "medium")
             tags: List of task tags (optional)

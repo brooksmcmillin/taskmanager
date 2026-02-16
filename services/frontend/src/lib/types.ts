@@ -36,6 +36,7 @@ export interface Subtask {
 	priority: 'low' | 'medium' | 'high' | 'urgent';
 	status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
 	due_date: string | null;
+	deadline_type: DeadlineType;
 	estimated_hours: number | null;
 	actual_hours: number | null;
 	position: number;
@@ -69,6 +70,7 @@ export interface Todo {
 	priority: 'low' | 'medium' | 'high' | 'urgent';
 	status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
 	due_date: string | null;
+	deadline_type: DeadlineType;
 	completed_date: string | null;
 	estimated_hours: number | null;
 	actual_hours: number | null;
@@ -132,6 +134,7 @@ export interface TodoCreate {
 	priority?: string;
 	status?: string;
 	due_date?: string;
+	deadline_type?: DeadlineType;
 	estimated_hours?: number;
 	tags?: string[];
 	context?: string;
@@ -187,6 +190,8 @@ export interface RegistrationCode {
 	created_at: string;
 	created_by_email: string | null;
 }
+
+export type DeadlineType = 'flexible' | 'preferred' | 'firm' | 'hard';
 
 export type ArticleRating = 'good' | 'bad' | 'not_interested';
 
