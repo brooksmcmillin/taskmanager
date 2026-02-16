@@ -145,6 +145,19 @@ docker-restart:  ## Restart Docker containers
 	docker compose restart
 
 # =============================================================================
+# Monitoring
+# =============================================================================
+
+docker-monitoring-up:  ## Start monitoring services only
+	docker compose up -d prometheus loki promtail postgres-exporter grafana
+
+docker-monitoring-down:  ## Stop monitoring services
+	docker compose stop prometheus loki promtail postgres-exporter grafana
+
+docker-monitoring-logs:  ## View monitoring service logs
+	docker compose logs -f prometheus loki promtail postgres-exporter grafana
+
+# =============================================================================
 # Database
 # =============================================================================
 

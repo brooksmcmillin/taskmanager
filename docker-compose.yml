@@ -155,6 +155,10 @@ services:
     image: grafana/promtail:3.0.0
     container_name: taskmanager-promtail
     restart: unless-stopped
+    # SECURITY: Docker socket mount grants container-level read access to all
+    # container metadata and logs. In production, run Promtail in a restricted
+    # network and consider using a socket proxy (e.g., tecnativa/docker-socket-proxy)
+    # to limit API access.
     volumes:
       - ./services/monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro

@@ -80,7 +80,11 @@ app.include_router(webauthn.router)
 app.include_router(github.router)
 
 
-Instrumentator().instrument(app).expose(app)
+Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    excluded_handlers=["/health", "/metrics"],
+).instrument(app).expose(app, endpoint="/metrics")
 
 
 @app.get("/health")
