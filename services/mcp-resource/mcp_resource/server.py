@@ -573,6 +573,7 @@ def create_resource_server(
         priority: str | None = None,
         tags: list[str] | None = None,
         parent_id: str | None = None,
+        estimated_hours: float | None = None,
     ) -> str:
         """
         Update an existing task.
@@ -587,6 +588,7 @@ def create_resource_server(
             priority: New priority - one of "low", "medium", "high", "urgent" (optional)
             tags: New list of tags (optional)
             parent_id: New parent task ID to move task - format "task_123" or just "123" (optional)
+            estimated_hours: Estimated hours to complete (optional)
 
         Returns:
             JSON object with id, updated_fields list, and status confirming update
@@ -632,6 +634,8 @@ def create_resource_server(
                 updated_fields.append("tags")
             if parent_id is not None:
                 updated_fields.append("parent_id")
+            if estimated_hours is not None:
+                updated_fields.append("estimated_hours")
 
             # Use SDK method with parent_id support
             response = api_client.update_todo(
@@ -640,6 +644,7 @@ def create_resource_server(
                 description=description,
                 category=category,
                 priority=priority,
+                estimated_hours=estimated_hours,
                 status=status,
                 due_date=due_date,
                 tags=tags,
