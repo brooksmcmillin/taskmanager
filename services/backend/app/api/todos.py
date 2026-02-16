@@ -34,6 +34,8 @@ router = APIRouter(prefix="/api/todos", tags=["todos"])
 class TodoCreate(BaseModel):
     """Create todo request."""
 
+    model_config = ConfigDict(use_enum_values=True)
+
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     priority: Priority = Priority.medium
@@ -59,6 +61,8 @@ class TodoCreate(BaseModel):
 
 class TodoUpdate(BaseModel):
     """Update todo request."""
+
+    model_config = ConfigDict(use_enum_values=True)
 
     title: str | None = None
     description: str | None = None
