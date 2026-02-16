@@ -10,6 +10,8 @@
 	let articlesLoading = true;
 	let tasksError = false;
 	let articlesError = false;
+	let showFeaturedOnly = true;
+	let completingTasks = new Set<number>();
 
 	function getGreeting(): string {
 		const hour = new Date().getHours();
@@ -68,6 +70,48 @@
 		return then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
+	function fetchArticles(featured: boolean) {
+		articlesLoading = true;
+		articlesError = false;
+		const params: Record<string, string> = { limit: '30', unread_only: 'true' };
+		if (featured) params.featured = 'true';
+		api
+			.get<ApiResponse<Article[]>>('/api/news', { params })
+			.then((result) => {
+				articles = result.data || [];
+				articlesLoading = false;
+			})
+			.catch(() => {
+				articlesError = true;
+				articlesLoading = false;
+			});
+	}
+
+	function toggleFeatured(featured: boolean) {
+		if (showFeaturedOnly === featured) return;
+		showFeaturedOnly = featured;
+		fetchArticles(featured);
+	}
+
+	async function completeTask(event: MouseEvent, taskId: number, source: 'today' | 'overdue') {
+		event.preventDefault();
+		event.stopPropagation();
+		if (completingTasks.has(taskId)) return;
+		completingTasks.add(taskId);
+		completingTasks = completingTasks;
+		try {
+			await api.post(`/api/todos/${taskId}/complete`, {});
+			if (source === 'today') {
+				tasks = tasks.filter((t) => t.id !== taskId);
+			} else {
+				overdueTasks = overdueTasks.filter((t) => t.id !== taskId);
+			}
+		} finally {
+			completingTasks.delete(taskId);
+			completingTasks = completingTasks;
+		}
+	}
+
 	onMount(() => {
 		let mounted = true;
 		const today = todayStr();
@@ -81,9 +125,6 @@
 			.then(([todayResult, overdueResult]) => {
 				if (!mounted) return;
 				tasks = todayResult.data || [];
-				// The backend's "overdue" query can include tasks due today that
-				// aren't completed yet. Since those already appear in todayResult,
-				// filter them out to avoid duplicates.
 				overdueTasks = (overdueResult.data || []).filter((t) => t.due_date !== today);
 				tasksLoading = false;
 			})
@@ -93,20 +134,7 @@
 				tasksLoading = false;
 			});
 
-		api
-			.get<ApiResponse<Article[]>>('/api/news', {
-				params: { limit: '30', unread_only: 'true' }
-			})
-			.then((result) => {
-				if (!mounted) return;
-				articles = result.data || [];
-				articlesLoading = false;
-			})
-			.catch(() => {
-				if (!mounted) return;
-				articlesError = true;
-				articlesLoading = false;
-			});
+		fetchArticles(showFeaturedOnly);
 
 		return () => {
 			mounted = false;
@@ -154,6 +182,12 @@
 							<div class="section-label overdue">Overdue</div>
 							{#each overdueTasks as task}
 								<a class="task-item" href="/task/{task.id}">
+									<button
+										class="complete-btn"
+										class:completing={completingTasks.has(task.id)}
+										onclick={(e) => completeTask(e, task.id, 'overdue')}
+										title="Mark complete"
+									></button>
 									<span class="priority-dot {task.priority}"></span>
 									<div class="task-content">
 										<div class="task-title">{task.title}</div>
@@ -182,6 +216,12 @@
 						{/if}
 						{#each tasks as task}
 							<a class="task-item" href="/task/{task.id}">
+								<button
+									class="complete-btn"
+									class:completing={completingTasks.has(task.id)}
+									onclick={(e) => completeTask(e, task.id, 'today')}
+									title="Mark complete"
+								></button>
 								<span class="priority-dot {task.priority}"></span>
 								<div class="task-content">
 									<div class="task-title">{task.title}</div>
@@ -205,9 +245,23 @@
 		<section class="panel">
 			<div class="panel-header">
 				<h2 class="panel-title">Feed</h2>
-				{#if !articlesLoading && !articlesError}
-					<span class="badge">{articles.length}</span>
-				{/if}
+				<div class="panel-header-right">
+					<div class="filter-toggle">
+						<button
+							class="filter-toggle-btn"
+							class:active={showFeaturedOnly}
+							onclick={() => toggleFeatured(true)}>Featured</button
+						>
+						<button
+							class="filter-toggle-btn"
+							class:active={!showFeaturedOnly}
+							onclick={() => toggleFeatured(false)}>All Sources</button
+						>
+					</div>
+					{#if !articlesLoading && !articlesError}
+						<span class="badge">{articles.length}</span>
+					{/if}
+				</div>
 			</div>
 
 			{#if articlesLoading}
@@ -296,6 +350,12 @@
 		border-bottom: 1px solid var(--border-color);
 	}
 
+	.panel-header-right {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+
 	.panel-title {
 		font-size: 0.6875rem;
 		font-weight: 700;
@@ -311,6 +371,91 @@
 		border-radius: 9999px;
 		background: var(--gray-100);
 		color: var(--text-secondary);
+	}
+
+	/* Filter Toggle */
+
+	.filter-toggle {
+		display: flex;
+		gap: 0.125rem;
+		background-color: var(--bg-input);
+		border-radius: var(--radius-md);
+		padding: 0.125rem;
+	}
+
+	.filter-toggle-btn {
+		padding: 0.25rem 0.625rem;
+		border-radius: var(--radius);
+		font-size: 0.6875rem;
+		font-weight: 500;
+		transition: all 0.15s ease;
+		color: var(--text-muted);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+	}
+
+	.filter-toggle-btn.active {
+		background-color: var(--bg-card);
+		color: var(--text-primary);
+		box-shadow: var(--shadow-sm);
+	}
+
+	/* Complete Button */
+
+	.complete-btn {
+		width: 32px;
+		align-self: stretch;
+		border-radius: var(--radius);
+		border: none;
+		background: transparent;
+		cursor: pointer;
+		flex-shrink: 0;
+		padding: 0;
+		position: relative;
+		transition: background 0.15s ease;
+	}
+
+	.complete-btn::before {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		border: 1.5px solid var(--gray-300);
+		transition: all 0.15s ease;
+	}
+
+	.complete-btn:hover {
+		background: var(--success-50);
+	}
+
+	.complete-btn:hover::before {
+		border-color: var(--success-500);
+	}
+
+	.complete-btn:hover::after {
+		content: '✓';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		font-size: 9px;
+		color: var(--success-500);
+		font-weight: 700;
+	}
+
+	.complete-btn.completing {
+		background: var(--success-50);
+		opacity: 0.6;
+		pointer-events: none;
+	}
+
+	.complete-btn.completing::before {
+		border-color: var(--success-500);
 	}
 
 	/* Tasks */
