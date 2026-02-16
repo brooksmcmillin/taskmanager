@@ -93,6 +93,9 @@ class Settings(BaseSettings):
             origins.append(frontend_origin)
         return origins
 
+    # Loki (log aggregation)
+    loki_url: str = "http://loki:3100"
+
     # Environment
     environment: str = "development"
 
