@@ -19,6 +19,7 @@ from app.api import (
     recurring_tasks,
     registration_codes,
     search,
+    service_accounts,
     todos,
     trash,
     webauthn,
@@ -80,6 +81,7 @@ app.include_router(api_keys.router)
 app.include_router(webauthn.router)
 app.include_router(github.router)
 app.include_router(admin_loki.router)
+app.include_router(service_accounts.router)
 
 
 Instrumentator(
