@@ -337,6 +337,7 @@ class TaskManagerClient:
         priority: str = "medium",
         estimated_hours: float | None = None,
         due_date: str | None = None,
+        deadline_type: str | None = None,
         tags: list[str] | None = None,
         parent_id: int | None = None,
     ) -> ApiResponse:
@@ -351,6 +352,7 @@ class TaskManagerClient:
             priority: Priority level (low, medium, high, urgent)
             estimated_hours: Estimated hours to complete
             due_date: Due date in ISO format
+            deadline_type: How strict the due date is (flexible, preferred, firm, hard)
             tags: list of tags
             parent_id: Parent todo ID to create a subtask (optional)
 
@@ -370,6 +372,8 @@ class TaskManagerClient:
             data["estimated_hours"] = estimated_hours
         if due_date is not None:
             data["due_date"] = due_date
+        if deadline_type is not None:
+            data["deadline_type"] = deadline_type
         if tags is not None:
             data["tags"] = tags
         if parent_id is not None:
@@ -399,6 +403,7 @@ class TaskManagerClient:
         actual_hours: float | None = None,
         status: str | None = None,
         due_date: str | None = None,
+        deadline_type: str | None = None,
         tags: list[str] | None = None,
         parent_id: int | None = None,
         agent_actionable: bool | None = None,
@@ -421,6 +426,7 @@ class TaskManagerClient:
             actual_hours: Actual hours spent
             status: New status (pending, in_progress, completed, cancelled)
             due_date: New due date (for rescheduling)
+            deadline_type: How strict the due date is (flexible, preferred, firm, hard)
             tags: New tags list
             parent_id: New parent ID to move task (optional)
             agent_actionable: Whether an AI agent can complete this task autonomously
@@ -450,6 +456,8 @@ class TaskManagerClient:
             data["status"] = status
         if due_date is not None:
             data["due_date"] = due_date
+        if deadline_type is not None:
+            data["deadline_type"] = deadline_type
         if tags is not None:
             data["tags"] = tags
         if parent_id is not None:
