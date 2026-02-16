@@ -22,10 +22,13 @@
 
 	$: todoId = parseInt($page.params.id ?? '0');
 
-	onMount(async () => {
-		await projects.load();
-		await loadTodo();
+	onMount(() => {
+		projects.load();
 	});
+
+	$: if (todoId) {
+		loadTodo();
+	}
 
 	async function loadTodo() {
 		loading = true;
