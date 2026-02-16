@@ -12,6 +12,7 @@
 	import { computeDueDateFilters } from '$lib/utils/dueDateFilter';
 	import type { DueDateOption, DueDateFilterValue } from '$lib/utils/dueDateFilter';
 	import { getPriorityColor } from '$lib/utils/priority';
+	import { contrastText } from '$lib/utils/colors';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
 	import type { Todo } from '$lib/types';
@@ -258,25 +259,33 @@
 											</button>
 										</div>
 									</div>
-									{#if pendingSubtasks.length > 0}
-										<div class="subtask-list-inline">
-											{#each pendingSubtasks as subtask}
-												<a class="subtask-row" href="/task/{subtask.id}">
-													<span class="subtask-connector"></span>
-													<span
-														class="subtask-priority-dot"
-														style="background-color: {getPriorityColor(subtask.priority)}"
-														title="{subtask.priority} priority"
-													></span>
-													<span class="subtask-key">#{subtask.id}</span>
-													<span class="subtask-title-text">{subtask.title}</span>
-													<span class="subtask-status-pill {subtask.status}">
-														{subtask.status.replace('_', ' ')}
-													</span>
-												</a>
-											{/each}
-										</div>
-									{/if}
+									{#each pendingSubtasks as subtask}
+										<a
+											class="subtask-item-card"
+											href="/task/{subtask.id}"
+											style="border-left-color: {todo.project_color || '#6b7280'}"
+										>
+											<div
+												class="subtask-item-parent-header"
+												style="background-color: {todo.project_color ||
+													'#6b7280'}; color: {contrastText(todo.project_color || '#6b7280')}"
+											>
+												#{todo.id}
+												{todo.title}
+											</div>
+											<div class="subtask-item-content">
+												<span
+													class="subtask-priority-dot"
+													style="background-color: {getPriorityColor(subtask.priority)}"
+													title="{subtask.priority} priority"
+												></span>
+												<span class="subtask-title-text">{subtask.title}</span>
+												<span class="subtask-status-pill {subtask.status}">
+													{subtask.status.replace('_', ' ')}
+												</span>
+											</div>
+										</a>
+									{/each}
 								</div>
 							{/each}
 						</div>
@@ -331,53 +340,47 @@
 		line-height: 1;
 	}
 
-	/* Subtask list under parent in list view */
-	.subtask-list-inline {
+	/* Subtask item cards in list view */
+	.subtask-item-card {
+		display: block;
 		margin-left: 1.5rem;
-		border-left: 2px solid var(--border-color, #e5e7eb);
-		padding-left: 0;
+		margin-top: 0.25rem;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--border-color, #e5e7eb);
+		border-left: 4px solid;
+		border-radius: var(--radius-sm, 0.25rem);
+		text-decoration: none;
+		color: var(--text-primary, #1f2937);
+		background-color: var(--bg-primary, #fff);
+		transition: box-shadow 0.15s ease;
 	}
 
-	.subtask-row {
+	.subtask-item-card:hover {
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+	}
+
+	.subtask-item-parent-header {
+		font-size: 0.625rem;
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		margin: -0.5rem -0.75rem 0.25rem -0.75rem;
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-sm, 0.25rem) var(--radius-sm, 0.25rem) 0 0;
+	}
+
+	.subtask-item-content {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.375rem 0.75rem;
 		font-size: 0.8125rem;
-		color: var(--text-primary, #1f2937);
-		text-decoration: none;
-		border-bottom: 1px solid var(--border-light, #f3f4f6);
-		transition: background-color 0.15s ease;
-		position: relative;
-	}
-
-	.subtask-row:last-child {
-		border-bottom: none;
-	}
-
-	.subtask-row:hover {
-		background-color: var(--bg-hover, #f9fafb);
-	}
-
-	.subtask-connector {
-		width: 0.75rem;
-		height: 1px;
-		background-color: var(--border-color, #e5e7eb);
-		flex-shrink: 0;
 	}
 
 	.subtask-priority-dot {
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		flex-shrink: 0;
-	}
-
-	.subtask-key {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--text-muted, #9ca3af);
-		font-family: monospace;
 		flex-shrink: 0;
 	}
 
@@ -433,7 +436,7 @@
 			width: 100%;
 		}
 
-		.subtask-list-inline {
+		.subtask-item-card {
 			margin-left: 1rem;
 		}
 	}

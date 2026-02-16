@@ -4,10 +4,9 @@
 	import { dndzone } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { todos, pendingTodos } from '$lib/stores/todos';
-	import { hexTo50Shade } from '$lib/utils/colors';
+	import { hexTo50Shade, contrastText } from '$lib/utils/colors';
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
-	import { getPriorityColor } from '$lib/utils/priority';
 	import { goto } from '$app/navigation';
 	import type { Todo, TodoFilters } from '$lib/types';
 
@@ -28,6 +27,19 @@
 	let originalDate: string | null = null;
 	let isDragging = false;
 	let isTouchDevice = false;
+
+	interface CalendarSubtaskItem {
+		id: number;
+		title: string;
+		priority: 'low' | 'medium' | 'high' | 'urgent';
+		status: string;
+		due_date: string;
+		parentId: number;
+		parentTitle: string;
+		parentColor: string | null;
+	}
+
+	let subtasksByDate: Record<string, CalendarSubtaskItem[]> = {};
 
 	interface Day {
 		date: Date;
@@ -52,10 +64,12 @@
 
 	function groupTodosByDate(todosList: Todo[]): Record<string, Todo[]> {
 		const grouped: Record<string, Todo[]> = {};
+		const subtaskGrouped: Record<string, CalendarSubtaskItem[]> = {};
 
 		// Initialize arrays for all visible dates
 		for (const day of days) {
 			grouped[day.dateStr] = [];
+			subtaskGrouped[day.dateStr] = [];
 		}
 
 		// Add todos to their respective dates
@@ -65,8 +79,28 @@
 				if (!grouped[dateStr]) grouped[dateStr] = [];
 				grouped[dateStr].push(todo);
 			}
+
+			// Extract pending subtasks as separate calendar items
+			const parentDueDate = todo.due_date ? todo.due_date.split('T')[0] : null;
+			(todo.subtasks || []).forEach((subtask) => {
+				if (subtask.status === 'completed') return;
+				const dateStr = subtask.due_date ? subtask.due_date.split('T')[0] : parentDueDate;
+				if (!dateStr) return;
+				if (!subtaskGrouped[dateStr]) subtaskGrouped[dateStr] = [];
+				subtaskGrouped[dateStr].push({
+					id: subtask.id,
+					title: subtask.title,
+					priority: subtask.priority,
+					status: subtask.status,
+					due_date: dateStr,
+					parentId: todo.id,
+					parentTitle: todo.title,
+					parentColor: todo.project_color || null
+				});
+			});
 		});
 
+		subtasksByDate = subtaskGrouped;
 		return grouped;
 	}
 
@@ -158,11 +192,6 @@
 		}
 	}
 
-	function navigateToSubtask(event: MouseEvent, subtaskId: number) {
-		event.stopPropagation();
-		goto(`/task/${subtaskId}`);
-	}
-
 	onMount(() => {
 		isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
@@ -219,8 +248,9 @@
 					>
 						{#each todosByDate[dateStr] || [] as todo (todo.id)}
 							{@const subtasks = todo.subtasks || []}
-							{@const pendingSubtasks = subtasks.filter((s) => s.status !== 'completed')}
-							{@const completedSubtaskCount = subtasks.length - pendingSubtasks.length}
+							{@const completedSubtaskCount = subtasks.filter(
+								(s) => s.status === 'completed'
+							).length}
 							<div
 								class="calendar-task {todo.priority}-priority"
 								style="background-color: {hexTo50Shade(
@@ -243,28 +273,36 @@
 											>{completedSubtaskCount}/{subtasks.length}</span
 										>
 									</div>
-									{#each pendingSubtasks as subtask}
-										<div
-											class="calendar-subtask-row"
-											role="button"
-											tabindex="0"
-											on:click|stopPropagation={(e) => navigateToSubtask(e, subtask.id)}
-											on:dblclick|stopPropagation
-											on:keydown|stopPropagation={(e) => {
-												if (e.key === 'Enter') goto(`/task/${subtask.id}`);
-											}}
-										>
-											<span
-												class="cal-subtask-dot"
-												style="background-color: {getPriorityColor(subtask.priority)}"
-											></span>
-											<span class="cal-subtask-title">{subtask.title}</span>
-										</div>
-									{/each}
 								{/if}
 							</div>
 						{/each}
 					</div>
+					{#each subtasksByDate[dateStr] || [] as subtask (subtask.id)}
+						<div
+							class="calendar-task calendar-subtask-item {subtask.priority}-priority"
+							style="background-color: {hexTo50Shade(
+								subtask.parentColor || DEFAULT_PROJECT_COLOR
+							)}; border-left: 4px solid {subtask.parentColor || DEFAULT_PROJECT_COLOR}"
+							on:click={() => goto(`/task/${subtask.id}`)}
+							role="button"
+							tabindex="0"
+							on:keydown={(e) => {
+								if (e.key === 'Enter') goto(`/task/${subtask.id}`);
+							}}
+						>
+							<div
+								class="calendar-subtask-parent"
+								style="background-color: {subtask.parentColor ||
+									DEFAULT_PROJECT_COLOR}; color: {contrastText(
+									subtask.parentColor || DEFAULT_PROJECT_COLOR
+								)}"
+							>
+								#{subtask.parentId}
+								{subtask.parentTitle}
+							</div>
+							<div class="task-title">{subtask.title}</div>
+						</div>
+					{/each}
 				</div>
 			{/each}
 		</div>
