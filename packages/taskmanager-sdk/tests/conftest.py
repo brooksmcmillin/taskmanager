@@ -70,6 +70,7 @@ def sample_todo() -> dict[str, str | int | float | list[str] | None]:
         "status": "pending",
         "priority": "medium",
         "due_date": "2025-12-31T23:59:59Z",
+        "deadline_type": "preferred",
         "estimated_hours": 2.5,
         "actual_hours": None,
         "tags": ["test", "sample"],
