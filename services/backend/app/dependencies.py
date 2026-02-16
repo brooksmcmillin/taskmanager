@@ -152,11 +152,11 @@ async def get_current_user_oauth(
     if not access_token.user_id:
         raise errors.auth_required()
 
-    # Get user
+    # Get user and verify they are still active
     result = await db.execute(select(User).where(User.id == access_token.user_id))
     user = result.scalar_one_or_none()
 
-    if not user:
+    if not user or not user.is_active:
         raise errors.auth_required()
 
     return user
