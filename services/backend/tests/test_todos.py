@@ -361,6 +361,42 @@ async def test_cannot_create_nested_subtasks_via_update(
     assert "nesting" in response.json()["detail"]["message"].lower()
 
 
+@pytest.mark.asyncio
+async def test_cannot_create_nested_subtasks_via_post(
+    authenticated_client: AsyncClient,
+):
+    """Test that POST /api/todos prevents creating subtasks of subtasks."""
+    # Create parent
+    parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Parent"},
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    # Create subtask
+    subtask = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Subtask",
+            "parent_id": parent_id,
+        },
+    )
+    subtask_id = subtask.json()["data"]["id"]
+
+    # Try to create a nested subtask directly (should fail)
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Nested Subtask",
+            "parent_id": subtask_id,
+        },
+    )
+
+    # Should fail with validation error
+    assert response.status_code == 400
+    assert "nesting" in response.json()["detail"]["message"].lower()
+
+
 # Parent Task Link Tests
 
 
