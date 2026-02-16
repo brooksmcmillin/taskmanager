@@ -478,6 +478,7 @@ def create_resource_server(
         title: str,
         description: str | None = None,
         due_date: str | None = None,
+        deadline_type: str = "preferred",
         category: str | None = None,
         priority: str = "medium",
         tags: list[str] | None = None,
@@ -490,6 +491,9 @@ def create_resource_server(
             title: Task title (required)
             description: Task details (optional)
             due_date: Due date in ISO format, e.g., "2025-12-20" (optional)
+            deadline_type: How strict the due date is - one of "flexible" (reschedule freely),
+                          "preferred" (soft target, default), "firm" (avoid moving),
+                          "hard" (never reschedule)
             category: Task category/project name (optional)
             priority: Priority level - one of "low", "medium", "high", "urgent" (default: "medium")
             tags: List of task tags (optional)
@@ -502,6 +506,16 @@ def create_resource_server(
             f"=== create_task called: title='{title}', category={category}, priority={priority}, parent_id={parent_id} ==="
         )
         try:
+            # Validate deadline_type
+            valid_deadline_types = ("flexible", "preferred", "firm", "hard")
+            if deadline_type not in valid_deadline_types:
+                return json.dumps(
+                    {
+                        "error": f"Invalid deadline_type: {deadline_type!r}. "
+                        f"Must be one of: {', '.join(valid_deadline_types)}"
+                    }
+                )
+
             api_client = get_api_client()
             logger.debug("API client created successfully")
 
@@ -523,6 +537,7 @@ def create_resource_server(
                 category=category,
                 priority=priority,
                 due_date=due_date,
+                deadline_type=deadline_type,
                 tags=tags,
                 parent_id=parent_id_int,
             )

@@ -980,3 +980,153 @@ async def test_update_todo_preserves_updated_at(authenticated_client: AsyncClien
 
     updated_data = update_response.json()["data"]
     assert updated_data["updated_at"] is not None
+
+
+# =============================================================================
+# Enum Validation Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_todo_rejects_invalid_deadline_type(
+    authenticated_client: AsyncClient,
+):
+    """Test that creating a todo with an invalid deadline_type is rejected."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bad deadline", "deadline_type": "invalid_value"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_todo_accepts_valid_deadline_types(
+    authenticated_client: AsyncClient,
+):
+    """Test that all valid DeadlineType enum values are accepted on create."""
+    for deadline_type in ["flexible", "preferred", "firm", "hard"]:
+        response = await authenticated_client.post(
+            "/api/todos",
+            json={"title": f"Task with {deadline_type}", "deadline_type": deadline_type},
+        )
+
+        assert response.status_code == 201, f"Failed for deadline_type={deadline_type}"
+        assert response.json()["data"]["deadline_type"] == deadline_type
+
+
+@pytest.mark.asyncio
+async def test_update_todo_rejects_invalid_deadline_type(
+    authenticated_client: AsyncClient,
+):
+    """Test that updating a todo with an invalid deadline_type is rejected."""
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to update"},
+    )
+    todo_id = create_response.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"deadline_type": "not_a_real_type"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_todo_accepts_valid_deadline_type(
+    authenticated_client: AsyncClient,
+):
+    """Test that updating a todo with a valid deadline_type succeeds."""
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to update"},
+    )
+    todo_id = create_response.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"deadline_type": "hard"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["deadline_type"] == "hard"
+
+
+@pytest.mark.asyncio
+async def test_create_todo_rejects_invalid_priority(
+    authenticated_client: AsyncClient,
+):
+    """Test that creating a todo with an invalid priority is rejected."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bad priority", "priority": "super_critical"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_todo_rejects_invalid_status(
+    authenticated_client: AsyncClient,
+):
+    """Test that creating a todo with an invalid status is rejected."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bad status", "status": "done"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_todo_rejects_invalid_action_type(
+    authenticated_client: AsyncClient,
+):
+    """Test that updating a todo with an invalid action_type is rejected."""
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to update"},
+    )
+    todo_id = create_response.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"action_type": "teleport"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_todo_rejects_invalid_agent_status(
+    authenticated_client: AsyncClient,
+):
+    """Test that updating a todo with an invalid agent_status is rejected."""
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to update"},
+    )
+    todo_id = create_response.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"agent_status": "flying"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_todo_default_deadline_type_is_preferred(
+    authenticated_client: AsyncClient,
+):
+    """Test that the default deadline_type is 'preferred' when not specified."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task without deadline_type"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["deadline_type"] == "preferred"
