@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api import (
+    admin_loki,
     api_keys,
     attachments,
     auth,
@@ -78,6 +79,7 @@ app.include_router(device.router)
 app.include_router(api_keys.router)
 app.include_router(webauthn.router)
 app.include_router(github.router)
+app.include_router(admin_loki.router)
 
 
 Instrumentator(

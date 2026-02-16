@@ -368,6 +368,14 @@
 									>
 										Registration Codes
 									</a>
+									<a
+										href="/admin/loki"
+										class="dropdown-item"
+										class:active={currentPath === '/admin/loki'}
+										onclick={closeDropdowns}
+									>
+										Log Ingestion
+									</a>
 								{/if}
 								<div class="dropdown-divider"></div>
 								<button
@@ -540,6 +548,14 @@
 						onclick={closeMobileMenu}
 					>
 						Registration Codes
+					</a>
+					<a
+						href="/admin/loki"
+						class="mobile-menu-item"
+						class:active={currentPath === '/admin/loki'}
+						onclick={closeMobileMenu}
+					>
+						Log Ingestion
 					</a>
 				{/if}
 				<button
