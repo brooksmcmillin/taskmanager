@@ -18,8 +18,9 @@ router = APIRouter(
     tags=["admin-service-accounts"],
 )
 
-# Unusable password hash — bcrypt hash of 64 random bytes, never matchable via login.
-_LOCKED_PASSWORD_HASH = "!locked"
+# Unusable password marker following Django's convention: a prefix that can never
+# be a valid bcrypt hash, making bcrypt.checkpw() always return False.
+_LOCKED_PASSWORD_HASH = "!unusable_service_account_password"
 
 
 # ---------------------------------------------------------------------------
@@ -75,12 +76,15 @@ class ServiceAccountCreateResponse(BaseModel):
 
 
 async def _get_service_account(db: DbSession, account_id: int) -> User:
-    """Fetch a service account by ID or raise 404."""
-    result = await db.execute(
-        select(User).where(User.id == account_id, User.is_service_account.is_(True))
-    )
+    """Fetch a service account by ID or raise 404.
+
+    Looks up by ID first and checks is_service_account in application code so
+    the query timing is identical regardless of whether the ID belongs to a
+    regular user or a service account (avoids leaking valid user IDs).
+    """
+    result = await db.execute(select(User).where(User.id == account_id))
     user = result.scalar_one_or_none()
-    if not user:
+    if not user or not user.is_service_account:
         raise errors.not_found("Service account")
     return user
 
@@ -178,6 +182,7 @@ async def create_service_account(
     )
     db.add(client)
     await db.flush()
+    await db.commit()
 
     response = _build_response(user, client)
 
