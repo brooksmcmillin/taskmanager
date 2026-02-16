@@ -1,5 +1,8 @@
 """Loki log ingestion summary API for admin users."""
 
+import logging
+from typing import Any
+
 import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -7,10 +10,18 @@ from pydantic import BaseModel
 from app.config import settings
 from app.dependencies import AdminUser
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/admin/loki", tags=["admin-loki"])
 
 LOKI_TIMEOUT = 10.0
 KEY_LABELS = ["container", "logstream"]
+
+_ERROR_MESSAGES: dict[type[Exception], str] = {
+    httpx.ConnectError: "Unable to connect to Loki",
+    httpx.TimeoutException: "Loki request timed out",
+    httpx.HTTPStatusError: "Loki returned an error response",
+}
 
 
 class LokiSummary(BaseModel):
@@ -55,7 +66,7 @@ async def get_loki_summary(_admin: AdminUser) -> LokiSummary:
                 params={"match[]": '{__name__=~".+"}'},
             )
             series_resp.raise_for_status()
-            series: list[object] = series_resp.json().get("data", [])
+            series: list[dict[str, Any]] = series_resp.json().get("data", [])
 
             return LokiSummary(
                 connected=True,
@@ -64,11 +75,13 @@ async def get_loki_summary(_admin: AdminUser) -> LokiSummary:
                 series_count=len(series),
             )
 
-    except Exception as exc:
+    except (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException) as exc:
+        logger.warning("Loki request failed: %s", exc)
+        message = _ERROR_MESSAGES.get(type(exc), "Loki request failed")
         return LokiSummary(
             connected=False,
             labels=[],
             label_values={},
             series_count=0,
-            error=str(exc),
+            error=message,
         )

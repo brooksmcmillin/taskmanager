@@ -177,5 +177,30 @@ async def test_loki_unreachable(admin_client: AsyncClient) -> None:
     assert data["labels"] == []
     assert data["label_values"] == {}
     assert data["series_count"] == 0
-    assert data["error"] is not None
-    assert "Connection refused" in data["error"]
+    assert data["error"] == "Unable to connect to Loki"
+
+
+@pytest.mark.asyncio
+async def test_loki_http_error(admin_client: AsyncClient) -> None:
+    """When Loki returns an HTTP error, should return connected=False with error."""
+    error_response = httpx.Response(
+        status_code=500,
+        content=b"Internal Server Error",
+        request=httpx.Request("GET", "http://loki:3100/loki/api/v1/labels"),
+    )
+    with patch("app.api.admin_loki.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "Server Error", request=error_response.request, response=error_response
+            )
+        )
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = await admin_client.get("/api/admin/loki/summary")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["connected"] is False
+    assert data["error"] == "Loki returned an error response"
