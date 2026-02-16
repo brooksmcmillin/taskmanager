@@ -45,13 +45,13 @@ class Todo:
     actual_hours: float | None
     status: str
     due_date: str | None
-    deadline_type: str  # flexible, preferred, firm, hard
     tags: list[str] | None
     created_at: str
     updated_at: str
     completed_at: str | None
     user_id: int
     project_id: int | None
+    deadline_type: str = "preferred"  # flexible, preferred, firm, hard
 
 
 @dataclass
