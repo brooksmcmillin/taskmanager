@@ -364,3 +364,97 @@ async def test_service_account_token_scopes(
     assert tok_resp2.status_code == 200
     assert "read" in tok_resp2.json()["scope"]
     assert "write" in tok_resp2.json()["scope"]
+
+
+# ---------------------------------------------------------------------------
+# 2.8 — Requesting scopes beyond what the client is allowed is rejected
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_scope_escalation_rejected(
+    client: AsyncClient,
+    service_account_credentials: dict,
+) -> None:
+    """Requesting scopes beyond the client's allowed set should be rejected."""
+    creds = service_account_credentials
+    # Service account has ["read", "write"]. Request "admin" which is not allowed.
+    response = await client.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "client_credentials",
+            "client_id": creds["client_id"],
+            "client_secret": creds["client_secret"],
+            "scope": "read admin",
+        },
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_scope_validation_system_client(
+    client: AsyncClient,
+    system_client: dict,
+) -> None:
+    """System clients should also be subject to scope validation."""
+    # System client has ["read"]. Request "write" which is not allowed.
+    response = await client.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "client_credentials",
+            "client_id": system_client["client_id"],
+            "client_secret": system_client["client_secret"],
+            "scope": "write",
+        },
+    )
+    assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# 2.9 — Existing token rejected after service account deactivation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_existing_token_rejected_after_deactivation(
+    client: AsyncClient,
+    admin_client: AsyncClient,
+    service_account_credentials: dict,
+) -> None:
+    """Tokens issued before deactivation should stop working once the
+    service account is deactivated."""
+    creds = service_account_credentials
+
+    # Issue a token while the account is active
+    tok_resp = await client.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "client_credentials",
+            "client_id": creds["client_id"],
+            "client_secret": creds["client_secret"],
+        },
+    )
+    assert tok_resp.status_code == 200
+    token = tok_resp.json()["access_token"]
+
+    # Verify the token works
+    task_resp = await client.post(
+        "/api/todos",
+        json={"title": "Before deactivation"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert task_resp.status_code == 201
+
+    # Deactivate the service account (sets is_active=False on user + client)
+    deact_resp = await admin_client.delete(
+        f"{SA_BASE_URL}/{creds['account_id']}"
+    )
+    assert deact_resp.status_code == 200
+
+    # The previously-issued token should now be rejected
+    task_resp2 = await client.post(
+        "/api/todos",
+        json={"title": "After deactivation"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert task_resp2.status_code == 401

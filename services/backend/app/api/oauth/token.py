@@ -231,9 +231,14 @@ async def _handle_client_credentials(
 
         token_user_id = linked_user.id
 
-    # Convert scope string to JSON for storage, or use client's default scopes
+    # Convert scope string to JSON for storage, or use client's default scopes.
+    # Requested scopes must be a subset of what the client is allowed.
     if scope:
-        scopes_list = scope.split()
+        requested_scopes = set(scope.split())
+        allowed_scopes = set(json.loads(client.scopes))
+        if not requested_scopes.issubset(allowed_scopes):
+            raise errors.oauth_invalid_scope()
+        scopes_list = list(requested_scopes)
         scopes_json = json.dumps(scopes_list)
     else:
         scopes_json = client.scopes
