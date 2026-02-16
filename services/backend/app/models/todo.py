@@ -112,6 +112,21 @@ class ActionType(str, enum.Enum):
     other = "other"  # Uncategorized
 
 
+class DeadlineType(str, enum.Enum):
+    """How strictly a task's due date should be respected.
+
+    - flexible: Due date is a loose suggestion; reschedule freely.
+    - preferred: Soft target date; try to hit it but okay to slip.
+    - firm: Avoid moving unless necessary (e.g., external dependency).
+    - hard: Immovable deadline; never reschedule (e.g., legal, contractual).
+    """
+
+    flexible = "flexible"
+    preferred = "preferred"
+    firm = "firm"
+    hard = "hard"
+
+
 class AutonomyTier(int, enum.Enum):
     """Autonomy tier for task execution.
 
@@ -179,6 +194,9 @@ class Todo(Base):
         default=Status.pending,
     )
     due_date: Mapped[date | None] = mapped_column(Date)
+    deadline_type: Mapped[DeadlineType] = mapped_column(
+        String(20), default=DeadlineType.preferred
+    )
     completed_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     estimated_hours: Mapped[float | None] = mapped_column(Numeric(5, 2))
     actual_hours: Mapped[float | None] = mapped_column(Numeric(5, 2))

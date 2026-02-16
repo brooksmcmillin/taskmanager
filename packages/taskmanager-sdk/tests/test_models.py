@@ -112,6 +112,7 @@ class TestTodo:
         assert todo.priority == "medium"
         assert todo.estimated_hours == 2.5
         assert todo.tags == ["test", "sample"]
+        assert todo.deadline_type == "preferred"
 
     def test_todo_with_none_fields(self) -> None:
         """Test creating a Todo with None optional fields."""
@@ -136,6 +137,47 @@ class TestTodo:
         assert todo.actual_hours is None
         assert todo.tags is None
         assert todo.completed_at is None
+
+    def test_todo_deadline_type_defaults_to_preferred(self) -> None:
+        """Test that deadline_type defaults to 'preferred' when not specified."""
+        todo = Todo(
+            id=1,
+            user_id=1,
+            project_id=None,
+            title="Test",
+            description=None,
+            status="pending",
+            priority="medium",
+            due_date=None,
+            estimated_hours=1.0,
+            actual_hours=None,
+            tags=None,
+            created_at="2025-01-01T00:00:00Z",
+            updated_at="2025-01-01T00:00:00Z",
+            completed_at=None,
+        )
+        assert todo.deadline_type == "preferred"
+
+    def test_todo_deadline_type_explicit_value(self) -> None:
+        """Test that deadline_type can be set to other valid values."""
+        todo = Todo(
+            id=1,
+            user_id=1,
+            project_id=None,
+            title="Test",
+            description=None,
+            status="pending",
+            priority="medium",
+            due_date=None,
+            estimated_hours=1.0,
+            actual_hours=None,
+            tags=None,
+            created_at="2025-01-01T00:00:00Z",
+            updated_at="2025-01-01T00:00:00Z",
+            completed_at=None,
+            deadline_type="hard",
+        )
+        assert todo.deadline_type == "hard"
 
     def test_todo_type_hints(self) -> None:
         """Test Todo type annotations."""

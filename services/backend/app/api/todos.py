@@ -19,6 +19,7 @@ from app.models.todo import (
     ACTION_TYPE_DEFAULT_TIER,
     ActionType,
     AgentStatus,
+    DeadlineType,
     Priority,
     Status,
     Todo,
@@ -33,11 +34,14 @@ router = APIRouter(prefix="/api/todos", tags=["todos"])
 class TodoCreate(BaseModel):
     """Create todo request."""
 
+    model_config = ConfigDict(use_enum_values=True)
+
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
     priority: Priority = Priority.medium
     status: Status = Status.pending
     due_date: date | None = None
+    deadline_type: DeadlineType = DeadlineType.preferred
     project_id: int | None = None
     category: str | None = Field(
         None, description="Project name (resolved to project_id)"
@@ -58,11 +62,14 @@ class TodoCreate(BaseModel):
 class TodoUpdate(BaseModel):
     """Update todo request."""
 
+    model_config = ConfigDict(use_enum_values=True)
+
     title: str | None = None
     description: str | None = None
     priority: Priority | None = None
     status: Status | None = None
     due_date: date | None = None
+    deadline_type: DeadlineType | None = None
     project_id: int | None = None
     category: str | None = Field(
         None, description="Project name (resolved to project_id)"
@@ -102,6 +109,7 @@ class SubtaskResponse(BaseModel):
     priority: Priority
     status: Status
     due_date: date | None
+    deadline_type: DeadlineType = DeadlineType.preferred
     estimated_hours: float | None
     actual_hours: float | None
     position: int
@@ -150,6 +158,7 @@ class TodoResponse(BaseModel):
     priority: Priority
     status: Status
     due_date: date | None
+    deadline_type: DeadlineType = DeadlineType.preferred
     project_id: int | None
     project_name: str | None = None
     project_color: str | None = None
@@ -215,6 +224,7 @@ def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
         priority=subtask.priority,
         status=subtask.status,
         due_date=subtask.due_date,
+        deadline_type=subtask.deadline_type,
         estimated_hours=float(subtask.estimated_hours)
         if subtask.estimated_hours
         else None,
@@ -290,6 +300,7 @@ def _build_todo_response(
         priority=todo.priority,
         status=todo.status,
         due_date=todo.due_date,
+        deadline_type=todo.deadline_type,
         project_id=todo.project_id,
         project_name=project_name,
         project_color=project_color,
@@ -670,6 +681,7 @@ async def create_todo(
         priority=request.priority,
         status=request.status,
         due_date=request.due_date,
+        deadline_type=request.deadline_type,
         project_id=request.project_id,
         tags=request.tags,
         context=request.context,
