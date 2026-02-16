@@ -630,9 +630,16 @@ async def create_todo(
 
     # Verify parent todo exists and belongs to user if parent_id is provided
     if request.parent_id:
-        await get_resource_for_user(
+        parent = await get_resource_for_user(
             db, Todo, request.parent_id, user.id, errors.todo_not_found
         )
+
+        # Prevent nested subtasks (subtasks of subtasks)
+        if parent.parent_id is not None:
+            raise errors.validation(
+                "Cannot create subtasks of subtasks. "
+                "Only one level of nesting is allowed."
+            )
 
     # Auto-assign position if not provided
     position = request.position
