@@ -1078,6 +1078,112 @@ class TestDependencyTools:
         assert transformed["project_name"] == "Phase 1"
 
 
+class TestCreateTaskDeadlineTypeValidation:
+    """Tests for deadline_type validation in create_task."""
+
+    @pytest.fixture
+    def mock_api_client(self) -> MagicMock:
+        """Create a mock API client."""
+        client = MagicMock()
+        client.create_todo.return_value = ApiResponse(
+            success=True,
+            data={"id": 1, "title": "Test Task"},
+            status_code=201,
+        )
+        return client
+
+    @pytest.mark.asyncio
+    async def test_valid_deadline_types_accepted(self, mock_api_client: MagicMock) -> None:
+        """Test that all valid deadline_type values are accepted."""
+        from mcp_resource.server import create_resource_server
+
+        import json
+
+        for dt in ("flexible", "preferred", "firm", "hard"):
+            with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+                # Import the create_task tool function
+                server = create_resource_server(
+                    port=8001,
+                    server_url="https://localhost:8001",
+                    auth_server_url="https://localhost:9000",
+                    auth_server_public_url="https://localhost:9000",
+                    oauth_strict=False,
+                )
+                # Access the tool directly - FastMCP stores tools
+                tools = server._tool_manager._tools
+                create_task_tool = tools["create_task"]
+                result = await create_task_tool.fn(title="Test", deadline_type=dt)
+                parsed = json.loads(result)
+                assert "error" not in parsed, f"deadline_type={dt!r} should be valid, got: {parsed}"
+
+    @pytest.mark.asyncio
+    async def test_invalid_deadline_type_rejected(self) -> None:
+        """Test that invalid deadline_type values return an error."""
+        from mcp_resource.server import create_resource_server
+
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=MagicMock()):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_task_tool = tools["create_task"]
+            result = await create_task_tool.fn(title="Test", deadline_type="invalid")
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "Invalid deadline_type" in parsed["error"]
+            assert "invalid" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_empty_string_deadline_type_rejected(self) -> None:
+        """Test that empty string deadline_type is rejected."""
+        from mcp_resource.server import create_resource_server
+
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=MagicMock()):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_task_tool = tools["create_task"]
+            result = await create_task_tool.fn(title="Test", deadline_type="")
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "Invalid deadline_type" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_deadline_type_passed_to_sdk(self, mock_api_client: MagicMock) -> None:
+        """Test that deadline_type is passed through to the SDK create_todo call."""
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_task_tool = tools["create_task"]
+            await create_task_tool.fn(title="Test", deadline_type="firm")
+
+            # Verify deadline_type was passed to the SDK
+            mock_api_client.create_todo.assert_called_once()
+            call_kwargs = mock_api_client.create_todo.call_args[1]
+            assert call_kwargs["deadline_type"] == "firm"
+
+
 class TestPastDueDateWarning:
     """Tests for _past_due_date_warning helper function."""
 
