@@ -606,12 +606,12 @@
 		margin-top: 0.5rem;
 		min-width: 10rem;
 		background-color: var(--dropdown-bg);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-lg);
 		box-shadow: var(--shadow-lg);
 		border: 1px solid var(--border-color);
 		overflow: hidden;
 		z-index: 50;
-		animation: slideDown 0.15s ease-out;
+		animation: slideDown 0.2s ease-out;
 	}
 
 	.dropdown-menu-right {
@@ -622,7 +622,7 @@
 	@keyframes slideDown {
 		from {
 			opacity: 0;
-			transform: translateY(-0.5rem);
+			transform: translateY(-0.375rem);
 		}
 		to {
 			opacity: 1;
@@ -636,17 +636,18 @@
 		font-size: 0.875rem;
 		color: var(--text-secondary);
 		text-decoration: none;
-		transition: background-color var(--transition-fast);
+		transition: all var(--transition-fast);
 	}
 
 	.dropdown-item:hover {
 		background-color: var(--bg-hover);
+		color: var(--text-primary);
 	}
 
 	.dropdown-item.active {
 		background-color: var(--primary-50);
 		color: var(--primary-600);
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.dropdown-logout {

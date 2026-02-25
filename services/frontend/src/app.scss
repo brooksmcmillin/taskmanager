@@ -1,29 +1,30 @@
-/* Main SCSS - Consolidated Task Manager Design System */
+/* Main SCSS - Task Manager Design System */
+/* "Warm Editorial" Aesthetic — Terracotta + Paper + Serif */
 
 // Variables
 :root {
-	/* Colors */
-	--primary-50: #eff6ff;
-	--primary-100: #dbeafe;
-	--primary-200: #bfdbfe;
-	--primary-500: #3b82f6;
-	--primary-600: #2563eb;
-	--primary-700: #1d4ed8;
+	/* Colors — Warm Terracotta + Stone Palette */
+	--primary-50: #fff5ee;
+	--primary-100: #ffe4cc;
+	--primary-200: #ffcda8;
+	--primary-500: #d4763a;
+	--primary-600: #c05621;
+	--primary-700: #9a4419;
 
-	--gray-50: #f9fafb;
-	--gray-100: #f3f4f6;
-	--gray-200: #e5e7eb;
-	--gray-300: #d1d5db;
-	--gray-400: #9ca3af;
-	--gray-500: #6b7280;
-	--gray-600: #4b5563;
-	--gray-700: #374151;
-	--gray-800: #1f2937;
-	--gray-900: #111827;
+	--gray-50: #faf8f6;
+	--gray-100: #f3f0ec;
+	--gray-200: #e7e3de;
+	--gray-300: #d4cfc8;
+	--gray-400: #a8a29e;
+	--gray-500: #78716c;
+	--gray-600: #57534e;
+	--gray-700: #44403c;
+	--gray-800: #292524;
+	--gray-900: #1c1917;
 
-	--success-50: #f0fdf4;
+	--success-50: #ecfdf5;
 	--success-500: #22c55e;
-	--success-600: #16a34a;
+	--success-600: #15803d;
 
 	--warning-50: #fffbeb;
 	--warning-100: #fef3c7;
@@ -38,15 +39,14 @@
 	--error-700: #b91c1c;
 
 	/* Theme colors for unified styling */
-	--accent-primary: #2563eb;
-	--accent-success: #059669;
-	--bg-secondary: #f8fafc;
+	--accent-primary: #c05621;
+	--accent-success: #15803d;
+	--bg-secondary: #f7f4f0;
 
 	/* Typography */
-	--font-sans:
-		system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-		sans-serif;
-	--font-mono: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace;
+	--font-sans: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+	--font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+	--font-mono: 'JetBrains Mono', 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace;
 
 	/* Spacing */
 	--space-1: 0.25rem;
@@ -57,29 +57,29 @@
 	--space-8: 2rem;
 	--space-12: 3rem;
 
-	/* Border radius */
-	--radius-sm: 0.25rem;
-	--radius: 0.375rem;
-	--radius-md: 0.5rem;
-	--radius-lg: 0.75rem;
-	--radius-xl: 1rem;
+	/* Border radius — slightly larger for warmth */
+	--radius-sm: 0.375rem;
+	--radius: 0.5rem;
+	--radius-md: 0.625rem;
+	--radius-lg: 0.875rem;
+	--radius-xl: 1.25rem;
 
-	/* Shadows */
-	--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-	--shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-	--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-	--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-	--shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+	/* Shadows — warm-toned */
+	--shadow-sm: 0 1px 2px 0 rgb(28 25 23 / 0.04);
+	--shadow: 0 1px 3px 0 rgb(28 25 23 / 0.07), 0 1px 2px -1px rgb(28 25 23 / 0.05);
+	--shadow-md: 0 4px 6px -1px rgb(28 25 23 / 0.07), 0 2px 4px -2px rgb(28 25 23 / 0.05);
+	--shadow-lg: 0 10px 15px -3px rgb(28 25 23 / 0.07), 0 4px 6px -4px rgb(28 25 23 / 0.05);
+	--shadow-xl: 0 20px 25px -5px rgb(28 25 23 / 0.08), 0 8px 10px -6px rgb(28 25 23 / 0.05);
 
 	/* Theme-specific colors (light mode) */
 	--bg-primary: #ffffff;
-	--bg-page: var(--gray-50);
+	--bg-page: #faf8f6;
 	--bg-card: #ffffff;
 	--bg-input: #ffffff;
 	--bg-nav: #ffffff;
-	--bg-hover: var(--gray-100);
-	--bg-active: var(--gray-200);
-	--bg-overlay: rgba(0, 0, 0, 0.5);
+	--bg-hover: #f3f0ec;
+	--bg-active: #e7e3de;
+	--bg-overlay: rgba(28, 25, 23, 0.4);
 	--dropdown-bg: var(--bg-card);
 	--tag-bg: var(--gray-200);
 	--tag-text: var(--gray-700);
@@ -97,58 +97,58 @@
 
 /* Dark mode theme */
 [data-theme='dark'] {
-	--primary-50: #1e3a5f;
-	--primary-100: #1e4976;
-	--primary-200: #2563a8;
+	--primary-50: #2a1a0e;
+	--primary-100: #3d2412;
+	--primary-200: #5c361c;
 
-	--gray-50: #111827;
-	--gray-100: #1f2937;
-	--gray-200: #374151;
-	--gray-300: #4b5563;
-	--gray-400: #6b7280;
-	--gray-500: #9ca3af;
-	--gray-600: #d1d5db;
-	--gray-700: #e5e7eb;
-	--gray-800: #f3f4f6;
-	--gray-900: #f9fafb;
+	--gray-50: #1c1917;
+	--gray-100: #292524;
+	--gray-200: #44403c;
+	--gray-300: #57534e;
+	--gray-400: #78716c;
+	--gray-500: #a8a29e;
+	--gray-600: #d6d3cd;
+	--gray-700: #e7e3de;
+	--gray-800: #f3f0ec;
+	--gray-900: #faf8f6;
 
-	--success-50: #064e3b;
-	--warning-50: #78350f;
-	--warning-100: #92400e;
-	--error-50: #7f1d1d;
-	--error-100: #991b1b;
+	--success-50: #052e16;
+	--warning-50: #451a03;
+	--warning-100: #78350f;
+	--error-50: #450a0a;
+	--error-100: #7f1d1d;
 
-	--bg-secondary: #1f2937;
+	--bg-secondary: #292524;
 
-	--bg-primary: #1f2937;
-	--bg-page: #111827;
-	--bg-card: #1f2937;
-	--bg-input: #374151;
-	--bg-nav: #1f2937;
-	--bg-hover: #374151;
-	--bg-active: #4b5563;
-	--bg-overlay: rgba(0, 0, 0, 0.7);
-	--dropdown-bg: #1f2937;
-	--tag-bg: #374151;
-	--tag-text: #d1d5db;
-	--text-primary: #f9fafb;
-	--text-secondary: #d1d5db;
-	--text-muted: #9ca3af;
-	--border-color: #374151;
-	--border-light: #1f2937;
+	--bg-primary: #292524;
+	--bg-page: #1c1917;
+	--bg-card: #292524;
+	--bg-input: #44403c;
+	--bg-nav: #292524;
+	--bg-hover: #44403c;
+	--bg-active: #57534e;
+	--bg-overlay: rgba(0, 0, 0, 0.6);
+	--dropdown-bg: #292524;
+	--tag-bg: #44403c;
+	--tag-text: #d6d3cd;
+	--text-primary: #faf8f6;
+	--text-secondary: #d6d3cd;
+	--text-muted: #a8a29e;
+	--border-color: #44403c;
+	--border-light: #292524;
 
-	--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-	--shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
-	--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-	--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-	--shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+	--shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.2);
+	--shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.2);
+	--shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+	--shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.2);
+	--shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.2);
 }
 
 // SCSS Variables for easier theming
-$primary-color: #2563eb;
-$success-color: #059669;
+$primary-color: #c05621;
+$success-color: #15803d;
 $error-color: #dc2626;
-$warning-color: #f59e0b;
+$warning-color: #d97706;
 
 // Breakpoints
 $breakpoint-sm: 640px;
@@ -167,7 +167,7 @@ $breakpoint-phone: 480px;
 	outline: 2px solid transparent;
 	outline-offset: 2px;
 	border-color: $color;
-	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+	box-shadow: 0 0 0 3px rgba(192, 86, 33, 0.12);
 }
 
 @mixin modal-base {
@@ -178,8 +178,8 @@ $breakpoint-phone: 480px;
 	top: 0;
 	width: 100%;
 	height: 100%;
-	background-color: rgba(0, 0, 0, 0.5);
-	backdrop-filter: blur(4px);
+	background-color: var(--bg-overlay);
+	backdrop-filter: blur(6px);
 	animation: fadeIn 0.3s ease-out;
 }
 
@@ -203,7 +203,7 @@ $breakpoint-phone: 480px;
 
 	&:hover {
 		@include button-hover-effect;
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 	}
 }
 
@@ -226,19 +226,53 @@ body {
 	background-color: var(--bg-page);
 	color: var(--text-primary);
 	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+// Custom selection color
+::selection {
+	background-color: rgba(192, 86, 33, 0.14);
+	color: inherit;
+}
+
+// Custom scrollbar
+::-webkit-scrollbar {
+	width: 7px;
+	height: 7px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--gray-300);
+	border-radius: 4px;
+
+	&:hover {
+		background: var(--gray-400);
+	}
 }
 
 a {
-	color: var(--primary-500);
+	color: var(--primary-600);
 	text-decoration: none;
+	transition: color var(--transition-fast);
 
 	&:hover {
-		color: var(--primary-600);
+		color: var(--primary-700);
 		text-decoration: underline;
 	}
 }
 
-h1,
+h1 {
+	font-family: var(--font-serif);
+	font-optical-sizing: auto;
+	letter-spacing: -0.02em;
+	color: var(--text-primary);
+}
+
 h2,
 h3,
 h4,
@@ -521,6 +555,9 @@ h6 {
 	box-shadow: var(--shadow);
 	padding: var(--space-6);
 	border: 1px solid var(--border-color);
+	transition:
+		box-shadow var(--transition-base),
+		transform var(--transition-base);
 }
 
 .card-compact {
@@ -537,9 +574,11 @@ h6 {
 
 	label {
 		display: block;
-		margin-bottom: 0.25rem;
+		margin-bottom: 0.375rem;
 		font-weight: 500;
+		font-size: 0.875rem;
 		color: var(--text-primary);
+		letter-spacing: 0.01em;
 	}
 
 	small {
@@ -557,12 +596,13 @@ h6 {
 	border-radius: var(--radius);
 	padding: var(--space-2) var(--space-3);
 	font-size: 0.875rem;
+	font-family: var(--font-sans);
 	line-height: 1.25rem;
 	width: 100%;
 	color: var(--text-primary);
 	transition:
-		border-color 0.15s ease-in-out,
-		box-shadow 0.15s ease-in-out;
+		border-color 0.2s ease,
+		box-shadow 0.2s ease;
 
 	&:focus {
 		@include focus-ring();
@@ -574,7 +614,7 @@ h6 {
 }
 
 .form-select {
-	background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+	background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2378716c' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
 	background-position: right var(--space-2) center;
 	background-repeat: no-repeat;
 	background-size: 1.5em 1.5em;
@@ -598,6 +638,7 @@ h6 {
 	justify-content: center;
 	border-radius: var(--radius);
 	font-size: 0.875rem;
+	font-family: var(--font-sans);
 	font-weight: 500;
 	padding: var(--space-2) var(--space-4);
 	transition: all 0.2s ease-in-out;
@@ -605,6 +646,7 @@ h6 {
 	cursor: pointer;
 	text-decoration: none;
 	line-height: 1.25rem;
+	letter-spacing: 0.01em;
 
 	// Adjacent button spacing
 	& + & {
@@ -714,7 +756,7 @@ h6 {
 // Navigation styles
 .nav-bar {
 	background-color: var(--bg-nav);
-	box-shadow: var(--shadow);
+	box-shadow: none;
 	border-bottom: 1px solid var(--border-color);
 	position: relative;
 	z-index: 50;
@@ -731,7 +773,7 @@ h6 {
 
 	&:hover {
 		color: var(--text-secondary);
-		background-color: var(--gray-100);
+		background-color: var(--bg-hover);
 	}
 
 	&.active {
@@ -809,7 +851,7 @@ h6 {
 .modal-content {
 	background-color: var(--bg-card);
 	padding: 32px;
-	border-radius: 12px;
+	border-radius: 14px;
 	box-shadow: var(--shadow-xl);
 	width: 90%;
 	max-width: 500px;
@@ -865,7 +907,7 @@ h6 {
 
 	&:hover {
 		color: var(--text-secondary);
-		background-color: var(--gray-100);
+		background-color: var(--bg-hover);
 	}
 }
 
@@ -873,13 +915,13 @@ h6 {
 .add-project-btn {
 	@include floating-action-button;
 	background: $success-color;
-	box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+	box-shadow: 0 4px 12px rgba(21, 128, 61, 0.35);
 }
 
 .add-todo-btn {
 	@include floating-action-button;
 	background: $primary-color;
-	box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+	box-shadow: 0 4px 12px rgba(192, 86, 33, 0.35);
 }
 
 // Form layouts (from TodoForm)
@@ -924,18 +966,20 @@ h6 {
 	background-color: var(--error-50);
 	color: var(--error-600);
 	padding: 0.75rem;
-	border-radius: 4px;
+	border-radius: var(--radius);
 	margin-top: 1rem;
-	border: 1px solid var(--error-500);
+	border: 1px solid var(--error-100);
+	font-size: 0.875rem;
 }
 
 .success-message {
 	background-color: var(--success-50);
 	color: var(--success-600);
 	padding: 0.75rem;
-	border-radius: 4px;
+	border-radius: var(--radius);
 	margin-top: 1rem;
 	border: 1px solid var(--success-500);
+	font-size: 0.875rem;
 }
 
 // OAuth specific styles
@@ -1060,7 +1104,7 @@ h6 {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
-		min-height: 20px; /* Minimal drop zone height; calendar-day min-height keeps cells sized */
+		min-height: 20px;
 	}
 }
 
@@ -1121,14 +1165,14 @@ h6 {
 	border-radius: var(--radius-sm);
 	font-size: 0.75rem;
 	cursor: grab;
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 	transition: all 0.2s ease;
 	border: none;
 	// Force dark text on calendar tasks since they have light backgrounds
 	color: #1f2937;
 
 	&:hover {
-		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
 		transform: translateY(-1px);
 	}
 
@@ -1198,6 +1242,9 @@ h6 {
 // Width utilities
 .max-w-2xl {
 	max-width: 42rem;
+}
+.max-w-4xl {
+	max-width: 56rem;
 }
 .max-w-6xl {
 	max-width: 72rem;
@@ -1282,7 +1329,7 @@ h6 {
 @keyframes fadeIn {
 	from {
 		opacity: 0;
-		transform: translateY(10px);
+		transform: translateY(8px);
 	}
 	to {
 		opacity: 1;
@@ -1293,7 +1340,7 @@ h6 {
 @keyframes slideIn {
 	from {
 		opacity: 0;
-		transform: scale(0.9) translateY(-10px);
+		transform: scale(0.95) translateY(-8px);
 	}
 	to {
 		opacity: 1;
@@ -1327,7 +1374,7 @@ h6 {
 	transition: all 0.2s ease;
 
 	&:hover {
-		background-color: var(--gray-100);
+		background-color: var(--bg-hover);
 		color: var(--text-primary);
 	}
 
@@ -1451,7 +1498,7 @@ h6 {
 	.modal-content {
 		padding: 20px;
 		width: 95%;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-lg);
 	}
 
 	// Filter containers full width

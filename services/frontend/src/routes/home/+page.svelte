@@ -305,6 +305,18 @@
 		max-width: 1280px;
 		margin: 0 auto;
 		padding: var(--space-8) var(--space-6);
+		animation: fadeIn 0.4s ease-out;
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	.home-header {
@@ -312,18 +324,20 @@
 	}
 
 	.greeting {
-		font-size: 1.875rem;
-		font-weight: 700;
+		font-size: 2rem;
+		font-weight: 500;
+		font-style: italic;
 		color: var(--text-primary);
 		line-height: 1.2;
 	}
 
 	.date {
 		display: block;
-		margin-top: var(--space-1);
+		margin-top: var(--space-2);
 		font-size: 0.875rem;
 		color: var(--text-muted);
-		font-weight: 500;
+		font-weight: 400;
+		letter-spacing: 0.02em;
 	}
 
 	.home-grid {
@@ -339,6 +353,13 @@
 		border-radius: var(--radius-lg);
 		padding: var(--space-6);
 		box-shadow: var(--shadow);
+		transition:
+			box-shadow 0.2s ease,
+			transform 0.2s ease;
+	}
+
+	.panel:hover {
+		box-shadow: var(--shadow-md);
 	}
 
 	.panel-header {
@@ -360,17 +381,17 @@
 		font-size: 0.6875rem;
 		font-weight: 700;
 		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--text-secondary);
+		letter-spacing: 0.1em;
+		color: var(--text-muted);
 	}
 
 	.badge {
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: 0.6875rem;
+		font-weight: 600;
 		padding: 0.125rem 0.5rem;
 		border-radius: 9999px;
-		background: var(--gray-100);
-		color: var(--text-secondary);
+		background: var(--primary-50);
+		color: var(--primary-600);
 	}
 
 	/* Filter Toggle */
@@ -378,17 +399,17 @@
 	.filter-toggle {
 		display: flex;
 		gap: 0.125rem;
-		background-color: var(--bg-input);
+		background-color: var(--gray-100);
 		border-radius: var(--radius-md);
-		padding: 0.125rem;
+		padding: 0.1875rem;
 	}
 
 	.filter-toggle-btn {
-		padding: 0.25rem 0.625rem;
+		padding: 0.25rem 0.75rem;
 		border-radius: var(--radius);
 		font-size: 0.6875rem;
 		font-weight: 500;
-		transition: all 0.15s ease;
+		transition: all 0.2s ease;
 		color: var(--text-muted);
 		background: transparent;
 		border: none;
@@ -397,8 +418,9 @@
 
 	.filter-toggle-btn.active {
 		background-color: var(--bg-card);
-		color: var(--text-primary);
+		color: var(--primary-600);
 		box-shadow: var(--shadow-sm);
+		font-weight: 600;
 	}
 
 	/* Complete Button */
@@ -491,12 +513,15 @@
 
 	.priority-dot.urgent {
 		background: var(--error-500);
+		box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
 	}
 	.priority-dot.high {
-		background: #f97316;
+		background: #ea580c;
+		box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.15);
 	}
 	.priority-dot.medium {
 		background: var(--warning-500);
+		box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
 	}
 	.priority-dot.low {
 		background: var(--gray-300);
@@ -524,8 +549,9 @@
 	}
 
 	.task-project {
-		font-weight: 500;
+		font-weight: 600;
 		color: var(--primary-600);
+		font-size: 0.6875rem;
 	}
 
 	.task-tag {
