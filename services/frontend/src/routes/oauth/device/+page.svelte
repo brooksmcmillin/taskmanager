@@ -122,7 +122,7 @@
 	<title>Authorize Device</title>
 </svelte:head>
 
-<div class="container">
+<div class="page-container">
 	<div class="auth-container">
 		<div class="card">
 			<h1>Authorize Device</h1>
@@ -211,8 +211,44 @@
 </div>
 
 <style>
+	.page-container {
+		min-height: 100vh;
+		background-color: var(--bg-page, #faf8f6);
+		padding: 2rem 1rem;
+	}
+
+	.auth-container {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		min-height: calc(100vh - 4rem);
+	}
+
+	.card {
+		max-width: 480px;
+		width: 100%;
+		padding: 2rem;
+		background: var(--bg-card, #ffffff);
+		border-radius: var(--radius-xl, 1.25rem);
+		box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(28 25 23 / 0.07));
+		border: 1px solid var(--border-light, #f3f0ec);
+	}
+
+	.card h1 {
+		text-align: center;
+		margin-bottom: 1.5rem;
+		font-size: 1.75rem;
+		font-weight: 700;
+		color: var(--text-primary, #1c1917);
+	}
+
 	.code-entry {
 		text-align: center;
+	}
+
+	.code-entry > p {
+		color: var(--text-secondary, #57534e);
+		font-size: 0.9375rem;
 	}
 
 	.code-form {
@@ -228,74 +264,94 @@
 		display: block;
 		margin-bottom: 0.5rem;
 		font-weight: 500;
+		color: var(--text-primary, #1c1917);
+		font-size: 0.875rem;
 	}
 
 	.code-input {
 		width: 100%;
 		padding: 1rem;
 		font-size: 1.5rem;
-		font-family: monospace;
+		font-family: var(--font-mono, 'SF Mono', Monaco, Inconsolata, monospace);
 		text-align: center;
 		text-transform: uppercase;
 		letter-spacing: 0.2em;
-		border: 2px solid var(--border-color, #e2e8f0);
-		border-radius: 0.5rem;
-		background: var(--input-bg, #fff);
+		border: 2px solid var(--border-color, #e7e3de);
+		border-radius: var(--radius-md, 0.625rem);
+		background: var(--bg-input, #ffffff);
 	}
 
 	.code-input:focus {
 		outline: none;
-		border-color: var(--primary-color, #3b82f6);
-		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+		border-color: var(--primary-600, #c05621);
+		box-shadow: 0 0 0 3px rgba(192, 86, 33, 0.1);
 	}
 
 	.form-group small {
 		display: block;
 		margin-top: 0.5rem;
-		color: var(--text-muted, #64748b);
+		color: var(--text-muted, #78716c);
 	}
 
 	.error-message {
-		background-color: #fef2f2;
-		border: 1px solid #fecaca;
-		color: #dc2626;
+		background-color: var(--error-50, #fef2f2);
+		border: 1px solid var(--error-100, #fecaca);
+		color: var(--error-600, #dc2626);
 		padding: 0.75rem 1rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-md, 0.625rem);
 		margin-bottom: 1rem;
+		font-size: 0.875rem;
+	}
+
+	.authorization-content {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
 	}
 
 	.code-display {
-		background-color: var(--bg-secondary, #f8fafc);
+		background-color: var(--bg-secondary, #f7f4f0);
 		padding: 0.75rem 1rem;
-		border-radius: 0.5rem;
-		margin-bottom: 1.5rem;
+		border-radius: var(--radius-md, 0.625rem);
 		text-align: center;
+		border: 1px solid var(--border-light, #f3f0ec);
+	}
+
+	.code-display p {
+		color: var(--text-secondary, #57534e);
 	}
 
 	.user-code {
-		font-family: monospace;
+		font-family: var(--font-mono, 'SF Mono', Monaco, Inconsolata, monospace);
 		font-size: 1.25rem;
 		letter-spacing: 0.1em;
-	}
-
-	.client-info {
-		margin-bottom: 1.5rem;
+		color: var(--text-primary, #1c1917);
 	}
 
 	.client-info h2 {
 		margin-bottom: 0.5rem;
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: var(--text-primary, #1c1917);
+	}
+
+	.client-info p {
+		color: var(--text-secondary, #57534e);
+		font-size: 0.9375rem;
 	}
 
 	.permissions {
-		margin-bottom: 1.5rem;
 		padding: 1rem;
-		background-color: var(--bg-secondary, #f8fafc);
-		border-radius: 0.5rem;
+		background-color: var(--bg-secondary, #f7f4f0);
+		border-radius: var(--radius-md, 0.625rem);
+		border: 1px solid var(--border-light, #f3f0ec);
 	}
 
 	.permissions h3 {
 		margin-bottom: 0.75rem;
-		font-size: 1rem;
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: var(--text-primary, #1c1917);
 	}
 
 	.scope-list {
@@ -305,55 +361,87 @@
 	}
 
 	.scope-item {
-		padding: 0.5rem 0;
-		border-bottom: 1px solid var(--border-color, #e2e8f0);
+		padding: 0.625rem 0;
+		border-bottom: 1px solid var(--border-light, #f3f0ec);
+		color: var(--text-secondary, #57534e);
+		font-size: 0.9375rem;
 	}
 
 	.scope-item:last-child {
 		border-bottom: none;
+		padding-bottom: 0;
 	}
 
 	.user-info {
-		margin-bottom: 1.5rem;
-		padding: 0.75rem 1rem;
-		background-color: var(--bg-secondary, #f8fafc);
-		border-radius: 0.5rem;
+		padding: 0.875rem 1rem;
+		background-color: var(--primary-50, #fff5ee);
+		border-radius: var(--radius-md, 0.625rem);
 		text-align: center;
+		border: 1px solid var(--primary-100, #ffe4cc);
+	}
+
+	.user-info p {
+		color: var(--text-secondary, #57534e);
+		font-size: 0.9375rem;
+	}
+
+	.user-info strong {
+		color: var(--primary-700, #9a4419);
+		font-weight: 600;
 	}
 
 	.button-group {
 		display: flex;
-		gap: 1rem;
+		gap: 0.75rem;
 		justify-content: center;
+	}
+
+	.btn {
+		padding: 0.625rem 1.5rem;
+		border-radius: var(--radius-md, 0.625rem);
+		font-size: 0.9375rem;
+		font-weight: 600;
+		border: none;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: inherit;
+	}
+
+	.btn-primary {
+		background-color: var(--primary-600, #c05621);
+		color: white;
+	}
+
+	.btn-primary:hover {
+		background-color: var(--primary-700, #9a4419);
+		transform: translateY(-1px);
+		box-shadow: var(--shadow-md);
+	}
+
+	.btn-primary:active {
+		transform: translateY(0);
+	}
+
+	.btn-secondary {
+		background-color: var(--gray-200, #e7e3de);
+		color: var(--gray-700, #44403c);
+	}
+
+	.btn-secondary:hover {
+		background-color: var(--gray-300, #d4cfc8);
 	}
 
 	.security-note {
-		margin-top: 1.5rem;
 		text-align: center;
-		color: var(--text-muted, #64748b);
+		color: var(--text-muted, #78716c);
 	}
 
-	.auth-container {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		min-height: 60vh;
-		padding: 2rem;
+	.security-note p {
+		margin: 0;
 	}
 
-	.card {
-		max-width: 480px;
-		width: 100%;
-		padding: 2rem;
-		background: var(--card-bg, white);
-		border-radius: 1rem;
-		box-shadow:
-			0 4px 6px -1px rgba(0, 0, 0, 0.1),
-			0 2px 4px -1px rgba(0, 0, 0, 0.06);
-	}
-
-	.card h1 {
-		text-align: center;
-		margin-bottom: 1.5rem;
+	.security-note small {
+		font-size: 0.8125rem;
+		line-height: 1.4;
 	}
 </style>

@@ -2,12 +2,12 @@
 	<title>Device Authorization Denied</title>
 </svelte:head>
 
-<div class="container">
-	<div class="denied-container">
+<div class="page-container">
+	<div class="result-container">
 		<div class="card">
-			<div class="denied-icon">❌</div>
+			<div class="status-icon">❌</div>
 			<h1>Device Authorization Denied</h1>
-			<p class="denied-message">
+			<p class="result-message">
 				You have denied access to the device. The device will not be able to access your account.
 			</p>
 			<div class="actions">
@@ -18,43 +18,71 @@
 </div>
 
 <style>
-	.denied-container {
+	.page-container {
+		min-height: 100vh;
+		background-color: var(--bg-page, #faf8f6);
+		padding: 2rem 1rem;
+	}
+
+	.result-container {
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		min-height: 60vh;
-		padding: 2rem;
+		min-height: calc(100vh - 4rem);
 	}
 
 	.card {
 		max-width: 480px;
 		width: 100%;
 		padding: 3rem 2rem;
-		background: var(--card-bg, white);
-		border-radius: 1rem;
-		box-shadow:
-			0 4px 6px -1px rgba(0, 0, 0, 0.1),
-			0 2px 4px -1px rgba(0, 0, 0, 0.06);
+		background: var(--bg-card, #ffffff);
+		border-radius: var(--radius-xl, 1.25rem);
+		box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(28 25 23 / 0.07));
+		border: 1px solid var(--border-light, #f3f0ec);
 		text-align: center;
 	}
 
-	.denied-icon {
-		font-size: 4rem;
-		margin-bottom: 1.5rem;
+	.status-icon {
+		font-size: 3.5rem;
+		margin-bottom: 1.25rem;
 	}
 
 	.card h1 {
 		margin-bottom: 1rem;
-		color: var(--error-color, #ef4444);
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--error-600, #dc2626);
 	}
 
-	.denied-message {
+	.result-message {
 		margin-bottom: 2rem;
-		color: var(--text-secondary, #64748b);
+		color: var(--text-secondary, #57534e);
+		font-size: 0.9375rem;
 		line-height: 1.6;
 	}
 
 	.actions {
 		margin-top: 2rem;
+	}
+
+	.btn-primary {
+		display: inline-block;
+		padding: 0.625rem 1.5rem;
+		border-radius: var(--radius-md, 0.625rem);
+		font-size: 0.9375rem;
+		font-weight: 600;
+		border: none;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		font-family: inherit;
+		background-color: var(--primary-600, #c05621);
+		color: white;
+		text-decoration: none;
+	}
+
+	.btn-primary:hover {
+		background-color: var(--primary-700, #9a4419);
+		transform: translateY(-1px);
+		box-shadow: var(--shadow-md);
 	}
 </style>
