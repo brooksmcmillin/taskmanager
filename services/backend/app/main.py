@@ -3,8 +3,11 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api import (
@@ -83,6 +86,9 @@ app.include_router(github.router)
 app.include_router(admin_loki.router)
 app.include_router(service_accounts.router)
 
+
+# Static files (self-hosted fonts)
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 Instrumentator(
     should_group_status_codes=False,
