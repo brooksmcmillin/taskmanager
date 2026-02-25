@@ -5,6 +5,11 @@
 	import DependencyList from './DependencyList.svelte';
 	import AttachmentList from './AttachmentList.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
+	import {
+		getDeadlineTypeLabel,
+		getDeadlineTypeColor,
+		getDeadlineTypeDescription
+	} from '$lib/utils/deadline';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { todos } from '$lib/stores/todos';
 	import { toasts } from '$lib/stores/ui';
@@ -212,6 +217,20 @@
 					<div class="detail-section">
 						<label class="detail-label">Due Date</label>
 						<span class="detail-text">{formatDateDisplay(todo.due_date, 'Not set')}</span>
+					</div>
+
+					<!-- Deadline Type -->
+					<div class="detail-section">
+						<label class="detail-label">Deadline Type</label>
+						<span
+							class="deadline-type-badge"
+							style="border-color: {getDeadlineTypeColor(
+								todo.deadline_type
+							)}; color: {getDeadlineTypeColor(todo.deadline_type)}"
+							title={getDeadlineTypeDescription(todo.deadline_type)}
+						>
+							{getDeadlineTypeLabel(todo.deadline_type)}
+						</span>
 					</div>
 
 					<!-- Tags -->
@@ -468,6 +487,16 @@
 
 	.parent-task-link:hover .parent-task-id {
 		color: var(--primary-600);
+	}
+
+	.deadline-type-badge {
+		display: inline-block;
+		padding: 0.25rem 0.625rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		border: 1.5px solid;
+		border-radius: var(--radius);
+		letter-spacing: 0.02em;
 	}
 
 	.tag {
