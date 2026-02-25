@@ -452,6 +452,8 @@ class TestTodos:
         for dt in ("flexible", "preferred", "firm", "hard"):
             result = client.create_todo(title="Test", deadline_type=dt)
             assert result.success is True
+            call_args = mock_session.post.call_args
+            assert call_args.kwargs["json"]["deadline_type"] == dt
 
     def test_create_todo_with_invalid_deadline_type(
         self, client: TaskManagerClient
@@ -473,6 +475,8 @@ class TestTodos:
         for dt in ("flexible", "preferred", "firm", "hard"):
             result = client.update_todo(1, deadline_type=dt)
             assert result.success is True
+            call_args = mock_session.put.call_args
+            assert call_args.kwargs["json"]["deadline_type"] == dt
 
     def test_update_todo_with_invalid_deadline_type(
         self, client: TaskManagerClient
