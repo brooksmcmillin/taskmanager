@@ -303,9 +303,9 @@ test.describe('Calendar Improvements', () => {
 		await page.waitForLoadState('networkidle');
 
 		// Wait for tasks to load into the calendar first
-		await expect(
-			page.locator('.calendar-task', { hasText: 'Overflow Task 1' })
-		).toBeVisible({ timeout: 10000 });
+		await expect(page.locator('.calendar-task', { hasText: 'Overflow Task 1' })).toBeVisible({
+			timeout: 10000
+		});
 
 		// Should see +N more button
 		await expect(page.locator('.calendar-overflow')).toBeVisible({ timeout: 5000 });
@@ -324,9 +324,9 @@ test.describe('Calendar Improvements', () => {
 		await page.waitForLoadState('networkidle');
 
 		// Wait for tasks to load into the calendar
-		await expect(
-			page.locator('.calendar-task', { hasText: 'Expand Task 1' })
-		).toBeVisible({ timeout: 10000 });
+		await expect(page.locator('.calendar-task', { hasText: 'Expand Task 1' })).toBeVisible({
+			timeout: 10000
+		});
 
 		const overflowBtn = page.locator('.calendar-overflow').first();
 		if (await overflowBtn.isVisible()) {
