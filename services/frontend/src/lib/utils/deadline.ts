@@ -1,6 +1,9 @@
 import type { DeadlineType } from '$lib/types';
 
-export const DEADLINE_TYPE_CONFIG: Record<DeadlineType, { label: string; color: string; description: string }> = {
+export const DEADLINE_TYPE_CONFIG: Record<
+	DeadlineType,
+	{ label: string; color: string; description: string }
+> = {
 	flexible: {
 		label: 'Flexible',
 		color: '#6b7280',

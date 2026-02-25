@@ -8,7 +8,11 @@
 	import AttachmentList from '$lib/components/AttachmentList.svelte';
 	import CommentList from '$lib/components/CommentList.svelte';
 	import { getPriorityColor } from '$lib/utils/priority';
-	import { getDeadlineTypeLabel, getDeadlineTypeColor, getDeadlineTypeDescription } from '$lib/utils/deadline';
+	import {
+		getDeadlineTypeLabel,
+		getDeadlineTypeColor,
+		getDeadlineTypeDescription
+	} from '$lib/utils/deadline';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { todos } from '$lib/stores/todos';
 	import { projects } from '$lib/stores/projects';
@@ -197,7 +201,9 @@
 								<label class="detail-label">Deadline Type</label>
 								<span
 									class="deadline-type-badge"
-									style="border-color: {getDeadlineTypeColor(todo.deadline_type)}; color: {getDeadlineTypeColor(todo.deadline_type)}"
+									style="border-color: {getDeadlineTypeColor(
+										todo.deadline_type
+									)}; color: {getDeadlineTypeColor(todo.deadline_type)}"
 									title={getDeadlineTypeDescription(todo.deadline_type)}
 								>
 									{getDeadlineTypeLabel(todo.deadline_type)}

@@ -204,8 +204,11 @@
 											{#if task.deadline_type && task.deadline_type !== 'preferred'}
 												<span
 													class="deadline-badge"
-													style="border-color: {getDeadlineTypeColor(task.deadline_type)}; color: {getDeadlineTypeColor(task.deadline_type)}"
-												>{getDeadlineTypeLabel(task.deadline_type)}</span>
+													style="border-color: {getDeadlineTypeColor(
+														task.deadline_type
+													)}; color: {getDeadlineTypeColor(task.deadline_type)}"
+													>{getDeadlineTypeLabel(task.deadline_type)}</span
+												>
 											{/if}
 											{#each task.tags as tag}
 												<span class="task-tag">{tag}</span>
@@ -240,8 +243,11 @@
 										{#if task.deadline_type && task.deadline_type !== 'preferred'}
 											<span
 												class="deadline-badge"
-												style="border-color: {getDeadlineTypeColor(task.deadline_type)}; color: {getDeadlineTypeColor(task.deadline_type)}"
-											>{getDeadlineTypeLabel(task.deadline_type)}</span>
+												style="border-color: {getDeadlineTypeColor(
+													task.deadline_type
+												)}; color: {getDeadlineTypeColor(task.deadline_type)}"
+												>{getDeadlineTypeLabel(task.deadline_type)}</span
+											>
 										{/if}
 										{#each task.tags as tag}
 											<span class="task-tag">{tag}</span>
