@@ -27,6 +27,7 @@ __version__ = "0.2.0"
 __author__ = "TaskManager SDK"
 
 from .client import (
+    VALID_DEADLINE_TYPES,
     TaskManagerClient,
     create_authenticated_client,
     create_client_credentials_client,
@@ -64,6 +65,8 @@ from .models import (
 __all__ = [
     # Client classes
     "TaskManagerClient",
+    # Constants
+    "VALID_DEADLINE_TYPES",
     # Configuration
     "TokenConfig",
     "create_authenticated_client",
