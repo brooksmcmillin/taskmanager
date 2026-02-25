@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
+	import { getDeadlineTypeLabel, getDeadlineTypeColor } from '$lib/utils/deadline';
 	import type { Todo, Article, ApiResponse } from '$lib/types';
 
 	let tasks: Todo[] = [];
@@ -200,6 +201,12 @@
 												<span>&middot;</span>
 												<span>{formatDueDate(task.due_date)}</span>
 											{/if}
+											{#if task.deadline_type && task.deadline_type !== 'preferred'}
+												<span
+													class="deadline-badge"
+													style="border-color: {getDeadlineTypeColor(task.deadline_type)}; color: {getDeadlineTypeColor(task.deadline_type)}"
+												>{getDeadlineTypeLabel(task.deadline_type)}</span>
+											{/if}
 											{#each task.tags as tag}
 												<span class="task-tag">{tag}</span>
 											{/each}
@@ -229,6 +236,12 @@
 										<span class="task-status {task.status}">{task.status.replace('_', ' ')}</span>
 										{#if task.project_name}
 											<span class="task-project">{task.project_name}</span>
+										{/if}
+										{#if task.deadline_type && task.deadline_type !== 'preferred'}
+											<span
+												class="deadline-badge"
+												style="border-color: {getDeadlineTypeColor(task.deadline_type)}; color: {getDeadlineTypeColor(task.deadline_type)}"
+											>{getDeadlineTypeLabel(task.deadline_type)}</span>
 										{/if}
 										{#each task.tags as tag}
 											<span class="task-tag">{tag}</span>
@@ -552,6 +565,15 @@
 		font-weight: 600;
 		color: var(--primary-600);
 		font-size: 0.6875rem;
+	}
+
+	.deadline-badge {
+		padding: 0 0.375rem;
+		border: 1px solid;
+		border-radius: var(--radius);
+		font-size: 0.6875rem;
+		font-weight: 600;
+		line-height: 1.4;
 	}
 
 	.task-tag {
