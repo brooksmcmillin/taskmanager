@@ -205,13 +205,6 @@
 		expandedDays = { ...expandedDays, [dateStr]: !expandedDays[dateStr] };
 	}
 
-	function overflowCount(dateStr: string): number {
-		const all = todosByDate[dateStr] || [];
-		const subtasks = subtasksByDate[dateStr] || [];
-		const hiddenTasks = Math.max(0, all.length - MAX_VISIBLE_TASKS);
-		return expandedDays[dateStr] ? 0 : hiddenTasks + subtasks.length;
-	}
-
 	onMount(() => {
 		// Subscribe to pendingTodos and rebuild the calendar whenever it changes
 		// But don't update during drag operations to avoid interfering with the drag
@@ -251,8 +244,10 @@
 		<div id="calendar-grid">
 			{#each days as { date, dateStr, isToday: isTodayDay }}
 				{@const allTasks = todosByDate[dateStr] || []}
-				{@const overflow = overflowCount(dateStr)}
 				{@const isExpanded = expandedDays[dateStr] || false}
+				{@const hiddenCount = Math.max(0, allTasks.length - MAX_VISIBLE_TASKS)}
+				{@const pendingSubtasks = subtasksByDate[dateStr] || []}
+				{@const overflow = isExpanded ? 0 : hiddenCount + pendingSubtasks.length}
 				<div class="calendar-day" class:today={isTodayDay} data-date={dateStr}>
 					<div class="calendar-date">
 						{date.getMonth() + 1}/{date.getDate()}

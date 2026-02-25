@@ -302,12 +302,12 @@ test.describe('Calendar Improvements', () => {
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
-		// Wait for tasks to load into the calendar first
-		await expect(page.locator('.calendar-task', { hasText: 'Overflow Task 1' })).toBeVisible({
+		// Wait for at least one visible calendar task to confirm data loaded
+		await expect(page.locator('.calendar-task:not(.calendar-task-hidden)').first()).toBeVisible({
 			timeout: 10000
 		});
 
-		// Should see +N more button
+		// Should see +N more button since we have 5 tasks and MAX_VISIBLE_TASKS = 3
 		await expect(page.locator('.calendar-overflow')).toBeVisible({ timeout: 5000 });
 		const overflowText = await page.locator('.calendar-overflow').first().textContent();
 		expect(overflowText).toMatch(/\+\d+ more/);
@@ -323,29 +323,29 @@ test.describe('Calendar Improvements', () => {
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
-		// Wait for tasks to load into the calendar
-		await expect(page.locator('.calendar-task', { hasText: 'Expand Task 1' })).toBeVisible({
+		// Wait for at least one visible calendar task to confirm data loaded
+		await expect(page.locator('.calendar-task:not(.calendar-task-hidden)').first()).toBeVisible({
 			timeout: 10000
 		});
 
-		const overflowBtn = page.locator('.calendar-overflow').first();
-		if (await overflowBtn.isVisible()) {
-			// Click to expand
-			await overflowBtn.click();
+		// Should see overflow button since we have 4 tasks and MAX_VISIBLE_TASKS = 3
+		await expect(page.locator('.calendar-overflow')).toBeVisible({ timeout: 5000 });
 
-			// After expanding, should show "Show less"
-			await expect(page.locator('.calendar-overflow', { hasText: 'Show less' })).toBeVisible({
-				timeout: 3000
-			});
+		// Click to expand
+		await page.locator('.calendar-overflow').first().click();
 
-			// Click to collapse
-			await page.locator('.calendar-overflow', { hasText: 'Show less' }).click();
+		// After expanding, should show "Show less"
+		await expect(page.locator('.calendar-overflow', { hasText: 'Show less' })).toBeVisible({
+			timeout: 3000
+		});
 
-			// Should show "+N more" again
-			await expect(page.locator('.calendar-overflow', { hasText: /\+\d+ more/ })).toBeVisible({
-				timeout: 3000
-			});
-		}
+		// Click to collapse
+		await page.locator('.calendar-overflow', { hasText: 'Show less' }).click();
+
+		// Should show "+N more" again
+		await expect(page.locator('.calendar-overflow', { hasText: /\+\d+ more/ })).toBeVisible({
+			timeout: 3000
+		});
 	});
 });
 
