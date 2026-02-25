@@ -1228,9 +1228,9 @@ def create_authorization_server(
 
     # Static files (self-hosted fonts)
     static_dir = Path(__file__).parent / "static"
-    routes.append(Mount("/static", app=StaticFiles(directory=str(static_dir)), name="static"))
+    static_mount = Mount("/static", app=StaticFiles(directory=str(static_dir)), name="static")
 
-    return Starlette(routes=routes, middleware=[Middleware(LoggingMiddleware)])
+    return Starlette(routes=[*routes, static_mount], middleware=[Middleware(LoggingMiddleware)])
 
 
 async def run_server(
