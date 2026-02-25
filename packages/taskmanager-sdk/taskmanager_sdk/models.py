@@ -51,6 +51,7 @@ class Todo:
     completed_at: str | None
     user_id: int
     project_id: int | None
+    deadline_type: str = "preferred"  # flexible, preferred, firm, hard
 
 
 @dataclass
@@ -120,6 +121,7 @@ class Task:
     priority: str
     description: str | None = None
     due_date: str | None = None
+    deadline_type: str = "preferred"  # flexible, preferred, firm, hard
     category: str | None = None
     project_name: str | None = None
     project_color: str | None = None

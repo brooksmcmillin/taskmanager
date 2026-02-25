@@ -18,7 +18,7 @@ from mcp_resource_framework.validation import validate_dict_response, validate_l
 from pydantic import AnyHttpUrl
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from taskmanager_sdk import TaskManagerClient
+from taskmanager_sdk import VALID_DEADLINE_TYPES, TaskManagerClient
 
 logger = logging.getLogger(__name__)
 
@@ -478,6 +478,7 @@ def create_resource_server(
         title: str,
         description: str | None = None,
         due_date: str | None = None,
+        deadline_type: str = "preferred",
         category: str | None = None,
         priority: str = "medium",
         tags: list[str] | None = None,
@@ -490,6 +491,9 @@ def create_resource_server(
             title: Task title (required)
             description: Task details (optional)
             due_date: Due date in ISO format, e.g., "2025-12-20" (optional)
+            deadline_type: How strict the due date is - one of "flexible" (reschedule freely),
+                          "preferred" (soft target, default), "firm" (avoid moving),
+                          "hard" (never reschedule)
             category: Task category/project name (optional)
             priority: Priority level - one of "low", "medium", "high", "urgent" (default: "medium")
             tags: List of task tags (optional)
@@ -502,6 +506,15 @@ def create_resource_server(
             f"=== create_task called: title='{title}', category={category}, priority={priority}, parent_id={parent_id} ==="
         )
         try:
+            # Validate deadline_type
+            if deadline_type not in VALID_DEADLINE_TYPES:
+                return json.dumps(
+                    {
+                        "error": f"Invalid deadline_type: {deadline_type!r}. "
+                        f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
+                    }
+                )
+
             api_client = get_api_client()
             logger.debug("API client created successfully")
 
@@ -523,6 +536,7 @@ def create_resource_server(
                 category=category,
                 priority=priority,
                 due_date=due_date,
+                deadline_type=deadline_type,
                 tags=tags,
                 parent_id=parent_id_int,
             )
@@ -568,6 +582,7 @@ def create_resource_server(
         title: str | None = None,
         description: str | None = None,
         due_date: str | None = None,
+        deadline_type: str | None = None,
         status: str | None = None,
         category: str | None = None,
         priority: str | None = None,
@@ -583,6 +598,9 @@ def create_resource_server(
             title: New title (optional)
             description: New description (optional)
             due_date: New due date in ISO format for rescheduling (optional)
+            deadline_type: How strict the due date is - one of "flexible" (reschedule freely),
+                          "preferred" (soft target), "firm" (avoid moving),
+                          "hard" (never reschedule) (optional)
             status: New status - one of "pending", "in_progress", "completed", "cancelled" (optional)
             category: New category/project name (optional)
             priority: New priority - one of "low", "medium", "high", "urgent" (optional)
@@ -595,6 +613,15 @@ def create_resource_server(
         """
         logger.info(f"=== update_task called: task_id='{task_id}', parent_id={parent_id} ===")
         try:
+            # Validate deadline_type if provided
+            if deadline_type is not None and deadline_type not in VALID_DEADLINE_TYPES:
+                return json.dumps(
+                    {
+                        "error": f"Invalid deadline_type: {deadline_type!r}. "
+                        f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
+                    }
+                )
+
             api_client = get_api_client()
             logger.debug("API client created successfully")
 
@@ -624,6 +651,8 @@ def create_resource_server(
                 updated_fields.append("description")
             if due_date is not None:
                 updated_fields.append("due_date")
+            if deadline_type is not None:
+                updated_fields.append("deadline_type")
             if status is not None:
                 updated_fields.append("status")
             if category is not None:
@@ -647,6 +676,7 @@ def create_resource_server(
                 estimated_hours=estimated_hours,
                 status=status,
                 due_date=due_date,
+                deadline_type=deadline_type,
                 tags=tags,
                 parent_id=parent_id_int,
             )
