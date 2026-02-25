@@ -119,12 +119,14 @@ test.describe('Toast Notifications and Undo', () => {
 
 		// Switch to list view to access the complete button
 		await page.click('button:has-text("List View")');
-		await expect(page.locator('.task-title', { hasText: 'Complete Me For Undo' })).toBeVisible({
-			timeout: 5000
-		});
 
-		// Click the complete button
-		await page.locator('.btn-success', { hasText: '✓' }).first().click();
+		// Wait for the task to appear in the list (task titles are plain divs, not .task-title)
+		const taskRow = page.locator('#list-view').getByText('Complete Me For Undo');
+		await expect(taskRow).toBeVisible({ timeout: 5000 });
+
+		// Click the complete button on the task's row
+		const taskCard = page.locator('.todo-with-subtasks', { hasText: 'Complete Me For Undo' });
+		await taskCard.locator('.btn-success').click();
 
 		// Toast should appear with Undo button
 		await expect(page.locator('.toast')).toBeVisible({ timeout: 5000 });
@@ -141,12 +143,12 @@ test.describe('Toast Notifications and Undo', () => {
 
 		// Switch to list view
 		await page.click('button:has-text("List View")');
-		await expect(page.locator('.task-title', { hasText: 'Undo This Task' })).toBeVisible({
-			timeout: 5000
-		});
+		const taskRow = page.locator('#list-view').getByText('Undo This Task');
+		await expect(taskRow).toBeVisible({ timeout: 5000 });
 
 		// Complete the task
-		await page.locator('.btn-success', { hasText: '✓' }).first().click();
+		const taskCard = page.locator('.todo-with-subtasks', { hasText: 'Undo This Task' });
+		await taskCard.locator('.btn-success').click();
 
 		// Wait for toast
 		await expect(page.locator('.toast-action', { hasText: 'Undo' })).toBeVisible({ timeout: 5000 });
@@ -155,7 +157,7 @@ test.describe('Toast Notifications and Undo', () => {
 		await page.click('.toast-action');
 
 		// Task should reappear in the list
-		await expect(page.locator('.task-title', { hasText: 'Undo This Task' })).toBeVisible({
+		await expect(page.locator('#list-view').getByText('Undo This Task')).toBeVisible({
 			timeout: 5000
 		});
 	});
@@ -189,11 +191,11 @@ test.describe('Toast Notifications and Undo', () => {
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
-		await expect(page.locator('.task-title', { hasText: 'Dismiss Toast Task' })).toBeVisible({
-			timeout: 5000
-		});
+		const taskRow = page.locator('#list-view').getByText('Dismiss Toast Task');
+		await expect(taskRow).toBeVisible({ timeout: 5000 });
 
-		await page.locator('.btn-success', { hasText: '✓' }).first().click();
+		const taskCard = page.locator('.todo-with-subtasks', { hasText: 'Dismiss Toast Task' });
+		await taskCard.locator('.btn-success').click();
 		await expect(page.locator('.toast')).toBeVisible({ timeout: 5000 });
 
 		// Click dismiss
@@ -284,13 +286,13 @@ test.describe('Calendar Improvements', () => {
 		// Single click should open detail panel
 		await calendarTask.click();
 
-		// Task detail panel should open (look for the panel content)
-		await expect(page.locator('.task-detail-panel, .detail-panel')).toBeVisible({ timeout: 5000 });
+		// Task detail panel should open
+		await expect(page.locator('.panel-container')).toBeVisible({ timeout: 5000 });
 	});
 
 	test('should show +N more when calendar day has many tasks', async ({ page }) => {
 		const tomorrow = getFutureDate(1);
-		// Create 5 tasks for the same day to trigger overflow
+		// Create 5 tasks for the same day to trigger overflow (MAX_VISIBLE_TASKS = 3)
 		await createTodoViaAPI(page, 'Overflow Task 1', { dueDate: tomorrow });
 		await createTodoViaAPI(page, 'Overflow Task 2', { dueDate: tomorrow });
 		await createTodoViaAPI(page, 'Overflow Task 3', { dueDate: tomorrow });
@@ -299,6 +301,11 @@ test.describe('Calendar Improvements', () => {
 
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
+
+		// Wait for tasks to load into the calendar first
+		await expect(
+			page.locator('.calendar-task', { hasText: 'Overflow Task 1' })
+		).toBeVisible({ timeout: 10000 });
 
 		// Should see +N more button
 		await expect(page.locator('.calendar-overflow')).toBeVisible({ timeout: 5000 });
@@ -315,6 +322,11 @@ test.describe('Calendar Improvements', () => {
 
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
+
+		// Wait for tasks to load into the calendar
+		await expect(
+			page.locator('.calendar-task', { hasText: 'Expand Task 1' })
+		).toBeVisible({ timeout: 10000 });
 
 		const overflowBtn = page.locator('.calendar-overflow').first();
 		if (await overflowBtn.isVisible()) {
