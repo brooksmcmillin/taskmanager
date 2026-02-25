@@ -9,7 +9,7 @@
 
 	// Redirect to login if not authenticated (client-side)
 	onMount(() => {
-		const publicRoutes = ['/login', '/register', '/oauth/authorize'];
+		const publicRoutes = ['/login', '/register', '/oauth/authorize', '/privacy', '/terms'];
 		const isPublicRoute = publicRoutes.some((route) => $page.url.pathname.startsWith(route));
 
 		if (!data.user && !isPublicRoute) {
