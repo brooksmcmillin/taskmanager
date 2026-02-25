@@ -65,3 +65,6 @@ db/certs/
 
 # File uploads
 uploads/
+
+# Claude Code
+.claude/
