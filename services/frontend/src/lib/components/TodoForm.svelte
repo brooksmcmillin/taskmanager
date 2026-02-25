@@ -5,7 +5,7 @@
 	import { recurringTasks } from '$lib/stores/recurringTasks';
 	import { toasts } from '$lib/stores/ui';
 	import { formatDateForInput } from '$lib/utils/dates';
-	import type { Todo, Project, Frequency } from '$lib/types';
+	import type { Todo, Project, Frequency, DeadlineType } from '$lib/types';
 
 	export let editingTodo: Todo | null = null;
 
@@ -18,6 +18,7 @@
 		description: '',
 		priority: 'medium',
 		due_date: '',
+		deadline_type: 'preferred' as DeadlineType,
 		tags: ''
 	};
 
@@ -62,6 +63,7 @@
 			description: editingTodo.description || '',
 			priority: editingTodo.priority,
 			due_date: editingTodo.due_date ? formatDateForInput(editingTodo.due_date) : '',
+			deadline_type: editingTodo.deadline_type || 'preferred',
 			tags: editingTodo.tags?.join(', ') || ''
 		};
 	}
@@ -76,6 +78,7 @@
 			description: '',
 			priority: 'medium',
 			due_date: '',
+			deadline_type: 'preferred' as DeadlineType,
 			tags: ''
 		};
 		enableRepeat = false;
@@ -106,6 +109,7 @@
 				title: formData.title,
 				description: formData.description || undefined,
 				priority: formData.priority,
+				deadline_type: formData.deadline_type,
 				tags: formData.tags ? formData.tags.split(',').map((t) => t.trim()) : undefined,
 				context: 'work'
 			};
@@ -261,6 +265,22 @@
 				class="form-input"
 				bind:value={formData.due_date}
 			/>
+		</div>
+
+		<!-- Deadline Type -->
+		<div class="form-section">
+			<label for="deadline_type" class="form-label">Deadline Type</label>
+			<select
+				id="deadline_type"
+				name="deadline_type"
+				class="form-select"
+				bind:value={formData.deadline_type}
+			>
+				<option value="flexible">Flexible</option>
+				<option value="preferred">Preferred</option>
+				<option value="firm">Firm</option>
+				<option value="hard">Hard</option>
+			</select>
 		</div>
 
 		<!-- Tags -->
