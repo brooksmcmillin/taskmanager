@@ -145,6 +145,7 @@ export async function createTodoViaUI(
 		priority?: string;
 		dueDate?: string;
 		projectId?: string;
+		deadlineType?: string;
 	} = {}
 ) {
 	await page.click('[data-testid=add-todo-button]');
@@ -162,6 +163,10 @@ export async function createTodoViaUI(
 
 	if (options.dueDate) {
 		await page.fill('[name=due_date]', options.dueDate);
+	}
+
+	if (options.deadlineType) {
+		await page.selectOption('[name=deadline_type]', options.deadlineType);
 	}
 
 	if (options.projectId) {
@@ -188,6 +193,7 @@ export async function createTodoViaAPI(
 		priority?: string;
 		dueDate?: string;
 		status?: string;
+		deadlineType?: string;
 	} = {}
 ) {
 	const body: Record<string, string> = { title };
@@ -195,6 +201,7 @@ export async function createTodoViaAPI(
 	if (options.priority) body.priority = options.priority;
 	if (options.dueDate) body.due_date = options.dueDate;
 	if (options.status) body.status = options.status;
+	if (options.deadlineType) body.deadline_type = options.deadlineType;
 
 	const response = await page.request.post('/api/todos', { data: body });
 	if (!response.ok()) {
