@@ -204,7 +204,7 @@
 <style>
 	.page-container {
 		min-height: 100vh;
-		background-color: var(--bg-page, #f9fafb);
+		background-color: var(--bg-page, #faf8f6);
 		padding: 2rem 1rem;
 	}
 
@@ -219,10 +219,10 @@
 		max-width: 480px;
 		width: 100%;
 		padding: 2rem;
-		background: var(--bg-card, white);
-		border-radius: var(--radius-xl, 1rem);
-		box-shadow: var(--shadow-lg);
-		border: 1px solid var(--border-light, #f3f4f6);
+		background: var(--bg-card, #ffffff);
+		border-radius: var(--radius-xl, 1.25rem);
+		box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(28 25 23 / 0.07));
+		border: 1px solid var(--border-light, #f3f0ec);
 	}
 
 	.card h1 {
@@ -230,13 +230,13 @@
 		margin-bottom: 1.5rem;
 		font-size: 1.75rem;
 		font-weight: 700;
-		color: var(--text-primary, #111827);
+		color: var(--text-primary, #1c1917);
 	}
 
 	.loading {
 		text-align: center;
 		padding: 2rem;
-		color: var(--text-secondary, #6b7280);
+		color: var(--text-secondary, #57534e);
 	}
 
 	.error-message {
@@ -244,7 +244,7 @@
 		border: 1px solid var(--error-100, #fecaca);
 		color: var(--error-600, #dc2626);
 		padding: 0.75rem 1rem;
-		border-radius: var(--radius-md, 0.5rem);
+		border-radius: var(--radius-md, 0.625rem);
 		margin-bottom: 1rem;
 		font-size: 0.875rem;
 	}
@@ -259,27 +259,27 @@
 		margin: 0 0 0.5rem 0;
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: var(--text-primary, #111827);
+		color: var(--text-primary, #1c1917);
 	}
 
 	.client-info p {
 		margin: 0;
-		color: var(--text-secondary, #6b7280);
+		color: var(--text-secondary, #57534e);
 		font-size: 0.9375rem;
 	}
 
 	.permissions {
 		padding: 1rem;
-		background-color: var(--bg-secondary, #f8fafc);
-		border-radius: var(--radius-md, 0.5rem);
-		border: 1px solid var(--border-light, #f3f4f6);
+		background-color: var(--bg-secondary, #f7f4f0);
+		border-radius: var(--radius-md, 0.625rem);
+		border: 1px solid var(--border-light, #f3f0ec);
 	}
 
 	.permissions h3 {
 		margin: 0 0 0.75rem 0;
 		font-size: 0.9375rem;
 		font-weight: 600;
-		color: var(--text-primary, #111827);
+		color: var(--text-primary, #1c1917);
 	}
 
 	.scope-list {
@@ -290,8 +290,8 @@
 
 	.scope-item {
 		padding: 0.625rem 0;
-		border-bottom: 1px solid var(--border-light, #e5e7eb);
-		color: var(--text-secondary, #4b5563);
+		border-bottom: 1px solid var(--border-light, #f3f0ec);
+		color: var(--text-secondary, #57534e);
 		font-size: 0.9375rem;
 	}
 
@@ -302,20 +302,20 @@
 
 	.user-info {
 		padding: 0.875rem 1rem;
-		background-color: var(--primary-50, #eff6ff);
-		border-radius: var(--radius-md, 0.5rem);
+		background-color: var(--primary-50, #fff5ee);
+		border-radius: var(--radius-md, 0.625rem);
 		text-align: center;
-		border: 1px solid var(--primary-100, #dbeafe);
+		border: 1px solid var(--primary-100, #ffe4cc);
 	}
 
 	.user-info p {
 		margin: 0;
-		color: var(--text-secondary, #4b5563);
+		color: var(--text-secondary, #57534e);
 		font-size: 0.9375rem;
 	}
 
 	.user-info strong {
-		color: var(--primary-700, #1d4ed8);
+		color: var(--primary-700, #9a4419);
 		font-weight: 600;
 	}
 
@@ -328,7 +328,7 @@
 
 	.btn {
 		padding: 0.625rem 1.5rem;
-		border-radius: var(--radius-md, 0.5rem);
+		border-radius: var(--radius-md, 0.625rem);
 		font-size: 0.9375rem;
 		font-weight: 600;
 		border: none;
@@ -338,12 +338,12 @@
 	}
 
 	.btn-primary {
-		background-color: var(--primary-600, #2563eb);
+		background-color: var(--primary-600, #c05621);
 		color: white;
 	}
 
 	.btn-primary:hover {
-		background-color: var(--primary-700, #1d4ed8);
+		background-color: var(--primary-700, #9a4419);
 		transform: translateY(-1px);
 		box-shadow: var(--shadow-md);
 	}
@@ -353,17 +353,17 @@
 	}
 
 	.btn-secondary {
-		background-color: var(--gray-200, #e5e7eb);
-		color: var(--gray-700, #374151);
+		background-color: var(--gray-200, #e7e3de);
+		color: var(--gray-700, #44403c);
 	}
 
 	.btn-secondary:hover {
-		background-color: var(--gray-300, #d1d5db);
+		background-color: var(--gray-300, #d4cfc8);
 	}
 
 	.security-note {
 		text-align: center;
-		color: var(--text-muted, #6b7280);
+		color: var(--text-muted, #78716c);
 	}
 
 	.security-note p {

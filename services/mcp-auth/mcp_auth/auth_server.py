@@ -31,7 +31,8 @@ from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from taskmanager_sdk import AuthenticationError, TaskManagerClient, TokenConfig
 from uvicorn import Config, Server
@@ -1225,7 +1226,11 @@ def create_authorization_server(
         ) -> Response:
             return await log_requests(request, call_next)
 
-    return Starlette(routes=routes, middleware=[Middleware(LoggingMiddleware)])
+    # Static files (self-hosted fonts)
+    static_dir = Path(__file__).parent / "static"
+    static_mount = Mount("/static", app=StaticFiles(directory=str(static_dir)), name="static")
+
+    return Starlette(routes=[*routes, static_mount], middleware=[Middleware(LoggingMiddleware)])
 
 
 async def run_server(
