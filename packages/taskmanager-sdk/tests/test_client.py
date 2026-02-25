@@ -439,6 +439,48 @@ class TestTodos:
         call_args = mock_session.put.call_args
         assert call_args.kwargs["json"]["category"] == "Personal"
 
+    def test_create_todo_with_valid_deadline_type(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test creating a todo with a valid deadline_type."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {"id": 1}
+        mock_session.post.return_value = mock_response
+
+        for dt in ("flexible", "preferred", "firm", "hard"):
+            result = client.create_todo(title="Test", deadline_type=dt)
+            assert result.success is True
+
+    def test_create_todo_with_invalid_deadline_type(
+        self, client: TaskManagerClient
+    ) -> None:
+        """Test creating a todo with an invalid deadline_type raises ValidationError."""
+        with pytest.raises(ValidationError, match="Invalid deadline_type"):
+            client.create_todo(title="Test", deadline_type="invalid")
+
+    def test_update_todo_with_valid_deadline_type(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test updating a todo with a valid deadline_type."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {"success": True}
+        mock_session.put.return_value = mock_response
+
+        for dt in ("flexible", "preferred", "firm", "hard"):
+            result = client.update_todo(1, deadline_type=dt)
+            assert result.success is True
+
+    def test_update_todo_with_invalid_deadline_type(
+        self, client: TaskManagerClient
+    ) -> None:
+        """Test updating a todo with an invalid deadline_type raises ValidationError."""
+        with pytest.raises(ValidationError, match="Invalid deadline_type"):
+            client.update_todo(1, deadline_type="bogus")
+
     def test_search_tasks(self, client: TaskManagerClient, mock_session: Mock) -> None:
         """Test searching tasks."""
         mock_response = Mock()

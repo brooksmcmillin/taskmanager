@@ -8,7 +8,7 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
 	const sessionId = cookies.get('session');
 
 	// Public routes that don't require auth
-	const publicRoutes = ['/login', '/register'];
+	const publicRoutes = ['/login', '/register', '/privacy', '/terms'];
 	const isPublicRoute = publicRoutes.includes(url.pathname);
 
 	// If no session and not on public route, user will be null (client will redirect)

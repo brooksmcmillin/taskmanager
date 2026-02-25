@@ -14,6 +14,7 @@ from app.core.errors import errors
 from app.core.security import generate_token, get_token_expiry, verify_password
 from app.dependencies import DbSession
 from app.models.oauth import AccessToken, AuthorizationCode, DeviceCode, OAuthClient
+from app.models.user import User
 
 router = APIRouter(prefix="/api/oauth", tags=["oauth"])
 
@@ -204,12 +205,37 @@ async def _handle_refresh_token(
 async def _handle_client_credentials(
     db, client: OAuthClient, scope: str | None
 ) -> dict:
-    """Handle client credentials grant."""
+    """Handle client credentials grant.
+
+    If the OAuthClient is linked to a service account (user_id is set),
+    the issued token carries that user_id so all downstream queries
+    attribute actions to the service account.
+    """
     if "client_credentials" not in client.grant_types:
         raise errors.oauth_unsupported_grant_type()
 
-    # Convert scope string to JSON for storage, or use client's default scopes
+    # Resolve the token's user_id from the linked service account (if any)
+    token_user_id: int | None = None
+    if client.user_id is not None:
+        result = await db.execute(select(User).where(User.id == client.user_id))
+        linked_user = result.scalar_one_or_none()
+
+        # Reject if the linked user doesn't exist, is inactive,
+        # or is not a service account
+        if not linked_user or not linked_user.is_active:
+            raise errors.oauth_invalid_client()
+        if not linked_user.is_service_account:
+            raise errors.oauth_invalid_client()
+
+        token_user_id = linked_user.id
+
+    # Convert scope string to JSON for storage, or use client's default scopes.
+    # Requested scopes must be a subset of what the client is allowed.
     if scope:
+        requested_scopes = set(scope.split())
+        allowed_scopes = set(json.loads(client.scopes))
+        if not requested_scopes.issubset(allowed_scopes):
+            raise errors.oauth_invalid_scope()
         scopes_list = scope.split()
         scopes_json = json.dumps(scopes_list)
     else:
@@ -219,7 +245,7 @@ async def _handle_client_credentials(
     access_token = AccessToken(
         token=generate_token(32),
         client_id=client.client_id,
-        user_id=None,  # No user for client credentials
+        user_id=token_user_id,
         scopes=scopes_json,
         expires_at=get_token_expiry(settings.access_token_expiry),
     )

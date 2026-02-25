@@ -13,6 +13,8 @@ from .exceptions import (
 )
 from .models import ApiResponse
 
+VALID_DEADLINE_TYPES = ("flexible", "preferred", "firm", "hard")
+
 
 class TaskManagerClient:
     """
@@ -373,6 +375,11 @@ class TaskManagerClient:
         if due_date is not None:
             data["due_date"] = due_date
         if deadline_type is not None:
+            if deadline_type not in VALID_DEADLINE_TYPES:
+                raise ValidationError(
+                    f"Invalid deadline_type: {deadline_type!r}. "
+                    f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
+                )
             data["deadline_type"] = deadline_type
         if tags is not None:
             data["tags"] = tags
@@ -457,6 +464,11 @@ class TaskManagerClient:
         if due_date is not None:
             data["due_date"] = due_date
         if deadline_type is not None:
+            if deadline_type not in VALID_DEADLINE_TYPES:
+                raise ValidationError(
+                    f"Invalid deadline_type: {deadline_type!r}. "
+                    f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
+                )
             data["deadline_type"] = deadline_type
         if tags is not None:
             data["tags"] = tags
