@@ -87,9 +87,7 @@ test.describe('Deadline Type Feature', () => {
 			const response = await page.request.get('/api/todos');
 			const data = await response.json();
 			const todos = data.data || data;
-			const created = todos.find(
-				(t: { title: string }) => t.title === 'Default Deadline Task'
-			);
+			const created = todos.find((t: { title: string }) => t.title === 'Default Deadline Task');
 			expect(created).toBeTruthy();
 			expect(created.deadline_type).toBe('preferred');
 		});
@@ -115,9 +113,7 @@ test.describe('Deadline Type Feature', () => {
 			const response = await page.request.get('/api/todos');
 			const data = await response.json();
 			const todos = data.data || data;
-			const created = todos.find(
-				(t: { title: string }) => t.title === 'Hard Deadline Task'
-			);
+			const created = todos.find((t: { title: string }) => t.title === 'Hard Deadline Task');
 			expect(created).toBeTruthy();
 			expect(created.deadline_type).toBe('hard');
 		});
@@ -138,9 +134,7 @@ test.describe('Deadline Type Feature', () => {
 			const response = await page.request.get('/api/todos');
 			const data = await response.json();
 			const todos = data.data || data;
-			const created = todos.find(
-				(t: { title: string }) => t.title === 'Flexible Deadline Task'
-			);
+			const created = todos.find((t: { title: string }) => t.title === 'Flexible Deadline Task');
 			expect(created).toBeTruthy();
 			expect(created.deadline_type).toBe('flexible');
 		});
@@ -161,9 +155,7 @@ test.describe('Deadline Type Feature', () => {
 			const response = await page.request.get('/api/todos');
 			const data = await response.json();
 			const todos = data.data || data;
-			const created = todos.find(
-				(t: { title: string }) => t.title === 'Firm Deadline Task'
-			);
+			const created = todos.find((t: { title: string }) => t.title === 'Firm Deadline Task');
 			expect(created).toBeTruthy();
 			expect(created.deadline_type).toBe('firm');
 		});
@@ -181,9 +173,7 @@ test.describe('Deadline Type Feature', () => {
 			const listResponse = await page.request.get('/api/todos');
 			const listData = await listResponse.json();
 			const todos = listData.data || listData;
-			const todo = todos.find(
-				(t: { title: string }) => t.title === 'Edit DL Type Task'
-			);
+			const todo = todos.find((t: { title: string }) => t.title === 'Edit DL Type Task');
 			expect(todo).toBeTruthy();
 
 			await page.goto(`/task/${todo.id}`);
@@ -209,9 +199,7 @@ test.describe('Deadline Type Feature', () => {
 			const listResponse = await page.request.get('/api/todos');
 			const listData = await listResponse.json();
 			const todos = listData.data || listData;
-			const todo = todos.find(
-				(t: { title: string }) => t.title === 'Update DL Task'
-			);
+			const todo = todos.find((t: { title: string }) => t.title === 'Update DL Task');
 
 			await page.goto(`/task/${todo.id}`);
 			await page.waitForLoadState('networkidle');
