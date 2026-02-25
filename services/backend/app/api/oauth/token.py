@@ -217,9 +217,7 @@ async def _handle_client_credentials(
     # Resolve the token's user_id from the linked service account (if any)
     token_user_id: int | None = None
     if client.user_id is not None:
-        result = await db.execute(
-            select(User).where(User.id == client.user_id)
-        )
+        result = await db.execute(select(User).where(User.id == client.user_id))
         linked_user = result.scalar_one_or_none()
 
         # Reject if the linked user doesn't exist, is inactive,
@@ -238,7 +236,7 @@ async def _handle_client_credentials(
         allowed_scopes = set(json.loads(client.scopes))
         if not requested_scopes.issubset(allowed_scopes):
             raise errors.oauth_invalid_scope()
-        scopes_list = list(requested_scopes)
+        scopes_list = scope.split()
         scopes_json = json.dumps(scopes_list)
     else:
         scopes_json = client.scopes
