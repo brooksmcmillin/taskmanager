@@ -141,6 +141,9 @@ async def _handle_authorization_code(
         refresh_token_expires_at=get_token_expiry(settings.access_token_expiry * 24),
     )
     db.add(access_token)
+    # Commit now so the token is visible to immediate follow-up requests
+    # (e.g. MCP auth server verifying the token right after exchange)
+    await db.commit()
 
     # Deserialize scopes from JSON for response
     scopes_list = json.loads(auth_code.scopes)
@@ -190,6 +193,7 @@ async def _handle_refresh_token(
 
     # Delete old token
     await db.delete(old_token)
+    await db.commit()
 
     # Deserialize scopes from JSON for response
     scopes_list = json.loads(old_token.scopes)
@@ -250,6 +254,7 @@ async def _handle_client_credentials(
         expires_at=get_token_expiry(settings.access_token_expiry),
     )
     db.add(access_token)
+    await db.commit()
 
     return {
         "access_token": access_token.token,
@@ -335,6 +340,7 @@ async def _handle_device_code(db, client: OAuthClient, device_code: str | None) 
 
     # Delete device code
     await db.delete(dc)
+    await db.commit()
 
     # Deserialize scopes from JSON for response
     scopes_list = json.loads(dc.scopes)
