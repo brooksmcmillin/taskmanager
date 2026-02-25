@@ -43,7 +43,7 @@
 
 	function endOfWeekStr(): string {
 		const d = new Date();
-		const daysUntilSunday = 7 - d.getDay();
+		const daysUntilSunday = d.getDay() === 0 ? 0 : 7 - d.getDay();
 		d.setDate(d.getDate() + daysUntilSunday);
 		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 	}

@@ -332,7 +332,7 @@
 						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
 							+{overflow} more
 						</button>
-					{:else if isExpanded && allTasks.length > MAX_VISIBLE_TASKS}
+					{:else if isExpanded && (allTasks.length > MAX_VISIBLE_TASKS || (subtasksByDate[dateStr] || []).length > 0)}
 						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
 							Show less
 						</button>

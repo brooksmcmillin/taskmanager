@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
+	import { createEventDispatcher, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api/client';
 	import { getPriorityColor } from '$lib/utils/priority';
@@ -86,6 +86,8 @@
 		goto(`/task/${id}`);
 	}
 
+	onDestroy(() => clearTimeout(debounceTimer));
+
 	$: if (open) {
 		// Focus input when modal opens
 		setTimeout(() => inputEl?.focus(), 50);
@@ -95,8 +97,12 @@
 <svelte:window on:keydown={handleKeydown} />
 
 {#if open}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="search-backdrop" on:click={handleBackdropClick} on:keydown={handleKeydown}>
+	<div
+		class="search-backdrop"
+		on:click={handleBackdropClick}
+		role="presentation"
+		aria-hidden="true"
+	>
 		<div class="search-modal" role="dialog" aria-modal="true" aria-label="Search tasks">
 			<div class="search-input-wrapper">
 				<svg
@@ -144,7 +150,7 @@
 									<div class="result-title">{result.title}</div>
 									<div class="result-meta">
 										<span class="result-status {result.status}"
-											>{result.status.replace('_', ' ')}</span
+											>{result.status.replaceAll('_', ' ')}</span
 										>
 										{#if result.project_name}
 											<span class="result-project">{result.project_name}</span>
