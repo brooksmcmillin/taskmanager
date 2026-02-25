@@ -131,9 +131,9 @@
 	<title>Login - Task Manager</title>
 </svelte:head>
 
-<main class="container" style="max-width: 400px; margin: 2rem auto;">
-	<div class="card">
-		<h1>Login</h1>
+<main class="auth-page">
+	<div class="card auth-card">
+		<h1 class="auth-title">Login</h1>
 
 		{#if error}
 			<div class="error-message" style="margin-bottom: 1rem;">
@@ -166,13 +166,13 @@
 				/>
 			</div>
 
-			<button type="submit" class="btn btn-primary" style="margin-left: 0; width: 100%;"
-				>Login</button
-			>
+			<button type="submit" class="btn btn-primary" style="margin-left: 0; width: 100%;">
+				Login
+			</button>
 		</form>
 
 		{#if webauthnSupported || githubEnabled}
-			<div class="divider">
+			<div class="auth-divider">
 				<span>or</span>
 			</div>
 		{/if}
@@ -216,69 +216,8 @@
 </main>
 
 <style>
-	.divider {
-		display: flex;
-		align-items: center;
-		text-align: center;
-		margin: 1.5rem 0;
-		color: var(--text-muted, #6b7280);
-	}
-
-	.divider::before,
-	.divider::after {
-		content: '';
-		flex: 1;
-		border-bottom: 1px solid var(--border-color, #e5e7eb);
-	}
-
-	.divider span {
-		padding: 0 0.75rem;
-		font-size: 0.875rem;
-	}
-
 	.passkey-btn {
 		width: 100%;
 		margin-bottom: 0.75rem;
-	}
-
-	.btn-github {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.625rem 1rem;
-		background-color: #24292e;
-		color: white;
-		border: none;
-		border-radius: var(--radius);
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background-color 0.2s ease;
-		margin-left: 0;
-	}
-
-	.btn-github:hover:not(:disabled) {
-		background-color: #1b1f23;
-	}
-
-	.btn-github:disabled {
-		opacity: 0.7;
-		cursor: not-allowed;
-	}
-
-	.github-icon {
-		width: 20px;
-		height: 20px;
-	}
-
-	:global([data-theme='dark']) .btn-github {
-		background-color: #f0f0f0;
-		color: #24292e;
-	}
-
-	:global([data-theme='dark']) .btn-github:hover:not(:disabled) {
-		background-color: #e0e0e0;
 	}
 </style>

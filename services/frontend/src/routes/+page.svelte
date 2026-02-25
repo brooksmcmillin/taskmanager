@@ -407,8 +407,8 @@
 	}
 
 	.subtask-status-pill.in_progress {
-		background-color: #dbeafe;
-		color: #1d4ed8;
+		background-color: var(--primary-50);
+		color: var(--primary-600);
 	}
 
 	@media (max-width: 768px) {
