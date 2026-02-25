@@ -9,8 +9,8 @@ should be respected:
 
 Existing rows default to 'preferred' for backward compatibility.
 
-Revision ID: 0020_add_deadline_type
-Revises: 0019_add_updated_at_server_default
+Revision ID: 0021_add_deadline_type
+Revises: 0020_add_service_account_fields
 Create Date: 2026-02-16
 
 """
@@ -22,8 +22,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "0020_add_deadline_type"
-down_revision: str | None = "0019_add_updated_at_server_default"
+revision: str = "0021_add_deadline_type"
+down_revision: str | None = "0020_add_service_account_fields"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
