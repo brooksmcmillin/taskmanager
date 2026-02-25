@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.scss';
 	import Navigation from '$lib/components/Navigation.svelte';
+	import Toasts from '$lib/components/Toasts.svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -29,3 +30,4 @@
 	<Navigation user={data.user} />
 {/if}
 <slot />
+<Toasts />

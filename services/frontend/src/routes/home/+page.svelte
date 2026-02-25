@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import { getDeadlineTypeLabel, getDeadlineTypeColor } from '$lib/utils/deadline';
+	import { toasts } from '$lib/stores/ui';
 	import type { Todo, Article, ApiResponse } from '$lib/types';
 
 	let tasks: Todo[] = [];
@@ -101,12 +102,37 @@
 		completingTasks.add(taskId);
 		completingTasks = completingTasks;
 		try {
+			// Save the task before removing it (for undo)
+			const removedTask =
+				source === 'today'
+					? tasks.find((t) => t.id === taskId)
+					: overdueTasks.find((t) => t.id === taskId);
+
 			await api.post(`/api/todos/${taskId}/complete`, {});
 			if (source === 'today') {
 				tasks = tasks.filter((t) => t.id !== taskId);
 			} else {
 				overdueTasks = overdueTasks.filter((t) => t.id !== taskId);
 			}
+
+			toasts.success('Task completed', 5000, {
+				label: 'Undo',
+				callback: async () => {
+					try {
+						await api.put(`/api/todos/${taskId}`, { status: 'pending' });
+						if (removedTask) {
+							const restored = { ...removedTask, status: 'pending' as const };
+							if (source === 'today') {
+								tasks = [...tasks, restored];
+							} else {
+								overdueTasks = [...overdueTasks, restored];
+							}
+						}
+					} catch {
+						toasts.error('Failed to undo completion');
+					}
+				}
+			});
 		} finally {
 			completingTasks.delete(taskId);
 			completingTasks = completingTasks;
