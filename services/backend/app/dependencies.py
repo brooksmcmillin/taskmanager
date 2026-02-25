@@ -171,19 +171,23 @@ async def validate_client_credentials_token(
 ) -> str:
     """Validate OAuth Bearer token from client credentials grant.
 
-    This validates machine-to-machine tokens that don't have a user_id.
+    Accepts both system-level tokens (user_id=None) and service account
+    tokens (user_id set, linked user has is_service_account=True).
     Returns the client_id associated with the token.
     """
     # Extract and validate token
     token = await _extract_bearer_token(request)
     access_token = await _validate_access_token(db, token)
 
-    # Client credentials grants have client_id but no user_id
-    if access_token.user_id is not None:
-        raise errors.auth_required()
-
     if not access_token.client_id:
         raise errors.invalid_token()
+
+    # Allow system-level tokens (no user) and service account tokens
+    if access_token.user_id is not None:
+        result = await db.execute(select(User).where(User.id == access_token.user_id))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_active or not user.is_service_account:
+            raise errors.auth_required()
 
     return access_token.client_id
 

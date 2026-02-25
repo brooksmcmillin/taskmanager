@@ -437,16 +437,99 @@ async def test_validate_client_credentials_token_success(
 
 
 @pytest.mark.asyncio
-async def test_validate_client_credentials_token_with_user_id(
+async def test_validate_client_credentials_token_with_regular_user_id(
     db_session: AsyncSession, test_user: User, user_access_token: AccessToken
 ):
-    """Test client credentials validation fails when token has user_id."""
+    """Test client credentials validation fails when token belongs to a regular user."""
     request = Request(
         scope={
             "type": "http",
             "headers": [
                 (b"authorization", f"Bearer {user_access_token.token}".encode())
             ],
+            "query_string": b"",
+            "root_path": "",
+            "path": "/",
+            "method": "GET",
+            "scheme": "http",
+        }
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        await validate_client_credentials_token(request, db_session)
+
+    assert exc_info.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_validate_client_credentials_token_with_service_account(
+    db_session: AsyncSession, oauth_client: OAuthClient
+):
+    """Test client credentials validation succeeds for service account tokens."""
+    # Create a service account user
+    service_user = User(
+        email="svc@service.local",
+        password_hash="!unusable_service_account_password",
+        is_service_account=True,
+    )
+    db_session.add(service_user)
+    await db_session.flush()
+
+    # Create a token linked to the service account
+    token = AccessToken(
+        token=generate_token(),
+        client_id=oauth_client.client_id,
+        user_id=service_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    db_session.add(token)
+    await db_session.commit()
+
+    request = Request(
+        scope={
+            "type": "http",
+            "headers": [(b"authorization", f"Bearer {token.token}".encode())],
+            "query_string": b"",
+            "root_path": "",
+            "path": "/",
+            "method": "GET",
+            "scheme": "http",
+        }
+    )
+
+    client_id = await validate_client_credentials_token(request, db_session)
+    assert client_id == oauth_client.client_id
+
+
+@pytest.mark.asyncio
+async def test_validate_client_credentials_token_with_inactive_service_account(
+    db_session: AsyncSession, oauth_client: OAuthClient
+):
+    """Test client credentials validation fails for inactive service account."""
+    service_user = User(
+        email="inactive-svc@service.local",
+        password_hash="!unusable_service_account_password",
+        is_service_account=True,
+        is_active=False,
+    )
+    db_session.add(service_user)
+    await db_session.flush()
+
+    token = AccessToken(
+        token=generate_token(),
+        client_id=oauth_client.client_id,
+        user_id=service_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    db_session.add(token)
+    await db_session.commit()
+
+    request = Request(
+        scope={
+            "type": "http",
+            "headers": [(b"authorization", f"Bearer {token.token}".encode())],
             "query_string": b"",
             "root_path": "",
             "path": "/",
