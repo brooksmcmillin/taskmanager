@@ -11,6 +11,7 @@
 	import {
 		getDeadlineTypeLabel,
 		getDeadlineTypeColor,
+		getDeadlineTypeBgColor,
 		getDeadlineTypeDescription
 	} from '$lib/utils/deadline';
 	import { formatDateDisplay } from '$lib/utils/dates';
@@ -201,9 +202,9 @@
 								<label class="detail-label">Deadline Type</label>
 								<span
 									class="deadline-type-badge"
-									style="border-color: {getDeadlineTypeColor(
+									style="color: {getDeadlineTypeColor(
 										todo.deadline_type
-									)}; color: {getDeadlineTypeColor(todo.deadline_type)}"
+									)}; background-color: {getDeadlineTypeBgColor(todo.deadline_type)}"
 									title={getDeadlineTypeDescription(todo.deadline_type)}
 								>
 									{getDeadlineTypeLabel(todo.deadline_type)}
@@ -424,12 +425,10 @@
 
 	.deadline-type-badge {
 		display: inline-block;
-		padding: 0.25rem 0.625rem;
+		padding: 0.25rem 0.75rem;
 		font-size: 0.75rem;
 		font-weight: 600;
-		border: 1.5px solid;
-		border-radius: var(--radius);
-		letter-spacing: 0.02em;
+		border-radius: 9999px;
 	}
 
 	.tag {
