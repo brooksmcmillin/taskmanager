@@ -16,9 +16,9 @@
 		<section>
 			<h2>1. Introduction</h2>
 			<p>
-				{appName} ("we," "our," or "us") is committed to protecting your privacy. This Privacy
-				Policy explains how we collect, use, disclose, and safeguard your information when you use
-				our task management application and related services (the "Service").
+				{appName} ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy
+				explains how we collect, use, disclose, and safeguard your information when you use our task management
+				application and related services (the "Service").
 			</p>
 			<p>
 				By using the Service, you agree to the collection and use of information in accordance with
@@ -51,8 +51,8 @@
 			<h3>2.2 Information Collected Automatically</h3>
 			<ul>
 				<li>
-					<strong>Log Data:</strong> IP address, browser type, operating system, referring URLs, and
-					access timestamps.
+					<strong>Log Data:</strong> IP address, browser type, operating system, referring URLs, and access
+					timestamps.
 				</li>
 				<li>
 					<strong>Session Data:</strong> Session identifiers used to maintain your authenticated state.
@@ -70,9 +70,7 @@
 				<li>Provide, maintain, and improve the Service.</li>
 				<li>Authenticate your identity and manage your account.</li>
 				<li>Send you notifications, updates, and administrative messages.</li>
-				<li>
-					Send text message notifications if you have opted in to receive them.
-				</li>
+				<li>Send text message notifications if you have opted in to receive them.</li>
 				<li>Respond to your comments, questions, and support requests.</li>
 				<li>Monitor and analyze usage trends to improve user experience.</li>
 				<li>Detect, prevent, and address technical issues and security threats.</li>
@@ -82,11 +80,11 @@
 
 		<section>
 			<h2>4. Text Message Communications</h2>
-			<p>
-				If you opt in to receive text messages from us, the following applies:
-			</p>
+			<p>If you opt in to receive text messages from us, the following applies:</p>
 			<ul>
-				<li>You may receive notifications related to your tasks, reminders, and account updates.</li>
+				<li>
+					You may receive notifications related to your tasks, reminders, and account updates.
+				</li>
 				<li>Message frequency varies based on your activity and preferences.</li>
 				<li>Message and data rates may apply depending on your mobile carrier plan.</li>
 				<li>You can opt out at any time by replying STOP to any message.</li>
@@ -102,23 +100,26 @@
 
 		<section>
 			<h2>5. Data Sharing and Disclosure</h2>
-			<p>We do not sell your personal information. We may share your information in the following circumstances:</p>
+			<p>
+				We do not sell your personal information. We may share your information in the following
+				circumstances:
+			</p>
 			<ul>
 				<li>
 					<strong>Service Providers:</strong> With third-party vendors who assist us in operating the
 					Service (e.g., hosting, analytics, SMS delivery), subject to confidentiality obligations.
 				</li>
 				<li>
-					<strong>Legal Requirements:</strong> When required by law, regulation, legal process, or
-					governmental request.
+					<strong>Legal Requirements:</strong> When required by law, regulation, legal process, or governmental
+					request.
 				</li>
 				<li>
-					<strong>Safety:</strong> To protect the rights, property, or safety of {appName}, our users,
-					or others.
+					<strong>Safety:</strong> To protect the rights, property, or safety of {appName}, our
+					users, or others.
 				</li>
 				<li>
-					<strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of
-					assets, your information may be transferred.
+					<strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of assets,
+					your information may be transferred.
 				</li>
 			</ul>
 		</section>
@@ -136,8 +137,8 @@
 		<section>
 			<h2>7. Data Retention</h2>
 			<p>
-				We retain your information for as long as your account is active or as needed to provide
-				the Service. You may request deletion of your account and associated data at any time by
+				We retain your information for as long as your account is active or as needed to provide the
+				Service. You may request deletion of your account and associated data at any time by
 				contacting us. We may retain certain information as required by law or for legitimate
 				business purposes.
 			</p>
@@ -154,7 +155,9 @@
 				<li>Request a portable copy of your data.</li>
 				<li>Withdraw consent at any time where processing is based on consent.</li>
 			</ul>
-			<p>To exercise these rights, contact us at <a href="mailto:{contactEmail}">{contactEmail}</a>.</p>
+			<p>
+				To exercise these rights, contact us at <a href="mailto:{contactEmail}">{contactEmail}</a>.
+			</p>
 		</section>
 
 		<section>

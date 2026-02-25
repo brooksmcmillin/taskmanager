@@ -62,9 +62,7 @@
 				<div class="success-icon">&#10003;</div>
 				<h1>You're signed up!</h1>
 				<p class="success-phone">+1 {phone}</p>
-				<p class="success-message">
-					You'll receive text message updates at this number.
-				</p>
+				<p class="success-message">You'll receive text message updates at this number.</p>
 				<button
 					class="btn btn-outline"
 					style="width: 100%; margin-left: 0;"
@@ -80,9 +78,7 @@
 			</div>
 		{:else}
 			<h1>Get Text Updates</h1>
-			<p class="subtitle">
-				Enter your phone number to receive text message notifications.
-			</p>
+			<p class="subtitle">Enter your phone number to receive text message notifications.</p>
 
 			<form on:submit|preventDefault={handleSubmit} novalidate>
 				<div class="form-group">
@@ -93,6 +89,7 @@
 						class="form-input"
 						bind:value={name}
 						placeholder="Your name"
+						maxlength="100"
 					/>
 				</div>
 
@@ -117,8 +114,8 @@
 					<label class="consent-label">
 						<input type="checkbox" bind:checked={consent} />
 						<span>
-							I agree to receive text messages. Message &amp; data rates may apply.
-							Reply STOP to unsubscribe.
+							I agree to receive text messages. Message &amp; data rates may apply. Reply STOP to
+							unsubscribe.
 						</span>
 					</label>
 				</div>
@@ -138,10 +135,10 @@
 			</form>
 
 			<p class="fine-print">
-				By opting in, you consent to receive automated text messages at the number provided.
-				Consent is not a condition of purchase. Message frequency varies.
-				Reply HELP for help, STOP to cancel.
-				See our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms and Conditions</a>.
+				By opting in, you consent to receive automated text messages at the number provided. Consent
+				is not a condition of purchase. Message frequency varies. Reply HELP for help, STOP to
+				cancel. See our <a href="/privacy">Privacy Policy</a> and
+				<a href="/terms">Terms and Conditions</a>.
 			</p>
 		{/if}
 	</div>

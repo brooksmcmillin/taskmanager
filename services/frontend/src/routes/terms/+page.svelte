@@ -16,16 +16,16 @@
 		<section>
 			<h2>1. Acceptance of Terms</h2>
 			<p>
-				By accessing or using {appName} (the "Service"), you agree to be bound by these Terms and
-				Conditions ("Terms"). If you do not agree to these Terms, do not use the Service.
+				By accessing or using {appName} (the "Service"), you agree to be bound by these Terms and Conditions
+				("Terms"). If you do not agree to these Terms, do not use the Service.
 			</p>
 		</section>
 
 		<section>
 			<h2>2. Description of Service</h2>
 			<p>
-				{appName} is a task management application that allows users to create, organize, and track
-				tasks and projects. The Service may include web-based interfaces, APIs, and related tools.
+				{appName} is a task management application that allows users to create, organize, and track tasks
+				and projects. The Service may include web-based interfaces, APIs, and related tools.
 			</p>
 		</section>
 
@@ -71,9 +71,7 @@
 
 		<section>
 			<h2>6. Text Message Communications</h2>
-			<p>
-				If you opt in to receive text message notifications:
-			</p>
+			<p>If you opt in to receive text message notifications:</p>
 			<ul>
 				<li>You consent to receive automated text messages related to the Service.</li>
 				<li>Message frequency varies based on your account activity and settings.</li>
@@ -81,9 +79,7 @@
 				<li>You may opt out at any time by replying STOP to any message.</li>
 				<li>Reply HELP for assistance.</li>
 				<li>Consent to receive texts is not required to use or purchase the Service.</li>
-				<li>
-					Your phone number will not be shared with third parties for marketing purposes.
-				</li>
+				<li>Your phone number will not be shared with third parties for marketing purposes.</li>
 			</ul>
 			<p>
 				For more information, see our <a href="/privacy">Privacy Policy</a>.
@@ -94,17 +90,17 @@
 			<h2>7. Intellectual Property</h2>
 			<p>
 				The Service, including its design, features, code, and documentation, is owned by
-				{appName} and protected by intellectual property laws. These Terms do not grant you any
-				right to use our trademarks, logos, or branding without prior written consent.
+				{appName} and protected by intellectual property laws. These Terms do not grant you any right
+				to use our trademarks, logos, or branding without prior written consent.
 			</p>
 		</section>
 
 		<section>
 			<h2>8. Third-Party Services</h2>
 			<p>
-				The Service may integrate with third-party applications and services. We are not
-				responsible for the availability, accuracy, or content of third-party services. Your use of
-				third-party services is subject to their respective terms and policies.
+				The Service may integrate with third-party applications and services. We are not responsible
+				for the availability, accuracy, or content of third-party services. Your use of third-party
+				services is subject to their respective terms and policies.
 			</p>
 		</section>
 
@@ -120,10 +116,10 @@
 		<section>
 			<h2>10. Termination</h2>
 			<p>
-				We reserve the right to suspend or terminate your account at any time for violation of
-				these Terms or for any other reason at our discretion. You may terminate your account at
-				any time by contacting us. Upon termination, your right to use the Service ceases
-				immediately. We may retain certain data as required by law.
+				We reserve the right to suspend or terminate your account at any time for violation of these
+				Terms or for any other reason at our discretion. You may terminate your account at any time
+				by contacting us. Upon termination, your right to use the Service ceases immediately. We may
+				retain certain data as required by law.
 			</p>
 		</section>
 
@@ -140,10 +136,10 @@
 		<section>
 			<h2>12. Limitation of Liability</h2>
 			<p>
-				TO THE MAXIMUM EXTENT PERMITTED BY LAW, {appName.toUpperCase()} SHALL NOT BE LIABLE FOR ANY
-				INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS
-				OR REVENUE, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL,
-				OR OTHER INTANGIBLE LOSSES, RESULTING FROM YOUR USE OF THE SERVICE.
+				TO THE MAXIMUM EXTENT PERMITTED BY LAW, {appName.toUpperCase()} SHALL NOT BE LIABLE FOR ANY INDIRECT,
+				INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUE, WHETHER
+				INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES,
+				RESULTING FROM YOUR USE OF THE SERVICE.
 			</p>
 		</section>
 
@@ -159,9 +155,9 @@
 		<section>
 			<h2>14. Changes to Terms</h2>
 			<p>
-				We may modify these Terms at any time. We will notify you of material changes by posting
-				the updated Terms on this page and updating the "Last updated" date. Your continued use of
-				the Service after changes constitutes acceptance of the revised Terms.
+				We may modify these Terms at any time. We will notify you of material changes by posting the
+				updated Terms on this page and updating the "Last updated" date. Your continued use of the
+				Service after changes constitutes acceptance of the revised Terms.
 			</p>
 		</section>
 
