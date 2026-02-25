@@ -138,7 +138,7 @@ async def _handle_authorization_code(
         scopes=auth_code.scopes,
         expires_at=get_token_expiry(settings.access_token_expiry),
         refresh_token=generate_token(32),
-        refresh_token_expires_at=get_token_expiry(settings.access_token_expiry * 24),
+        refresh_token_expires_at=get_token_expiry(settings.refresh_token_expiry),
     )
     db.add(access_token)
     # Commit now so the token is visible to immediate follow-up requests
@@ -187,7 +187,7 @@ async def _handle_refresh_token(
         scopes=old_token.scopes,
         expires_at=get_token_expiry(settings.access_token_expiry),
         refresh_token=generate_token(32),
-        refresh_token_expires_at=get_token_expiry(settings.access_token_expiry * 24),
+        refresh_token_expires_at=get_token_expiry(settings.refresh_token_expiry),
     )
     db.add(new_token)
 
@@ -334,7 +334,7 @@ async def _handle_device_code(db, client: OAuthClient, device_code: str | None) 
         scopes=dc.scopes,
         expires_at=get_token_expiry(settings.access_token_expiry),
         refresh_token=generate_token(32),
-        refresh_token_expires_at=get_token_expiry(settings.access_token_expiry * 24),
+        refresh_token_expires_at=get_token_expiry(settings.refresh_token_expiry),
     )
     db.add(access_token)
 

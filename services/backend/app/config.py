@@ -56,7 +56,8 @@ class Settings(BaseSettings):
     login_window_ms: int = 15 * 60 * 1000  # 15 minutes
 
     # OAuth
-    access_token_expiry: int = 3600  # 1 hour in seconds
+    access_token_expiry: int = 86400  # 24 hours in seconds
+    refresh_token_expiry: int = 604800  # 7 days in seconds
     auth_code_expiry: int = 10  # minutes
     device_code_expiry: int = 1800  # 30 minutes in seconds
     device_poll_interval: int = 5  # seconds

@@ -176,7 +176,7 @@ def create_resource_server(
             "registration_endpoint": f"{auth_base}/register",
             "scopes_supported": DEFAULT_SCOPE,
             "response_types_supported": ["code"],
-            "grant_types_supported": ["authorization_code"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
             "token_endpoint_auth_methods_supported": ["client_secret_post"],
             "code_challenge_methods_supported": ["S256"],
         }
