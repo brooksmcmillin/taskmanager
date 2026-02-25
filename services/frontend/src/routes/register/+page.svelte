@@ -160,9 +160,9 @@
 	<title>Register - Task Manager</title>
 </svelte:head>
 
-<main class="register-page">
-	<div class="card register-card">
-		<h1 class="register-title">Register</h1>
+<main class="auth-page">
+	<div class="card auth-card">
+		<h1 class="auth-title">Register</h1>
 
 		{#if githubEnabled}
 			<button
@@ -180,7 +180,7 @@
 				{githubLoading ? 'Redirecting...' : 'Sign up with GitHub'}
 			</button>
 
-			<div class="oauth-divider">
+			<div class="auth-divider">
 				<span>or register with email</span>
 			</div>
 		{/if}
@@ -276,102 +276,5 @@
 </main>
 
 <style>
-	.register-page {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: calc(100vh - 5rem);
-		padding: var(--space-4);
-	}
-
-	.register-card {
-		width: 100%;
-		max-width: 400px;
-		box-shadow:
-			0 25px 50px -12px rgba(28, 25, 23, 0.08),
-			0 0 0 1px var(--border-color);
-		animation: cardEnter 0.5s ease-out;
-	}
-
-	@keyframes cardEnter {
-		from {
-			opacity: 0;
-			transform: translateY(12px) scale(0.98);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0) scale(1);
-		}
-	}
-
-	.register-title {
-		font-size: 1.75rem;
-		font-weight: 500;
-		margin-bottom: 0.25rem;
-	}
-
-	.oauth-divider {
-		display: flex;
-		align-items: center;
-		text-align: center;
-		margin: 1.5rem 0;
-		color: var(--text-muted);
-	}
-
-	.oauth-divider::before,
-	.oauth-divider::after {
-		content: '';
-		flex: 1;
-		border-bottom: 1px solid var(--border-color);
-	}
-
-	.oauth-divider span {
-		padding: 0 1rem;
-		font-size: 0.8125rem;
-		letter-spacing: 0.04em;
-	}
-
-	.btn-github {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.625rem 1rem;
-		background-color: #292524;
-		color: white;
-		border: none;
-		border-radius: var(--radius);
-		font-family: var(--font-sans);
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		margin-left: 0;
-	}
-
-	.btn-github:hover:not(:disabled) {
-		background-color: #1c1917;
-		transform: translateY(-1px);
-		box-shadow: var(--shadow-md);
-	}
-
-	.btn-github:disabled {
-		opacity: 0.7;
-		cursor: not-allowed;
-	}
-
-	.github-icon {
-		width: 20px;
-		height: 20px;
-	}
-
-	:global([data-theme='dark']) .btn-github {
-		background-color: #f3f0ec;
-		color: #292524;
-	}
-
-	:global([data-theme='dark']) .btn-github:hover:not(:disabled) {
-		background-color: #e7e3de;
-	}
+	/* All shared auth styles (.auth-page, .auth-card, .auth-title, .auth-divider, .btn-github) are in app.scss */
 </style>

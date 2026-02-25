@@ -46,7 +46,7 @@
 	/* Typography */
 	--font-sans: 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 	--font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
-	--font-mono: 'JetBrains Mono', 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace;
+	--font-mono: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace;
 
 	/* Spacing */
 	--space-1: 0.25rem;
@@ -216,6 +216,8 @@ html {
 	line-height: 1.5;
 	-webkit-text-size-adjust: 100%;
 	tab-size: 4;
+	scrollbar-width: thin;
+	scrollbar-color: var(--gray-300) transparent;
 }
 
 body {
@@ -968,7 +970,7 @@ h6 {
 	padding: 0.75rem;
 	border-radius: var(--radius);
 	margin-top: 1rem;
-	border: 1px solid var(--error-100);
+	border: 1px solid var(--error-500);
 	font-size: 0.875rem;
 }
 
@@ -1521,6 +1523,115 @@ h6 {
 
 	.text-2xl {
 		font-size: 1.25rem;
+	}
+}
+
+// Shared auth page styles (login, register)
+.auth-page {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: calc(100vh - 5rem);
+	padding: var(--space-4);
+}
+
+.auth-card {
+	width: 100%;
+	max-width: 400px;
+	box-shadow:
+		0 25px 50px -12px rgba(28, 25, 23, 0.08),
+		0 0 0 1px var(--border-color);
+	animation: cardEnter 0.5s ease-out;
+}
+
+.auth-title {
+	font-size: 1.75rem;
+	font-weight: 500;
+	margin-bottom: 0.25rem;
+}
+
+@keyframes cardEnter {
+	from {
+		opacity: 0;
+		transform: translateY(12px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.btn-github {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	width: 100%;
+	padding: 0.625rem 1rem;
+	background-color: #292524;
+	color: white;
+	border: none;
+	border-radius: var(--radius);
+	font-family: var(--font-sans);
+	font-size: 0.875rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	margin-left: 0;
+
+	&:hover:not(:disabled) {
+		background-color: #1c1917;
+		transform: translateY(-1px);
+		box-shadow: var(--shadow-md);
+	}
+
+	&:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
+	}
+
+	.github-icon {
+		width: 20px;
+		height: 20px;
+	}
+}
+
+[data-theme='dark'] .btn-github {
+	background-color: #f3f0ec;
+	color: #292524;
+
+	&:hover:not(:disabled) {
+		background-color: #e7e3de;
+	}
+}
+
+.auth-divider {
+	display: flex;
+	align-items: center;
+	text-align: center;
+	margin: 1.5rem 0;
+	color: var(--text-muted);
+
+	&::before,
+	&::after {
+		content: '';
+		flex: 1;
+		border-bottom: 1px solid var(--border-color);
+	}
+
+	span {
+		padding: 0 0.75rem;
+		font-size: 0.8125rem;
+		letter-spacing: 0.04em;
+	}
+}
+
+// Reduced motion: disable entrance animations for accessibility
+@media (prefers-reduced-motion: reduce) {
+	.auth-card,
+	.home-container,
+	.animate-fade-in {
+		animation: none !important;
 	}
 }
 
