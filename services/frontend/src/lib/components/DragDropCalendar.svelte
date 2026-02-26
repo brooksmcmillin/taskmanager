@@ -389,7 +389,9 @@
 				{@const isExpanded = expandedDays[dateStr] || false}
 				{@const hiddenCount = Math.max(0, allTasks.length - MAX_VISIBLE_TASKS)}
 				{@const pendingSubtasks = subtasksByDate[dateStr] || []}
-				{@const overflow = isExpanded ? 0 : hiddenCount + pendingSubtasks.length}
+				{@const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - allTasks.length)}
+				{@const visibleSubtaskCount = isExpanded ? pendingSubtasks.length : Math.min(pendingSubtasks.length, freeSlots)}
+				{@const overflow = isExpanded ? 0 : hiddenCount + (pendingSubtasks.length - visibleSubtaskCount)}
 				<div class="calendar-day" class:today={isTodayDay} data-date={dateStr}>
 					<div class="calendar-date">
 						{date.getMonth() + 1}/{date.getDate()}
@@ -448,8 +450,8 @@
 							</div>
 						{/each}
 					</div>
-					{#if isExpanded}
-						{#each subtasksByDate[dateStr] || [] as subtask (subtask.id)}
+					{#each pendingSubtasks as subtask, idx (subtask.id)}
+						{#if isExpanded || idx < visibleSubtaskCount}
 							<div
 								class="calendar-task calendar-subtask-item {subtask.priority}-priority"
 								style="background-color: {hexTo50Shade(
@@ -474,8 +476,8 @@
 								</div>
 								<div class="task-title">{subtask.title}</div>
 							</div>
-						{/each}
-					{/if}
+						{/if}
+					{/each}
 					{#if overflow > 0}
 						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
 							+{overflow} more
