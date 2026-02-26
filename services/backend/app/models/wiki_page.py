@@ -59,11 +59,15 @@ class WikiPage(Base):
     title: Mapped[str] = mapped_column(String(500))
     slug: Mapped[str] = mapped_column(String(500), index=True)
     content: Mapped[str] = mapped_column(Text, default="")
+    revision_number: Mapped[int] = mapped_column(default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
     )
 
     # Relationships
@@ -72,4 +76,35 @@ class WikiPage(Base):
         "Todo",
         secondary=todo_wiki_links,
         back_populates="linked_wiki_pages",
+    )
+    revisions: Mapped[list[WikiPageRevision]] = relationship(
+        "WikiPageRevision",
+        back_populates="wiki_page",
+        order_by="WikiPageRevision.revision_number",
+    )
+
+
+class WikiPageRevision(Base):
+    """Snapshot of a wiki page at a specific revision."""
+
+    __tablename__ = "wiki_page_revisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    wiki_page_id: Mapped[int] = mapped_column(
+        ForeignKey("wiki_pages.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
+    title: Mapped[str] = mapped_column(String(500))
+    slug: Mapped[str] = mapped_column(String(500))
+    content: Mapped[str] = mapped_column(Text)
+    revision_number: Mapped[int] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # Relationships
+    wiki_page: Mapped[WikiPage] = relationship(
+        "WikiPage", back_populates="revisions"
     )

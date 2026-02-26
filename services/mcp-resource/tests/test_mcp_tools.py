@@ -1910,3 +1910,155 @@ class TestWikiTools:
             parsed = json.loads(result)
             assert "error" in parsed
             assert "Invalid task_id" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_update_wiki_page_append(self, mock_api_client: MagicMock) -> None:
+        """Test updating a wiki page with append mode."""
+        import json
+
+        mock_api_client.update_wiki_page.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 3,
+                "title": "My Page",
+                "slug": "my-page",
+                "content": "Old content\nNew content",
+                "revision_number": 2,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["update_wiki_page"].fn(
+                page_id=3, content="New content", append=True
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "updated"
+            mock_api_client.update_wiki_page.assert_called_with(
+                page_id=3, title=None, content="New content", slug=None, append=True
+            )
+
+    @pytest.mark.asyncio
+    async def test_batch_link_wiki_page_to_tasks_success(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test batch linking tasks to a wiki page."""
+        import json
+
+        mock_api_client.batch_link_wiki_page_to_tasks.return_value = ApiResponse(
+            success=True,
+            data={"linked": [1, 2], "already_linked": [], "not_found": [99]},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["batch_link_wiki_page_to_tasks"].fn(
+                page_id=5, task_ids=["task_1", "task_2", "99"]
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "completed"
+            assert parsed["linked"] == [1, 2]
+            assert parsed["not_found"] == [99]
+            mock_api_client.batch_link_wiki_page_to_tasks.assert_called_with(5, [1, 2, 99])
+
+    @pytest.mark.asyncio
+    async def test_batch_link_invalid_task_ids(self, mock_api_client: MagicMock) -> None:
+        """Test batch linking with invalid task ID format."""
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["batch_link_wiki_page_to_tasks"].fn(
+                page_id=5, task_ids=["task_1", "invalid"]
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "Invalid task_id" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_get_wiki_page_revisions_success(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test listing revisions for a wiki page."""
+        import json
+
+        mock_api_client.get_wiki_page_revisions.return_value = ApiResponse(
+            success=True,
+            data=[
+                {
+                    "id": 1,
+                    "wiki_page_id": 5,
+                    "title": "Old Title",
+                    "slug": "old-title",
+                    "revision_number": 1,
+                    "created_at": "2026-01-01T00:00:00Z",
+                },
+            ],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_wiki_page_revisions"].fn(page_id=5)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 1
+            assert parsed["revisions"][0]["revision_number"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_wiki_page_revision_success(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test getting a specific revision of a wiki page."""
+        import json
+
+        mock_api_client.get_wiki_page_revision.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 1,
+                "wiki_page_id": 5,
+                "title": "Rev 1 Title",
+                "slug": "rev-1-title",
+                "content": "Rev 1 content",
+                "revision_number": 1,
+                "created_at": "2026-01-01T00:00:00Z",
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_wiki_page_revision"].fn(
+                page_id=5, revision_number=1
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["revision"]["revision_number"] == 1
+            assert parsed["revision"]["content"] == "Rev 1 content"
+
+    @pytest.mark.asyncio
+    async def test_get_wiki_page_revision_not_found(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test getting a revision that doesn't exist."""
+        import json
+
+        mock_api_client.get_wiki_page_revision.return_value = ApiResponse(
+            success=False,
+            error="Revision not found",
+            status_code=404,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_wiki_page_revision"].fn(
+                page_id=5, revision_number=99
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed

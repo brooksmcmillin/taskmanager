@@ -594,3 +594,318 @@ async def test_cannot_link_task_to_other_users_page(
         f"/api/wiki/{page_id}/link-task", json={"todo_id": todo_id}
     )
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Search content snippet tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_search_returns_content_snippet(authenticated_client: AsyncClient) -> None:
+    """Search results include a content snippet when a query matches content."""
+    await authenticated_client.post(
+        "/api/wiki",
+        json={"title": "Generic Title", "content": "The quick brown fox jumps over"},
+    )
+
+    response = await authenticated_client.get("/api/wiki", params={"q": "brown fox"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["meta"]["count"] == 1
+    result = data["data"][0]
+    assert "content_snippet" in result
+    assert "brown fox" in result["content_snippet"]
+
+
+@pytest.mark.asyncio
+async def test_search_content_only_match(authenticated_client: AsyncClient) -> None:
+    """A page whose title does NOT match but content DOES should be returned."""
+    await authenticated_client.post(
+        "/api/wiki",
+        json={
+            "title": "Unrelated Title",
+            "content": "Some unique xylophone reference here",
+        },
+    )
+    await authenticated_client.post(
+        "/api/wiki",
+        json={"title": "Another Page", "content": "Nothing special"},
+    )
+
+    response = await authenticated_client.get("/api/wiki", params={"q": "xylophone"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["meta"]["count"] == 1
+    assert data["data"][0]["title"] == "Unrelated Title"
+    assert "xylophone" in data["data"][0]["content_snippet"]
+
+
+@pytest.mark.asyncio
+async def test_list_without_search_no_snippet(
+    authenticated_client: AsyncClient,
+) -> None:
+    """Listing without search query does not include a content snippet."""
+    await authenticated_client.post("/api/wiki", json={"title": "No Search"})
+    response = await authenticated_client.get("/api/wiki")
+    assert response.status_code == 200
+    result = response.json()["data"][0]
+    # When not searching, content_snippet should be absent or None
+    assert result.get("content_snippet") is None
+
+
+# ---------------------------------------------------------------------------
+# Append mode tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_append_mode(authenticated_client: AsyncClient) -> None:
+    """When append=True, content is appended rather than replaced."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Append Test", "content": "Line 1"}
+    )
+    page_id = create.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"content": "Line 2", "append": True}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["content"] == "Line 1\nLine 2"
+
+
+@pytest.mark.asyncio
+async def test_update_append_empty_content(authenticated_client: AsyncClient) -> None:
+    """Appending to a page with empty content does not produce a leading newline."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Append Empty", "content": ""}
+    )
+    page_id = create.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"content": "First line", "append": True}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["content"] == "First line"
+
+
+@pytest.mark.asyncio
+async def test_update_append_false_replaces(authenticated_client: AsyncClient) -> None:
+    """When append=False (default), content replaces the old content."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Replace Test", "content": "Original"}
+    )
+    page_id = create.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"content": "Replacement"}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["content"] == "Replacement"
+
+
+# ---------------------------------------------------------------------------
+# Soft delete tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_page(authenticated_client: AsyncClient) -> None:
+    """Deleting a page soft-deletes it (not visible in lists or gets)."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Soft Delete Me"}
+    )
+    page_id = create.json()["data"]["id"]
+
+    response = await authenticated_client.delete(f"/api/wiki/{page_id}")
+    assert response.status_code == 200
+    assert response.json()["data"]["deleted"] is True
+
+    # Should not appear in list
+    listing = await authenticated_client.get("/api/wiki")
+    assert all(p["id"] != page_id for p in listing.json()["data"])
+
+    # Should not be fetchable by ID
+    get_resp = await authenticated_client.get(f"/api/wiki/{page_id}")
+    assert get_resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Revision history tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_revision_created_on_update(authenticated_client: AsyncClient) -> None:
+    """Updating a page creates a revision and increments revision_number."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Revisions", "content": "v1"}
+    )
+    page_id = create.json()["data"]["id"]
+    assert create.json()["data"]["revision_number"] == 1
+
+    # Update the page
+    update = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"content": "v2"}
+    )
+    assert update.json()["data"]["revision_number"] == 2
+
+    # Check revisions endpoint (list returns summaries without content)
+    revisions = await authenticated_client.get(f"/api/wiki/{page_id}/revisions")
+    assert revisions.status_code == 200
+    rev_data = revisions.json()["data"]
+    assert len(rev_data) == 1
+    assert rev_data[0]["revision_number"] == 1
+    assert "content" not in rev_data[0]
+
+    # Full content is available via the specific revision endpoint
+    rev_detail = await authenticated_client.get(
+        f"/api/wiki/{page_id}/revisions/1"
+    )
+    assert rev_detail.status_code == 200
+    assert rev_detail.json()["data"]["content"] == "v1"
+
+
+@pytest.mark.asyncio
+async def test_get_specific_revision(authenticated_client: AsyncClient) -> None:
+    """Can fetch a specific revision by number."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Rev Detail", "content": "first"}
+    )
+    page_id = create.json()["data"]["id"]
+
+    await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"content": "second"}
+    )
+    await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"content": "third"}
+    )
+
+    # Get revision 1 (original state before first update)
+    rev1 = await authenticated_client.get(f"/api/wiki/{page_id}/revisions/1")
+    assert rev1.status_code == 200
+    assert rev1.json()["data"]["content"] == "first"
+
+    # Get revision 2 (state before second update)
+    rev2 = await authenticated_client.get(f"/api/wiki/{page_id}/revisions/2")
+    assert rev2.status_code == 200
+    assert rev2.json()["data"]["content"] == "second"
+
+    # Revision 3 doesn't exist yet (current state is rev 3)
+    rev3 = await authenticated_client.get(f"/api/wiki/{page_id}/revisions/3")
+    assert rev3.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_revisions_for_nonexistent_page(
+    authenticated_client: AsyncClient,
+) -> None:
+    """Requesting revisions for a non-existent page returns 404."""
+    response = await authenticated_client.get("/api/wiki/99999/revisions")
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Batch link tasks tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_batch_link_tasks(authenticated_client: AsyncClient) -> None:
+    """Batch linking multiple tasks at once."""
+    page = await authenticated_client.post(
+        "/api/wiki", json={"title": "Batch Link"}
+    )
+    page_id = page.json()["data"]["id"]
+    todo1_id = await _create_todo(authenticated_client)
+    todo2_id = await _create_todo(authenticated_client)
+
+    response = await authenticated_client.post(
+        f"/api/wiki/{page_id}/link-tasks",
+        json={"todo_ids": [todo1_id, todo2_id]},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert set(data["linked"]) == {todo1_id, todo2_id}
+    assert data["already_linked"] == []
+    assert data["not_found"] == []
+
+
+@pytest.mark.asyncio
+async def test_batch_link_tasks_mixed(authenticated_client: AsyncClient) -> None:
+    """Batch link with already-linked, new, and not-found IDs."""
+    page = await authenticated_client.post(
+        "/api/wiki", json={"title": "Batch Mixed"}
+    )
+    page_id = page.json()["data"]["id"]
+    todo_id = await _create_todo(authenticated_client)
+
+    # Link one task first
+    await authenticated_client.post(
+        f"/api/wiki/{page_id}/link-task", json={"todo_id": todo_id}
+    )
+
+    new_todo_id = await _create_todo(authenticated_client)
+
+    response = await authenticated_client.post(
+        f"/api/wiki/{page_id}/link-tasks",
+        json={"todo_ids": [todo_id, new_todo_id, 99999]},
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["linked"] == [new_todo_id]
+    assert data["already_linked"] == [todo_id]
+    assert data["not_found"] == [99999]
+
+
+# ---------------------------------------------------------------------------
+# Slug feedback tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_slug_modified_on_dedup(authenticated_client: AsyncClient) -> None:
+    """When a slug is deduplicated, response indicates the modification."""
+    await authenticated_client.post("/api/wiki", json={"title": "Slug Feedback"})
+    response = await authenticated_client.post(
+        "/api/wiki", json={"title": "Slug Feedback"}
+    )
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["slug"] == "slug-feedback-2"
+    assert data["slug_modified"] is True
+    assert data["requested_slug"] == "slug-feedback"
+
+
+@pytest.mark.asyncio
+async def test_slug_not_modified(authenticated_client: AsyncClient) -> None:
+    """When slug is not modified, slug_modified is False."""
+    response = await authenticated_client.post(
+        "/api/wiki", json={"title": "Unique Page Title"}
+    )
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["slug_modified"] is False
+    assert data["requested_slug"] is None
+
+
+@pytest.mark.asyncio
+async def test_slug_modified_on_update(authenticated_client: AsyncClient) -> None:
+    """Slug modification feedback works on update too."""
+    # Create two pages so the slug will conflict
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "Taken Slug", "slug": "target-slug"}
+    )
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Other Page"}
+    )
+    page_id = create.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"slug": "target-slug"}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["slug"] == "target-slug-2"
+    assert data["slug_modified"] is True
+    assert data["requested_slug"] == "target-slug"

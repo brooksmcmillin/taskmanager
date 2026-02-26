@@ -697,6 +697,7 @@ class TaskManagerClient:
         title: str | None = None,
         content: str | None = None,
         slug: str | None = None,
+        append: bool = False,
     ) -> ApiResponse:
         """
         Update a wiki page.
@@ -706,6 +707,7 @@ class TaskManagerClient:
             title: New title (optional)
             content: New content (optional)
             slug: New slug (optional)
+            append: If True, append content instead of replacing (default False)
 
         Returns:
             ApiResponse with updated wiki page data
@@ -717,6 +719,8 @@ class TaskManagerClient:
             data["content"] = content
         if slug is not None:
             data["slug"] = slug
+        if append:
+            data["append"] = True
         return self._make_request("PUT", f"/wiki/{page_id}", data)
 
     def delete_wiki_page(self, page_id: int) -> ApiResponse:
@@ -782,6 +786,52 @@ class TaskManagerClient:
             ApiResponse with list of wiki page summaries
         """
         return self._make_request("GET", f"/todos/{todo_id}/wiki-pages")
+
+    def batch_link_wiki_page_to_tasks(
+        self, page_id: int, todo_ids: list[int]
+    ) -> ApiResponse:
+        """
+        Batch link a wiki page to multiple tasks at once.
+
+        Args:
+            page_id: Wiki page ID
+            todo_ids: List of task IDs to link
+
+        Returns:
+            ApiResponse with linked, already_linked, and not_found lists
+        """
+        return self._make_request(
+            "POST", f"/wiki/{page_id}/link-tasks", {"todo_ids": todo_ids}
+        )
+
+    def get_wiki_page_revisions(self, page_id: int) -> ApiResponse:
+        """
+        List revisions for a wiki page.
+
+        Args:
+            page_id: Wiki page ID
+
+        Returns:
+            ApiResponse with list of revision summaries
+        """
+        return self._make_request("GET", f"/wiki/{page_id}/revisions")
+
+    def get_wiki_page_revision(
+        self, page_id: int, revision_number: int
+    ) -> ApiResponse:
+        """
+        Get a specific revision of a wiki page.
+
+        Args:
+            page_id: Wiki page ID
+            revision_number: Revision number to fetch
+
+        Returns:
+            ApiResponse with revision data including content
+        """
+        return self._make_request(
+            "GET", f"/wiki/{page_id}/revisions/{revision_number}"
+        )
 
     # Dependency methods
     def get_dependencies(self, todo_id: int) -> ApiResponse:
