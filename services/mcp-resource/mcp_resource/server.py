@@ -604,6 +604,10 @@ def create_resource_server(
                 - priority (optional): "low", "medium", "high", or "urgent"
                 - tags (optional): List of tags
                 - parent_id (optional): Parent task ID ("task_123" or "123")
+                - depends_on (optional): List of 0-based indices of other tasks
+                  in this batch that must be completed before this task.
+                  Example: [0, 1] means this task depends on the first and
+                  second tasks in the batch.
 
         Returns:
             JSON object with created task IDs and count
@@ -660,6 +664,14 @@ def create_resource_server(
                         return json.dumps(
                             {"error": f"Task at index {i}: invalid parent_id format: {parent_id}"}
                         )
+
+                depends_on = task.get("depends_on")
+                if depends_on is not None:
+                    if not isinstance(depends_on, list):
+                        return json.dumps(
+                            {"error": f"Task at index {i}: depends_on must be a list of integers"}
+                        )
+                    todo["depends_on"] = depends_on
 
                 todo_dicts.append(todo)
 
@@ -2478,9 +2490,7 @@ def create_resource_server(
                     invalid_ids.append(tid)
 
             if invalid_ids:
-                return json.dumps(
-                    {"error": f"Invalid task_id format(s): {', '.join(invalid_ids)}"}
-                )
+                return json.dumps({"error": f"Invalid task_id format(s): {', '.join(invalid_ids)}"})
 
             response = api_client.batch_link_wiki_page_to_tasks(page_id, todo_ids)
             logger.info(
@@ -2488,9 +2498,7 @@ def create_resource_server(
                 f"status={response.status_code}"
             )
 
-            result, result_error = validate_dict_response(
-                response, "batch link result"
-            )
+            result, result_error = validate_dict_response(response, "batch link result")
             if result_error:
                 logger.error(f"Failed to batch link tasks: {result_error}")
                 return json.dumps({"error": result_error})
@@ -2508,9 +2516,7 @@ def create_resource_server(
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in batch_link_wiki_page_to_tasks: {e}", exc_info=True
-            )
+            logger.error(f"Exception in batch_link_wiki_page_to_tasks: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     @app.tool()
@@ -2538,16 +2544,12 @@ def create_resource_server(
                 f"status={response.status_code}"
             )
 
-            revisions, rev_error = validate_list_response(
-                response, "revisions", key="data"
-            )
+            revisions, rev_error = validate_list_response(response, "revisions", key="data")
             if rev_error:
                 logger.error(f"Failed to get revisions: {rev_error}")
                 return json.dumps({"error": rev_error})
 
-            logger.info(
-                f"Returning {len(revisions)} revisions for wiki page {page_id}"
-            )
+            logger.info(f"Returning {len(revisions)} revisions for wiki page {page_id}")
             return json.dumps(
                 {
                     "page_id": page_id,
@@ -2557,9 +2559,7 @@ def create_resource_server(
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in get_wiki_page_revisions: {e}", exc_info=True
-            )
+            logger.error(f"Exception in get_wiki_page_revisions: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     @app.tool()
@@ -2595,9 +2595,7 @@ def create_resource_server(
                 logger.error(f"Failed to get revision: {rev_error}")
                 return json.dumps({"error": rev_error})
 
-            logger.info(
-                f"Retrieved revision {revision_number} for wiki page {page_id}"
-            )
+            logger.info(f"Retrieved revision {revision_number} for wiki page {page_id}")
             return json.dumps(
                 {
                     "page_id": page_id,
@@ -2606,9 +2604,7 @@ def create_resource_server(
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in get_wiki_page_revision: {e}", exc_info=True
-            )
+            logger.error(f"Exception in get_wiki_page_revision: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     return app

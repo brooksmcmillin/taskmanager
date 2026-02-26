@@ -417,7 +417,9 @@ class TaskManagerClient:
             todos: List of todo dicts, each with at least a "title" key.
                    Supports the same fields as create_todo (description,
                    category, priority, due_date, deadline_type, tags,
-                   parent_id, etc.)
+                   parent_id, etc.) plus:
+                   - depends_on: List of 0-based indices of other tasks in
+                     the batch that this task depends on.
 
         Returns:
             ApiResponse with list of created todos

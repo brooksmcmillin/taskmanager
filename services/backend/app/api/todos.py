@@ -58,6 +58,12 @@ class TodoCreate(BaseModel):
     autonomy_tier: int | None = Field(
         None, ge=1, le=4, description="Risk level: 1-4 (1=fully autonomous, 4=never)"
     )
+    # Batch-only: 0-based indices of other tasks in the batch that this task depends on
+    depends_on: list[int] | None = Field(
+        None,
+        description="List of 0-based indices of other tasks in the same batch "
+        "that this task depends on. Only used in batch creation.",
+    )
 
 
 class TodoUpdate(BaseModel):
@@ -729,6 +735,50 @@ async def create_todo(
     return {"data": _build_todo_response(todo, project_name, project_color)}
 
 
+def _validate_batch_dependency_graph(todos: list[TodoCreate]) -> None:
+    """Validate that depends_on references don't form circular dependencies.
+
+    Uses Kahn's algorithm (topological sort) to detect cycles in the
+    dependency graph defined by the batch's depends_on indices.
+
+    Raises:
+        errors.validation: If a circular dependency is detected.
+    """
+    from collections import deque
+
+    n = len(todos)
+    # Build adjacency list and in-degree count
+    # Edge: dep_idx -> i means "i depends on dep_idx" (dep_idx must come first)
+    adj: dict[int, list[int]] = {i: [] for i in range(n)}
+    in_degree = [0] * n
+
+    for i, item in enumerate(todos):
+        if item.depends_on:
+            for dep_idx in item.depends_on:
+                adj[dep_idx].append(i)
+                in_degree[i] += 1
+
+    # Kahn's algorithm: start with nodes that have no dependencies
+    queue: deque[int] = deque()
+    for i in range(n):
+        if in_degree[i] == 0:
+            queue.append(i)
+
+    visited_count = 0
+    while queue:
+        node = queue.popleft()
+        visited_count += 1
+        for neighbor in adj[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if visited_count < n:
+        raise errors.validation(
+            "Circular dependency detected in batch depends_on references"
+        )
+
+
 @router.post("/batch", status_code=201)
 async def batch_create_todos(
     request: BatchTodoCreate,
@@ -740,7 +790,32 @@ async def batch_create_todos(
     Accepts up to 50 todo objects. All todos are created atomically—if any
     validation fails, none are created. Validation runs for all items before
     any database writes occur.
+
+    Each task can include a `depends_on` field with a list of 0-based indices
+    referring to other tasks in the same batch. After all tasks are created,
+    the dependency relationships are established. Indices are validated for
+    bounds, self-references, and circular dependencies within the batch.
     """
+    batch_size = len(request.todos)
+
+    # Phase 0: Validate depends_on indices before any database work
+    for i, item in enumerate(request.todos):
+        if item.depends_on:
+            for dep_idx in item.depends_on:
+                if dep_idx < 0 or dep_idx >= batch_size:
+                    raise errors.validation(
+                        f"Task at index {i}: depends_on index {dep_idx} "
+                        f"is out of bounds (batch size: {batch_size})"
+                    )
+                if dep_idx == i:
+                    raise errors.validation(
+                        f"Task at index {i}: cannot depend on itself "
+                        f"(self-reference at index {dep_idx})"
+                    )
+
+    # Check for circular dependencies within the batch using topological sort
+    _validate_batch_dependency_graph(request.todos)
+
     # Phase 1: Validate all items and prepare Todo objects before any writes
     prepared: list[Todo] = []
 
@@ -816,6 +891,18 @@ async def batch_create_todos(
             db, todo.project_id, user.id
         )
         created.append(_build_todo_response(todo, project_name, project_color))
+
+    # Phase 3: Create dependency relationships using the now-assigned IDs
+    for i, item in enumerate(request.todos):
+        if item.depends_on:
+            for dep_idx in item.depends_on:
+                await db.execute(
+                    task_dependencies.insert().values(
+                        dependent_id=prepared[i].id,
+                        dependency_id=prepared[dep_idx].id,
+                    )
+                )
+    await db.flush()
 
     return {"data": created, "meta": {"count": len(created)}}
 
