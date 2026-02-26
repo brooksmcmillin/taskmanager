@@ -37,7 +37,11 @@ const config: PlaywrightTestConfig = {
 	},
 	reporter: isCI
 		? [['blob', { outputDir: 'blob-report' }], ['list']]
-		: [['html', { outputFolder: 'playwright-report' }], ['list'], ['json', { outputFile: 'test-results.json' }]],
+		: [
+				['html', { outputFolder: 'playwright-report' }],
+				['list'],
+				['json', { outputFile: 'test-results.json' }]
+			],
 	timeout: 30000,
 	expect: {
 		timeout: 5000
