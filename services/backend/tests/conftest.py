@@ -47,10 +47,62 @@ POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 
 # URL-encode the password to handle special characters
-
 encoded_password = quote_plus(POSTGRES_PASSWORD)
 
-TEST_DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{encoded_password}@{POSTGRES_HOST}:{POSTGRES_PORT}/taskmanager_test"
+
+def _get_db_name(worker_id: str) -> str:
+    """Return per-worker database name for xdist, or default for single-process."""
+    if worker_id == "master":
+        return "taskmanager_test"
+    # worker_id is "gw0", "gw1", etc.
+    return f"taskmanager_test_{worker_id}"
+
+
+def _make_database_url(db_name: str) -> str:
+    """Build async database URL for the given database name."""
+    return f"postgresql+asyncpg://{POSTGRES_USER}:{encoded_password}@{POSTGRES_HOST}:{POSTGRES_PORT}/{db_name}"
+
+
+@pytest.fixture(scope="session")
+def worker_db_name(worker_id: str) -> str:
+    """Return the database name for this xdist worker."""
+    return _get_db_name(worker_id)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _create_worker_database(worker_db_name: str):
+    """Create a per-worker database at session start, drop it at session end.
+
+    Uses synchronous psycopg to avoid async event loop issues in session fixtures.
+    """
+    if worker_db_name == "taskmanager_test":
+        # Single-process mode — assume database already exists (CI creates it)
+        yield
+        return
+
+    import psycopg
+
+    conninfo = (
+        f"host={POSTGRES_HOST} port={POSTGRES_PORT} "
+        f"user={POSTGRES_USER} password={POSTGRES_PASSWORD} "
+        f"dbname=taskmanager_test"
+    )
+
+    # CREATE/DROP DATABASE cannot run inside a transaction
+    conn = psycopg.connect(conninfo, autocommit=True)
+    try:
+        conn.execute(f"DROP DATABASE IF EXISTS {worker_db_name}")
+        conn.execute(f"CREATE DATABASE {worker_db_name}")
+    finally:
+        conn.close()
+
+    yield
+
+    conn = psycopg.connect(conninfo, autocommit=True)
+    try:
+        conn.execute(f"DROP DATABASE IF EXISTS {worker_db_name}")
+    finally:
+        conn.close()
 
 
 @pytest.fixture(scope="session")
@@ -62,9 +114,9 @@ def event_loop():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db_engine():
+async def db_engine(worker_db_name: str):
     """Create test database engine."""
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    engine = create_async_engine(_make_database_url(worker_db_name), echo=False)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

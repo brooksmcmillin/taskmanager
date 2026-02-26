@@ -615,6 +615,7 @@ def create_resource_server(
                 - parent_index (optional): 0-based index of another task in
                   this batch to use as parent. Mutually exclusive with
                   parent_id.
+                - estimated_hours (optional): Estimated hours to complete
                 - depends_on (optional): List of 0-based indices of other tasks
                   in this batch that must be completed before this task.
                   Example: [0, 1] means this task depends on the first and
@@ -665,6 +666,8 @@ def create_resource_server(
                     todo["deadline_type"] = deadline_type
                 if task.get("tags"):
                     todo["tags"] = task["tags"]
+                if task.get("estimated_hours") is not None:
+                    todo["estimated_hours"] = task["estimated_hours"]
 
                 parent_id = task.get("parent_id")
                 parent_index = task.get("parent_index")

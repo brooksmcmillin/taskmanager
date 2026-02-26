@@ -295,9 +295,11 @@ def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
         due_date=subtask.due_date,
         deadline_type=subtask.deadline_type,
         estimated_hours=float(subtask.estimated_hours)
-        if subtask.estimated_hours
+        if subtask.estimated_hours is not None
         else None,
-        actual_hours=float(subtask.actual_hours) if subtask.actual_hours else None,
+        actual_hours=float(subtask.actual_hours)
+        if subtask.actual_hours is not None
+        else None,
         position=subtask.position,
         created_at=subtask.created_at,
         updated_at=subtask.updated_at,
@@ -375,8 +377,12 @@ def _build_todo_response(
         project_color=project_color,
         tags=todo.tags or [],
         context=todo.context,
-        estimated_hours=float(todo.estimated_hours) if todo.estimated_hours else None,
-        actual_hours=float(todo.actual_hours) if todo.actual_hours else None,
+        estimated_hours=float(todo.estimated_hours)
+        if todo.estimated_hours is not None
+        else None,
+        actual_hours=float(todo.actual_hours)
+        if todo.actual_hours is not None
+        else None,
         position=todo.position,
         parent_id=todo.parent_id,
         parent_task=parent_task_response,

@@ -1,20 +1,14 @@
 name: Backend CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'services/backend/**'
-      - '.github/workflows/backend-ci.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'services/backend/**'
-      - '.github/workflows/backend-ci.yml'
   workflow_call:
     secrets:
       CODECOV_TOKEN:
         required: false
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -73,7 +67,7 @@ jobs:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5434
           POSTGRES_DB: taskmanager_test
-        run: uv run pytest tests/ -v
+        run: uv run pytest tests/ -v -n auto
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

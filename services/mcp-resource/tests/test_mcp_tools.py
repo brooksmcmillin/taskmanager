@@ -1754,6 +1754,35 @@ class TestCreateTasksBatch:
             call_args = mock_api_client.batch_create_todos.call_args
             assert call_args.kwargs["wiki_page_id"] is None
 
+    @pytest.mark.asyncio
+    async def test_batch_create_with_estimated_hours(self, mock_api_client: MagicMock) -> None:
+        """Test that estimated_hours is passed through to the SDK."""
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            await create_tasks_tool.fn(
+                tasks=[
+                    {"title": "Task with hours", "estimated_hours": 4.5},
+                    {"title": "Task without hours"},
+                    {"title": "Task with zero hours", "estimated_hours": 0},
+                ]
+            )
+            mock_api_client.batch_create_todos.assert_called_once()
+            call_args = mock_api_client.batch_create_todos.call_args
+            todos = call_args[0][0] if call_args[0] else call_args[1]["todos"]
+            assert todos[0]["estimated_hours"] == 4.5
+            assert "estimated_hours" not in todos[1]
+            assert todos[2]["estimated_hours"] == 0
+
 
 class TestWikiTools:
     """Tests for wiki MCP tools."""
