@@ -11,7 +11,7 @@ from app.config import settings
 from app.db.database import Base
 
 # Import all models to ensure they're registered with Base.metadata
-from app.models import oauth, project, recurring_task, session, todo, user  # noqa: F401
+from app.models import oauth, project, recurring_task, session, todo, user, wiki_page  # noqa: F401
 
 config = context.config
 

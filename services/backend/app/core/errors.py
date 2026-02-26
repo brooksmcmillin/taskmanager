@@ -225,6 +225,11 @@ class Errors:
         """NOT_FOUND_011: Comment not found."""
         return ApiError("NOT_FOUND_011", 404, "Comment not found")
 
+    @staticmethod
+    def wiki_page_not_found() -> ApiError:
+        """NOT_FOUND_012: Wiki page not found."""
+        return ApiError("NOT_FOUND_012", 404, "Wiki page not found")
+
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
     # =========================================================================
@@ -267,6 +272,18 @@ class Errors:
     def self_dependency() -> ApiError:
         """CONFLICT_006: Cannot depend on self."""
         return ApiError("CONFLICT_006", 400, "A task cannot depend on itself")
+
+    @staticmethod
+    def wiki_link_exists() -> ApiError:
+        """CONFLICT_007: Wiki page already linked to task."""
+        return ApiError("CONFLICT_007", 409, "Wiki page is already linked to this task")
+
+    @staticmethod
+    def wiki_slug_exists() -> ApiError:
+        """CONFLICT_008: Wiki page slug already exists."""
+        return ApiError(
+            "CONFLICT_008", 409, "A wiki page with this slug already exists"
+        )
 
     # =========================================================================
     # Registration Code Errors (REG_001 - REG_003)

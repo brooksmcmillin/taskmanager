@@ -2,7 +2,6 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -26,6 +25,7 @@ from app.api import (
     todos,
     trash,
     webauthn,
+    wiki,
 )
 from app.api.oauth import authorize, clients, device, github, token
 from app.config import settings
@@ -85,6 +85,8 @@ app.include_router(webauthn.router)
 app.include_router(github.router)
 app.include_router(admin_loki.router)
 app.include_router(service_accounts.router)
+app.include_router(wiki.router)
+app.include_router(wiki.todo_wiki_router)
 
 
 # Static files (self-hosted fonts)

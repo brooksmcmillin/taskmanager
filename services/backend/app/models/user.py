@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from app.models.session import Session
     from app.models.todo import Todo
     from app.models.webauthn_credential import WebAuthnCredential
+    from app.models.wiki_page import WikiPage
 
 
 class User(Base):
@@ -77,4 +78,7 @@ class User(Base):
     )
     oauth_providers: Mapped[list[UserOAuthProvider]] = relationship(
         "UserOAuthProvider", back_populates="user", cascade="all, delete-orphan"
+    )
+    wiki_pages: Mapped[list[WikiPage]] = relationship(
+        "WikiPage", back_populates="user", cascade="all, delete-orphan"
     )

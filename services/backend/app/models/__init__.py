@@ -15,6 +15,7 @@ from app.models.session import Session
 from app.models.todo import Priority, Status, TimeHorizon, Todo
 from app.models.user import User
 from app.models.webauthn_credential import WebAuthnCredential
+from app.models.wiki_page import WikiPage, todo_wiki_links
 
 __all__ = [
     "ApiKey",
@@ -41,4 +42,6 @@ __all__ = [
     "Attachment",
     "Comment",
     "WebAuthnCredential",
+    "WikiPage",
+    "todo_wiki_links",
 ]

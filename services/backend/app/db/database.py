@@ -50,6 +50,7 @@ async def init_db() -> None:
             session,
             todo,
             user,
+            wiki_page,
         )
 
         await conn.run_sync(Base.metadata.create_all)
