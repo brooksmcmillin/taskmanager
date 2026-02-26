@@ -82,18 +82,18 @@ test.describe('Task Card Info Density', () => {
 	});
 
 	test('should show "No date" for tasks without a due date', async ({ page }) => {
-		await createTodoViaAPI(page, 'No Date Task');
+		await createTodoViaAPI(page, 'Undated Task Check');
 
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
 
-		const taskCard = page.locator('.todo-with-subtasks', { hasText: 'No Date Task' });
+		const taskCard = page.locator('.todo-with-subtasks', { hasText: 'Undated Task Check' });
 		await expect(taskCard).toBeVisible({ timeout: 5000 });
 
-		// Should display "No date" text
-		await expect(taskCard.locator('text=No date')).toBeVisible();
+		// The metadata line should contain "No date"
+		await expect(taskCard.locator('.text-xs.text-gray-500', { hasText: 'No date' })).toBeVisible();
 	});
 
 	test('should show formatted due date for tasks with a due date', async ({ page }) => {
