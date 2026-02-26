@@ -315,3 +315,41 @@ export interface ApiKeyCreate {
 export interface ApiKeyCreateResponse extends ApiKey {
 	key: string;
 }
+
+// Wiki types
+export interface WikiPage {
+	id: number;
+	title: string;
+	slug: string;
+	content: string;
+	created_at: string;
+	updated_at: string | null;
+}
+
+export interface WikiPageSummary {
+	id: number;
+	title: string;
+	slug: string;
+	created_at: string;
+	updated_at: string | null;
+}
+
+export interface WikiPageCreate {
+	title: string;
+	content?: string;
+	slug?: string;
+}
+
+export interface WikiPageUpdate {
+	title?: string;
+	content?: string;
+	slug?: string;
+}
+
+export interface WikiLinkedTodo {
+	id: number;
+	title: string;
+	status: string;
+	priority: string;
+	due_date: string | null;
+}

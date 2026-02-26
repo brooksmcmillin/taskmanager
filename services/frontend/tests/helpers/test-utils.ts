@@ -211,6 +211,26 @@ export async function createTodoViaAPI(
 }
 
 /**
+ * Create a wiki page via the backend API directly
+ * Faster and more reliable than UI-based creation for tests that aren't testing wiki page creation itself
+ */
+export async function createWikiPageViaAPI(
+	page: Page,
+	title: string,
+	content: string = ''
+): Promise<{ id: number; slug: string; title: string }> {
+	const body: Record<string, string> = { title };
+	if (content) body.content = content;
+
+	const response = await page.request.post('/api/wiki', { data: body });
+	if (!response.ok()) {
+		throw new Error(`Failed to create wiki page: ${response.status()} ${await response.text()}`);
+	}
+	const json = await response.json();
+	return json.data;
+}
+
+/**
  * Cleanup helper - delete all todos created by a user
  * Useful in afterEach hooks
  */

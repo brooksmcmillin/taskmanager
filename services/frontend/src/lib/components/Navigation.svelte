@@ -296,6 +296,7 @@
 							{/if}
 						</div>
 
+						<a href="/wiki" class="nav-link" class:active={currentPath.startsWith('/wiki')}>Wiki</a>
 						<a href="/trash" class="nav-link" class:active={currentPath === '/trash'}>Trash</a>
 					</div>
 				{/if}
@@ -493,6 +494,18 @@
 					onclick={closeMobileMenu}
 				>
 					Sources
+				</a>
+			</div>
+
+			<div class="mobile-menu-section">
+				<div class="mobile-menu-label">Wiki</div>
+				<a
+					href="/wiki"
+					class="mobile-menu-item"
+					class:active={currentPath.startsWith('/wiki')}
+					onclick={closeMobileMenu}
+				>
+					Wiki Pages
 				</a>
 			</div>
 

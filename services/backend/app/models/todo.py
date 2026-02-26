@@ -24,6 +24,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
+from app.models.wiki_page import todo_wiki_links
 
 # Association table for task dependencies (many-to-many self-referential)
 task_dependencies = Table(
@@ -50,6 +51,7 @@ if TYPE_CHECKING:
     from app.models.project import Project
     from app.models.recurring_task import RecurringTask
     from app.models.user import User
+    from app.models.wiki_page import WikiPage
 
 
 class Priority(str, enum.Enum):
@@ -249,6 +251,12 @@ class Todo(Base):
     )
     comments: Mapped[list[Comment]] = relationship(
         "Comment", back_populates="todo", cascade="all, delete-orphan"
+    )
+
+    linked_wiki_pages: Mapped[list[WikiPage]] = relationship(
+        "WikiPage",
+        secondary=todo_wiki_links,
+        back_populates="linked_todos",
     )
 
     # Task dependencies: tasks this task depends on (must be completed first)

@@ -18,33 +18,47 @@
 	import { todos } from '$lib/stores/todos';
 	import { projects } from '$lib/stores/projects';
 	import { toasts } from '$lib/stores/ui';
-	import type { Todo } from '$lib/types';
+	import { api } from '$lib/api/client';
+	import type { Todo, WikiPageSummary } from '$lib/types';
 
-	let todo: Todo | null = null;
-	let loading = true;
-	let error = '';
-	let mode: 'view' | 'edit' = 'view';
+	let todo: Todo | null = $state(null);
+	let loading = $state(true);
+	let error = $state('');
+	let mode: 'view' | 'edit' = $state('view');
 	let todoForm: TodoForm;
+	let linkedWikiPages: WikiPageSummary[] = $state([]);
 
-	$: todoId = parseInt($page.params.id ?? '0');
+	let todoId = $derived(parseInt($page.params.id ?? '0'));
 
 	onMount(() => {
 		projects.load();
 	});
 
-	$: if (todoId) {
-		loadTodo();
-	}
+	$effect(() => {
+		if (todoId) {
+			loadTodo();
+		}
+	});
 
 	async function loadTodo() {
 		loading = true;
 		error = '';
 		try {
 			todo = await todos.getById(todoId);
+			loadWikiPages(todoId);
 		} catch (e) {
 			error = 'Task not found';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadWikiPages(id: number) {
+		try {
+			const response = await api.get<{ data: WikiPageSummary[] }>(`/api/todos/${id}/wiki-pages`);
+			linkedWikiPages = response.data || [];
+		} catch {
+			linkedWikiPages = [];
 		}
 	}
 
@@ -302,6 +316,18 @@
 
 						<!-- Comments -->
 						<CommentList todoId={todo.id} comments={todo.comments || []} />
+
+						<!-- Wiki Pages -->
+						{#if linkedWikiPages.length > 0}
+							<div class="detail-section wiki-pages-section">
+								<label class="detail-label">Wiki Pages</label>
+								<div class="wiki-pages-list">
+									{#each linkedWikiPages as wp (wp.id)}
+										<a href="/wiki/{wp.slug}" class="wiki-page-link">{wp.title}</a>
+									{/each}
+								</div>
+							</div>
+						{/if}
 					</div>
 
 					<!-- Actions -->
@@ -474,6 +500,34 @@
 
 	.parent-task-link:hover .parent-task-id {
 		color: var(--primary-600);
+	}
+
+	.wiki-pages-section {
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-light);
+	}
+
+	.wiki-pages-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.wiki-page-link {
+		display: inline-block;
+		padding: 0.25rem 0.75rem;
+		background: var(--primary-50);
+		color: var(--primary-600);
+		border-radius: 9999px;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		text-decoration: none;
+		transition: all var(--transition-fast);
+	}
+
+	.wiki-page-link:hover {
+		background: var(--primary-100);
+		color: var(--primary-700);
 	}
 
 	@media (max-width: 640px) {
