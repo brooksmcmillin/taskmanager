@@ -283,7 +283,10 @@ source = { virtual = "." }
 dependencies = [
     { name = "click" },
     { name = "mcp" },
+    { name = "mcp-resource-framework" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "starlette" },
     { name = "uvicorn" },
 ]
 
@@ -299,7 +302,10 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
     { name = "mcp", specifier = ">=1.24.0" },
+    { name = "mcp-resource-framework", directory = "../../packages/mcp-resource-framework" },
+    { name = "pydantic", specifier = ">=2.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "starlette", specifier = ">=0.40.0" },
     { name = "uvicorn", specifier = ">=0.30.0" },
 ]
 
@@ -308,6 +314,34 @@ dev = [
     { name = "pyright", specifier = ">=1.1.400" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },
+    { name = "ruff", specifier = ">=0.2.0" },
+]
+
+[[package]]
+name = "mcp-resource-framework"
+version = "0.1.0"
+source = { directory = "../../packages/mcp-resource-framework" }
+dependencies = [
+    { name = "httpx" },
+    { name = "mcp" },
+    { name = "pydantic" },
+    { name = "starlette" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "mcp", specifier = ">=1.24.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "starlette", specifier = ">=0.40.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1.400" },
+    { name = "pytest", specifier = ">=9.0.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23.0" },
+    { name = "pytest-cov", specifier = ">=4.1.0" },
     { name = "ruff", specifier = ">=0.2.0" },
 ]
 

@@ -127,11 +127,16 @@ services:
       context: .
       dockerfile: services/mcp-relay/Dockerfile
     container_name: taskmanager-mcp-relay
-    command: uv run --no-sync python -m mcp_relay.server --port 8002
+    command: uv run --no-sync python -m mcp_relay.server --port 8002 --auth-server http://mcp-auth:9000 --auth-server-public-url ${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000} --server-url ${MCP_RELAY_SERVER_URL:-http://localhost:8002}
     ports:
       - '8002:8002'
     environment:
       - MAX_MESSAGES_PER_CHANNEL=${MAX_MESSAGES_PER_CHANNEL:-1000}
+      - MAX_CHANNELS=${MAX_CHANNELS:-100}
+      - MCP_AUTH_SERVER=http://mcp-auth:9000
+      - MCP_AUTH_SERVER_PUBLIC_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
+    depends_on:
+      - mcp-auth
     networks:
       - taskmanager_network
     restart: unless-stopped

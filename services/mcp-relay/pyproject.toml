@@ -7,7 +7,10 @@ requires-python = ">=3.13"
 dependencies = [
     "click>=8.1.0",
     "mcp>=1.24.0",
+    "mcp-resource-framework",
+    "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
+    "starlette>=0.40.0",
     "uvicorn>=0.30.0",
 ]
 
@@ -75,6 +78,12 @@ unfixable = []
 [tool.pyright]
 pythonVersion = "3.13"
 typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.uv.sources]
+mcp-resource-framework = { path = "../../packages/mcp-resource-framework" }
 
 [dependency-groups]
 dev = [

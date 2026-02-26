@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
 
 import pytest
 
-from mcp_relay.server import MessageStore, create_relay_server
-
-if TYPE_CHECKING:
-    from mcp.server.fastmcp.server import FastMCP
+from mcp_relay.server import MAX_READ_LIMIT, MessageStore
 
 
 class TestMessageStore:
@@ -57,6 +53,13 @@ class TestMessageStore:
         assert len(filtered) == 1
         assert filtered[0].id == msg2.id
 
+    def test_since_invalid_timestamp(self) -> None:
+        store = MessageStore()
+        store.add("test", "msg")
+
+        with pytest.raises(ValueError, match="Invalid ISO timestamp"):
+            store.get("test", since="not-a-date")
+
     def test_limit_parameter(self) -> None:
         store = MessageStore()
         for i in range(10):
@@ -67,6 +70,14 @@ class TestMessageStore:
         # Should return the last 3
         assert messages[0].content == "msg-7"
         assert messages[2].content == "msg-9"
+
+    def test_limit_capped_at_max(self) -> None:
+        store = MessageStore()
+        store.add("test", "msg")
+
+        # Requesting more than MAX_READ_LIMIT should be capped
+        messages = store.get("test", limit=99999)
+        assert len(messages) == 1  # only 1 message exists, but limit was capped
 
     def test_list_channels(self) -> None:
         store = MessageStore()
@@ -127,26 +138,41 @@ class TestMessageStore:
         msg = store.add("test", "hello")
         assert msg.sender == "anonymous"
 
+    def test_max_channels_enforced(self) -> None:
+        store = MessageStore(max_channels=3)
+        store.add("ch1", "msg")
+        store.add("ch2", "msg")
+        store.add("ch3", "msg")
+
+        with pytest.raises(ValueError, match="Channel limit reached"):
+            store.add("ch4", "msg")
+
+    def test_max_message_size_enforced(self) -> None:
+        store = MessageStore(max_message_size=10)
+        store.add("test", "short")  # OK
+
+        with pytest.raises(ValueError, match="Message too large"):
+            store.add("test", "x" * 11)
+
     @pytest.mark.asyncio
     async def test_wait_for_message_immediate(self) -> None:
         """wait_for_new returns immediately if messages exist since the given timestamp."""
         store = MessageStore()
         msg = store.add("test", "already here")
 
-        # Since before the message — should return immediately
-        from datetime import datetime
-
         early = datetime(2000, 1, 1, tzinfo=UTC).isoformat()
-        messages = await store.wait_for_new("test", since=early, timeout=1)
+        messages, timed_out = await store.wait_for_new("test", since=early, timeout=1)
         assert len(messages) == 1
         assert messages[0].id == msg.id
+        assert timed_out is False
 
     @pytest.mark.asyncio
     async def test_wait_for_message_timeout(self) -> None:
         """wait_for_new returns empty list on timeout."""
         store = MessageStore()
-        messages = await store.wait_for_new("empty", timeout=1)
+        messages, timed_out = await store.wait_for_new("empty", timeout=1)
         assert messages == []
+        assert timed_out is True
 
     @pytest.mark.asyncio
     async def test_wait_for_message_delivery(self) -> None:
@@ -158,61 +184,45 @@ class TestMessageStore:
             store.add("test", "delayed message", "poster")
 
         task = asyncio.create_task(post_after_delay())
-        messages = await store.wait_for_new("test", timeout=5)
+        messages, timed_out = await store.wait_for_new("test", timeout=5)
         await task
 
         assert len(messages) == 1
         assert messages[0].content == "delayed message"
+        assert timed_out is False
 
 
-class TestToolFunctions:
-    """Tests for MCP tool functions via the relay server."""
+class TestStoreIntegration:
+    """Integration tests exercising the store the way tools would."""
 
-    @pytest.fixture
-    def relay(self) -> FastMCP:
-        """Create a fresh relay server (with fresh store) for each test."""
-        import mcp_relay.server as mod
+    def test_send_read_roundtrip(self) -> None:
+        store = MessageStore()
+        msg = store.add("e2e", "test message", "sender-a")
 
-        mod.store = MessageStore()
-        return create_relay_server()
-
-    @pytest.mark.asyncio
-    async def test_send_message_tool(self, relay: FastMCP) -> None:  # noqa: ARG002
-        import mcp_relay.server as mod
-
-        msg = mod.store.add("tools-test", "via store", "tester")
-        assert msg.content == "via store"
-
-    @pytest.mark.asyncio
-    async def test_roundtrip_via_store(self) -> None:
-        """End-to-end: send via store, read via store, verify JSON format."""
-        import mcp_relay.server as mod
-
-        mod.store = MessageStore()
-        create_relay_server()
-
-        mod.store.add("e2e", "test message", "sender-a")
-        messages = mod.store.get("e2e")
-
+        messages = store.get("e2e")
         assert len(messages) == 1
         d = messages[0].to_dict()
         assert d["channel"] == "e2e"
         assert d["content"] == "test message"
         assert d["sender"] == "sender-a"
+        assert d["id"] == msg.id
 
-    @pytest.mark.asyncio
-    async def test_list_and_clear(self) -> None:
-        import mcp_relay.server as mod
+    def test_list_and_clear(self) -> None:
+        store = MessageStore()
+        store.add("ch1", "msg1")
+        store.add("ch2", "msg2")
 
-        mod.store = MessageStore()
-        create_relay_server()
-
-        mod.store.add("ch1", "msg1")
-        mod.store.add("ch2", "msg2")
-
-        channels = mod.store.list_channels()
+        channels = store.list_channels()
         assert len(channels) == 2
 
-        mod.store.clear("ch1")
-        assert mod.store.get("ch1") == []
-        assert len(mod.store.get("ch2")) == 1
+        store.clear("ch1")
+        assert store.get("ch1") == []
+        assert len(store.get("ch2")) == 1
+
+    def test_limit_respected(self) -> None:
+        store = MessageStore()
+        for i in range(MAX_READ_LIMIT + 50):
+            store.add("big", f"msg-{i}")
+
+        messages = store.get("big", limit=MAX_READ_LIMIT + 100)
+        assert len(messages) == MAX_READ_LIMIT
