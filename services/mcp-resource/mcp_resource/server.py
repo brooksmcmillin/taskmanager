@@ -2167,6 +2167,7 @@ def create_resource_server(
         title: str | None = None,
         content: str | None = None,
         slug: str | None = None,
+        append: bool = False,
     ) -> str:
         """
         Update an existing wiki page.
@@ -2177,18 +2178,21 @@ def create_resource_server(
             content: New page content in markdown format (optional)
             slug: New URL-friendly slug (optional). Must be lowercase letters,
                   numbers, and hyphens only.
+            append: If True, append content to the existing page content instead
+                    of replacing it. Useful for adding notes or log entries to a
+                    page without overwriting existing content. Default: False.
 
         Returns:
             JSON object with updated page data including id, title, slug, content,
-            created_at, and updated_at
+            revision_number, created_at, and updated_at
         """
         logger.info(
-            f"=== update_wiki_page called: page_id={page_id}, title={title}, slug={slug} ==="
+            f"=== update_wiki_page called: page_id={page_id}, title={title}, slug={slug}, append={append} ==="
         )
         try:
             api_client = get_api_client()
             response = api_client.update_wiki_page(
-                page_id=page_id, title=title, content=content, slug=slug
+                page_id=page_id, title=title, content=content, slug=slug, append=append
             )
             logger.info(
                 f"update_wiki_page response: success={response.success}, status={response.status_code}"
@@ -2215,9 +2219,10 @@ def create_resource_server(
     @guard_tool(input_params=[], screen_output=True)
     async def delete_wiki_page(page_id: int) -> str:
         """
-        Delete a wiki page permanently.
+        Soft-delete a wiki page.
 
-        This is a hard delete - the page and all its task links will be removed.
+        The page will no longer appear in listings or be fetchable, but its
+        data and revision history are preserved internally.
 
         Args:
             page_id: Wiki page ID to delete
@@ -2438,6 +2443,171 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in get_task_wiki_pages: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def batch_link_wiki_page_to_tasks(page_id: int, task_ids: list[str]) -> str:
+        """
+        Link a wiki page to multiple tasks at once.
+
+        For each task ID, the tool will attempt to create a link. The response
+        reports which tasks were newly linked, which were already linked, and
+        which were not found.
+
+        Args:
+            page_id: Wiki page ID
+            task_ids: List of task IDs - format "task_123" or just "123"
+
+        Returns:
+            JSON object with linked, already_linked, and not_found arrays
+        """
+        logger.info(
+            f"=== batch_link_wiki_page_to_tasks called: page_id={page_id}, task_ids={task_ids} ==="
+        )
+        try:
+            api_client = get_api_client()
+
+            todo_ids: list[int] = []
+            invalid_ids: list[str] = []
+            for tid in task_ids:
+                numeric_id = tid.replace("task_", "") if tid.startswith("task_") else tid
+                try:
+                    todo_ids.append(int(numeric_id))
+                except ValueError:
+                    invalid_ids.append(tid)
+
+            if invalid_ids:
+                return json.dumps(
+                    {"error": f"Invalid task_id format(s): {', '.join(invalid_ids)}"}
+                )
+
+            response = api_client.batch_link_wiki_page_to_tasks(page_id, todo_ids)
+            logger.info(
+                f"batch_link_wiki_page_to_tasks response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            result, result_error = validate_dict_response(
+                response, "batch link result"
+            )
+            if result_error:
+                logger.error(f"Failed to batch link tasks: {result_error}")
+                return json.dumps({"error": result_error})
+
+            logger.info(f"Batch linked tasks to wiki page {page_id}: {result}")
+            return json.dumps(
+                {
+                    "page_id": page_id,
+                    "linked": result.get("linked", []),
+                    "already_linked": result.get("already_linked", []),
+                    "not_found": result.get("not_found", []),
+                    "status": "completed",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Exception in batch_link_wiki_page_to_tasks: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_wiki_page_revisions(page_id: int) -> str:
+        """
+        List revision history for a wiki page.
+
+        Each update to a wiki page creates a revision snapshot of the previous
+        state. Use this to view the history of changes.
+
+        Args:
+            page_id: Wiki page ID
+
+        Returns:
+            JSON object with "revisions" array containing revision summaries
+            with fields: id, wiki_page_id, title, slug, content, revision_number, created_at
+        """
+        logger.info(f"=== get_wiki_page_revisions called: page_id={page_id} ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.get_wiki_page_revisions(page_id)
+            logger.info(
+                f"get_wiki_page_revisions response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            revisions, rev_error = validate_list_response(
+                response, "revisions", key="data"
+            )
+            if rev_error:
+                logger.error(f"Failed to get revisions: {rev_error}")
+                return json.dumps({"error": rev_error})
+
+            logger.info(
+                f"Returning {len(revisions)} revisions for wiki page {page_id}"
+            )
+            return json.dumps(
+                {
+                    "page_id": page_id,
+                    "revisions": revisions,
+                    "count": len(revisions),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Exception in get_wiki_page_revisions: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_wiki_page_revision(page_id: int, revision_number: int) -> str:
+        """
+        Get a specific revision of a wiki page.
+
+        Retrieves the full content of a page at a particular revision number.
+
+        Args:
+            page_id: Wiki page ID
+            revision_number: Revision number to retrieve
+
+        Returns:
+            JSON object with revision data including title, slug, content,
+            revision_number, and created_at
+        """
+        logger.info(
+            f"=== get_wiki_page_revision called: page_id={page_id}, "
+            f"revision_number={revision_number} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.get_wiki_page_revision(page_id, revision_number)
+            logger.info(
+                f"get_wiki_page_revision response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            revision, rev_error = validate_dict_response(response, "revision")
+            if rev_error:
+                logger.error(f"Failed to get revision: {rev_error}")
+                return json.dumps({"error": rev_error})
+
+            logger.info(
+                f"Retrieved revision {revision_number} for wiki page {page_id}"
+            )
+            return json.dumps(
+                {
+                    "page_id": page_id,
+                    "revision": revision,
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Exception in get_wiki_page_revision: {e}", exc_info=True
+            )
             return json.dumps({"error": str(e)})
 
     return app

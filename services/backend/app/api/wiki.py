@@ -1,7 +1,7 @@
 """Wiki page API routes."""
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,7 +11,7 @@ from app.core.errors import errors
 from app.db.queries import get_resource_for_user
 from app.dependencies import CurrentUserFlexible, DbSession
 from app.models.todo import Todo
-from app.models.wiki_page import WikiPage, todo_wiki_links
+from app.models.wiki_page import WikiPage, WikiPageRevision, todo_wiki_links
 from app.schemas import DataResponse, ListResponse
 
 # ---------------------------------------------------------------------------
@@ -34,6 +34,7 @@ class WikiPageUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
     content: str | None = None
     slug: str | None = Field(None, max_length=500)
+    append: bool = False
 
 
 class WikiPageResponse(BaseModel):
@@ -43,8 +44,11 @@ class WikiPageResponse(BaseModel):
     title: str
     slug: str
     content: str
+    revision_number: int = 1
     created_at: datetime
     updated_at: datetime | None
+    slug_modified: bool = False
+    requested_slug: str | None = None
 
 
 class WikiPageSummary(BaseModel):
@@ -55,6 +59,10 @@ class WikiPageSummary(BaseModel):
     slug: str
     created_at: datetime
     updated_at: datetime | None
+
+
+class WikiPageSearchResult(WikiPageSummary):
+    content_snippet: str | None = None
 
 
 class LinkedTodoResponse(BaseModel):
@@ -69,6 +77,28 @@ class LinkedTodoResponse(BaseModel):
 
 class LinkTaskRequest(BaseModel):
     todo_id: int
+
+
+class BatchLinkTasksRequest(BaseModel):
+    todo_ids: list[int]
+
+
+class BatchLinkTasksResponse(BaseModel):
+    linked: list[int]
+    already_linked: list[int]
+    not_found: list[int]
+
+
+class WikiPageRevisionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    wiki_page_id: int
+    title: str
+    slug: str
+    content: str
+    revision_number: int
+    created_at: datetime
 
 
 # ---------------------------------------------------------------------------
@@ -98,28 +128,61 @@ def generate_slug(title: str) -> str:
     return slug or "untitled"
 
 
+def extract_snippet(content: str, query: str, max_len: int = 200) -> str | None:
+    """Extract a snippet of content around the first match of query."""
+    idx = content.lower().find(query.lower())
+    if idx == -1:
+        return None
+    start = max(0, idx - 80)
+    end = min(len(content), idx + len(query) + 80)
+    snippet = content[start:end]
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(content):
+        snippet = snippet + "..."
+    return snippet
+
+
 async def ensure_unique_slug(
     db: DbSession,
     user_id: int,
     slug: str,
     exclude_id: int | None = None,
-) -> str:
-    """Append -2, -3, etc. if slug already taken by this user."""
+) -> tuple[str, bool]:
+    """Append -2, -3, etc. if slug already taken by this user.
+
+    Returns (final_slug, was_modified) tuple.
+    """
     candidate = slug
     suffix = 1
     while suffix <= MAX_SLUG_DEDUP:
         query = select(WikiPage.id).where(
             WikiPage.user_id == user_id,
             WikiPage.slug == candidate,
+            WikiPage.deleted_at.is_(None),
         )
         if exclude_id is not None:
             query = query.where(WikiPage.id != exclude_id)
         result = await db.execute(query)
         if result.scalar_one_or_none() is None:
-            return candidate
+            was_modified = candidate != slug
+            return candidate, was_modified
         suffix += 1
         candidate = f"{slug}-{suffix}"
     raise errors.validation("Too many pages with similar slugs; provide a unique slug")
+
+
+async def _save_revision(db: DbSession, page: WikiPage) -> None:
+    """Save the current page state as a revision before updating."""
+    revision = WikiPageRevision(
+        wiki_page_id=page.id,
+        user_id=page.user_id,
+        title=page.title,
+        slug=page.slug,
+        content=page.content,
+        revision_number=page.revision_number,
+    )
+    db.add(revision)
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +197,12 @@ async def list_wiki_pages(
     user: CurrentUserFlexible,
     db: DbSession,
     q: str | None = Query(None, description="Search query"),
-) -> ListResponse[WikiPageSummary]:
+) -> ListResponse[WikiPageSearchResult] | ListResponse[WikiPageSummary]:
     """List wiki pages for the current user, optionally filtered by search."""
-    query = select(WikiPage).where(WikiPage.user_id == user.id)
+    query = select(WikiPage).where(
+        WikiPage.user_id == user.id,
+        WikiPage.deleted_at.is_(None),
+    )
     if q:
         query = query.where(
             WikiPage.title.ilike(f"%{q}%") | WikiPage.content.ilike(f"%{q}%")
@@ -144,6 +210,15 @@ async def list_wiki_pages(
     query = query.order_by(WikiPage.updated_at.desc().nullslast())
     result = await db.execute(query)
     pages = result.scalars().all()
+
+    if q:
+        data = []
+        for p in pages:
+            item = WikiPageSearchResult.model_validate(p)
+            item.content_snippet = extract_snippet(p.content, q)
+            data.append(item)
+        return ListResponse(data=data, meta={"count": len(data)})
+
     return ListResponse(
         data=[WikiPageSummary.model_validate(p) for p in pages],
         meta={"count": len(pages)},
@@ -157,24 +232,29 @@ async def create_wiki_page(
     db: DbSession,
 ) -> DataResponse[WikiPageResponse]:
     """Create a new wiki page."""
+    requested_slug = body.slug
     if body.slug:
         validate_slug(body.slug)
     slug = body.slug if body.slug else generate_slug(body.title)
     if slug in RESERVED_SLUGS:
         raise errors.validation(f"Slug '{slug}' is reserved")
-    slug = await ensure_unique_slug(db, user.id, slug)
+    final_slug, was_modified = await ensure_unique_slug(db, user.id, slug)
 
     page = WikiPage(
         user_id=user.id,
         title=body.title,
-        slug=slug,
+        slug=final_slug,
         content=body.content,
     )
     db.add(page)
     await db.flush()
     await db.refresh(page)
 
-    return DataResponse(data=WikiPageResponse.model_validate(page))
+    resp = WikiPageResponse.model_validate(page)
+    if was_modified:
+        resp.slug_modified = True
+        resp.requested_slug = requested_slug or slug
+    return DataResponse(data=resp)
 
 
 @router.get("/resolve")
@@ -195,6 +275,7 @@ async def resolve_wiki_links(
         result = await db.execute(
             select(WikiPage.title, WikiPage.slug).where(
                 WikiPage.user_id == user.id,
+                WikiPage.deleted_at.is_(None),
                 WikiPage.title.in_(title_list),
             )
         )
@@ -224,8 +305,15 @@ async def update_wiki_page(
 ) -> DataResponse[WikiPageResponse]:
     """Update an existing wiki page."""
     page = await get_resource_for_user(
-        db, WikiPage, page_id, user.id, errors.wiki_page_not_found, check_deleted=False
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
+
+    # Save current state as revision before making changes
+    await _save_revision(db, page)
+    page.revision_number += 1
+
+    slug_modified = False
+    requested_slug: str | None = None
 
     if body.title is not None:
         page.title = body.title
@@ -234,23 +322,41 @@ async def update_wiki_page(
             new_slug = generate_slug(body.title)
             if new_slug in RESERVED_SLUGS:
                 raise errors.validation(f"Slug '{new_slug}' is reserved")
-            page.slug = await ensure_unique_slug(
+            final_slug, was_modified = await ensure_unique_slug(
                 db, user.id, new_slug, exclude_id=page.id
             )
+            page.slug = final_slug
+            if was_modified:
+                slug_modified = True
+                requested_slug = new_slug
 
     if body.slug is not None:
         validate_slug(body.slug)
         if body.slug in RESERVED_SLUGS:
             raise errors.validation(f"Slug '{body.slug}' is reserved")
-        page.slug = await ensure_unique_slug(db, user.id, body.slug, exclude_id=page.id)
+        requested_slug_val = body.slug
+        final_slug, was_modified = await ensure_unique_slug(
+            db, user.id, body.slug, exclude_id=page.id
+        )
+        page.slug = final_slug
+        if was_modified:
+            slug_modified = True
+            requested_slug = requested_slug_val
 
     if body.content is not None:
-        page.content = body.content
+        if body.append:
+            page.content = page.content + "\n" + body.content
+        else:
+            page.content = body.content
 
     await db.flush()
     await db.refresh(page)
 
-    return DataResponse(data=WikiPageResponse.model_validate(page))
+    resp = WikiPageResponse.model_validate(page)
+    if slug_modified:
+        resp.slug_modified = True
+        resp.requested_slug = requested_slug
+    return DataResponse(data=resp)
 
 
 @router.delete("/{page_id}")
@@ -259,12 +365,63 @@ async def delete_wiki_page(
     user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
-    """Hard-delete a wiki page."""
+    """Soft-delete a wiki page."""
     page = await get_resource_for_user(
-        db, WikiPage, page_id, user.id, errors.wiki_page_not_found, check_deleted=False
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
-    await db.delete(page)
+    page.deleted_at = datetime.now(UTC)
+    await db.flush()
     return {"data": {"deleted": True, "id": page_id}}
+
+
+# ---------------------------------------------------------------------------
+# Revision endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{page_id}/revisions")
+async def list_revisions(
+    page_id: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> ListResponse[WikiPageRevisionResponse]:
+    """List revisions for a wiki page."""
+    await get_resource_for_user(
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
+    )
+    result = await db.execute(
+        select(WikiPageRevision)
+        .where(WikiPageRevision.wiki_page_id == page_id)
+        .order_by(WikiPageRevision.revision_number.desc())
+    )
+    revisions = result.scalars().all()
+    return ListResponse(
+        data=[WikiPageRevisionResponse.model_validate(r) for r in revisions],
+        meta={"count": len(revisions)},
+    )
+
+
+@router.get("/{page_id}/revisions/{revision_number}")
+async def get_revision(
+    page_id: int,
+    revision_number: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> DataResponse[WikiPageRevisionResponse]:
+    """Get a specific revision of a wiki page."""
+    await get_resource_for_user(
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
+    )
+    result = await db.execute(
+        select(WikiPageRevision).where(
+            WikiPageRevision.wiki_page_id == page_id,
+            WikiPageRevision.revision_number == revision_number,
+        )
+    )
+    revision = result.scalar_one_or_none()
+    if not revision:
+        raise errors.not_found("Revision")
+    return DataResponse(data=WikiPageRevisionResponse.model_validate(revision))
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +438,7 @@ async def link_task(
 ) -> DataResponse[LinkedTodoResponse]:
     """Link a wiki page to a task."""
     page = await get_resource_for_user(
-        db, WikiPage, page_id, user.id, errors.wiki_page_not_found, check_deleted=False
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
     todo = await get_resource_for_user(
         db, Todo, body.todo_id, user.id, errors.todo_not_found
@@ -304,6 +461,61 @@ async def link_task(
     return DataResponse(data=LinkedTodoResponse.model_validate(todo))
 
 
+@router.post("/{page_id}/link-tasks", status_code=200)
+async def batch_link_tasks(
+    page_id: int,
+    body: BatchLinkTasksRequest,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> DataResponse[BatchLinkTasksResponse]:
+    """Batch link multiple tasks to a wiki page."""
+    page = await get_resource_for_user(
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
+    )
+
+    linked: list[int] = []
+    already_linked: list[int] = []
+    not_found: list[int] = []
+
+    for todo_id in body.todo_ids:
+        # Check task exists and belongs to user
+        result = await db.execute(
+            select(Todo).where(
+                Todo.id == todo_id,
+                Todo.user_id == user.id,
+                Todo.deleted_at.is_(None),
+            )
+        )
+        todo = result.scalar_one_or_none()
+        if not todo:
+            not_found.append(todo_id)
+            continue
+
+        # Check for existing link
+        existing = await db.execute(
+            select(todo_wiki_links).where(
+                todo_wiki_links.c.todo_id == todo_id,
+                todo_wiki_links.c.wiki_page_id == page.id,
+            )
+        )
+        if existing.first():
+            already_linked.append(todo_id)
+            continue
+
+        await db.execute(
+            todo_wiki_links.insert().values(todo_id=todo_id, wiki_page_id=page.id)
+        )
+        linked.append(todo_id)
+
+    return DataResponse(
+        data=BatchLinkTasksResponse(
+            linked=linked,
+            already_linked=already_linked,
+            not_found=not_found,
+        )
+    )
+
+
 @router.delete("/{page_id}/link-task/{todo_id}")
 async def unlink_task(
     page_id: int,
@@ -313,7 +525,7 @@ async def unlink_task(
 ) -> dict:
     """Unlink a wiki page from a task."""
     await get_resource_for_user(
-        db, WikiPage, page_id, user.id, errors.wiki_page_not_found, check_deleted=False
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
     await get_resource_for_user(
         db, Todo, todo_id, user.id, errors.todo_not_found
@@ -339,7 +551,7 @@ async def get_linked_tasks(
 ) -> ListResponse[LinkedTodoResponse]:
     """List tasks linked to a wiki page."""
     await get_resource_for_user(
-        db, WikiPage, page_id, user.id, errors.wiki_page_not_found, check_deleted=False
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
 
     result = await db.execute(
@@ -375,7 +587,10 @@ async def get_todo_wiki_pages(
     result = await db.execute(
         select(WikiPage)
         .join(todo_wiki_links, todo_wiki_links.c.wiki_page_id == WikiPage.id)
-        .where(todo_wiki_links.c.todo_id == todo_id)
+        .where(
+            todo_wiki_links.c.todo_id == todo_id,
+            WikiPage.deleted_at.is_(None),
+        )
         .order_by(WikiPage.title)
     )
     pages = result.scalars().all()
@@ -400,6 +615,7 @@ async def _resolve_page(db: DbSession, user_id: int, slug_or_id: str) -> WikiPag
             select(WikiPage).where(
                 WikiPage.id == page_id,
                 WikiPage.user_id == user_id,
+                WikiPage.deleted_at.is_(None),
             )
         )
         page = result.scalar_one_or_none()
@@ -411,6 +627,7 @@ async def _resolve_page(db: DbSession, user_id: int, slug_or_id: str) -> WikiPag
         select(WikiPage).where(
             WikiPage.slug == slug_or_id,
             WikiPage.user_id == user_id,
+            WikiPage.deleted_at.is_(None),
         )
     )
     page = result.scalar_one_or_none()
