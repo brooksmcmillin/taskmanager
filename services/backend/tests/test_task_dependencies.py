@@ -374,3 +374,261 @@ async def test_complex_dependency_graph_no_cycle(authenticated_client: AsyncClie
 
     # This should succeed - diamond is not a cycle
     assert response.status_code == 201
+
+
+# =============================================================================
+# Batch Creation with depends_on Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_batch_create_with_depends_on(authenticated_client: AsyncClient):
+    """Test batch creation with depends_on indices creates dependencies."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Step 1: Setup"},
+                {"title": "Step 2: Build", "depends_on": [0]},
+                {"title": "Step 3: Deploy", "depends_on": [0, 1]},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 3
+
+    task_ids = [t["id"] for t in data["data"]]
+
+    # Verify Step 2 depends on Step 1
+    deps_1 = await authenticated_client.get(f"/api/todos/{task_ids[1]}/dependencies")
+    assert deps_1.status_code == 200
+    dep_ids_1 = {d["id"] for d in deps_1.json()["data"]}
+    assert dep_ids_1 == {task_ids[0]}
+
+    # Verify Step 3 depends on Step 1 and Step 2
+    deps_2 = await authenticated_client.get(f"/api/todos/{task_ids[2]}/dependencies")
+    assert deps_2.status_code == 200
+    dep_ids_2 = {d["id"] for d in deps_2.json()["data"]}
+    assert dep_ids_2 == {task_ids[0], task_ids[1]}
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_empty_list(authenticated_client: AsyncClient):
+    """Test batch creation with empty depends_on list works fine."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task A", "depends_on": []},
+                {"title": "Task B", "depends_on": []},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_without_field(authenticated_client: AsyncClient):
+    """Test backward compatibility: batch creation without depends_on still works."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task A"},
+                {"title": "Task B"},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_out_of_bounds(authenticated_client: AsyncClient):
+    """Test batch creation rejects out-of-bounds depends_on index."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task A"},
+                {"title": "Task B", "depends_on": [5]},
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_negative_index(
+    authenticated_client: AsyncClient,
+):
+    """Test batch creation rejects negative depends_on index."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task A"},
+                {"title": "Task B", "depends_on": [-1]},
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_self_reference(
+    authenticated_client: AsyncClient,
+):
+    """Test batch creation rejects self-referencing depends_on."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task A", "depends_on": [0]},
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_circular(authenticated_client: AsyncClient):
+    """Test batch creation rejects circular depends_on references."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task A", "depends_on": [1]},
+                {"title": "Task B", "depends_on": [0]},
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_circular_chain(
+    authenticated_client: AsyncClient,
+):
+    """Test batch creation rejects circular chain A->B->C->A."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task A", "depends_on": [2]},
+                {"title": "Task B", "depends_on": [0]},
+                {"title": "Task C", "depends_on": [1]},
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_diamond_no_cycle(
+    authenticated_client: AsyncClient,
+):
+    """Test batch creation allows diamond dependency pattern (not a cycle)."""
+    # A depends on B and C, both B and C depend on D
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task D"},
+                {"title": "Task B", "depends_on": [0]},
+                {"title": "Task C", "depends_on": [0]},
+                {"title": "Task A", "depends_on": [1, 2]},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 4
+
+    task_ids = [t["id"] for t in data["data"]]
+
+    # Verify Task A depends on Task B and Task C
+    deps = await authenticated_client.get(f"/api/todos/{task_ids[3]}/dependencies")
+    dep_ids = {d["id"] for d in deps.json()["data"]}
+    assert dep_ids == {task_ids[1], task_ids[2]}
+
+
+@pytest.mark.asyncio
+async def test_batch_create_depends_on_visible_in_get_todo(
+    authenticated_client: AsyncClient,
+):
+    """Test that dependencies created via batch are visible in GET /todos/{id}."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Prerequisite"},
+                {"title": "Main task", "depends_on": [0]},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    task_ids = [t["id"] for t in response.json()["data"]]
+
+    # GET the dependent task and verify dependencies are included
+    todo_response = await authenticated_client.get(f"/api/todos/{task_ids[1]}")
+    assert todo_response.status_code == 200
+    todo_data = todo_response.json()["data"]
+    assert len(todo_data["dependencies"]) == 1
+    assert todo_data["dependencies"][0]["id"] == task_ids[0]
+
+    # GET the prerequisite task and verify dependents are included
+    prereq_response = await authenticated_client.get(f"/api/todos/{task_ids[0]}")
+    assert prereq_response.status_code == 200
+    prereq_data = prereq_response.json()["data"]
+    assert len(prereq_data["dependents"]) == 1
+    assert prereq_data["dependents"][0]["id"] == task_ids[1]
+
+
+@pytest.mark.asyncio
+async def test_batch_create_mixed_depends_on_and_no_depends(
+    authenticated_client: AsyncClient,
+):
+    """Test batch with a mix of tasks with and without depends_on."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Independent task"},
+                {"title": "Another independent"},
+                {"title": "Depends on first", "depends_on": [0]},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 3
+
+    task_ids = [t["id"] for t in data["data"]]
+
+    # Independent tasks should have no dependencies
+    deps_0 = await authenticated_client.get(f"/api/todos/{task_ids[0]}/dependencies")
+    assert deps_0.json()["meta"]["count"] == 0
+
+    deps_1 = await authenticated_client.get(f"/api/todos/{task_ids[1]}/dependencies")
+    assert deps_1.json()["meta"]["count"] == 0
+
+    # Third task depends on first
+    deps_2 = await authenticated_client.get(f"/api/todos/{task_ids[2]}/dependencies")
+    assert deps_2.json()["meta"]["count"] == 1
+    assert deps_2.json()["data"][0]["id"] == task_ids[0]

@@ -616,6 +616,10 @@ def create_resource_server(
                   this batch to use as parent. Mutually exclusive with
                   parent_id.
                 - estimated_hours (optional): Estimated hours to complete
+                - depends_on (optional): List of 0-based indices of other tasks
+                  in this batch that must be completed before this task.
+                  Example: [0, 1] means this task depends on the first and
+                  second tasks in the batch.
             wiki_page_id: Optional wiki page ID to auto-link to all created tasks.
                 When provided, every task created in this batch is automatically
                 linked to the specified wiki page, eliminating the need for
@@ -694,6 +698,14 @@ def create_resource_server(
                             {"error": f"Task at index {i}: parent_index must be an integer"}
                         )
                     todo["parent_index"] = parent_index
+
+                depends_on = task.get("depends_on")
+                if depends_on is not None:
+                    if not isinstance(depends_on, list):
+                        return json.dumps(
+                            {"error": f"Task at index {i}: depends_on must be a list of integers"}
+                        )
+                    todo["depends_on"] = depends_on
 
                 todo_dicts.append(todo)
 
