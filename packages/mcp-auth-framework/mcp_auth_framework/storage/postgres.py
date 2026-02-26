@@ -2,7 +2,7 @@
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import asyncpg
@@ -66,8 +66,7 @@ class PostgresTokenStorage(TokenStorage):
         if not self._pool:
             raise RuntimeError("Token storage not initialized. Call initialize() first.")
 
-        # Use naive datetime for PostgreSQL TIMESTAMP column (without timezone)
-        expires_datetime = datetime.utcfromtimestamp(expires_at)
+        expires_datetime = datetime.fromtimestamp(expires_at, tz=timezone.utc)
         scopes_str = " ".join(scopes)
 
         async with self._pool.acquire() as conn:
@@ -115,9 +114,8 @@ class PostgresTokenStorage(TokenStorage):
             logger.debug(f"Token {token[:20]}... not found in database")
             return None
 
-        # Check if expired (using naive UTC datetimes for PostgreSQL TIMESTAMP)
         expires_at = row["expires_at"]
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if expires_at < now:
             logger.debug(f"Token {token[:20]}... has expired")
             # Clean up expired token
@@ -158,8 +156,7 @@ class PostgresTokenStorage(TokenStorage):
         if not self._pool:
             raise RuntimeError("Token storage not initialized. Call initialize() first.")
 
-        # Use naive UTC datetime for PostgreSQL TIMESTAMP column
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         async with self._pool.acquire() as conn:
             result = await conn.execute(
                 "DELETE FROM mcp_access_tokens WHERE expires_at < $1",
@@ -204,7 +201,7 @@ class PostgresTokenStorage(TokenStorage):
         if not self._pool:
             raise RuntimeError("Token storage not initialized. Call initialize() first.")
 
-        expires_datetime = datetime.utcfromtimestamp(expires_at)
+        expires_datetime = datetime.fromtimestamp(expires_at, tz=timezone.utc)
         scopes_str = " ".join(scopes)
 
         async with self._pool.acquire() as conn:
@@ -254,7 +251,7 @@ class PostgresTokenStorage(TokenStorage):
 
         # Check if expired
         expires_at = row["expires_at"]
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if expires_at < now:
             logger.debug(f"Refresh token {refresh_token[:20]}... has expired")
             await self.delete_refresh_token(refresh_token)
@@ -294,7 +291,7 @@ class PostgresTokenStorage(TokenStorage):
         if not self._pool:
             raise RuntimeError("Token storage not initialized. Call initialize() first.")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         async with self._pool.acquire() as conn:
             result = await conn.execute(
                 "DELETE FROM mcp_refresh_tokens WHERE expires_at < $1",
