@@ -1,9 +1,9 @@
 """Add MCP access and refresh token tables.
 
-Creates mcp_access_tokens and mcp_refresh_tokens tables used by the
-MCP auth server for persistent OAuth token storage. Previously these
-tables were created by legacy SQL migrations that were removed during
-the Astro-to-FastAPI migration.
+Replaces legacy mcp_access_tokens and mcp_refresh_tokens tables with
+updated schema including user_id FK, timezone-aware timestamps, and
+proper indexes. The legacy tables were created by SQL migrations that
+predated the alembic migration chain.
 
 Revision ID: 0022_add_mcp_token_tables
 Revises: 0021_add_deadline_type
@@ -24,8 +24,27 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _table_exists(connection: sa.Connection, table_name: str) -> bool:
+    result = connection.execute(
+        sa.text(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+            "WHERE table_name = :name)"
+        ),
+        {"name": table_name},
+    )
+    return result.scalar()
+
+
 def upgrade() -> None:
-    """Create MCP token tables."""
+    """Replace legacy MCP token tables with updated schema."""
+    conn = op.get_bind()
+
+    # Drop legacy tables if they exist (ephemeral token data, safe to drop)
+    if _table_exists(conn, "mcp_refresh_tokens"):
+        op.drop_table("mcp_refresh_tokens")
+    if _table_exists(conn, "mcp_access_tokens"):
+        op.drop_table("mcp_access_tokens")
+
     op.create_table(
         "mcp_access_tokens",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
