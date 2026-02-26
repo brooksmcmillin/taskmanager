@@ -587,6 +587,7 @@ def create_resource_server(
     @guard_tool(screen_output=True)
     async def create_tasks(
         tasks: list[dict[str, Any]],
+        wiki_page_id: int | None = None,
     ) -> str:
         """
         Create multiple tasks in a single request (batch creation).
@@ -614,6 +615,10 @@ def create_resource_server(
                 - parent_index (optional): 0-based index of another task in
                   this batch to use as parent. Mutually exclusive with
                   parent_id.
+            wiki_page_id: Optional wiki page ID to auto-link to all created tasks.
+                When provided, every task created in this batch is automatically
+                linked to the specified wiki page, eliminating the need for
+                separate link_wiki_page_to_task calls.
 
         Returns:
             JSON object with created task IDs and count
@@ -690,7 +695,7 @@ def create_resource_server(
                 todo_dicts.append(todo)
 
             api_client = get_api_client()
-            response = api_client.batch_create_todos(todo_dicts)
+            response = api_client.batch_create_todos(todo_dicts, wiki_page_id=wiki_page_id)
 
             created_tasks, list_error = validate_list_response(response, "batch created tasks")
             if list_error:
@@ -716,6 +721,9 @@ def create_resource_server(
                 "count": len(results),
                 "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
+            if wiki_page_id is not None:
+                result["wiki_page_id"] = wiki_page_id
+                result["wiki_links_created"] = len(results)
             if warnings:
                 result["warnings"] = warnings
             return json.dumps(result)

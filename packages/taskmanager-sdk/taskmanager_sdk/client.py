@@ -409,6 +409,7 @@ class TaskManagerClient:
     def batch_create_todos(
         self,
         todos: list[dict[str, Any]],
+        wiki_page_id: int | None = None,
     ) -> ApiResponse:
         """
         Create multiple todos in a single request.
@@ -418,11 +419,16 @@ class TaskManagerClient:
                    Supports the same fields as create_todo (description,
                    category, priority, due_date, deadline_type, tags,
                    parent_id, etc.)
+            wiki_page_id: Optional wiki page ID to auto-link to all
+                          created tasks.
 
         Returns:
             ApiResponse with list of created todos
         """
-        return self._make_request("POST", "/todos/batch", {"todos": todos})
+        data: dict[str, Any] = {"todos": todos}
+        if wiki_page_id is not None:
+            data["wiki_page_id"] = wiki_page_id
+        return self._make_request("POST", "/todos/batch", data)
 
     def get_todo(self, todo_id: int) -> ApiResponse:
         """

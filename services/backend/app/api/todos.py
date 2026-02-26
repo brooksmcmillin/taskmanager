@@ -26,6 +26,7 @@ from app.models.todo import (
     Todo,
     task_dependencies,
 )
+from app.models.wiki_page import WikiPage, todo_wiki_links
 from app.schemas import ListResponse
 
 router = APIRouter(prefix="/api/todos", tags=["todos"])
@@ -111,6 +112,10 @@ class BatchTodoCreate(BaseModel):
     """
 
     todos: list[TodoCreate] = Field(..., min_length=1, max_length=50)
+    wiki_page_id: int | None = Field(
+        None,
+        description="Wiki page ID to auto-link to all created tasks",
+    )
 
     @model_validator(mode="after")
     def validate_parent_indexes(self) -> "BatchTodoCreate":
@@ -796,7 +801,16 @@ async def batch_create_todos(
     ``parent_index`` field (0-based index).  Parents must appear before
     children in the list, and only one level of nesting is allowed.
     ``parent_index`` and ``parent_id`` are mutually exclusive per task.
+
+    If ``wiki_page_id`` is provided, all created tasks are automatically
+    linked to that wiki page.
     """
+    # Phase 0: Validate wiki page if provided
+    if request.wiki_page_id is not None:
+        await get_resource_for_user(
+            db, WikiPage, request.wiki_page_id, user.id, errors.wiki_page_not_found
+        )
+
     # Phase 1: Validate all items and prepare Todo objects before any writes.
     # Items with parent_index skip parent_id assignment here — it's set in
     # phase 3 after all items have been flushed and have real IDs.
@@ -900,7 +914,20 @@ async def batch_create_todos(
         )
         created.append(_build_todo_response(todo, project_name, project_color))
 
-    return {"data": created, "meta": {"count": len(created)}}
+    # Phase 5: Link all created tasks to the wiki page if requested
+    if request.wiki_page_id is not None:
+        for todo in prepared:
+            await db.execute(
+                todo_wiki_links.insert().values(
+                    todo_id=todo.id, wiki_page_id=request.wiki_page_id
+                )
+            )
+
+    result: dict = {"data": created, "meta": {"count": len(created)}}
+    if request.wiki_page_id is not None:
+        result["meta"]["wiki_page_id"] = request.wiki_page_id
+        result["meta"]["wiki_links_created"] = len(created)
+    return result
 
 
 @router.get("/{todo_id}")

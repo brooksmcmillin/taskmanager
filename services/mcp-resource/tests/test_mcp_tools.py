@@ -1697,6 +1697,63 @@ class TestCreateTasksBatch:
             assert parsed["created"][1]["id"] == "task_11"
             assert parsed["created"][1]["parent_id"] == "task_10"
 
+    @pytest.mark.asyncio
+    async def test_batch_create_with_wiki_page_id(self, mock_api_client: MagicMock) -> None:
+        """Test that wiki_page_id is passed to the SDK."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(
+                tasks=[{"title": "Task 1"}],
+                wiki_page_id=42,
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["wiki_page_id"] == 42
+            assert parsed["wiki_links_created"] == 2  # mock returns 2 tasks
+
+            call_args = mock_api_client.batch_create_todos.call_args
+            assert call_args.kwargs["wiki_page_id"] == 42
+
+    @pytest.mark.asyncio
+    async def test_batch_create_without_wiki_page_id(self, mock_api_client: MagicMock) -> None:
+        """Test that wiki_page_id is not in result when not provided."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(
+                tasks=[{"title": "Task 1"}],
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert "wiki_page_id" not in parsed
+            assert "wiki_links_created" not in parsed
+
+            call_args = mock_api_client.batch_create_todos.call_args
+            assert call_args.kwargs["wiki_page_id"] is None
+
 
 class TestWikiTools:
     """Tests for wiki MCP tools."""
