@@ -584,6 +584,122 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
+    @guard_tool(screen_output=True)
+    async def create_tasks(
+        tasks: list[dict[str, Any]],
+    ) -> str:
+        """
+        Create multiple tasks in a single request (batch creation).
+
+        More efficient than calling create_task multiple times—sends one
+        API request instead of N sequential calls.
+
+        Args:
+            tasks: Array of task objects. Each object supports:
+                - title (required): Task title
+                - description (optional): Task details
+                - due_date (optional): Due date "YYYY-MM-DD"
+                - deadline_type (optional): "flexible", "preferred", "firm", or "hard"
+                - category (optional): Project/category name
+                - priority (optional): "low", "medium", "high", or "urgent"
+                - tags (optional): List of tags
+                - parent_id (optional): Parent task ID ("task_123" or "123")
+
+        Returns:
+            JSON object with created task IDs and count
+        """
+        try:
+            if not tasks:
+                return json.dumps({"error": "tasks array must not be empty"})
+            if len(tasks) > 50:
+                return json.dumps({"error": "Maximum 50 tasks per batch"})
+
+            # Validate and transform each task
+            todo_dicts: list[dict[str, Any]] = []
+            for i, task in enumerate(tasks):
+                if not isinstance(task, dict):
+                    return json.dumps({"error": f"Task at index {i} must be an object"})
+                title = task.get("title")
+                if not title:
+                    return json.dumps({"error": f"Task at index {i} is missing required 'title'"})
+
+                deadline_type = task.get("deadline_type", "preferred")
+                if deadline_type not in VALID_DEADLINE_TYPES:
+                    return json.dumps(
+                        {
+                            "error": f"Task at index {i}: invalid deadline_type "
+                            f"{deadline_type!r}. "
+                            f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
+                        }
+                    )
+
+                todo: dict[str, Any] = {"title": title}
+                if task.get("description"):
+                    todo["description"] = task["description"]
+                if task.get("category"):
+                    todo["category"] = task["category"]
+                if task.get("priority"):
+                    todo["priority"] = task["priority"]
+                if task.get("due_date"):
+                    todo["due_date"] = task["due_date"]
+                if deadline_type != "preferred":
+                    todo["deadline_type"] = deadline_type
+                if task.get("tags"):
+                    todo["tags"] = task["tags"]
+
+                parent_id = task.get("parent_id")
+                if parent_id:
+                    numeric_id = (
+                        parent_id.replace("task_", "")
+                        if parent_id.startswith("task_")
+                        else parent_id
+                    )
+                    try:
+                        todo["parent_id"] = int(numeric_id)
+                    except ValueError:
+                        return json.dumps(
+                            {
+                                "error": f"Task at index {i}: invalid parent_id "
+                                f"format: {parent_id}"
+                            }
+                        )
+
+                todo_dicts.append(todo)
+
+            api_client = get_api_client()
+            response = api_client.batch_create_todos(todo_dicts)
+
+            created_tasks, list_error = validate_list_response(response, "batch created tasks")
+            if list_error:
+                return json.dumps({"error": list_error})
+
+            results: list[dict[str, Any]] = []
+            warnings: list[str] = []
+            for task_data in created_tasks or []:
+                task_id = task_data.get("id")
+                results.append(
+                    {
+                        "id": f"task_{task_id}" if task_id else None,
+                        "title": task_data.get("title", ""),
+                    }
+                )
+                warning = _past_due_date_warning(task_data.get("due_date"))
+                if warning:
+                    warnings.append(f"task_{task_id}: {warning}")
+
+            result: dict[str, Any] = {
+                "created": results,
+                "count": len(results),
+                "current_time": datetime.datetime.now().isoformat(),
+            }
+            if warnings:
+                result["warnings"] = warnings
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Exception in create_tasks: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
     @guard_tool(
         input_params=["title", "description", "status", "category", "tags"],
         screen_output=True,

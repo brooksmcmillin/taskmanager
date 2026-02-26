@@ -1379,3 +1379,189 @@ class TestPastDueDateWarning:
         parsed = json.loads(json.dumps(result))
         assert "warning" in parsed
         assert "2023-06-15" in parsed["warning"]
+
+
+class TestCreateTasksBatch:
+    """Tests for the create_tasks (batch) MCP tool."""
+
+    @pytest.fixture
+    def mock_api_client(self) -> MagicMock:
+        client = MagicMock()
+        client.batch_create_todos.return_value = ApiResponse(
+            success=True,
+            data=[
+                {"id": 1, "title": "Task 1"},
+                {"id": 2, "title": "Task 2"},
+            ],
+            status_code=201,
+        )
+        return client
+
+    @pytest.mark.asyncio
+    async def test_batch_create_success(self, mock_api_client: MagicMock) -> None:
+        """Test successful batch creation of tasks."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(
+                tasks=[
+                    {"title": "Task 1", "priority": "high"},
+                    {"title": "Task 2", "category": "Work"},
+                ]
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 2
+            assert len(parsed["created"]) == 2
+            assert parsed["created"][0]["id"] == "task_1"
+            assert parsed["created"][1]["id"] == "task_2"
+
+    @pytest.mark.asyncio
+    async def test_batch_create_empty_list(self) -> None:
+        """Test that empty tasks list returns error."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=MagicMock()):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(tasks=[])
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "empty" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_batch_create_missing_title(self) -> None:
+        """Test that a task without a title returns error."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=MagicMock()):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(tasks=[{"description": "no title"}])
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "title" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_batch_create_invalid_deadline_type(self) -> None:
+        """Test that invalid deadline_type in a task returns error."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=MagicMock()):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(tasks=[{"title": "Test", "deadline_type": "bogus"}])
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "deadline_type" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_batch_create_over_limit(self) -> None:
+        """Test that more than 50 tasks returns error."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=MagicMock()):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(tasks=[{"title": f"Task {i}"} for i in range(51)])
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "50" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_batch_create_passes_to_sdk(self, mock_api_client: MagicMock) -> None:
+        """Test that tasks are correctly passed to the SDK."""
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            await create_tasks_tool.fn(
+                tasks=[
+                    {"title": "Task 1", "priority": "high", "category": "Work"},
+                    {"title": "Task 2", "tags": ["urgent"]},
+                ]
+            )
+            mock_api_client.batch_create_todos.assert_called_once()
+            call_args = mock_api_client.batch_create_todos.call_args
+            todos = call_args[0][0] if call_args[0] else call_args[1]["todos"]
+            assert len(todos) == 2
+            assert todos[0]["title"] == "Task 1"
+            assert todos[0]["priority"] == "high"
+            assert todos[0]["category"] == "Work"
+            assert todos[1]["title"] == "Task 2"
+            assert todos[1]["tags"] == ["urgent"]
+
+    @pytest.mark.asyncio
+    async def test_batch_create_with_parent_id(self, mock_api_client: MagicMock) -> None:
+        """Test that parent_id is correctly parsed from task_ format."""
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            await create_tasks_tool.fn(tasks=[{"title": "Subtask", "parent_id": "task_42"}])
+            call_args = mock_api_client.batch_create_todos.call_args
+            todos = call_args[0][0] if call_args[0] else call_args[1]["todos"]
+            assert todos[0]["parent_id"] == 42

@@ -92,6 +92,12 @@ class TodoUpdate(BaseModel):
     blocking_reason: str | None = None
 
 
+class BatchTodoCreate(BaseModel):
+    """Batch todo creation request."""
+
+    todos: list[TodoCreate] = Field(..., min_length=1, max_length=50)
+
+
 class BulkUpdateRequest(BaseModel):
     """Bulk update request."""
 
@@ -721,6 +727,89 @@ async def create_todo(
 
     project_name, project_color = await get_project_info(db, todo.project_id, user.id)
     return {"data": _build_todo_response(todo, project_name, project_color)}
+
+
+@router.post("/batch", status_code=201)
+async def batch_create_todos(
+    request: BatchTodoCreate,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> dict:
+    """Create multiple todos in a single request.
+
+    Accepts up to 50 todo objects. All todos are created atomically—if any
+    validation fails, none are created.
+    """
+    created: list[TodoResponse] = []
+
+    for item in request.todos:
+        # Resolve category name to project_id
+        if item.category and not item.project_id:
+            project_id = await _resolve_category_to_project(db, item.category, user.id)
+            if project_id:
+                item.project_id = project_id
+
+        # Verify parent todo exists and belongs to user
+        if item.parent_id:
+            parent = await get_resource_for_user(
+                db, Todo, item.parent_id, user.id, errors.todo_not_found
+            )
+            if parent.parent_id is not None:
+                raise errors.validation(
+                    "Cannot create subtasks of subtasks. "
+                    "Only one level of nesting is allowed."
+                )
+
+        # Auto-assign position if not provided
+        position = item.position
+        if position is None:
+            position = await get_next_position(
+                db, Todo, user.id, parent_id=item.parent_id
+            )
+
+        # Infer agent fields if not provided
+        agent_actionable = item.agent_actionable
+        action_type = item.action_type
+        autonomy_tier = item.autonomy_tier
+        if agent_actionable is None or action_type is None or autonomy_tier is None:
+            inferred_type, inferred_actionable, inferred_tier = infer_action_type(
+                item.title, item.description
+            )
+            if action_type is None:
+                action_type = inferred_type
+            if agent_actionable is None:
+                agent_actionable = inferred_actionable
+            if autonomy_tier is None:
+                autonomy_tier = inferred_tier
+
+        todo = Todo(
+            user_id=user.id,
+            title=item.title,
+            description=item.description,
+            priority=item.priority,
+            status=item.status,
+            due_date=item.due_date,
+            deadline_type=item.deadline_type,
+            project_id=item.project_id,
+            tags=item.tags,
+            context=item.context,
+            estimated_hours=item.estimated_hours,
+            parent_id=item.parent_id,
+            position=position,
+            agent_actionable=agent_actionable,
+            action_type=action_type,
+            autonomy_tier=autonomy_tier,
+        )
+        db.add(todo)
+        await db.flush()
+        await db.refresh(todo)
+
+        project_name, project_color = await get_project_info(
+            db, todo.project_id, user.id
+        )
+        created.append(_build_todo_response(todo, project_name, project_color))
+
+    return {"data": created, "meta": {"count": len(created)}}
 
 
 @router.get("/{todo_id}")
