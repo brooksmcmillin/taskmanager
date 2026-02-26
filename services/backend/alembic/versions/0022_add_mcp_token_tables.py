@@ -28,7 +28,7 @@ def _table_exists(connection: sa.Connection, table_name: str) -> bool:
     result = connection.execute(
         sa.text(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
-            "WHERE table_name = :name)"
+            "WHERE table_name = :name AND table_schema = 'public')"
         ),
         {"name": table_name},
     )
@@ -105,7 +105,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove MCP token tables."""
+    """Remove MCP token tables.
+
+    Note: this does NOT restore the legacy table schema that existed before
+    upgrade(). The legacy tables (which lacked user_id, used naive timestamps,
+    and had different indexes) were dropped during upgrade. Token data is
+    ephemeral and regenerated on next auth flow, so this is acceptable.
+    """
     op.drop_index("ix_mcp_refresh_tokens_user_id", table_name="mcp_refresh_tokens")
     op.drop_index("ix_mcp_refresh_tokens_expires_at", table_name="mcp_refresh_tokens")
     op.drop_index("ix_mcp_refresh_tokens_client_id", table_name="mcp_refresh_tokens")

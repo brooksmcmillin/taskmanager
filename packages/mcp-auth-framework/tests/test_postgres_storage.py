@@ -13,6 +13,11 @@ import pytest
 from mcp_auth_framework.storage.postgres import PostgresTokenStorage
 
 
+def _get_datetime_args(call_args: tuple) -> list[datetime]:
+    """Extract all datetime arguments from a mock call, regardless of position."""
+    return [arg for arg in call_args[0] if isinstance(arg, datetime)]
+
+
 def _make_storage() -> PostgresTokenStorage:
     """Create a PostgresTokenStorage with a mocked pool."""
     storage = PostgresTokenStorage(database_url="postgresql://test:test@localhost/test")
@@ -54,12 +59,13 @@ class TestStoreTokenTimezone:
             expires_at=expires_at,
         )
 
-        call_args = conn.execute.call_args
-        expires_datetime = call_args[0][5]  # 6th positional arg
-        assert expires_datetime.tzinfo is not None, (
-            "expires_at datetime passed to DB must be timezone-aware"
-        )
-        assert expires_datetime.tzinfo == timezone.utc
+        dt_args = _get_datetime_args(conn.execute.call_args)
+        assert len(dt_args) > 0, "Expected at least one datetime arg passed to DB"
+        for dt in dt_args:
+            assert dt.tzinfo is not None, (
+                "All datetime args passed to DB must be timezone-aware"
+            )
+            assert dt.tzinfo == timezone.utc
 
     @pytest.mark.asyncio
     async def test_store_refresh_token_passes_aware_datetime(self) -> None:
@@ -76,12 +82,13 @@ class TestStoreTokenTimezone:
             expires_at=expires_at,
         )
 
-        call_args = conn.execute.call_args
-        expires_datetime = call_args[0][5]
-        assert expires_datetime.tzinfo is not None, (
-            "expires_at datetime passed to DB must be timezone-aware"
-        )
-        assert expires_datetime.tzinfo == timezone.utc
+        dt_args = _get_datetime_args(conn.execute.call_args)
+        assert len(dt_args) > 0, "Expected at least one datetime arg passed to DB"
+        for dt in dt_args:
+            assert dt.tzinfo is not None, (
+                "All datetime args passed to DB must be timezone-aware"
+            )
+            assert dt.tzinfo == timezone.utc
 
 
 class TestLoadTokenTimezone:
@@ -241,9 +248,9 @@ class TestCleanupTimezone:
         count = await storage.cleanup_expired_tokens()
 
         assert count == 3
-        call_args = conn.execute.call_args
-        now_arg = call_args[0][1]
-        assert now_arg.tzinfo is not None, (
+        dt_args = _get_datetime_args(conn.execute.call_args)
+        assert len(dt_args) == 1, "Expected exactly one datetime arg in cleanup query"
+        assert dt_args[0].tzinfo is not None, (
             "now datetime passed to cleanup query must be timezone-aware"
         )
 
@@ -256,9 +263,9 @@ class TestCleanupTimezone:
         count = await storage.cleanup_expired_refresh_tokens()
 
         assert count == 5
-        call_args = conn.execute.call_args
-        now_arg = call_args[0][1]
-        assert now_arg.tzinfo is not None, (
+        dt_args = _get_datetime_args(conn.execute.call_args)
+        assert len(dt_args) == 1, "Expected exactly one datetime arg in cleanup query"
+        assert dt_args[0].tzinfo is not None, (
             "now datetime passed to cleanup query must be timezone-aware"
         )
 
