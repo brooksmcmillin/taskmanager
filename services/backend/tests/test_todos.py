@@ -1433,3 +1433,234 @@ async def test_batch_create_over_limit(authenticated_client: AsyncClient):
     )
 
     assert response.status_code == 422
+
+
+# --- Batch create with parent_index tests ---
+
+
+@pytest.mark.asyncio
+async def test_batch_create_with_parent_index(authenticated_client: AsyncClient):
+    """Test batch create with parent_index creates parent-child relationships."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Parent task"},
+                {"title": "Child task 1", "parent_index": 0},
+                {"title": "Child task 2", "parent_index": 0},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 3
+
+    parent_id = data["data"][0]["id"]
+    assert data["data"][0]["parent_id"] is None
+    assert data["data"][1]["parent_id"] == parent_id
+    assert data["data"][2]["parent_id"] == parent_id
+
+
+@pytest.mark.asyncio
+async def test_batch_create_parent_index_self_reference(
+    authenticated_client: AsyncClient,
+):
+    """Test that parent_index cannot reference itself."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Self-parent", "parent_index": 0},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_create_parent_index_out_of_range(
+    authenticated_client: AsyncClient,
+):
+    """Test that parent_index out of range is rejected."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task 1"},
+                {"title": "Task 2", "parent_index": 5},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_create_parent_index_negative(authenticated_client: AsyncClient):
+    """Test that negative parent_index is rejected."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task 1"},
+                {"title": "Task 2", "parent_index": -1},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_create_parent_index_forward_reference(
+    authenticated_client: AsyncClient,
+):
+    """Test that parent_index cannot reference a later item."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Child first", "parent_index": 1},
+                {"title": "Parent second"},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_create_parent_index_nested_subtask(
+    authenticated_client: AsyncClient,
+):
+    """Test that parent_index cannot point to a subtask (no multi-level)."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Grandparent"},
+                {"title": "Parent", "parent_index": 0},
+                {"title": "Child of child", "parent_index": 1},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_create_parent_index_and_parent_id_conflict(
+    authenticated_client: AsyncClient,
+):
+    """Test that parent_index and parent_id cannot both be set."""
+    # Create a real parent task first
+    parent_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Existing parent"},
+    )
+    parent_id = parent_response.json()["data"]["id"]
+
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Batch parent"},
+                {
+                    "title": "Conflicting child",
+                    "parent_id": parent_id,
+                    "parent_index": 0,
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_create_mixed_parent_id_and_parent_index(
+    authenticated_client: AsyncClient,
+):
+    """Test mixing parent_id (existing task) and parent_index (batch task)."""
+    # Create a real parent task first
+    parent_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Existing parent"},
+    )
+    existing_parent_id = parent_response.json()["data"]["id"]
+
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Batch parent"},
+                {"title": "Child of batch parent", "parent_index": 0},
+                {"title": "Child of existing parent", "parent_id": existing_parent_id},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 3
+
+    batch_parent_id = data["data"][0]["id"]
+    assert data["data"][0]["parent_id"] is None
+    assert data["data"][1]["parent_id"] == batch_parent_id
+    assert data["data"][2]["parent_id"] == existing_parent_id
+
+
+@pytest.mark.asyncio
+async def test_batch_create_parent_index_verifies_via_get(
+    authenticated_client: AsyncClient,
+):
+    """Test that parent-child relationship from parent_index is reflected in GET."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Parent via batch"},
+                {"title": "Subtask via batch", "parent_index": 0},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    parent_id = data["data"][0]["id"]
+
+    # Fetch the parent and verify subtasks
+    get_response = await authenticated_client.get(f"/api/todos/{parent_id}")
+    assert get_response.status_code == 200
+    parent_data = get_response.json()["data"]
+    assert len(parent_data["subtasks"]) == 1
+    assert parent_data["subtasks"][0]["title"] == "Subtask via batch"
+
+
+@pytest.mark.asyncio
+async def test_batch_create_parent_index_multiple_parents(
+    authenticated_client: AsyncClient,
+):
+    """Test batch with multiple parent tasks and their children."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Parent A"},
+                {"title": "Parent B"},
+                {"title": "Child of A", "parent_index": 0},
+                {"title": "Child of B", "parent_index": 1},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 4
+
+    parent_a_id = data["data"][0]["id"]
+    parent_b_id = data["data"][1]["id"]
+    assert data["data"][2]["parent_id"] == parent_a_id
+    assert data["data"][3]["parent_id"] == parent_b_id

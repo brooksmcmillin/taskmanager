@@ -594,6 +594,12 @@ def create_resource_server(
         More efficient than calling create_task multiple times—sends one
         API request instead of N sequential calls.
 
+        Supports inline parent-child relationships: use ``parent_index``
+        (0-based) to reference another task in the same batch as the parent.
+        Parents must appear before children in the list, and only one level
+        of nesting is allowed.  ``parent_index`` and ``parent_id`` are
+        mutually exclusive per task.
+
         Args:
             tasks: Array of task objects. Each object supports:
                 - title (required): Task title
@@ -604,6 +610,10 @@ def create_resource_server(
                 - priority (optional): "low", "medium", "high", or "urgent"
                 - tags (optional): List of tags
                 - parent_id (optional): Parent task ID ("task_123" or "123")
+                  for existing tasks
+                - parent_index (optional): 0-based index of another task in
+                  this batch to use as parent. Mutually exclusive with
+                  parent_id.
 
         Returns:
             JSON object with created task IDs and count
@@ -648,11 +658,20 @@ def create_resource_server(
                     todo["tags"] = task["tags"]
 
                 parent_id = task.get("parent_id")
-                if parent_id:
+                parent_index = task.get("parent_index")
+
+                if parent_id is not None and parent_index is not None:
+                    return json.dumps(
+                        {
+                            "error": f"Task at index {i}: cannot specify both "
+                            f"parent_id and parent_index"
+                        }
+                    )
+
+                if parent_id is not None:
+                    pid_str = str(parent_id)
                     numeric_id = (
-                        parent_id.replace("task_", "")
-                        if parent_id.startswith("task_")
-                        else parent_id
+                        pid_str.replace("task_", "") if pid_str.startswith("task_") else pid_str
                     )
                     try:
                         todo["parent_id"] = int(numeric_id)
@@ -660,6 +679,13 @@ def create_resource_server(
                         return json.dumps(
                             {"error": f"Task at index {i}: invalid parent_id format: {parent_id}"}
                         )
+
+                if parent_index is not None:
+                    if not isinstance(parent_index, int):
+                        return json.dumps(
+                            {"error": f"Task at index {i}: parent_index must be an integer"}
+                        )
+                    todo["parent_index"] = parent_index
 
                 todo_dicts.append(todo)
 
@@ -674,12 +700,13 @@ def create_resource_server(
             warnings: list[str] = []
             for task_data in created_tasks or []:
                 task_id = task_data.get("id")
-                results.append(
-                    {
-                        "id": f"task_{task_id}" if task_id else None,
-                        "title": task_data.get("title", ""),
-                    }
-                )
+                result_item: dict[str, Any] = {
+                    "id": f"task_{task_id}" if task_id else None,
+                    "title": task_data.get("title", ""),
+                }
+                if task_data.get("parent_id"):
+                    result_item["parent_id"] = f"task_{task_data['parent_id']}"
+                results.append(result_item)
                 warning = _past_due_date_warning(task_data.get("due_date"))
                 if warning:
                     warnings.append(f"task_{task_id}: {warning}")
@@ -2478,9 +2505,7 @@ def create_resource_server(
                     invalid_ids.append(tid)
 
             if invalid_ids:
-                return json.dumps(
-                    {"error": f"Invalid task_id format(s): {', '.join(invalid_ids)}"}
-                )
+                return json.dumps({"error": f"Invalid task_id format(s): {', '.join(invalid_ids)}"})
 
             response = api_client.batch_link_wiki_page_to_tasks(page_id, todo_ids)
             logger.info(
@@ -2488,9 +2513,7 @@ def create_resource_server(
                 f"status={response.status_code}"
             )
 
-            result, result_error = validate_dict_response(
-                response, "batch link result"
-            )
+            result, result_error = validate_dict_response(response, "batch link result")
             if result_error:
                 logger.error(f"Failed to batch link tasks: {result_error}")
                 return json.dumps({"error": result_error})
@@ -2508,9 +2531,7 @@ def create_resource_server(
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in batch_link_wiki_page_to_tasks: {e}", exc_info=True
-            )
+            logger.error(f"Exception in batch_link_wiki_page_to_tasks: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     @app.tool()
@@ -2538,16 +2559,12 @@ def create_resource_server(
                 f"status={response.status_code}"
             )
 
-            revisions, rev_error = validate_list_response(
-                response, "revisions", key="data"
-            )
+            revisions, rev_error = validate_list_response(response, "revisions", key="data")
             if rev_error:
                 logger.error(f"Failed to get revisions: {rev_error}")
                 return json.dumps({"error": rev_error})
 
-            logger.info(
-                f"Returning {len(revisions)} revisions for wiki page {page_id}"
-            )
+            logger.info(f"Returning {len(revisions)} revisions for wiki page {page_id}")
             return json.dumps(
                 {
                     "page_id": page_id,
@@ -2557,9 +2574,7 @@ def create_resource_server(
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in get_wiki_page_revisions: {e}", exc_info=True
-            )
+            logger.error(f"Exception in get_wiki_page_revisions: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     @app.tool()
@@ -2595,9 +2610,7 @@ def create_resource_server(
                 logger.error(f"Failed to get revision: {rev_error}")
                 return json.dumps({"error": rev_error})
 
-            logger.info(
-                f"Retrieved revision {revision_number} for wiki page {page_id}"
-            )
+            logger.info(f"Retrieved revision {revision_number} for wiki page {page_id}")
             return json.dumps(
                 {
                     "page_id": page_id,
@@ -2606,9 +2619,7 @@ def create_resource_server(
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in get_wiki_page_revision: {e}", exc_info=True
-            )
+            logger.error(f"Exception in get_wiki_page_revision: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     return app
