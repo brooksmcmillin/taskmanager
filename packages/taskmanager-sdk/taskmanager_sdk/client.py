@@ -295,8 +295,10 @@ class TaskManagerClient:
         start_date: str | None = None,
         end_date: str | None = None,
         category: str | None = None,
+        deadline_type: str | None = None,
         limit: int | None = None,
         include_subtasks: bool = False,
+        order_by: str | None = None,
     ) -> ApiResponse:
         """
         Get todos with optional filtering.
@@ -307,8 +309,10 @@ class TaskManagerClient:
             start_date: Filter tasks with due_date on or after this date (ISO format)
             end_date: Filter tasks with due_date on or before this date (ISO format)
             category: Filter by category name (project name)
+            deadline_type: Filter by deadline type (flexible, preferred, firm, hard)
             limit: Maximum number of tasks to return
             include_subtasks: Include subtasks in the response (default: False)
+            order_by: Sort order (position, due_date, or deadline_type)
 
         Returns:
             ApiResponse with TaskListResponse data
@@ -324,10 +328,19 @@ class TaskManagerClient:
             params["end_date"] = end_date
         if category is not None:
             params["category"] = category
+        if deadline_type is not None:
+            if deadline_type not in VALID_DEADLINE_TYPES:
+                raise ValidationError(
+                    f"Invalid deadline_type: {deadline_type!r}. "
+                    f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
+                )
+            params["deadline_type"] = deadline_type
         if limit is not None:
             params["limit"] = limit
         if include_subtasks:
             params["include_subtasks"] = True
+        if order_by is not None:
+            params["order_by"] = order_by
         return self._make_request("GET", "/todos", params=params)
 
     def create_todo(
