@@ -59,7 +59,7 @@
 		const dayStrs = days.map((d) => d.dateStr);
 		if (!dayStrs.includes(selectedDay)) {
 			const todayDay = days.find((d) => d.isToday);
-			selectedDay = todayDay ? todayDay.dateStr : (days[7]?.dateStr ?? days[0].dateStr);
+			selectedDay = todayDay ? todayDay.dateStr : (days[7]?.dateStr ?? days[0]?.dateStr);
 		}
 	}
 
@@ -318,7 +318,7 @@
 							role="button"
 							tabindex="0"
 							on:keydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') handleEditTodo(todo);
+								if (e.key === 'Enter' || e.key === ' ') handleTaskClick(todo);
 							}}
 						>
 							<div class="mobile-task-title">{todo.title}</div>
@@ -351,7 +351,7 @@
 							role="button"
 							tabindex="0"
 							on:keydown={(e) => {
-								if (e.key === 'Enter') goto(`/task/${subtask.id}`);
+								if (e.key === 'Enter' || e.key === ' ') goto(`/task/${subtask.id}`);
 							}}
 						>
 							<div
@@ -459,7 +459,7 @@
 								role="button"
 								tabindex="0"
 								on:keydown={(e) => {
-									if (e.key === 'Enter') goto(`/task/${subtask.id}`);
+									if (e.key === 'Enter' || e.key === ' ') goto(`/task/${subtask.id}`);
 								}}
 							>
 								<div
@@ -694,7 +694,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		margin: -12px -12px 8px -8px;
+		margin: -12px -12px 8px -12px;
 		padding: 4px 12px;
 		border-radius: var(--radius-sm, 0.25rem) var(--radius-sm, 0.25rem) 0 0;
 	}
@@ -703,10 +703,6 @@
 	@media (max-width: 768px) {
 		.mobile-calendar {
 			display: block;
-		}
-
-		:global(.desktop-calendar) {
-			display: none !important;
 		}
 
 		.calendar-nav-buttons {
