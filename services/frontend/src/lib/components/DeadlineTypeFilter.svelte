@@ -1,17 +1,20 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
 	import type { DeadlineType } from '$lib/types';
 	import { DEADLINE_TYPE_CONFIG } from '$lib/utils/deadline';
 
-	export let selected: DeadlineType | null = null;
-
-	const dispatch = createEventDispatcher();
+	let {
+		selected = null,
+		onchange
+	}: {
+		selected: DeadlineType | null;
+		onchange: (detail: { deadlineType: DeadlineType | null }) => void;
+	} = $props();
 
 	function handleChange(event: Event) {
 		const target = event.target as HTMLSelectElement;
 		const value = target.value;
 		const deadlineType = value === '' ? null : (value as DeadlineType);
-		dispatch('change', { deadlineType });
+		onchange({ deadlineType });
 	}
 </script>
 
@@ -23,7 +26,7 @@
 		id="deadline-type-filter"
 		class="form-select deadline-type-filter-select"
 		value={selected ?? ''}
-		on:change={handleChange}
+		onchange={handleChange}
 	>
 		<option value="">All Types</option>
 		{#each Object.entries(DEADLINE_TYPE_CONFIG) as [value, config]}

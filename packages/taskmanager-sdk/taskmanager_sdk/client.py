@@ -340,6 +340,12 @@ class TaskManagerClient:
         if include_subtasks:
             params["include_subtasks"] = True
         if order_by is not None:
+            valid_order_by = ("position", "due_date", "deadline_type")
+            if order_by not in valid_order_by:
+                raise ValidationError(
+                    f"Invalid order_by: {order_by!r}. "
+                    f"Must be one of: {', '.join(valid_order_by)}"
+                )
             params["order_by"] = order_by
         return self._make_request("GET", "/todos", params=params)
 

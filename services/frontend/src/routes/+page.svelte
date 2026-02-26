@@ -150,13 +150,11 @@
 		goto(url, { replaceState: true, keepFocus: true });
 	}
 
-	function handleDeadlineTypeFilterChange(
-		event: CustomEvent<{ deadlineType: DeadlineType | null }>
-	) {
+	function handleDeadlineTypeFilterChange(detail: { deadlineType: DeadlineType | null }) {
 		const url = new URL($page.url);
 
-		if (event.detail.deadlineType) {
-			url.searchParams.set('deadline_type', event.detail.deadlineType);
+		if (detail.deadlineType) {
+			url.searchParams.set('deadline_type', detail.deadlineType);
 		} else {
 			url.searchParams.delete('deadline_type');
 		}
@@ -293,7 +291,7 @@
 			<DueDateFilter selected={selectedDueDate} on:change={handleDueDateFilterChange} />
 			<DeadlineTypeFilter
 				selected={selectedDeadlineType}
-				on:change={handleDeadlineTypeFilterChange}
+				onchange={handleDeadlineTypeFilterChange}
 			/>
 			<ProjectFilter {selectedProjectId} on:change={handleFilterChange} />
 		</div>

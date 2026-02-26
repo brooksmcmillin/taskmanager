@@ -1169,6 +1169,28 @@ async def test_update_todo_deadline_type(authenticated_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_filter_todos_invalid_deadline_type_returns_422(
+    authenticated_client: AsyncClient,
+):
+    """Test that an invalid deadline_type returns 422."""
+    response = await authenticated_client.get(
+        "/api/todos", params={"deadline_type": "invalid_type"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_filter_todos_invalid_order_by_returns_422(
+    authenticated_client: AsyncClient,
+):
+    """Test that an invalid order_by returns 422."""
+    response = await authenticated_client.get(
+        "/api/todos", params={"order_by": "invalid_sort"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_filter_todos_by_deadline_type(authenticated_client: AsyncClient):
     """Test filtering todos by deadline_type."""
     # Create todos with different deadline types

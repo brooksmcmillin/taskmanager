@@ -31,12 +31,18 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("token", sa.String(255), unique=True, nullable=False),
         sa.Column("client_id", sa.String(255), nullable=False),
+        sa.Column(
+            "user_id",
+            sa.Integer,
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=True,
+        ),
         sa.Column("scopes", sa.Text, nullable=False),
         sa.Column("resource", sa.String(500), nullable=True),
-        sa.Column("expires_at", sa.DateTime, nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "created_at",
-            sa.DateTime,
+            sa.DateTime(timezone=True),
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
@@ -47,18 +53,25 @@ def upgrade() -> None:
     op.create_index(
         "ix_mcp_access_tokens_expires_at", "mcp_access_tokens", ["expires_at"]
     )
+    op.create_index("ix_mcp_access_tokens_user_id", "mcp_access_tokens", ["user_id"])
 
     op.create_table(
         "mcp_refresh_tokens",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("token", sa.String(255), unique=True, nullable=False),
         sa.Column("client_id", sa.String(255), nullable=False),
+        sa.Column(
+            "user_id",
+            sa.Integer,
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=True,
+        ),
         sa.Column("scopes", sa.Text, nullable=True),
         sa.Column("resource", sa.String(500), nullable=True),
-        sa.Column("expires_at", sa.DateTime, nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "created_at",
-            sa.DateTime,
+            sa.DateTime(timezone=True),
             server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
@@ -69,14 +82,17 @@ def upgrade() -> None:
     op.create_index(
         "ix_mcp_refresh_tokens_expires_at", "mcp_refresh_tokens", ["expires_at"]
     )
+    op.create_index("ix_mcp_refresh_tokens_user_id", "mcp_refresh_tokens", ["user_id"])
 
 
 def downgrade() -> None:
     """Remove MCP token tables."""
+    op.drop_index("ix_mcp_refresh_tokens_user_id", table_name="mcp_refresh_tokens")
     op.drop_index("ix_mcp_refresh_tokens_expires_at", table_name="mcp_refresh_tokens")
     op.drop_index("ix_mcp_refresh_tokens_client_id", table_name="mcp_refresh_tokens")
     op.drop_table("mcp_refresh_tokens")
 
+    op.drop_index("ix_mcp_access_tokens_user_id", table_name="mcp_access_tokens")
     op.drop_index("ix_mcp_access_tokens_expires_at", table_name="mcp_access_tokens")
     op.drop_index("ix_mcp_access_tokens_client_id", table_name="mcp_access_tokens")
     op.drop_table("mcp_access_tokens")

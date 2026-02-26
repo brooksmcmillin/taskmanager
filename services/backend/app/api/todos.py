@@ -1,6 +1,7 @@
 """Todo API routes."""
 
 from datetime import UTC, date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -581,12 +582,12 @@ async def list_todos(
     end_date: date | None = Query(None),  # noqa: B008
     no_due_date: bool = Query(False),
     parent_id: int | None = Query(None),
-    deadline_type: str | None = Query(
-        None, description="Filter by deadline type: flexible, preferred, firm, hard"
+    deadline_type: Literal["flexible", "preferred", "firm", "hard"] | None = Query(
+        None, description="Filter by deadline type"
     ),
     include_subtasks: bool = Query(False),
-    order_by: str | None = Query(
-        None, description="Order by: position, due_date, or deadline_type"
+    order_by: Literal["position", "due_date", "deadline_type"] | None = Query(
+        None, description="Sort order"
     ),
 ) -> ListResponse[TodoResponse]:
     """List todos with optional filters.
