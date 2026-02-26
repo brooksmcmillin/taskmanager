@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { registerAndLogin, createTodoViaAPI, getFutureDate } from '../helpers/test-utils';
+import { registerAndLogin, createTodoViaAPI } from '../helpers/test-utils';
 
 /**
  * Helper to create a project via API and return its ID and name.
@@ -25,6 +25,18 @@ async function createProjectViaAPI(
 	}
 	const json = await response.json();
 	return { id: json.data.id, name: json.data.name };
+}
+
+/**
+ * Select a project in the filter dropdown and wait for the URL to update.
+ */
+async function selectProjectFilter(
+	page: import('@playwright/test').Page,
+	projectId: number
+): Promise<void> {
+	await page.locator('.project-filter-container select').selectOption(String(projectId));
+	await page.waitForURL(/project_id/, { timeout: 5000 });
+	await page.waitForLoadState('networkidle');
 }
 
 test.describe('Auto-set project on new tasks (#223)', () => {
@@ -49,8 +61,7 @@ test.describe('Auto-set project on new tasks (#223)', () => {
 		await expect(page.locator('#project_id')).toBeVisible({ timeout: 5000 });
 
 		// The project select should be pre-filled with the filtered project
-		const selectedValue = await page.locator('#project_id').inputValue();
-		expect(selectedValue).toBe(String(project.id));
+		await expect(page.locator('#project_id')).toHaveValue(String(project.id));
 	});
 
 	test('should not pre-fill project when no filter is active', async ({ page }) => {
@@ -66,8 +77,7 @@ test.describe('Auto-set project on new tasks (#223)', () => {
 		await expect(page.locator('#project_id')).toBeVisible({ timeout: 5000 });
 
 		// The project select should be empty (no pre-fill)
-		const selectedValue = await page.locator('#project_id').inputValue();
-		expect(selectedValue).toBe('');
+		await expect(page.locator('#project_id')).toHaveValue('');
 	});
 });
 
@@ -79,16 +89,10 @@ test.describe('Persist project filter across views (#224)', () => {
 	test('should persist project filter when navigating away and back', async ({ page }) => {
 		const project = await createProjectViaAPI(page, `Persist Project ${Date.now()}`);
 
-		// Navigate to tasks page
+		// Navigate to tasks page and select the project filter
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
-
-		// Select the project filter
-		await page.locator('.project-filter-container select').selectOption(String(project.id));
-		await page.waitForLoadState('networkidle');
-
-		// Verify URL has the project_id param
-		expect(page.url()).toContain(`project_id=${project.id}`);
+		await selectProjectFilter(page, project.id);
 
 		// Navigate away to another page
 		await page.goto('/home');
@@ -96,30 +100,25 @@ test.describe('Persist project filter across views (#224)', () => {
 
 		// Navigate back to tasks page (without project_id in URL)
 		await page.goto('/');
-		await page.waitForLoadState('networkidle');
-
-		// The project filter should be restored from localStorage
-		expect(page.url()).toContain(`project_id=${project.id}`);
+		// Wait for the onMount redirect to restore the filter from localStorage
+		await page.waitForURL(/project_id/, { timeout: 5000 });
 
 		// The project filter dropdown should show the selected project
-		const selectedValue = await page.locator('.project-filter-container select').inputValue();
-		expect(selectedValue).toBe(String(project.id));
+		await expect(page.locator('.project-filter-container select')).toHaveValue(String(project.id));
 	});
 
 	test('should persist project filter across page refresh', async ({ page }) => {
 		const project = await createProjectViaAPI(page, `Refresh Project ${Date.now()}`);
 
-		// Navigate with project filter
-		await page.goto(`/?project_id=${project.id}`);
-		await page.waitForLoadState('networkidle');
-
-		// Select the project to save to localStorage
-		await page.locator('.project-filter-container select').selectOption(String(project.id));
-		await page.waitForLoadState('networkidle');
-
-		// Refresh the page without the query parameter
+		// Navigate and select the project filter to save to localStorage
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
+		await selectProjectFilter(page, project.id);
+
+		// Navigate to / without the query parameter (simulates refresh losing query params)
+		await page.goto('/');
+		// Wait for the onMount redirect to restore the filter
+		await page.waitForURL(/project_id/, { timeout: 5000 });
 
 		// Should restore from localStorage
 		expect(page.url()).toContain(`project_id=${project.id}`);
@@ -131,9 +130,7 @@ test.describe('Persist project filter across views (#224)', () => {
 		// Set a project filter and persist it
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
-		await page.locator('.project-filter-container select').selectOption(String(project.id));
-		await page.waitForLoadState('networkidle');
-		expect(page.url()).toContain(`project_id=${project.id}`);
+		await selectProjectFilter(page, project.id);
 
 		// Delete the project via API
 		const deleteRes = await page.request.delete(`/api/projects/${project.id}`);
@@ -152,20 +149,15 @@ test.describe('Persist project filter across views (#224)', () => {
 	test('should clear persisted filter when "All Projects" is selected', async ({ page }) => {
 		const project = await createProjectViaAPI(page, `Clear Project ${Date.now()}`);
 
-		// Set a project filter
-		await page.goto(`/?project_id=${project.id}`);
+		// Set a project filter and persist it
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
-
-		// Save to localStorage by selecting via dropdown
-		await page.locator('.project-filter-container select').selectOption(String(project.id));
-		await page.waitForLoadState('networkidle');
+		await selectProjectFilter(page, project.id);
 
 		// Clear the filter by selecting "All Projects" (empty value)
 		await page.locator('.project-filter-container select').selectOption('');
-		await page.waitForLoadState('networkidle');
-
-		// URL should not have project_id
-		expect(page.url()).not.toContain('project_id');
+		// Wait for URL to lose the project_id param
+		await page.waitForURL((url) => !url.searchParams.has('project_id'), { timeout: 5000 });
 
 		// Navigate away and back
 		await page.goto('/home');

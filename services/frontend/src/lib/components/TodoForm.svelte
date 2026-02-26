@@ -14,7 +14,7 @@
 
 	let projectList: Project[] = [];
 	let formData = {
-		project_id: '',
+		project_id: defaultProjectId ? String(defaultProjectId) : '',
 		title: '',
 		description: '',
 		priority: 'medium',
