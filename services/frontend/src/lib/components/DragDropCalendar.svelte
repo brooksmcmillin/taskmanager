@@ -30,6 +30,8 @@
 	let isDragging = false;
 	// Per-day expand state for overflow
 	let expandedDays: Record<string, boolean> = {};
+	// Mobile: selected day for detail view
+	let selectedDay: string = formatDateForInput(new Date());
 
 	interface CalendarSubtaskItem {
 		id: number;
@@ -51,6 +53,40 @@
 	}
 
 	$: days = generateDays(currentWeekStart, 21);
+
+	// Keep selectedDay within visible range when navigating weeks
+	$: {
+		const dayStrs = days.map((d) => d.dateStr);
+		if (!dayStrs.includes(selectedDay)) {
+			const todayDay = days.find((d) => d.isToday);
+			selectedDay = todayDay ? todayDay.dateStr : (days[7]?.dateStr ?? days[0].dateStr);
+		}
+	}
+
+	// Selected day data for mobile detail view
+	$: selectedDayTasks = todosByDate[selectedDay] || [];
+	$: selectedDaySubtasks = subtasksByDate[selectedDay] || [];
+
+	function formatDayHeader(dateStr: string): string {
+		const [year, month, day] = dateStr.split('-').map(Number);
+		const date = new Date(year, month - 1, day);
+		const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+		const monthNames = [
+			'Jan',
+			'Feb',
+			'Mar',
+			'Apr',
+			'May',
+			'Jun',
+			'Jul',
+			'Aug',
+			'Sep',
+			'Oct',
+			'Nov',
+			'Dec'
+		];
+		return `${dayNames[date.getDay()]}, ${monthNames[date.getMonth()]} ${date.getDate()}`;
+	}
 
 	function generateDays(start: Date, count: number): Day[] {
 		return Array.from({ length: count }, (_, i) => {
@@ -189,6 +225,7 @@
 		const thisWeekMonday = getStartOfWeek(new Date());
 		thisWeekMonday.setDate(thisWeekMonday.getDate() - 7);
 		currentWeekStart = thisWeekMonday;
+		selectedDay = formatDateForInput(new Date());
 	}
 
 	function handleEditTodo(todo: Todo) {
@@ -223,16 +260,120 @@
 </script>
 
 <div class="card" id="drag-drop-calendar">
-	<div class="flex justify-between items-center mb-6">
+	<div class="calendar-top-nav">
 		<h2 class="text-xl font-semibold">Task Calendar</h2>
-		<div class="flex gap-4">
+		<div class="calendar-nav-buttons">
 			<button class="btn btn-secondary btn-sm" on:click={prevWeek}>← Previous</button>
 			<button class="btn btn-secondary btn-sm" on:click={goToToday}>Today</button>
 			<button class="btn btn-secondary btn-sm" on:click={nextWeek}>Next →</button>
 		</div>
 	</div>
 
-	<div id="calendar-container">
+	<!-- Mobile: Week strip + day detail -->
+	<div class="mobile-calendar">
+		<div class="week-strip-headers">
+			{#each ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as dayName}
+				<div class="week-strip-header">{dayName}</div>
+			{/each}
+		</div>
+		<div class="week-strip-grid">
+			{#each days as { date, dateStr, isToday: isTodayDay }}
+				{@const taskCount =
+					(todosByDate[dateStr] || []).length + (subtasksByDate[dateStr] || []).length}
+				<button
+					class="day-pill"
+					class:selected={selectedDay === dateStr}
+					class:today={isTodayDay}
+					on:click={() => (selectedDay = dateStr)}
+				>
+					<span class="day-pill-date">{date.getDate()}</span>
+					{#if taskCount > 0}
+						<span class="task-dot" class:task-dot-selected={selectedDay === dateStr}></span>
+					{/if}
+				</button>
+			{/each}
+		</div>
+
+		<div class="day-detail">
+			<div class="day-detail-header">
+				<span class="day-detail-title">{formatDayHeader(selectedDay)}</span>
+				<span class="day-detail-count">
+					{selectedDayTasks.length + selectedDaySubtasks.length} tasks
+				</span>
+			</div>
+			{#if selectedDayTasks.length === 0 && selectedDaySubtasks.length === 0}
+				<div class="day-detail-empty">No tasks scheduled</div>
+			{:else}
+				<div class="day-detail-tasks">
+					{#each selectedDayTasks as todo (todo.id)}
+						{@const subtasks = todo.subtasks || []}
+						{@const completedSubtaskCount = subtasks.filter((s) => s.status === 'completed').length}
+						<div
+							class="mobile-task-card"
+							style="border-left: 4px solid {todo.project_color ||
+								DEFAULT_PROJECT_COLOR}; background-color: {hexTo50Shade(
+								todo.project_color || DEFAULT_PROJECT_COLOR
+							)}"
+							on:click={() => handleTaskClick(todo)}
+							role="button"
+							tabindex="0"
+							on:keydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') handleEditTodo(todo);
+							}}
+						>
+							<div class="mobile-task-title">{todo.title}</div>
+							<div class="mobile-task-meta">
+								<span class="mobile-task-priority">{todo.priority}</span>
+								{#if todo.deadline_type && todo.deadline_type !== 'preferred'}
+									<span
+										class="mobile-task-deadline"
+										style="color: {getDeadlineTypeColor(todo.deadline_type)}"
+									>
+										{getDeadlineTypeLabel(todo.deadline_type)}
+									</span>
+								{/if}
+								{#if subtasks.length > 0}
+									<span class="mobile-task-subtasks">
+										{completedSubtaskCount}/{subtasks.length}
+									</span>
+								{/if}
+							</div>
+						</div>
+					{/each}
+					{#each selectedDaySubtasks as subtask (subtask.id)}
+						<div
+							class="mobile-task-card mobile-subtask-card"
+							style="border-left: 4px solid {subtask.parentColor ||
+								DEFAULT_PROJECT_COLOR}; background-color: {hexTo50Shade(
+								subtask.parentColor || DEFAULT_PROJECT_COLOR
+							)}"
+							on:click={() => goto(`/task/${subtask.id}`)}
+							role="button"
+							tabindex="0"
+							on:keydown={(e) => {
+								if (e.key === 'Enter') goto(`/task/${subtask.id}`);
+							}}
+						>
+							<div
+								class="mobile-subtask-parent"
+								style="background-color: {subtask.parentColor ||
+									DEFAULT_PROJECT_COLOR}; color: {contrastText(
+									subtask.parentColor || DEFAULT_PROJECT_COLOR
+								)}"
+							>
+								#{subtask.parentId}
+								{subtask.parentTitle}
+							</div>
+							<div class="mobile-task-title">{subtask.title}</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</div>
+
+	<!-- Desktop: Grid view -->
+	<div id="calendar-container" class="desktop-calendar">
 		<div class="calendar-headers">
 			{#each [{ full: 'Monday', short: 'Mon' }, { full: 'Tuesday', short: 'Tue' }, { full: 'Wednesday', short: 'Wed' }, { full: 'Thursday', short: 'Thu' }, { full: 'Friday', short: 'Fri' }, { full: 'Saturday', short: 'Sat' }, { full: 'Sunday', short: 'Sun' }] as day}
 				<div class="calendar-header-day">
@@ -373,5 +514,208 @@
 
 	.calendar-overflow:hover {
 		background: var(--primary-50, #eff6ff);
+	}
+
+	/* Calendar header navigation */
+	.calendar-top-nav {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1.5rem;
+	}
+
+	.calendar-nav-buttons {
+		display: flex;
+		gap: 1rem;
+	}
+
+	/* Mobile calendar: hidden on desktop */
+	.mobile-calendar {
+		display: none;
+	}
+
+	/* Week strip layout */
+	.week-strip-headers {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: 2px;
+		margin-bottom: 2px;
+	}
+
+	.week-strip-header {
+		text-align: center;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		color: var(--text-muted, #9ca3af);
+		padding: 2px 0;
+	}
+
+	.week-strip-grid {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: 4px;
+		margin-bottom: 16px;
+	}
+
+	.day-pill {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 3px;
+		padding: 8px 4px 6px;
+		border: 2px solid var(--border-color, #e5e7eb);
+		border-radius: var(--radius, 0.5rem);
+		background: var(--bg-card, #fff);
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.day-pill:hover {
+		background: var(--primary-50, #eff6ff);
+		border-color: var(--primary-300, #93c5fd);
+	}
+
+	.day-pill.today {
+		border-color: var(--primary-500, #3b82f6);
+	}
+
+	.day-pill.selected {
+		background: var(--primary-500, #3b82f6);
+		color: white;
+		border-color: var(--primary-600, #2563eb);
+	}
+
+	.day-pill-date {
+		font-size: 0.875rem;
+		font-weight: 600;
+		line-height: 1;
+	}
+
+	.task-dot {
+		width: 5px;
+		height: 5px;
+		border-radius: 50%;
+		background-color: var(--primary-500, #3b82f6);
+	}
+
+	.task-dot-selected {
+		background-color: white;
+	}
+
+	/* Selected day detail panel */
+	.day-detail {
+		border-top: 1px solid var(--border-color, #e5e7eb);
+		padding-top: 12px;
+	}
+
+	.day-detail-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+
+	.day-detail-title {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--text-primary, #1f2937);
+	}
+
+	.day-detail-count {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--text-muted, #9ca3af);
+	}
+
+	.day-detail-empty {
+		text-align: center;
+		padding: 32px 16px;
+		color: var(--text-muted, #9ca3af);
+		font-size: 0.875rem;
+	}
+
+	.day-detail-tasks {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	/* Mobile task cards */
+	.mobile-task-card {
+		padding: 12px;
+		border-radius: var(--radius-sm, 0.25rem);
+		cursor: pointer;
+		transition: box-shadow 0.15s ease;
+		color: #1f2937;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+	}
+
+	.mobile-task-card:hover {
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+	}
+
+	.mobile-task-title {
+		font-size: 0.9375rem;
+		font-weight: 500;
+		margin-bottom: 4px;
+	}
+
+	.mobile-task-meta {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 0.75rem;
+	}
+
+	.mobile-task-priority {
+		text-transform: capitalize;
+		font-weight: 500;
+		color: var(--text-secondary, #6b7280);
+	}
+
+	.mobile-task-deadline {
+		font-weight: 700;
+		text-transform: uppercase;
+		font-size: 0.625rem;
+		letter-spacing: 0.04em;
+	}
+
+	.mobile-task-subtasks {
+		font-weight: 600;
+		color: var(--text-secondary, #6b7280);
+		background: rgba(0, 0, 0, 0.06);
+		padding: 0 0.25rem;
+		border-radius: 3px;
+	}
+
+	.mobile-subtask-parent {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		margin: -12px -12px 8px -8px;
+		padding: 4px 12px;
+		border-radius: var(--radius-sm, 0.25rem) var(--radius-sm, 0.25rem) 0 0;
+	}
+
+	/* Responsive: show mobile calendar, hide desktop on small screens */
+	@media (max-width: 768px) {
+		.mobile-calendar {
+			display: block;
+		}
+
+		:global(.desktop-calendar) {
+			display: none !important;
+		}
+
+		.calendar-nav-buttons {
+			gap: 0.5rem;
+		}
+
+		.calendar-top-nav {
+			flex-wrap: wrap;
+			gap: 0.5rem;
+		}
 	}
 </style>
