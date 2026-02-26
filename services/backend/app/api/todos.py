@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import and_, case, select
+from sqlalchemy import and_, case, func, select
 
 from app.core.errors import errors
 from app.db.queries import (
@@ -402,17 +402,42 @@ def _build_todo_response(
 
 async def _resolve_category_to_project(
     db: "DbSession", category: str, user_id: int
-) -> int | None:
+) -> int:
     """Resolve a category name to a project_id for the given user.
 
+    Performs a case-insensitive match against the user's existing projects.
+    If no match is found, automatically creates a new project with the given name.
+
+    Args:
+        db: Database session
+        category: Category/project name to resolve
+        user_id: ID of the authenticated user
+
     Returns:
-        The project ID if found, None otherwise.
+        The project ID (either existing or newly created).
     """
+    # Try case-insensitive exact match against user's projects
     result = await db.execute(
-        select(Project).where(Project.name == category, Project.user_id == user_id)
+        select(Project).where(
+            func.lower(Project.name) == category.lower(),
+            Project.user_id == user_id,
+        )
     )
     project = result.scalar_one_or_none()
-    return project.id if project else None
+    if project:
+        return project.id
+
+    # No match found — auto-create the project for this user
+    position = await get_next_position(db, Project, user_id)
+    new_project = Project(
+        user_id=user_id,
+        name=category,
+        position=position,
+    )
+    db.add(new_project)
+    await db.flush()
+    await db.refresh(new_project)
+    return new_project.id
 
 
 # Rule-based action type inference patterns
@@ -732,9 +757,9 @@ async def create_todo(
     """
     # Resolve category name to project_id
     if request.category and not request.project_id:
-        project_id = await _resolve_category_to_project(db, request.category, user.id)
-        if project_id:
-            request.project_id = project_id
+        request.project_id = await _resolve_category_to_project(
+            db, request.category, user.id
+        )
 
     # Verify parent todo exists and belongs to user if parent_id is provided
     if request.parent_id:
@@ -902,9 +927,9 @@ async def batch_create_todos(
     for i, item in enumerate(request.todos):
         # Resolve category name to project_id
         if item.category and not item.project_id:
-            project_id = await _resolve_category_to_project(db, item.category, user.id)
-            if project_id:
-                item.project_id = project_id
+            item.project_id = await _resolve_category_to_project(
+                db, item.category, user.id
+            )
 
         # Verify parent todo exists and belongs to user (only for parent_id,
         # not parent_index which references items within this batch)
@@ -1126,9 +1151,9 @@ async def update_todo(
     if "category" in update_data:
         category = update_data.pop("category")
         if category and "project_id" not in update_data:
-            project_id = await _resolve_category_to_project(db, category, user.id)
-            if project_id:
-                update_data["project_id"] = project_id
+            update_data["project_id"] = await _resolve_category_to_project(
+                db, category, user.id
+            )
 
     # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
@@ -1174,9 +1199,9 @@ async def bulk_update_todos(
     if "category" in update_data:
         category = update_data.pop("category")
         if category and "project_id" not in update_data:
-            project_id = await _resolve_category_to_project(db, category, user.id)
-            if project_id:
-                update_data["project_id"] = project_id
+            update_data["project_id"] = await _resolve_category_to_project(
+                db, category, user.id
+            )
 
     # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:

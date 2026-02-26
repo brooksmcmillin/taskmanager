@@ -1777,3 +1777,187 @@ async def test_batch_create_with_estimated_hours(authenticated_client: AsyncClie
     assert data["data"][0]["estimated_hours"] == 2.5
     assert data["data"][1]["estimated_hours"] is None
     assert data["data"][2]["estimated_hours"] == 0
+
+
+# Category matching tests
+
+
+@pytest.mark.asyncio
+async def test_create_todo_with_exact_category_match(authenticated_client: AsyncClient):
+    """Test creating a todo with a category that exactly matches an existing project."""
+    # Create a project first
+    project_response = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "ExactMatch Project"},
+    )
+    assert project_response.status_code == 201
+    project_id = project_response.json()["data"]["id"]
+
+    # Create a todo using the exact category name
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task with exact category", "category": "ExactMatch Project"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["project_id"] == project_id
+    assert data["project_name"] == "ExactMatch Project"
+
+
+@pytest.mark.asyncio
+async def test_create_todo_with_case_insensitive_category_match(
+    authenticated_client: AsyncClient,
+):
+    """Test creating a todo with a category matching a project case-insensitively."""
+    # Create a project with mixed case
+    project_response = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "Work Tasks"},
+    )
+    assert project_response.status_code == 201
+    project_id = project_response.json()["data"]["id"]
+
+    # Create todos using different casings
+    for casing in ["work tasks", "WORK TASKS", "Work Tasks", "wOrK tAsKs"]:
+        response = await authenticated_client.post(
+            "/api/todos",
+            json={"title": f"Task with casing '{casing}'", "category": casing},
+        )
+        assert response.status_code == 201, f"Failed for casing: {casing}"
+        data = response.json()["data"]
+        assert data["project_id"] == project_id, f"Wrong project for casing: {casing}"
+        assert data["project_name"] == "Work Tasks", f"Wrong name for casing: {casing}"
+
+
+@pytest.mark.asyncio
+async def test_create_todo_with_nonexistent_category_auto_creates_project(
+    authenticated_client: AsyncClient,
+):
+    """Test that a todo with a non-existent category auto-creates the project."""
+    new_category = "Brand New Category"
+
+    # Verify the project doesn't exist yet
+    projects_before = await authenticated_client.get("/api/projects")
+    project_names_before = [p["name"] for p in projects_before.json()["data"]]
+    assert new_category not in project_names_before
+
+    # Create a todo with a non-existent category
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task with new category", "category": new_category},
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["project_name"] == new_category
+    assert data["project_id"] is not None
+
+    # Verify the project was auto-created
+    projects_after = await authenticated_client.get("/api/projects")
+    project_names_after = [p["name"] for p in projects_after.json()["data"]]
+    assert new_category in project_names_after
+
+
+@pytest.mark.asyncio
+async def test_create_todo_without_category(authenticated_client: AsyncClient):
+    """Test creating a todo without a category still works as before."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task without category"},
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["project_id"] is None
+    assert data["project_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_todo_nonexistent_category_reuses_created_project(
+    authenticated_client: AsyncClient,
+):
+    """Test that subsequent tasks with the same category reuse the auto-created project.
+
+    Verifies that auto-created projects are not duplicated on subsequent tasks.
+    """
+    new_category = "Auto Created Project"
+
+    # Create two todos with the same new category
+    response1 = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "First task", "category": new_category},
+    )
+    response2 = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Second task", "category": new_category},
+    )
+
+    assert response1.status_code == 201
+    assert response2.status_code == 201
+    project_id_1 = response1.json()["data"]["project_id"]
+    project_id_2 = response2.json()["data"]["project_id"]
+
+    # Both tasks should be in the same project
+    assert project_id_1 == project_id_2
+    assert project_id_1 is not None
+
+
+@pytest.mark.asyncio
+async def test_batch_create_todos_with_nonexistent_category_auto_creates_project(
+    authenticated_client: AsyncClient,
+):
+    """Test that batch creation with a non-existent category auto-creates the project.
+
+    Ensures the auto-created project is shared by all tasks in the batch.
+    """
+    new_category = "Batch Auto Category"
+
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Batch task 1", "category": new_category},
+                {"title": "Batch task 2", "category": new_category},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 2
+    project_id_1 = data["data"][0]["project_id"]
+    project_id_2 = data["data"][1]["project_id"]
+    assert project_id_1 is not None
+    assert project_id_1 == project_id_2
+    assert data["data"][0]["project_name"] == new_category
+
+
+@pytest.mark.asyncio
+async def test_batch_create_todos_with_case_insensitive_category_match(
+    authenticated_client: AsyncClient,
+):
+    """Test that batch creation matches categories case-insensitively."""
+    # Create a project first
+    project_response = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "Batch Project"},
+    )
+    assert project_response.status_code == 201
+    project_id = project_response.json()["data"]["id"]
+
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Batch task 1", "category": "batch project"},
+                {"title": "Batch task 2", "category": "BATCH PROJECT"},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 2
+    assert data["data"][0]["project_id"] == project_id
+    assert data["data"][1]["project_id"] == project_id
