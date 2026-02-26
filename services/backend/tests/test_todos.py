@@ -1395,6 +1395,36 @@ async def test_batch_create_with_subtasks(authenticated_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_batch_create_atomic_rollback(authenticated_client: AsyncClient):
+    """Test that batch create rolls back all todos if any validation fails.
+
+    Items 1-2 are valid but item 3 references a nonexistent parent_id,
+    so the entire batch should fail and no todos should be persisted.
+    """
+    # Confirm no todos exist initially
+    list_response = await authenticated_client.get("/api/todos")
+    assert list_response.json()["meta"]["count"] == 0
+
+    # Attempt batch with invalid parent_id on the 3rd item
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Valid task 1"},
+                {"title": "Valid task 2"},
+                {"title": "Invalid task", "parent_id": 999999},
+            ]
+        },
+    )
+
+    assert response.status_code == 404
+
+    # Verify no todos were persisted (atomicity)
+    list_response = await authenticated_client.get("/api/todos")
+    assert list_response.json()["meta"]["count"] == 0
+
+
+@pytest.mark.asyncio
 async def test_batch_create_over_limit(authenticated_client: AsyncClient):
     """Test batch create rejects more than 50 todos."""
     response = await authenticated_client.post(

@@ -511,7 +511,7 @@ def _apply_todo_filters(
         if status == "overdue":
             query = query.where(
                 and_(
-                    Todo.due_date < date.today(),
+                    Todo.due_date < datetime.now(tz=UTC).date(),
                     Todo.status != Status.completed,
                 )
             )
@@ -738,9 +738,11 @@ async def batch_create_todos(
     """Create multiple todos in a single request.
 
     Accepts up to 50 todo objects. All todos are created atomically—if any
-    validation fails, none are created.
+    validation fails, none are created. Validation runs for all items before
+    any database writes occur.
     """
-    created: list[TodoResponse] = []
+    # Phase 1: Validate all items and prepare Todo objects before any writes
+    prepared: list[Todo] = []
 
     for item in request.todos:
         # Resolve category name to project_id
@@ -782,24 +784,30 @@ async def batch_create_todos(
             if autonomy_tier is None:
                 autonomy_tier = inferred_tier
 
-        todo = Todo(
-            user_id=user.id,
-            title=item.title,
-            description=item.description,
-            priority=item.priority,
-            status=item.status,
-            due_date=item.due_date,
-            deadline_type=item.deadline_type,
-            project_id=item.project_id,
-            tags=item.tags,
-            context=item.context,
-            estimated_hours=item.estimated_hours,
-            parent_id=item.parent_id,
-            position=position,
-            agent_actionable=agent_actionable,
-            action_type=action_type,
-            autonomy_tier=autonomy_tier,
+        prepared.append(
+            Todo(
+                user_id=user.id,
+                title=item.title,
+                description=item.description,
+                priority=item.priority,
+                status=item.status,
+                due_date=item.due_date,
+                deadline_type=item.deadline_type,
+                project_id=item.project_id,
+                tags=item.tags,
+                context=item.context,
+                estimated_hours=item.estimated_hours,
+                parent_id=item.parent_id,
+                position=position,
+                agent_actionable=agent_actionable,
+                action_type=action_type,
+                autonomy_tier=autonomy_tier,
+            )
         )
+
+    # Phase 2: All validation passed — write to database
+    created: list[TodoResponse] = []
+    for todo in prepared:
         db.add(todo)
         await db.flush()
         await db.refresh(todo)

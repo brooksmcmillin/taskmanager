@@ -29,7 +29,7 @@ def _past_due_date_warning(due_date: str | None) -> str | None:
         return None
     try:
         parsed = datetime.date.fromisoformat(due_date)
-        if parsed < datetime.date.today():
+        if parsed < datetime.datetime.now(tz=datetime.UTC).date():
             return f"Due date {due_date} is in the past"
     except ValueError:
         pass
@@ -263,7 +263,7 @@ def create_resource_server(
             - message: Human-readable status summary
         """
         logger.info("=== check_task_system_status called ===")
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tz=datetime.UTC)
         checks: dict[str, dict[str, Any]] = {}
         errors: list[str] = []
 
@@ -476,7 +476,7 @@ def create_resource_server(
             return json.dumps(
                 {
                     "tasks": result_tasks,
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -573,7 +573,7 @@ def create_resource_server(
                 "title": task.get("title", title) if task is not None else title,
                 "status": "created",
                 "parent_id": f"task_{parent_id_int}" if parent_id_int else None,
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             warning = _past_due_date_warning(due_date)
             if warning:
@@ -690,7 +690,7 @@ def create_resource_server(
             result: dict[str, Any] = {
                 "created": results,
                 "count": len(results),
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             if warnings:
                 result["warnings"] = warnings
@@ -820,7 +820,7 @@ def create_resource_server(
                 "id": f"task_{todo_id}",
                 "updated_fields": updated_fields,
                 "status": "updated",
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             warning = _past_due_date_warning(due_date)
             if warning:
@@ -861,7 +861,7 @@ def create_resource_server(
             return json.dumps(
                 {
                     "categories": categories,
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -919,7 +919,7 @@ def create_resource_server(
                 "id": project_id,
                 "name": project.get("name", name) if project is not None else name,
                 "status": "created",
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             return json.dumps(result)
         except Exception as e:
@@ -1025,7 +1025,7 @@ def create_resource_server(
                 {
                     "tasks": result_tasks,
                     "count": len(result_tasks),
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1074,7 +1074,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "attachments": attachments,
                     "count": len(attachments),
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1124,7 +1124,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "attachment_id": attachment_id,
                     "status": "deleted",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1170,7 +1170,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "comments": comments,
                     "count": len(comments),
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1218,7 +1218,7 @@ def create_resource_server(
                     "comment_id": comment_id,
                     "content": content,
                     "status": "created",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1265,7 +1265,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "comment_id": comment_id,
                     "status": "deleted",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1354,7 +1354,7 @@ def create_resource_server(
                     "created_at": task.get("created_at"),
                     "updated_at": task.get("updated_at"),
                 },
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             return json.dumps(result)
         except Exception as e:
@@ -1403,7 +1403,7 @@ def create_resource_server(
                 {
                     "id": task_id,
                     "status": "deleted",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1447,7 +1447,7 @@ def create_resource_server(
             start_date = None
             end_date = None
             if due_today:
-                today = datetime.datetime.now().strftime("%Y-%m-%d")
+                today = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d")
                 start_date = today
                 end_date = today
 
@@ -1532,7 +1532,7 @@ def create_resource_server(
                         "agent_actionable_only": agent_actionable_only,
                         "unclassified_only": unclassified_only,
                     },
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1658,7 +1658,7 @@ def create_resource_server(
                     "autonomy_tier": autonomy_tier,
                     "agent_actionable": agent_actionable,
                     "blocking_reason": blocking_reason,
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1700,7 +1700,9 @@ def create_resource_server(
                 if task_response.success and task_response.data:
                     existing_notes = task_response.data.get("agent_notes") or ""
                     if existing_notes:
-                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                        timestamp = datetime.datetime.now(tz=datetime.UTC).strftime(
+                            "%Y-%m-%d %H:%M"
+                        )
                         note = f"{existing_notes}\n\n---\n[{timestamp}]\n{note}"
 
             # Update task with note
@@ -1717,7 +1719,7 @@ def create_resource_server(
                 {
                     "id": f"task_{todo_id}",
                     "status": "note_added",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1790,7 +1792,7 @@ def create_resource_server(
                     "id": f"task_{todo_id}",
                     "agent_status": status,
                     "blocking_reason": blocking_reason if status == "blocked" else None,
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1839,7 +1841,7 @@ def create_resource_server(
                 {
                     "id": task_id,
                     "status": "completed",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1906,7 +1908,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "dependencies": result_deps,
                     "count": len(result_deps),
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1969,7 +1971,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "dependency_id": dependency_id,
                     "status": "created",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -2030,7 +2032,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "dependency_id": dependency_id,
                     "status": "removed",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:

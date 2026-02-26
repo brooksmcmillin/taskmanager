@@ -419,7 +419,7 @@ class TestTimestampInResponses:
         """Test that timestamps are in ISO format."""
         import datetime
 
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tz=datetime.UTC)
         timestamp = now.isoformat()
 
         # Verify it's a valid ISO format
@@ -434,7 +434,7 @@ class TestTimestampInResponses:
         # Simulate a response with current_time
         response_dict = {
             "tasks": [{"id": "task_1", "title": "Test"}],
-            "current_time": datetime.datetime.now().isoformat(),
+            "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
         }
 
         response = json.dumps(response_dict)
@@ -1291,7 +1291,9 @@ class TestPastDueDateWarning:
 
     def test_past_date_returns_warning(self) -> None:
         """Test that a date in the past produces a warning."""
-        past = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        past = (
+            datetime.datetime.now(tz=datetime.UTC).date() - datetime.timedelta(days=1)
+        ).isoformat()
         warning = _past_due_date_warning(past)
         assert warning is not None
         assert past in warning
@@ -1299,12 +1301,14 @@ class TestPastDueDateWarning:
 
     def test_future_date_returns_none(self) -> None:
         """Test that a future date produces no warning."""
-        future = (datetime.date.today() + datetime.timedelta(days=30)).isoformat()
+        future = (
+            datetime.datetime.now(tz=datetime.UTC).date() + datetime.timedelta(days=30)
+        ).isoformat()
         assert _past_due_date_warning(future) is None
 
     def test_today_returns_none(self) -> None:
         """Test that today's date produces no warning."""
-        today = datetime.date.today().isoformat()
+        today = datetime.datetime.now(tz=datetime.UTC).date().isoformat()
         assert _past_due_date_warning(today) is None
 
     def test_none_returns_none(self) -> None:
@@ -1331,7 +1335,7 @@ class TestPastDueDateWarning:
             "title": "Test",
             "status": "created",
             "parent_id": None,
-            "current_time": datetime.datetime.now().isoformat(),
+            "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
         }
         warning = _past_due_date_warning(due_date)
         if warning:
@@ -1346,13 +1350,15 @@ class TestPastDueDateWarning:
         """Test that create_task response has no warning for future due dates."""
         from typing import Any
 
-        due_date = (datetime.date.today() + datetime.timedelta(days=7)).isoformat()
+        due_date = (
+            datetime.datetime.now(tz=datetime.UTC).date() + datetime.timedelta(days=7)
+        ).isoformat()
         result: dict[str, Any] = {
             "id": "task_1",
             "title": "Test",
             "status": "created",
             "parent_id": None,
-            "current_time": datetime.datetime.now().isoformat(),
+            "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
         }
         warning = _past_due_date_warning(due_date)
         if warning:
@@ -1370,7 +1376,7 @@ class TestPastDueDateWarning:
             "id": "task_5",
             "updated_fields": ["due_date"],
             "status": "updated",
-            "current_time": datetime.datetime.now().isoformat(),
+            "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
         }
         warning = _past_due_date_warning(due_date)
         if warning:
