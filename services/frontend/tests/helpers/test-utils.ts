@@ -222,7 +222,10 @@ export async function cleanupTodos(page: Page) {
 	const todos = json.data ?? [];
 
 	for (const todo of todos) {
-		await page.request.delete(`/api/todos/${todo.id}`);
+		const del = await page.request.delete(`/api/todos/${todo.id}`);
+		if (!del.ok()) {
+			console.warn(`cleanupTodos: failed to delete todo ${todo.id} (${del.status()})`);
+		}
 	}
 }
 
