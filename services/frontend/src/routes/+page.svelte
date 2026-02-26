@@ -207,10 +207,13 @@
 		});
 	}
 
+	// Sentinel key for tasks with no project — cannot collide with real project names
+	const INBOX_KEY = '\x00__inbox__';
+
 	// Group todos by project for list view
 	$: groupedTodos = $pendingTodos.reduce(
 		(acc, todo) => {
-			const projectName = todo.project_name || 'Inbox';
+			const projectName = todo.project_name || INBOX_KEY;
 			if (!acc[projectName]) acc[projectName] = [];
 			acc[projectName].push(todo);
 			return acc;
@@ -218,12 +221,16 @@
 		{} as Record<string, Todo[]>
 	);
 
-	// Sort project names
+	// Sort project names, with Inbox (no-project) always last
 	$: sortedProjectNames = Object.keys(groupedTodos).sort((a, b) => {
-		if (a === 'Inbox') return 1;
-		if (b === 'Inbox') return -1;
+		if (a === INBOX_KEY) return 1;
+		if (b === INBOX_KEY) return -1;
 		return a.localeCompare(b);
 	});
+
+	function displayProjectName(key: string): string {
+		return key === INBOX_KEY ? 'Inbox' : key;
+	}
 </script>
 
 <svelte:head>
@@ -338,7 +345,7 @@
 					{@const projectTodos = groupedTodos[projectName]}
 					<div class="card">
 						<div class="mb-3">
-							<h3 class="font-semibold text-lg text-gray-800">{projectName}</h3>
+							<h3 class="font-semibold text-lg text-gray-800">{displayProjectName(projectName)}</h3>
 						</div>
 						<div class="space-y-3">
 							{#each projectTodos as todo}
@@ -391,6 +398,7 @@
 												on:click|stopPropagation={() => openEditPanel(todo)}
 												class="btn btn-secondary btn-sm"
 												data-tooltip="Edit todo"
+											aria-label="Edit todo"
 											>
 												✏️
 											</button>
@@ -398,6 +406,7 @@
 												on:click|stopPropagation={() => handleCompleteTodo(todo.id)}
 												class="btn btn-success btn-sm"
 												data-tooltip="Mark as complete"
+												aria-label="Mark as complete"
 											>
 												✓
 											</button>
@@ -664,10 +673,6 @@
 
 		.subtask-item-card {
 			margin-left: 1rem;
-		}
-
-		#todo-lists {
-			columns: 1;
 		}
 	}
 
