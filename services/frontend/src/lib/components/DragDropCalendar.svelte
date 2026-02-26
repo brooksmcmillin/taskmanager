@@ -389,7 +389,13 @@
 				{@const isExpanded = expandedDays[dateStr] || false}
 				{@const hiddenCount = Math.max(0, allTasks.length - MAX_VISIBLE_TASKS)}
 				{@const pendingSubtasks = subtasksByDate[dateStr] || []}
-				{@const overflow = isExpanded ? 0 : hiddenCount + pendingSubtasks.length}
+				{@const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - allTasks.length)}
+				{@const visibleSubtaskCount = isExpanded
+					? pendingSubtasks.length
+					: Math.min(pendingSubtasks.length, freeSlots)}
+				{@const overflow = isExpanded
+					? 0
+					: hiddenCount + (pendingSubtasks.length - visibleSubtaskCount)}
 				<div class="calendar-day" class:today={isTodayDay} data-date={dateStr}>
 					<div class="calendar-date">
 						{date.getMonth() + 1}/{date.getDate()}
@@ -448,39 +454,37 @@
 							</div>
 						{/each}
 					</div>
-					{#if isExpanded}
-						{#each subtasksByDate[dateStr] || [] as subtask (subtask.id)}
+					{#each isExpanded ? pendingSubtasks : pendingSubtasks.slice(0, visibleSubtaskCount) as subtask (subtask.id)}
+						<div
+							class="calendar-task calendar-subtask-item {subtask.priority}-priority"
+							style="background-color: {hexTo50Shade(
+								subtask.parentColor || DEFAULT_PROJECT_COLOR
+							)}; border-left: 4px solid {subtask.parentColor || DEFAULT_PROJECT_COLOR}"
+							on:click={() => goto(`/task/${subtask.id}`)}
+							role="button"
+							tabindex="0"
+							on:keydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') goto(`/task/${subtask.id}`);
+							}}
+						>
 							<div
-								class="calendar-task calendar-subtask-item {subtask.priority}-priority"
-								style="background-color: {hexTo50Shade(
+								class="calendar-subtask-parent"
+								style="background-color: {subtask.parentColor ||
+									DEFAULT_PROJECT_COLOR}; color: {contrastText(
 									subtask.parentColor || DEFAULT_PROJECT_COLOR
-								)}; border-left: 4px solid {subtask.parentColor || DEFAULT_PROJECT_COLOR}"
-								on:click={() => goto(`/task/${subtask.id}`)}
-								role="button"
-								tabindex="0"
-								on:keydown={(e) => {
-									if (e.key === 'Enter' || e.key === ' ') goto(`/task/${subtask.id}`);
-								}}
+								)}"
 							>
-								<div
-									class="calendar-subtask-parent"
-									style="background-color: {subtask.parentColor ||
-										DEFAULT_PROJECT_COLOR}; color: {contrastText(
-										subtask.parentColor || DEFAULT_PROJECT_COLOR
-									)}"
-								>
-									#{subtask.parentId}
-									{subtask.parentTitle}
-								</div>
-								<div class="task-title">{subtask.title}</div>
+								#{subtask.parentId}
+								{subtask.parentTitle}
 							</div>
-						{/each}
-					{/if}
+							<div class="task-title">{subtask.title}</div>
+						</div>
+					{/each}
 					{#if overflow > 0}
 						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
 							+{overflow} more
 						</button>
-					{:else if isExpanded && (allTasks.length > MAX_VISIBLE_TASKS || (subtasksByDate[dateStr] || []).length > 0)}
+					{:else if isExpanded && (allTasks.length > MAX_VISIBLE_TASKS || pendingSubtasks.length > 0)}
 						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
 							Show less
 						</button>

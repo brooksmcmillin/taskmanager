@@ -1133,6 +1133,16 @@ h6 {
 		background-color: var(--primary-50);
 	}
 
+	&.today {
+		border-color: var(--primary-500);
+		background-color: var(--primary-50);
+
+		.calendar-date {
+			color: var(--primary-600);
+			font-weight: 700;
+		}
+	}
+
 	&.other-month {
 		background-color: var(--bg-page);
 		color: var(--text-muted);
