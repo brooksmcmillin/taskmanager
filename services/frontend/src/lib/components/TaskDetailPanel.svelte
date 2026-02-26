@@ -19,6 +19,7 @@
 
 	export let show = false;
 	export let todo: Todo | null = null;
+	export let defaultProjectId: number | null = null;
 
 	let mode: 'view' | 'edit' | 'create' = 'view';
 	let todoForm: TodoForm;
@@ -327,7 +328,12 @@
 				</div>
 			{:else if mode === 'edit' || mode === 'create'}
 				<div class="panel-body">
-					<TodoForm bind:this={todoForm} bind:editingTodo={todo} on:success={handleFormSuccess} />
+					<TodoForm
+						bind:this={todoForm}
+						bind:editingTodo={todo}
+						{defaultProjectId}
+						on:success={handleFormSuccess}
+					/>
 				</div>
 			{/if}
 		</div>

@@ -86,7 +86,19 @@
 		return `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
 	}
 
+	const PROJECT_FILTER_KEY = 'selected-project-id';
+
 	onMount(async () => {
+		// Restore project filter from localStorage if not in URL
+		if (!$page.url.searchParams.has('project_id')) {
+			const storedProjectId = localStorage.getItem(PROJECT_FILTER_KEY);
+			if (storedProjectId) {
+				const url = new URL($page.url);
+				url.searchParams.set('project_id', storedProjectId);
+				await goto(url, { replaceState: true, keepFocus: true });
+			}
+		}
+
 		// Load projects first
 		await projects.load();
 
@@ -131,8 +143,10 @@
 
 		if (projectId) {
 			url.searchParams.set('project_id', String(projectId));
+			localStorage.setItem(PROJECT_FILTER_KEY, String(projectId));
 		} else {
 			url.searchParams.delete('project_id');
+			localStorage.removeItem(PROJECT_FILTER_KEY);
 		}
 
 		goto(url, { replaceState: true, keepFocus: true });
@@ -353,6 +367,7 @@
 	<!-- Task Detail Panel -->
 	<TaskDetailPanel
 		bind:this={taskDetailPanel}
+		defaultProjectId={selectedProjectId}
 		on:complete={(e) => handleCompleteTodo(e.detail)}
 		on:formSuccess={handleFormSuccess}
 	/>

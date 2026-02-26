@@ -8,6 +8,7 @@
 	import type { Todo, Project, Frequency, DeadlineType } from '$lib/types';
 
 	export let editingTodo: Todo | null = null;
+	export let defaultProjectId: number | null = null;
 
 	const dispatch = createEventDispatcher();
 
@@ -73,7 +74,7 @@
 	 */
 	export function reset() {
 		formData = {
-			project_id: '',
+			project_id: defaultProjectId ? String(defaultProjectId) : '',
 			title: '',
 			description: '',
 			priority: 'medium',
