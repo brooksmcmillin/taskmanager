@@ -1181,44 +1181,9 @@ h6 {
 }
 
 @media (max-width: $breakpoint-md) {
-	// Mobile calendar improvements
-	.calendar-headers {
-		min-width: 500px;
-		grid-template-columns: repeat(7, minmax(68px, 1fr));
-		gap: 4px;
-	}
-
-	.calendar-header-day {
-		padding: 6px 2px;
-		font-size: 0.8125rem;
-	}
-
-	.day-full {
-		display: none;
-	}
-
-	.day-short {
-		display: inline;
-	}
-
-	#calendar-grid {
-		min-width: 500px;
-		grid-template-columns: repeat(7, minmax(68px, 1fr));
-		gap: 4px;
-	}
-
-	.calendar-day {
-		min-height: 90px;
-		padding: 4px;
-
-		.calendar-date {
-			font-size: 0.75rem;
-		}
-
-		.tasks-container {
-			min-height: 16px;
-			gap: 4px;
-		}
+	// Mobile: hide desktop calendar grid (mobile view shown via component)
+	.desktop-calendar {
+		display: none !important;
 	}
 
 	.calendar-task {
