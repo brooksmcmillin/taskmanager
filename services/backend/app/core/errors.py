@@ -278,13 +278,6 @@ class Errors:
         """CONFLICT_007: Wiki page already linked to task."""
         return ApiError("CONFLICT_007", 409, "Wiki page is already linked to this task")
 
-    @staticmethod
-    def wiki_slug_exists() -> ApiError:
-        """CONFLICT_008: Wiki page slug already exists."""
-        return ApiError(
-            "CONFLICT_008", 409, "A wiki page with this slug already exists"
-        )
-
     # =========================================================================
     # Registration Code Errors (REG_001 - REG_003)
     # =========================================================================

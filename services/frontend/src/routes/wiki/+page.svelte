@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { wiki } from '$lib/stores/wiki';
 	import { toasts } from '$lib/stores/ui';
 	import type { WikiPageSummary } from '$lib/types';
@@ -9,6 +9,9 @@
 	let searchQuery = $state('');
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+	const unsubscribe = wiki.subscribe((v) => (pages = v));
+	onDestroy(unsubscribe);
+
 	onMount(async () => {
 		await loadPages();
 	});
@@ -17,11 +20,6 @@
 		loading = true;
 		try {
 			await wiki.load(searchQuery || undefined);
-			pages = [];
-			const unsub = wiki.subscribe((v) => (pages = v));
-			unsub();
-			// Re-subscribe reactively
-			wiki.subscribe((v) => (pages = v));
 		} catch (error) {
 			toasts.show('Failed to load wiki pages: ' + (error as Error).message, 'error');
 		} finally {

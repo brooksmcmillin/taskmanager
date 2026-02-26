@@ -10,6 +10,14 @@ export function extractWikiLinks(content: string): string[] {
 	return [...new Set(matches.map((m) => m.slice(2, -2).trim()))];
 }
 
+function escapeHtml(s: string): string {
+	return s
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+}
+
 /**
  * Render markdown content with wiki-link support.
  *
@@ -24,12 +32,13 @@ export function renderMarkdown(
 	// Replace [[Page Title]] with links before markdown parsing
 	const withLinks = content.replace(/\[\[([^\]]+)\]\]/g, (_match, title: string) => {
 		const trimmed = title.trim();
+		const escaped = escapeHtml(trimmed);
 		const slug = resolvedSlugs[trimmed];
 		if (slug) {
-			return `<a href="/wiki/${encodeURIComponent(slug)}" class="wiki-link">${trimmed}</a>`;
+			return `<a href="/wiki/${encodeURIComponent(slug)}" class="wiki-link">${escaped}</a>`;
 		}
 		// Missing page — link to create
-		return `<a href="/wiki/new?title=${encodeURIComponent(trimmed)}" class="wiki-link wiki-link-missing">${trimmed}</a>`;
+		return `<a href="/wiki/new?title=${encodeURIComponent(trimmed)}" class="wiki-link wiki-link-missing">${escaped}</a>`;
 	});
 
 	const html = marked.parse(withLinks, { async: false }) as string;

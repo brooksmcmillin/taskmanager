@@ -5,7 +5,6 @@ from httpx import AsyncClient
 
 from app.api.wiki import generate_slug
 
-
 # ---------------------------------------------------------------------------
 # Unit tests for slug generation
 # ---------------------------------------------------------------------------
@@ -102,6 +101,34 @@ async def test_create_page_slug_dedup(authenticated_client: AsyncClient) -> None
 async def test_create_page_reserved_slug(authenticated_client: AsyncClient) -> None:
     response = await authenticated_client.post(
         "/api/wiki", json={"title": "New", "slug": "new"}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_create_page_invalid_slug(authenticated_client: AsyncClient) -> None:
+    response = await authenticated_client.post(
+        "/api/wiki", json={"title": "Bad Slug", "slug": "../admin"}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_create_page_numeric_slug(authenticated_client: AsyncClient) -> None:
+    response = await authenticated_client.post(
+        "/api/wiki", json={"title": "Numeric", "slug": "123"}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_update_page_invalid_slug(authenticated_client: AsyncClient) -> None:
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Slug Val"}
+    )
+    page_id = create.json()["data"]["id"]
+    response = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"slug": "UPPER-CASE"}
     )
     assert response.status_code == 400
 

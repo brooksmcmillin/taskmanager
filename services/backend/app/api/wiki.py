@@ -5,8 +5,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import delete, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import CursorResult, delete, select
 
 from app.core.errors import errors
 from app.db.queries import get_resource_for_user
@@ -20,6 +19,9 @@ from app.schemas import DataResponse, ListResponse
 # ---------------------------------------------------------------------------
 
 RESERVED_SLUGS = {"new", "resolve"}
+SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+MAX_SLUG_DEDUP = 100
+MAX_RESOLVE_TITLES = 50
 
 
 class WikiPageCreate(BaseModel):
@@ -74,6 +76,18 @@ class LinkTaskRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def validate_slug(slug: str) -> None:
+    """Validate a user-supplied slug."""
+    if len(slug) > 200:
+        raise errors.validation("Slug must be 200 characters or fewer")
+    if not SLUG_PATTERN.match(slug):
+        raise errors.validation(
+            "Slug must contain only lowercase letters, numbers, and hyphens"
+        )
+    if slug.isdigit():
+        raise errors.validation("Slug cannot be purely numeric")
+
+
 def generate_slug(title: str) -> str:
     """Convert title to URL-safe slug."""
     slug = title.lower().strip()
@@ -93,7 +107,7 @@ async def ensure_unique_slug(
     """Append -2, -3, etc. if slug already taken by this user."""
     candidate = slug
     suffix = 1
-    while True:
+    while suffix <= MAX_SLUG_DEDUP:
         query = select(WikiPage.id).where(
             WikiPage.user_id == user_id,
             WikiPage.slug == candidate,
@@ -105,6 +119,7 @@ async def ensure_unique_slug(
             return candidate
         suffix += 1
         candidate = f"{slug}-{suffix}"
+    raise errors.validation("Too many pages with similar slugs; provide a unique slug")
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +157,8 @@ async def create_wiki_page(
     db: DbSession,
 ) -> DataResponse[WikiPageResponse]:
     """Create a new wiki page."""
+    if body.slug:
+        validate_slug(body.slug)
     slug = body.slug if body.slug else generate_slug(body.title)
     if slug in RESERVED_SLUGS:
         raise errors.validation(f"Slug '{slug}' is reserved")
@@ -167,7 +184,8 @@ async def resolve_wiki_links(
     titles: str = Query(..., description="Comma-separated page titles"),
 ) -> DataResponse[dict[str, str | None]]:
     """Batch resolve page titles to slugs. Returns {title: slug | null}."""
-    title_list = [t.strip() for t in titles.split(",") if t.strip()]
+    all_titles = [t.strip() for t in titles.split(",") if t.strip()]
+    title_list = all_titles[:MAX_RESOLVE_TITLES]
     result_map: dict[str, str | None] = {}
     if title_list:
         result = await db.execute(
@@ -217,6 +235,7 @@ async def update_wiki_page(
             )
 
     if body.slug is not None:
+        validate_slug(body.slug)
         if body.slug in RESERVED_SLUGS:
             raise errors.validation(f"Slug '{body.slug}' is reserved")
         page.slug = await ensure_unique_slug(db, user.id, body.slug, exclude_id=page.id)
@@ -296,13 +315,13 @@ async def unlink_task(
         db, Todo, todo_id, user.id, errors.todo_not_found
     )
 
-    result = await db.execute(
+    cursor: CursorResult = await db.execute(  # type: ignore[assignment]
         delete(todo_wiki_links).where(
             todo_wiki_links.c.todo_id == todo_id,
             todo_wiki_links.c.wiki_page_id == page_id,
         )
     )
-    if result.rowcount == 0:
+    if cursor.rowcount == 0:
         raise errors.not_found("Wiki-task link")
 
     return {"data": {"deleted": True, "page_id": page_id, "todo_id": todo_id}}
@@ -315,22 +334,19 @@ async def get_linked_tasks(
     db: DbSession,
 ) -> ListResponse[LinkedTodoResponse]:
     """List tasks linked to a wiki page."""
-    page = await get_resource_for_user(
+    await get_resource_for_user(
         db, WikiPage, page_id, user.id, errors.wiki_page_not_found, check_deleted=False
     )
 
     result = await db.execute(
-        select(WikiPage)
-        .where(WikiPage.id == page.id)
-        .options(selectinload(WikiPage.linked_todos))
+        select(Todo)
+        .join(todo_wiki_links, todo_wiki_links.c.todo_id == Todo.id)
+        .where(
+            todo_wiki_links.c.wiki_page_id == page_id,
+            Todo.deleted_at.is_(None),
+        )
     )
-    page_with_todos = result.scalar_one()
-
-    todos = [
-        LinkedTodoResponse.model_validate(t)
-        for t in page_with_todos.linked_todos
-        if t.deleted_at is None
-    ]
+    todos = [LinkedTodoResponse.model_validate(t) for t in result.scalars().all()]
     return ListResponse(data=todos, meta={"count": len(todos)})
 
 
