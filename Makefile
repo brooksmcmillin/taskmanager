@@ -15,6 +15,7 @@ install:  ## Install all dependencies
 	cd services/backend && uv sync
 	cd services/mcp-auth && uv sync
 	cd services/mcp-resource && uv sync
+	cd services/mcp-relay && uv sync
 	cd packages/taskmanager-sdk && uv sync
 
 install-dev:  ## Install development dependencies including pre-commit
@@ -43,6 +44,7 @@ test:  ## Run all tests
 	cd services/backend && uv run pytest tests/ -v
 	cd services/mcp-auth && uv run pytest tests/ -v
 	cd services/mcp-resource && uv run pytest tests/ -v
+	cd services/mcp-relay && uv run pytest tests/ -v
 	cd packages/taskmanager-sdk && uv run pytest tests/ -v
 
 test-local:  ## Run all tests with local database setup
@@ -51,6 +53,7 @@ test-local:  ## Run all tests with local database setup
 	$(MAKE) test-backend
 	$(MAKE) test-mcp-auth
 	$(MAKE) test-mcp-resource
+	$(MAKE) test-mcp-relay
 	$(MAKE) test-sdk
 
 test-frontend:  ## Run frontend tests (SvelteKit)
@@ -69,6 +72,9 @@ test-mcp-auth:  ## Run mcp-auth tests
 test-mcp-resource:  ## Run mcp-resource tests
 	cd services/mcp-resource && uv run pytest tests/ -v
 
+test-mcp-relay:  ## Run mcp-relay tests
+	cd services/mcp-relay && uv run pytest tests/ -v
+
 test-sdk:  ## Run SDK tests
 	cd packages/taskmanager-sdk && uv run pytest tests/ -v
 
@@ -86,6 +92,7 @@ lint:  ## Run all linting checks
 	cd services/backend && uv run ruff check .
 	cd services/mcp-auth && uv run ruff check .
 	cd services/mcp-resource && uv run ruff check .
+	cd services/mcp-relay && uv run ruff check .
 	cd packages/taskmanager-sdk && uv run ruff check .
 
 format:  ## Auto-format code
@@ -93,12 +100,14 @@ format:  ## Auto-format code
 	cd services/backend && uv run ruff format . && uv run ruff check --fix .
 	cd services/mcp-auth && uv run ruff format . && uv run ruff check --fix .
 	cd services/mcp-resource && uv run ruff format . && uv run ruff check --fix .
+	cd services/mcp-relay && uv run ruff format . && uv run ruff check --fix .
 	cd packages/taskmanager-sdk && uv run ruff format . && uv run ruff check --fix .
 
 typecheck:  ## Run type checking
 	cd services/backend && uv run pyright
 	cd services/mcp-auth && uv run pyright
 	cd services/mcp-resource && uv run pyright
+	cd services/mcp-relay && uv run pyright
 	cd packages/taskmanager-sdk && uv run pyright
 
 # =============================================================================
@@ -112,6 +121,7 @@ security:  ## Run security checks
 	cd services/backend && uv run pip-audit || true
 	cd services/mcp-auth && uv run pip-audit || true
 	cd services/mcp-resource && uv run pip-audit || true
+	cd services/mcp-relay && uv run pip-audit || true
 	cd packages/taskmanager-sdk && uv run pip-audit || true
 	@echo "Running bandit..."
 	cd services/backend && uv run bandit -r app/ || true

@@ -1,0 +1,94 @@
+[project]
+name = "mcp-relay"
+version = "0.1.0"
+description = "MCP Relay Server - Inter-session message broker for dev workflows"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.1.0",
+    "mcp>=1.24.0",
+    "mcp-resource-framework",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "starlette>=0.40.0",
+    "uvicorn>=0.30.0",
+]
+
+[project.scripts]
+mcp-relay = "mcp_relay.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mcp_relay*"]
+
+[tool.ruff]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "S",  # flake8-bandit (security)
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "S101",  # use of assert (common in tests)
+    "S105",  # hardcoded password (we use env vars)
+    "S106",  # hardcoded password (we use env vars)
+]
+
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.uv.sources]
+mcp-resource-framework = { path = "../../packages/mcp-resource-framework" }
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.400",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.2.0",
+]
