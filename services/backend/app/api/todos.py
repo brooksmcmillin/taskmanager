@@ -1,10 +1,11 @@
 """Todo API routes."""
 
 from datetime import UTC, date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import and_, select
+from sqlalchemy import and_, case, select
 
 from app.core.errors import errors
 from app.db.queries import (
@@ -490,6 +491,7 @@ def _apply_todo_filters(
     end_date: date | None,
     no_due_date: bool,
     parent_id: int | None,
+    deadline_type: str | None,
     order_by: str | None,
 ):
     """Apply filtering and ordering to a todo list query."""
@@ -524,8 +526,23 @@ def _apply_todo_filters(
         if end_date:
             query = query.where(Todo.due_date <= end_date)
 
+    if deadline_type:
+        query = query.where(Todo.deadline_type == deadline_type)
+
+    # Deadline type strictness ordering: flexible < preferred < firm < hard
+    _deadline_type_order = {"flexible": 0, "preferred": 1, "firm": 2, "hard": 3}
+
     if order_by == "position":
         query = query.order_by(Todo.position, Todo.created_at)
+    elif order_by == "deadline_type":
+        query = query.order_by(
+            case(
+                _deadline_type_order,
+                value=Todo.deadline_type,
+                else_=1,
+            ).desc(),
+            Todo.due_date.asc().nulls_last(),
+        )
     else:
         query = query.order_by(Todo.due_date.asc().nulls_last(), Todo.priority.desc())
 
@@ -565,8 +582,13 @@ async def list_todos(
     end_date: date | None = Query(None),  # noqa: B008
     no_due_date: bool = Query(False),
     parent_id: int | None = Query(None),
+    deadline_type: Literal["flexible", "preferred", "firm", "hard"] | None = Query(
+        None, description="Filter by deadline type"
+    ),
     include_subtasks: bool = Query(False),
-    order_by: str | None = Query(None, description="Order by: position or due_date"),
+    order_by: Literal["position", "due_date", "deadline_type"] | None = Query(
+        None, description="Sort order"
+    ),
 ) -> ListResponse[TodoResponse]:
     """List todos with optional filters.
 
@@ -595,6 +617,7 @@ async def list_todos(
         end_date=end_date,
         no_due_date=no_due_date,
         parent_id=parent_id,
+        deadline_type=deadline_type,
         order_by=order_by,
     )
 

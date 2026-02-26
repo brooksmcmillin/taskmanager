@@ -374,8 +374,10 @@ def create_resource_server(
         start_date: str | None = None,
         end_date: str | None = None,
         category: str | None = None,
+        deadline_type: str | None = None,
         limit: int | None = None,
         include_subtasks: bool = True,
+        order_by: str | None = None,
     ) -> str:
         """
         Retrieve tasks with filtering options.
@@ -385,12 +387,14 @@ def create_resource_server(
             start_date: Filter tasks with due date on or after this date (ISO format, e.g., "2025-12-14")
             end_date: Filter tasks with due date on or before this date (ISO format, e.g., "2025-12-20")
             category: Filter by category/project name
+            deadline_type: Filter by deadline type - one of "flexible", "preferred", "firm", "hard"
             limit: Maximum number of tasks to return
             include_subtasks: Whether to include subtasks in the response (default: True)
+            order_by: Sort order - one of "position", "due_date", "deadline_type"
 
         Returns:
             JSON object with "tasks" array containing task objects with fields:
-            id, title, description, due_date, status, category, priority, tags, parent_id, subtasks, created_at, updated_at
+            id, title, description, due_date, deadline_type, status, category, priority, tags, parent_id, subtasks, created_at, updated_at
         """
         logger.info(
             f"=== get_tasks called: status={status}, start_date={start_date}, "
@@ -406,8 +410,10 @@ def create_resource_server(
                 start_date=start_date,
                 end_date=end_date,
                 category=category,
+                deadline_type=deadline_type,
                 limit=limit,
                 include_subtasks=include_subtasks,
+                order_by=order_by,
             )
             logger.info(
                 f"get_todos response: success={response.success}, status={response.status_code}"
@@ -452,6 +458,7 @@ def create_resource_server(
                         "title": task.get("title", ""),
                         "description": task.get("description"),
                         "due_date": task.get("due_date"),
+                        "deadline_type": task.get("deadline_type", "preferred"),
                         "status": task.get("status", "pending"),
                         "category": task.get("project_name") or task.get("category"),
                         "priority": task.get("priority", "medium"),
@@ -883,6 +890,7 @@ def create_resource_server(
                         "title": task.get("title", ""),
                         "description": task.get("description"),
                         "due_date": task.get("due_date"),
+                        "deadline_type": task.get("deadline_type", "preferred"),
                         "status": task.get("status", "pending"),
                         "category": task.get("project_name") or task.get("category"),
                         "priority": task.get("priority", "medium"),
@@ -1381,6 +1389,7 @@ def create_resource_server(
                         "title": task.get("title", ""),
                         "description": task.get("description"),
                         "due_date": task.get("due_date"),
+                        "deadline_type": task.get("deadline_type", "preferred"),
                         "status": task.get("status", "pending"),
                         "category": task.get("project_name") or task.get("category"),
                         "priority": task.get("priority", "medium"),

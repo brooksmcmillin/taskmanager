@@ -122,10 +122,12 @@ export interface TodoFilters {
 	status?: string;
 	project_id?: number;
 	priority?: string;
+	deadline_type?: DeadlineType;
 	start_date?: string;
 	end_date?: string;
 	no_due_date?: boolean;
 	include_subtasks?: boolean;
+	order_by?: string;
 }
 
 export interface TodoCreate {

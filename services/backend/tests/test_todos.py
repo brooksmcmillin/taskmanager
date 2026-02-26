@@ -1008,7 +1008,10 @@ async def test_create_todo_accepts_valid_deadline_types(
     for deadline_type in ["flexible", "preferred", "firm", "hard"]:
         response = await authenticated_client.post(
             "/api/todos",
-            json={"title": f"Task with {deadline_type}", "deadline_type": deadline_type},
+            json={
+                "title": f"Task with {deadline_type}",
+                "deadline_type": deadline_type,
+            },
         )
 
         assert response.status_code == 201, f"Failed for deadline_type={deadline_type}"
@@ -1130,3 +1133,184 @@ async def test_create_todo_default_deadline_type_is_preferred(
 
     assert response.status_code == 201
     assert response.json()["data"]["deadline_type"] == "preferred"
+
+
+# Deadline Type Filtering and Sorting Tests
+
+
+@pytest.mark.asyncio
+async def test_create_todo_with_deadline_type(authenticated_client: AsyncClient):
+    """Test creating a todo with an explicit deadline_type."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Hard deadline task", "deadline_type": "hard"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["deadline_type"] == "hard"
+
+
+@pytest.mark.asyncio
+async def test_update_todo_deadline_type(authenticated_client: AsyncClient):
+    """Test updating a todo's deadline_type."""
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Change my deadline type"},
+    )
+    todo_id = create_response.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"deadline_type": "firm"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["deadline_type"] == "firm"
+
+
+@pytest.mark.asyncio
+async def test_filter_todos_invalid_deadline_type_returns_422(
+    authenticated_client: AsyncClient,
+):
+    """Test that an invalid deadline_type returns 422."""
+    response = await authenticated_client.get(
+        "/api/todos", params={"deadline_type": "invalid_type"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_filter_todos_invalid_order_by_returns_422(
+    authenticated_client: AsyncClient,
+):
+    """Test that an invalid order_by returns 422."""
+    response = await authenticated_client.get(
+        "/api/todos", params={"order_by": "invalid_sort"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_filter_todos_by_deadline_type(authenticated_client: AsyncClient):
+    """Test filtering todos by deadline_type."""
+    # Create todos with different deadline types
+    for dt in ["flexible", "preferred", "firm", "hard"]:
+        await authenticated_client.post(
+            "/api/todos",
+            json={"title": f"Task with {dt} deadline", "deadline_type": dt},
+        )
+
+    # Filter by "hard" only
+    response = await authenticated_client.get(
+        "/api/todos", params={"deadline_type": "hard"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["meta"]["count"] >= 1
+    assert all(t["deadline_type"] == "hard" for t in data["data"])
+
+
+@pytest.mark.asyncio
+async def test_filter_todos_by_flexible_deadline_type(
+    authenticated_client: AsyncClient,
+):
+    """Test filtering todos by flexible deadline_type."""
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Flexible task", "deadline_type": "flexible"},
+    )
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Hard task", "deadline_type": "hard"},
+    )
+
+    response = await authenticated_client.get(
+        "/api/todos", params={"deadline_type": "flexible"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert all(t["deadline_type"] == "flexible" for t in data["data"])
+
+
+@pytest.mark.asyncio
+async def test_sort_todos_by_deadline_type(authenticated_client: AsyncClient):
+    """Test sorting by deadline_type (hard > firm > preferred > flexible)."""
+    # Create todos with different deadline types and due dates
+    for dt in ["flexible", "hard", "preferred", "firm"]:
+        await authenticated_client.post(
+            "/api/todos",
+            json={
+                "title": f"Sort test {dt}",
+                "deadline_type": dt,
+                "due_date": "2026-03-01",
+            },
+        )
+
+    response = await authenticated_client.get(
+        "/api/todos", params={"order_by": "deadline_type"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    deadline_types = [t["deadline_type"] for t in data["data"]]
+
+    # Verify ordering: hard > firm > preferred > flexible
+    type_order = {"hard": 3, "firm": 2, "preferred": 1, "flexible": 0}
+    for i in range(len(deadline_types) - 1):
+        assert type_order[deadline_types[i]] >= type_order[deadline_types[i + 1]]
+
+
+@pytest.mark.asyncio
+async def test_filter_deadline_type_with_other_filters(
+    authenticated_client: AsyncClient,
+):
+    """Test that deadline_type filter works in combination with other filters."""
+    # Create tasks with different combinations
+    await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Hard pending",
+            "deadline_type": "hard",
+            "due_date": "2026-03-15",
+        },
+    )
+    await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Flexible pending",
+            "deadline_type": "flexible",
+            "due_date": "2026-03-15",
+        },
+    )
+
+    # Filter by deadline_type and date range
+    response = await authenticated_client.get(
+        "/api/todos",
+        params={
+            "deadline_type": "hard",
+            "start_date": "2026-03-01",
+            "end_date": "2026-03-31",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert all(t["deadline_type"] == "hard" for t in data["data"])
+
+
+@pytest.mark.asyncio
+async def test_deadline_type_in_response(authenticated_client: AsyncClient):
+    """Test that deadline_type is always included in todo responses."""
+    for dt in ["flexible", "preferred", "firm", "hard"]:
+        response = await authenticated_client.post(
+            "/api/todos",
+            json={"title": f"Response test {dt}", "deadline_type": dt},
+        )
+        assert response.json()["data"]["deadline_type"] == dt
+
+    # Check list response includes deadline_type
+    list_response = await authenticated_client.get("/api/todos")
+    for todo in list_response.json()["data"]:
+        assert "deadline_type" in todo

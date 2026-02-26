@@ -11,6 +11,7 @@
 	import DragDropCalendar from '$lib/components/DragDropCalendar.svelte';
 	import ProjectFilter from '$lib/components/ProjectFilter.svelte';
 	import DueDateFilter from '$lib/components/DueDateFilter.svelte';
+	import DeadlineTypeFilter from '$lib/components/DeadlineTypeFilter.svelte';
 	import SearchModal from '$lib/components/SearchModal.svelte';
 	import { computeDueDateFilters } from '$lib/utils/dueDateFilter';
 	import type { DueDateOption, DueDateFilterValue } from '$lib/utils/dueDateFilter';
@@ -23,7 +24,7 @@
 	import { contrastText } from '$lib/utils/colors';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
-	import type { Todo, ApiResponse } from '$lib/types';
+	import type { Todo, ApiResponse, DeadlineType } from '$lib/types';
 
 	let currentView: 'list' | 'calendar' = 'calendar';
 	let minimizedProjects: Record<string, boolean> = {};
@@ -79,6 +80,8 @@
 
 	$: selectedDueDate = ($page.url.searchParams.get('due_date') as DueDateOption) || 'all';
 
+	$: selectedDeadlineType = ($page.url.searchParams.get('deadline_type') as DeadlineType) || null;
+
 	function getProjectId(projectName: string): string {
 		return `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
 	}
@@ -91,6 +94,7 @@
 		await todos.load({
 			status: 'pending',
 			...(selectedProjectId && { project_id: selectedProjectId }),
+			...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
 			...computeDueDateFilters(selectedDueDate)
 		});
 
@@ -146,6 +150,18 @@
 		goto(url, { replaceState: true, keepFocus: true });
 	}
 
+	function handleDeadlineTypeFilterChange(detail: { deadlineType: DeadlineType | null }) {
+		const url = new URL($page.url);
+
+		if (detail.deadlineType) {
+			url.searchParams.set('deadline_type', detail.deadlineType);
+		} else {
+			url.searchParams.delete('deadline_type');
+		}
+
+		goto(url, { replaceState: true, keepFocus: true });
+	}
+
 	function openTaskDetail(todo: Todo) {
 		taskDetailPanel.open(todo);
 	}
@@ -161,6 +177,7 @@
 			await todos.load({
 				status: 'pending',
 				...(selectedProjectId && { project_id: selectedProjectId }),
+				...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
 				...computeDueDateFilters(selectedDueDate)
 			});
 			loadSummaryStats();
@@ -172,6 +189,7 @@
 						await todos.load({
 							status: 'pending',
 							...(selectedProjectId && { project_id: selectedProjectId }),
+							...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
 							...computeDueDateFilters(selectedDueDate)
 						});
 						loadSummaryStats();
@@ -190,19 +208,22 @@
 		await todos.load({
 			status: 'pending',
 			...(selectedProjectId && { project_id: selectedProjectId }),
+			...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
 			...computeDueDateFilters(selectedDueDate)
 		});
 	}
 
 	// Reload todos when filters change (only in browser, after initial load)
-	// selectedProjectId and selectedDueDate are reactive via URL params, triggering this block
+	// selectedProjectId, selectedDueDate, and selectedDeadlineType are reactive via URL params
 	$: if (browser && initialLoadComplete) {
-		// Reference both reactive values to establish dependencies
+		// Reference all reactive values to establish dependencies
 		const _projectId = selectedProjectId;
 		const _dueDate = selectedDueDate;
+		const _deadlineType = selectedDeadlineType;
 		todos.load({
 			status: 'pending',
 			...(_projectId ? { project_id: _projectId } : {}),
+			...(_deadlineType ? { deadline_type: _deadlineType } : {}),
 			...computeDueDateFilters(_dueDate)
 		});
 	}
@@ -279,6 +300,10 @@
 				<kbd class="search-shortcut">Ctrl+K</kbd>
 			</button>
 			<DueDateFilter selected={selectedDueDate} on:change={handleDueDateFilterChange} />
+			<DeadlineTypeFilter
+				selected={selectedDeadlineType}
+				onchange={handleDeadlineTypeFilterChange}
+			/>
 			<ProjectFilter {selectedProjectId} on:change={handleFilterChange} />
 		</div>
 	</div>

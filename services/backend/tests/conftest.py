@@ -23,6 +23,7 @@ from urllib.parse import quote_plus  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,
     async_sessionmaker,
@@ -71,7 +72,11 @@ async def db_engine():
     yield engine
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        # Drop all tables with CASCADE to handle FK dependencies from
+        # tables created by migrations but not in ORM metadata (e.g.
+        # mcp_access_tokens, mcp_refresh_tokens).
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
 
     await engine.dispose()
 
