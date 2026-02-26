@@ -258,9 +258,11 @@ test.describe('Deadline Type Feature', () => {
 			// Switch to list view
 			await page.click('button:has-text("List View")');
 
-			const pill = page.locator('.deadline-type-pill');
-			await expect(pill.first()).toBeVisible();
-			await expect(pill.first()).toHaveText('Firm');
+			const taskRow = page.locator('.todo-with-subtasks', {
+				has: page.locator('text=Firm List Task')
+			});
+			await expect(taskRow.locator('.deadline-type-pill')).toBeVisible();
+			await expect(taskRow.locator('.deadline-type-pill')).toHaveText('Firm');
 		});
 
 		test('should NOT show pill for preferred (default) deadline type in list view', async ({
@@ -296,10 +298,12 @@ test.describe('Deadline Type Feature', () => {
 			await page.goto('/');
 			await page.waitForLoadState('networkidle');
 
-			// Calendar is the default view
-			const label = page.locator('.calendar-deadline-type');
-			await expect(label.first()).toBeVisible();
-			await expect(label.first()).toHaveText('Hard');
+			// Calendar is the default view — scope to the specific task card
+			const taskCard = page.locator('.calendar-task', {
+				has: page.locator('text=Hard Calendar Task')
+			});
+			await expect(taskCard.locator('.calendar-deadline-type')).toBeVisible();
+			await expect(taskCard.locator('.calendar-deadline-type')).toHaveText('Hard');
 		});
 
 		test('should NOT show deadline type label on calendar for preferred tasks', async ({
@@ -322,7 +326,8 @@ test.describe('Deadline Type Feature', () => {
 		});
 
 		test('should show pill for flexible deadline type in home dashboard', async ({ page }) => {
-			const today = new Date().toISOString().split('T')[0];
+			const d = new Date();
+			const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 			await createTodoViaAPI(page, 'Flexible Home Task', {
 				deadlineType: 'flexible',
 				dueDate: today
@@ -331,9 +336,11 @@ test.describe('Deadline Type Feature', () => {
 			await page.goto('/home');
 			await page.waitForLoadState('networkidle');
 
-			const pill = page.locator('.deadline-type-pill');
-			await expect(pill.first()).toBeVisible();
-			await expect(pill.first()).toHaveText('Flexible');
+			const taskItem = page.locator('.task-item', {
+				has: page.locator('text=Flexible Home Task')
+			});
+			await expect(taskItem.locator('.deadline-type-pill')).toBeVisible();
+			await expect(taskItem.locator('.deadline-type-pill')).toHaveText('Flexible');
 		});
 	});
 
