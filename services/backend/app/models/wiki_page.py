@@ -91,7 +91,7 @@ class WikiPageRevision(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     wiki_page_id: Mapped[int] = mapped_column(
-        ForeignKey("wiki_pages.id", ondelete="CASCADE")
+        ForeignKey("wiki_pages.id", ondelete="CASCADE"), index=True
     )
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE")

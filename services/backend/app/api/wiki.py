@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import CursorResult, delete, select
+from sqlalchemy import CursorResult, delete, select, update
 
 from app.core.errors import errors
 from app.db.queries import get_resource_for_user
@@ -22,17 +22,19 @@ RESERVED_SLUGS = {"new", "resolve"}
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MAX_SLUG_DEDUP = 100
 MAX_RESOLVE_TITLES = 50
+MAX_BATCH_LINK_TASKS = 100
+MAX_CONTENT_LENGTH = 500_000
 
 
 class WikiPageCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
-    content: str = ""
+    content: str = Field("", max_length=MAX_CONTENT_LENGTH)
     slug: str | None = Field(None, max_length=500)
 
 
 class WikiPageUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
-    content: str | None = None
+    content: str | None = Field(None, max_length=MAX_CONTENT_LENGTH)
     slug: str | None = Field(None, max_length=500)
     append: bool = False
 
@@ -80,7 +82,7 @@ class LinkTaskRequest(BaseModel):
 
 
 class BatchLinkTasksRequest(BaseModel):
-    todo_ids: list[int]
+    todo_ids: list[int] = Field(..., max_length=MAX_BATCH_LINK_TASKS)
 
 
 class BatchLinkTasksResponse(BaseModel):
@@ -89,16 +91,19 @@ class BatchLinkTasksResponse(BaseModel):
     not_found: list[int]
 
 
-class WikiPageRevisionResponse(BaseModel):
+class WikiPageRevisionSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     wiki_page_id: int
     title: str
     slug: str
-    content: str
     revision_number: int
     created_at: datetime
+
+
+class WikiPageRevisionResponse(WikiPageRevisionSummary):
+    content: str
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +202,7 @@ async def list_wiki_pages(
     user: CurrentUserFlexible,
     db: DbSession,
     q: str | None = Query(None, description="Search query"),
-) -> ListResponse[WikiPageSearchResult] | ListResponse[WikiPageSummary]:
+) -> ListResponse[WikiPageSearchResult]:
     """List wiki pages for the current user, optionally filtered by search."""
     query = select(WikiPage).where(
         WikiPage.user_id == user.id,
@@ -211,18 +216,13 @@ async def list_wiki_pages(
     result = await db.execute(query)
     pages = result.scalars().all()
 
-    if q:
-        data = []
-        for p in pages:
-            item = WikiPageSearchResult.model_validate(p)
+    data = []
+    for p in pages:
+        item = WikiPageSearchResult.model_validate(p)
+        if q:
             item.content_snippet = extract_snippet(p.content, q)
-            data.append(item)
-        return ListResponse(data=data, meta={"count": len(data)})
-
-    return ListResponse(
-        data=[WikiPageSummary.model_validate(p) for p in pages],
-        meta={"count": len(pages)},
-    )
+        data.append(item)
+    return ListResponse(data=data, meta={"count": len(data)})
 
 
 @router.post("", status_code=201)
@@ -310,7 +310,13 @@ async def update_wiki_page(
 
     # Save current state as revision before making changes
     await _save_revision(db, page)
-    page.revision_number += 1
+
+    # Atomically increment revision_number at the SQL level
+    await db.execute(
+        update(WikiPage)
+        .where(WikiPage.id == page.id)
+        .values(revision_number=WikiPage.revision_number + 1)
+    )
 
     slug_modified = False
     requested_slug: str | None = None
@@ -345,7 +351,15 @@ async def update_wiki_page(
 
     if body.content is not None:
         if body.append:
-            page.content = page.content + "\n" + body.content
+            if page.content:
+                new_content = page.content + "\n" + body.content
+            else:
+                new_content = body.content
+            if len(new_content) > MAX_CONTENT_LENGTH:
+                raise errors.validation(
+                    f"Total content exceeds maximum of {MAX_CONTENT_LENGTH} characters"
+                )
+            page.content = new_content
         else:
             page.content = body.content
 
@@ -384,8 +398,8 @@ async def list_revisions(
     page_id: int,
     user: CurrentUserFlexible,
     db: DbSession,
-) -> ListResponse[WikiPageRevisionResponse]:
-    """List revisions for a wiki page."""
+) -> ListResponse[WikiPageRevisionSummary]:
+    """List revisions for a wiki page (without content)."""
     await get_resource_for_user(
         db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
@@ -396,7 +410,7 @@ async def list_revisions(
     )
     revisions = result.scalars().all()
     return ListResponse(
-        data=[WikiPageRevisionResponse.model_validate(r) for r in revisions],
+        data=[WikiPageRevisionSummary.model_validate(r) for r in revisions],
         meta={"count": len(revisions)},
     )
 
@@ -473,39 +487,49 @@ async def batch_link_tasks(
         db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
 
+    # Deduplicate IDs while preserving order
+    seen: set[int] = set()
+    unique_ids: list[int] = []
+    for tid in body.todo_ids:
+        if tid not in seen:
+            seen.add(tid)
+            unique_ids.append(tid)
+
+    # Batch-fetch all matching todos in one query
+    result = await db.execute(
+        select(Todo).where(
+            Todo.id.in_(unique_ids),
+            Todo.user_id == user.id,
+            Todo.deleted_at.is_(None),
+        )
+    )
+    found_todos = {t.id for t in result.scalars().all()}
+
+    # Batch-fetch existing links in one query
+    existing_result = await db.execute(
+        select(todo_wiki_links.c.todo_id).where(
+            todo_wiki_links.c.wiki_page_id == page.id,
+            todo_wiki_links.c.todo_id.in_(unique_ids),
+        )
+    )
+    existing_links = {row.todo_id for row in existing_result.all()}
+
     linked: list[int] = []
     already_linked: list[int] = []
     not_found: list[int] = []
 
-    for todo_id in body.todo_ids:
-        # Check task exists and belongs to user
-        result = await db.execute(
-            select(Todo).where(
-                Todo.id == todo_id,
-                Todo.user_id == user.id,
-                Todo.deleted_at.is_(None),
-            )
-        )
-        todo = result.scalar_one_or_none()
-        if not todo:
+    for todo_id in unique_ids:
+        if todo_id not in found_todos:
             not_found.append(todo_id)
-            continue
-
-        # Check for existing link
-        existing = await db.execute(
-            select(todo_wiki_links).where(
-                todo_wiki_links.c.todo_id == todo_id,
-                todo_wiki_links.c.wiki_page_id == page.id,
-            )
-        )
-        if existing.first():
+        elif todo_id in existing_links:
             already_linked.append(todo_id)
-            continue
-
-        await db.execute(
-            todo_wiki_links.insert().values(todo_id=todo_id, wiki_page_id=page.id)
-        )
-        linked.append(todo_id)
+        else:
+            await db.execute(
+                todo_wiki_links.insert().values(
+                    todo_id=todo_id, wiki_page_id=page.id
+                )
+            )
+            linked.append(todo_id)
 
     return DataResponse(
         data=BatchLinkTasksResponse(

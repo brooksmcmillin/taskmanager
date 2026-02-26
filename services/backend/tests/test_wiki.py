@@ -675,6 +675,21 @@ async def test_update_append_mode(authenticated_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_update_append_empty_content(authenticated_client: AsyncClient) -> None:
+    """Appending to a page with empty content does not produce a leading newline."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Append Empty", "content": ""}
+    )
+    page_id = create.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"content": "First line", "append": True}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["content"] == "First line"
+
+
+@pytest.mark.asyncio
 async def test_update_append_false_replaces(authenticated_client: AsyncClient) -> None:
     """When append=False (default), content replaces the old content."""
     create = await authenticated_client.post(
@@ -735,13 +750,20 @@ async def test_revision_created_on_update(authenticated_client: AsyncClient) -> 
     )
     assert update.json()["data"]["revision_number"] == 2
 
-    # Check revisions endpoint
+    # Check revisions endpoint (list returns summaries without content)
     revisions = await authenticated_client.get(f"/api/wiki/{page_id}/revisions")
     assert revisions.status_code == 200
     rev_data = revisions.json()["data"]
     assert len(rev_data) == 1
     assert rev_data[0]["revision_number"] == 1
-    assert rev_data[0]["content"] == "v1"
+    assert "content" not in rev_data[0]
+
+    # Full content is available via the specific revision endpoint
+    rev_detail = await authenticated_client.get(
+        f"/api/wiki/{page_id}/revisions/1"
+    )
+    assert rev_detail.status_code == 200
+    assert rev_detail.json()["data"]["content"] == "v1"
 
 
 @pytest.mark.asyncio

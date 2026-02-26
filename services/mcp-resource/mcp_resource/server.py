@@ -2495,6 +2495,7 @@ def create_resource_server(
                 logger.error(f"Failed to batch link tasks: {result_error}")
                 return json.dumps({"error": result_error})
 
+            assert result is not None
             logger.info(f"Batch linked tasks to wiki page {page_id}: {result}")
             return json.dumps(
                 {
