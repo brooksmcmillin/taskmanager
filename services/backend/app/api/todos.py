@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import and_, case, select
 
 from app.core.errors import errors
@@ -51,6 +51,13 @@ class TodoCreate(BaseModel):
     context: str | None = None
     estimated_hours: float | None = None
     parent_id: int | None = None
+    parent_index: int | None = Field(
+        None,
+        description=(
+            "0-based index of another task in the same batch to use as parent. "
+            "Only valid in batch creation. Mutually exclusive with parent_id."
+        ),
+    )
     position: int | None = None
     # Agent fields - typically not set on creation, inferred automatically
     agent_actionable: bool | None = None
@@ -93,9 +100,53 @@ class TodoUpdate(BaseModel):
 
 
 class BatchTodoCreate(BaseModel):
-    """Batch todo creation request."""
+    """Batch todo creation request.
+
+    Supports inline parent-child relationships via ``parent_index``.  Each
+    task may reference another task in the same batch by its 0-based index
+    to declare it as its parent.  The referenced task must appear before
+    the child (i.e. a task cannot reference a later index), must not be a
+    subtask itself (only one level of nesting), and ``parent_index`` is
+    mutually exclusive with ``parent_id``.
+    """
 
     todos: list[TodoCreate] = Field(..., min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_parent_indexes(self) -> "BatchTodoCreate":
+        """Validate all parent_index references in the batch."""
+        for i, item in enumerate(self.todos):
+            if item.parent_index is not None and item.parent_id is not None:
+                raise ValueError(
+                    f"Todo at index {i}: cannot specify both parent_id and parent_index"
+                )
+
+            if item.parent_index is not None:
+                idx = item.parent_index
+                if idx < 0 or idx >= len(self.todos):
+                    raise ValueError(
+                        f"Todo at index {i}: parent_index {idx} is out of "
+                        f"range (batch has {len(self.todos)} items, "
+                        f"valid range 0-{len(self.todos) - 1})"
+                    )
+                if idx == i:
+                    raise ValueError(
+                        f"Todo at index {i}: parent_index cannot reference itself"
+                    )
+                if idx > i:
+                    raise ValueError(
+                        f"Todo at index {i}: parent_index {idx} references a "
+                        f"later item. Parents must appear before children in "
+                        f"the batch."
+                    )
+                # Ensure parent is not itself a subtask (only 1 level)
+                parent = self.todos[idx]
+                if parent.parent_index is not None or parent.parent_id is not None:
+                    raise ValueError(
+                        f"Todo at index {i}: parent at index {idx} is itself "
+                        f"a subtask. Only one level of nesting is allowed."
+                    )
+        return self
 
 
 class BulkUpdateRequest(BaseModel):
@@ -740,18 +791,29 @@ async def batch_create_todos(
     Accepts up to 50 todo objects. All todos are created atomically—if any
     validation fails, none are created. Validation runs for all items before
     any database writes occur.
-    """
-    # Phase 1: Validate all items and prepare Todo objects before any writes
-    prepared: list[Todo] = []
 
-    for item in request.todos:
+    Tasks may reference other tasks in the same batch as parents via the
+    ``parent_index`` field (0-based index).  Parents must appear before
+    children in the list, and only one level of nesting is allowed.
+    ``parent_index`` and ``parent_id`` are mutually exclusive per task.
+    """
+    # Phase 1: Validate all items and prepare Todo objects before any writes.
+    # Items with parent_index skip parent_id assignment here — it's set in
+    # phase 3 after all items have been flushed and have real IDs.
+    prepared: list[Todo] = []
+    # Track which batch index each prepared Todo corresponds to, and which
+    # items need parent_index resolution.
+    parent_index_map: dict[int, int] = {}  # prepared idx -> parent batch idx
+
+    for i, item in enumerate(request.todos):
         # Resolve category name to project_id
         if item.category and not item.project_id:
             project_id = await _resolve_category_to_project(db, item.category, user.id)
             if project_id:
                 item.project_id = project_id
 
-        # Verify parent todo exists and belongs to user
+        # Verify parent todo exists and belongs to user (only for parent_id,
+        # not parent_index which references items within this batch)
         if item.parent_id:
             parent = await get_resource_for_user(
                 db, Todo, item.parent_id, user.id, errors.todo_not_found
@@ -762,11 +824,18 @@ async def batch_create_todos(
                     "Only one level of nesting is allowed."
                 )
 
-        # Auto-assign position if not provided
+        # Record parent_index for later resolution
+        if item.parent_index is not None:
+            parent_index_map[i] = item.parent_index
+
+        # Auto-assign position if not provided.
+        # For parent_index items, parent_id is not yet known so we pass None
+        # and positions will be recalculated in phase 3.
+        effective_parent_id = item.parent_id  # None for parent_index items
         position = item.position
         if position is None:
             position = await get_next_position(
-                db, Todo, user.id, parent_id=item.parent_id
+                db, Todo, user.id, parent_id=effective_parent_id
             )
 
         # Infer agent fields if not provided
@@ -806,12 +875,26 @@ async def batch_create_todos(
         )
 
     # Phase 2: All validation passed — write to database
-    created: list[TodoResponse] = []
     for todo in prepared:
         db.add(todo)
         await db.flush()
         await db.refresh(todo)
 
+    # Phase 3: Resolve parent_index references now that all items have IDs
+    for child_idx, parent_batch_idx in parent_index_map.items():
+        child_todo = prepared[child_idx]
+        parent_todo = prepared[parent_batch_idx]
+        child_todo.parent_id = parent_todo.id
+        # Recalculate position under the new parent
+        child_todo.position = await get_next_position(
+            db, Todo, user.id, parent_id=parent_todo.id
+        )
+        await db.flush()
+        await db.refresh(child_todo)
+
+    # Phase 4: Build responses
+    created: list[TodoResponse] = []
+    for todo in prepared:
         project_name, project_color = await get_project_info(
             db, todo.project_id, user.id
         )

@@ -1573,6 +1573,130 @@ class TestCreateTasksBatch:
             todos = call_args[0][0] if call_args[0] else call_args[1]["todos"]
             assert todos[0]["parent_id"] == 42
 
+    @pytest.mark.asyncio
+    async def test_batch_create_with_parent_index(self, mock_api_client: MagicMock) -> None:
+        """Test that parent_index is passed through to the SDK."""
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            await create_tasks_tool.fn(
+                tasks=[
+                    {"title": "Parent task"},
+                    {"title": "Child task", "parent_index": 0},
+                ]
+            )
+            call_args = mock_api_client.batch_create_todos.call_args
+            todos = call_args[0][0] if call_args[0] else call_args[1]["todos"]
+            assert len(todos) == 2
+            assert "parent_index" not in todos[0]
+            assert todos[1]["parent_index"] == 0
+
+    @pytest.mark.asyncio
+    async def test_batch_create_parent_index_and_parent_id_conflict(self) -> None:
+        """Test that parent_index and parent_id together returns error."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=MagicMock()):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(
+                tasks=[
+                    {"title": "Parent"},
+                    {"title": "Child", "parent_id": "task_1", "parent_index": 0},
+                ]
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "parent_id" in parsed["error"]
+            assert "parent_index" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_batch_create_parent_index_non_integer(self) -> None:
+        """Test that non-integer parent_index returns error."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=MagicMock()):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(
+                tasks=[
+                    {"title": "Parent"},
+                    {"title": "Child", "parent_index": "zero"},
+                ]
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "parent_index" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_batch_create_with_parent_index_response_includes_parent_id(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test that response includes parent_id for tasks created with parent_index."""
+        import json
+
+        from mcp_resource.server import create_resource_server
+
+        mock_api_client.batch_create_todos.return_value = ApiResponse(
+            success=True,
+            data=[
+                {"id": 10, "title": "Parent task", "parent_id": None},
+                {"id": 11, "title": "Child task", "parent_id": 10},
+            ],
+            status_code=201,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            tools = server._tool_manager._tools
+            create_tasks_tool = tools["create_tasks"]
+            result = await create_tasks_tool.fn(
+                tasks=[
+                    {"title": "Parent task"},
+                    {"title": "Child task", "parent_index": 0},
+                ]
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 2
+            assert parsed["created"][0]["id"] == "task_10"
+            assert "parent_id" not in parsed["created"][0]
+            assert parsed["created"][1]["id"] == "task_11"
+            assert parsed["created"][1]["parent_id"] == "task_10"
+
 
 class TestWikiTools:
     """Tests for wiki MCP tools."""
@@ -1943,9 +2067,7 @@ class TestWikiTools:
             )
 
     @pytest.mark.asyncio
-    async def test_batch_link_wiki_page_to_tasks_success(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_batch_link_wiki_page_to_tasks_success(self, mock_api_client: MagicMock) -> None:
         """Test batch linking tasks to a wiki page."""
         import json
 
@@ -1982,9 +2104,7 @@ class TestWikiTools:
             assert "Invalid task_id" in parsed["error"]
 
     @pytest.mark.asyncio
-    async def test_get_wiki_page_revisions_success(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_get_wiki_page_revisions_success(self, mock_api_client: MagicMock) -> None:
         """Test listing revisions for a wiki page."""
         import json
 
@@ -2012,9 +2132,7 @@ class TestWikiTools:
             assert parsed["revisions"][0]["revision_number"] == 1
 
     @pytest.mark.asyncio
-    async def test_get_wiki_page_revision_success(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_get_wiki_page_revision_success(self, mock_api_client: MagicMock) -> None:
         """Test getting a specific revision of a wiki page."""
         import json
 
@@ -2034,18 +2152,14 @@ class TestWikiTools:
 
         with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
             tools = self._create_server(mock_api_client)
-            result = await tools["get_wiki_page_revision"].fn(
-                page_id=5, revision_number=1
-            )
+            result = await tools["get_wiki_page_revision"].fn(page_id=5, revision_number=1)
             parsed = json.loads(result)
             assert "error" not in parsed
             assert parsed["revision"]["revision_number"] == 1
             assert parsed["revision"]["content"] == "Rev 1 content"
 
     @pytest.mark.asyncio
-    async def test_get_wiki_page_revision_not_found(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_get_wiki_page_revision_not_found(self, mock_api_client: MagicMock) -> None:
         """Test getting a revision that doesn't exist."""
         import json
 
@@ -2057,8 +2171,6 @@ class TestWikiTools:
 
         with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
             tools = self._create_server(mock_api_client)
-            result = await tools["get_wiki_page_revision"].fn(
-                page_id=5, revision_number=99
-            )
+            result = await tools["get_wiki_page_revision"].fn(page_id=5, revision_number=99)
             parsed = json.loads(result)
             assert "error" in parsed
