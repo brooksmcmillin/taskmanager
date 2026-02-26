@@ -32,7 +32,7 @@ def _table_exists(connection: sa.Connection, table_name: str) -> bool:
         ),
         {"name": table_name},
     )
-    return result.scalar()
+    return bool(result.scalar())
 
 
 def upgrade() -> None:

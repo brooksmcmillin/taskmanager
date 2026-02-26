@@ -406,6 +406,24 @@ class TaskManagerClient:
             data["parent_id"] = parent_id
         return self._make_request("POST", "/todos", data)
 
+    def batch_create_todos(
+        self,
+        todos: list[dict[str, Any]],
+    ) -> ApiResponse:
+        """
+        Create multiple todos in a single request.
+
+        Args:
+            todos: List of todo dicts, each with at least a "title" key.
+                   Supports the same fields as create_todo (description,
+                   category, priority, due_date, deadline_type, tags,
+                   parent_id, etc.)
+
+        Returns:
+            ApiResponse with list of created todos
+        """
+        return self._make_request("POST", "/todos/batch", {"todos": todos})
+
     def get_todo(self, todo_id: int) -> ApiResponse:
         """
         Get a specific todo by ID.

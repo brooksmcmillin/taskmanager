@@ -1314,3 +1314,122 @@ async def test_deadline_type_in_response(authenticated_client: AsyncClient):
     list_response = await authenticated_client.get("/api/todos")
     for todo in list_response.json()["data"]:
         assert "deadline_type" in todo
+
+
+# --- Batch create tests ---
+
+
+@pytest.mark.asyncio
+async def test_batch_create_todos(authenticated_client: AsyncClient):
+    """Test batch creation of multiple todos."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Batch task 1", "priority": "high"},
+                {"title": "Batch task 2", "description": "Second task"},
+                {"title": "Batch task 3", "priority": "low", "tags": ["test"]},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 3
+    assert len(data["data"]) == 3
+    assert data["data"][0]["title"] == "Batch task 1"
+    assert data["data"][1]["title"] == "Batch task 2"
+    assert data["data"][2]["title"] == "Batch task 3"
+    # Each should have a unique ID
+    ids = [t["id"] for t in data["data"]]
+    assert len(set(ids)) == 3
+
+
+@pytest.mark.asyncio
+async def test_batch_create_empty_list(authenticated_client: AsyncClient):
+    """Test batch create rejects empty list."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={"todos": []},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_batch_create_unauthenticated(client: AsyncClient):
+    """Test batch create requires authentication."""
+    response = await client.post(
+        "/api/todos/batch",
+        json={"todos": [{"title": "Task"}]},
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_batch_create_with_subtasks(authenticated_client: AsyncClient):
+    """Test batch create can create subtasks."""
+    # Create a parent first
+    parent_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Parent task"},
+    )
+    parent_id = parent_response.json()["data"]["id"]
+
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Subtask 1", "parent_id": parent_id},
+                {"title": "Subtask 2", "parent_id": parent_id},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 2
+    for task in data["data"]:
+        assert task["parent_id"] == parent_id
+
+
+@pytest.mark.asyncio
+async def test_batch_create_atomic_rollback(authenticated_client: AsyncClient):
+    """Test that batch create rolls back all todos if any validation fails.
+
+    Items 1-2 are valid but item 3 references a nonexistent parent_id,
+    so the entire batch should fail and no todos should be persisted.
+    """
+    # Confirm no todos exist initially
+    list_response = await authenticated_client.get("/api/todos")
+    assert list_response.json()["meta"]["count"] == 0
+
+    # Attempt batch with invalid parent_id on the 3rd item
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Valid task 1"},
+                {"title": "Valid task 2"},
+                {"title": "Invalid task", "parent_id": 999999},
+            ]
+        },
+    )
+
+    assert response.status_code == 404
+
+    # Verify no todos were persisted (atomicity)
+    list_response = await authenticated_client.get("/api/todos")
+    assert list_response.json()["meta"]["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_batch_create_over_limit(authenticated_client: AsyncClient):
+    """Test batch create rejects more than 50 todos."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={"todos": [{"title": f"Task {i}"} for i in range(51)]},
+    )
+
+    assert response.status_code == 422

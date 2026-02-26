@@ -65,6 +65,7 @@ select = [
     "C4", # flake8-comprehensions
     "UP", # pyupgrade
     "SIM", # flake8-simplify
+    "DTZ", # flake8-datetimez (naive datetime)
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)

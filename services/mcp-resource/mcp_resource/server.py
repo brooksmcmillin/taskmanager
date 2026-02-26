@@ -29,7 +29,7 @@ def _past_due_date_warning(due_date: str | None) -> str | None:
         return None
     try:
         parsed = datetime.date.fromisoformat(due_date)
-        if parsed < datetime.date.today():
+        if parsed < datetime.datetime.now(tz=datetime.UTC).date():
             return f"Due date {due_date} is in the past"
     except ValueError:
         pass
@@ -263,7 +263,7 @@ def create_resource_server(
             - message: Human-readable status summary
         """
         logger.info("=== check_task_system_status called ===")
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(tz=datetime.UTC)
         checks: dict[str, dict[str, Any]] = {}
         errors: list[str] = []
 
@@ -476,7 +476,7 @@ def create_resource_server(
             return json.dumps(
                 {
                     "tasks": result_tasks,
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -573,7 +573,7 @@ def create_resource_server(
                 "title": task.get("title", title) if task is not None else title,
                 "status": "created",
                 "parent_id": f"task_{parent_id_int}" if parent_id_int else None,
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             warning = _past_due_date_warning(due_date)
             if warning:
@@ -581,6 +581,122 @@ def create_resource_server(
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Exception in create_task: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(screen_output=True)
+    async def create_tasks(
+        tasks: list[dict[str, Any]],
+    ) -> str:
+        """
+        Create multiple tasks in a single request (batch creation).
+
+        More efficient than calling create_task multiple times—sends one
+        API request instead of N sequential calls.
+
+        Args:
+            tasks: Array of task objects. Each object supports:
+                - title (required): Task title
+                - description (optional): Task details
+                - due_date (optional): Due date "YYYY-MM-DD"
+                - deadline_type (optional): "flexible", "preferred", "firm", or "hard"
+                - category (optional): Project/category name
+                - priority (optional): "low", "medium", "high", or "urgent"
+                - tags (optional): List of tags
+                - parent_id (optional): Parent task ID ("task_123" or "123")
+
+        Returns:
+            JSON object with created task IDs and count
+        """
+        try:
+            if not tasks:
+                return json.dumps({"error": "tasks array must not be empty"})
+            if len(tasks) > 50:
+                return json.dumps({"error": "Maximum 50 tasks per batch"})
+
+            # Validate and transform each task
+            todo_dicts: list[dict[str, Any]] = []
+            for i, task in enumerate(tasks):
+                if not isinstance(task, dict):
+                    return json.dumps({"error": f"Task at index {i} must be an object"})
+                title = task.get("title")
+                if not title:
+                    return json.dumps({"error": f"Task at index {i} is missing required 'title'"})
+
+                deadline_type = task.get("deadline_type", "preferred")
+                if deadline_type not in VALID_DEADLINE_TYPES:
+                    return json.dumps(
+                        {
+                            "error": f"Task at index {i}: invalid deadline_type "
+                            f"{deadline_type!r}. "
+                            f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
+                        }
+                    )
+
+                todo: dict[str, Any] = {"title": title}
+                if task.get("description"):
+                    todo["description"] = task["description"]
+                if task.get("category"):
+                    todo["category"] = task["category"]
+                if task.get("priority"):
+                    todo["priority"] = task["priority"]
+                if task.get("due_date"):
+                    todo["due_date"] = task["due_date"]
+                if deadline_type != "preferred":
+                    todo["deadline_type"] = deadline_type
+                if task.get("tags"):
+                    todo["tags"] = task["tags"]
+
+                parent_id = task.get("parent_id")
+                if parent_id:
+                    numeric_id = (
+                        parent_id.replace("task_", "")
+                        if parent_id.startswith("task_")
+                        else parent_id
+                    )
+                    try:
+                        todo["parent_id"] = int(numeric_id)
+                    except ValueError:
+                        return json.dumps(
+                            {
+                                "error": f"Task at index {i}: invalid parent_id "
+                                f"format: {parent_id}"
+                            }
+                        )
+
+                todo_dicts.append(todo)
+
+            api_client = get_api_client()
+            response = api_client.batch_create_todos(todo_dicts)
+
+            created_tasks, list_error = validate_list_response(response, "batch created tasks")
+            if list_error:
+                return json.dumps({"error": list_error})
+
+            results: list[dict[str, Any]] = []
+            warnings: list[str] = []
+            for task_data in created_tasks or []:
+                task_id = task_data.get("id")
+                results.append(
+                    {
+                        "id": f"task_{task_id}" if task_id else None,
+                        "title": task_data.get("title", ""),
+                    }
+                )
+                warning = _past_due_date_warning(task_data.get("due_date"))
+                if warning:
+                    warnings.append(f"task_{task_id}: {warning}")
+
+            result: dict[str, Any] = {
+                "created": results,
+                "count": len(results),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+            }
+            if warnings:
+                result["warnings"] = warnings
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Exception in create_tasks: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     @app.tool()
@@ -704,7 +820,7 @@ def create_resource_server(
                 "id": f"task_{todo_id}",
                 "updated_fields": updated_fields,
                 "status": "updated",
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             warning = _past_due_date_warning(due_date)
             if warning:
@@ -745,7 +861,7 @@ def create_resource_server(
             return json.dumps(
                 {
                     "categories": categories,
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -803,7 +919,7 @@ def create_resource_server(
                 "id": project_id,
                 "name": project.get("name", name) if project is not None else name,
                 "status": "created",
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             return json.dumps(result)
         except Exception as e:
@@ -909,7 +1025,7 @@ def create_resource_server(
                 {
                     "tasks": result_tasks,
                     "count": len(result_tasks),
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -958,7 +1074,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "attachments": attachments,
                     "count": len(attachments),
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1008,7 +1124,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "attachment_id": attachment_id,
                     "status": "deleted",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1054,7 +1170,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "comments": comments,
                     "count": len(comments),
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1102,7 +1218,7 @@ def create_resource_server(
                     "comment_id": comment_id,
                     "content": content,
                     "status": "created",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1149,7 +1265,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "comment_id": comment_id,
                     "status": "deleted",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1238,7 +1354,7 @@ def create_resource_server(
                     "created_at": task.get("created_at"),
                     "updated_at": task.get("updated_at"),
                 },
-                "current_time": datetime.datetime.now().isoformat(),
+                "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
             return json.dumps(result)
         except Exception as e:
@@ -1287,7 +1403,7 @@ def create_resource_server(
                 {
                     "id": task_id,
                     "status": "deleted",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1331,7 +1447,7 @@ def create_resource_server(
             start_date = None
             end_date = None
             if due_today:
-                today = datetime.datetime.now().strftime("%Y-%m-%d")
+                today = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d")
                 start_date = today
                 end_date = today
 
@@ -1416,7 +1532,7 @@ def create_resource_server(
                         "agent_actionable_only": agent_actionable_only,
                         "unclassified_only": unclassified_only,
                     },
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1542,7 +1658,7 @@ def create_resource_server(
                     "autonomy_tier": autonomy_tier,
                     "agent_actionable": agent_actionable,
                     "blocking_reason": blocking_reason,
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1584,7 +1700,9 @@ def create_resource_server(
                 if task_response.success and task_response.data:
                     existing_notes = task_response.data.get("agent_notes") or ""
                     if existing_notes:
-                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                        timestamp = datetime.datetime.now(tz=datetime.UTC).strftime(
+                            "%Y-%m-%d %H:%M"
+                        )
                         note = f"{existing_notes}\n\n---\n[{timestamp}]\n{note}"
 
             # Update task with note
@@ -1601,7 +1719,7 @@ def create_resource_server(
                 {
                     "id": f"task_{todo_id}",
                     "status": "note_added",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1674,7 +1792,7 @@ def create_resource_server(
                     "id": f"task_{todo_id}",
                     "agent_status": status,
                     "blocking_reason": blocking_reason if status == "blocked" else None,
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1723,7 +1841,7 @@ def create_resource_server(
                 {
                     "id": task_id,
                     "status": "completed",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1790,7 +1908,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "dependencies": result_deps,
                     "count": len(result_deps),
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1853,7 +1971,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "dependency_id": dependency_id,
                     "status": "created",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
@@ -1914,7 +2032,7 @@ def create_resource_server(
                     "task_id": task_id,
                     "dependency_id": dependency_id,
                     "status": "removed",
-                    "current_time": datetime.datetime.now().isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:

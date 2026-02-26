@@ -59,6 +59,12 @@ taskmanager_sdk = ["py.typed"]
 [tool.ruff]
 exclude = ["build"]
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "DTZ"]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*" = ["DTZ"]
+
 [tool.pyright]
 pythonVersion = "3.10"
 typeCheckingMode = "standard"

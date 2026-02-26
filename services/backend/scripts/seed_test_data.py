@@ -12,7 +12,7 @@ import argparse
 import asyncio
 import random
 import sys
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 # Add parent directory to path to import app modules
@@ -245,7 +245,7 @@ def generate_due_date() -> date | None:
 
     # Random date 0-14 days from today
     days_ahead = random.randint(0, 14)
-    return date.today() + timedelta(days=days_ahead)
+    return datetime.now(tz=UTC).date() + timedelta(days=days_ahead)
 
 
 async def create_tasks(
