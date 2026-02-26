@@ -60,19 +60,8 @@
 		}, 200);
 	}
 
-	function openUserDropdown() {
-		if (closeTimeout) {
-			clearTimeout(closeTimeout);
-			closeTimeout = null;
-		}
-		userDropdownOpen = true;
-	}
-
-	function scheduleCloseUserDropdown() {
-		closeTimeout = setTimeout(() => {
-			userDropdownOpen = false;
-			closeTimeout = null;
-		}, 200);
+	function toggleUserDropdown() {
+		userDropdownOpen = !userDropdownOpen;
 	}
 
 	function closeAllMenus() {
@@ -157,10 +146,21 @@
 		}
 	});
 
+	// Close user dropdown on outside click (since it's click-only, not hover)
+	function handleDocumentClick(event: MouseEvent) {
+		if (!userDropdownOpen) return;
+		const target = event.target as HTMLElement;
+		if (!target.closest('.user-dropdown')) {
+			userDropdownOpen = false;
+		}
+	}
+
 	onMount(() => {
 		window.addEventListener('resize', handleResize);
+		document.addEventListener('click', handleDocumentClick);
 		return () => {
 			window.removeEventListener('resize', handleResize);
+			document.removeEventListener('click', handleDocumentClick);
 			// Ensure scroll is restored on unmount
 			document.body.style.overflow = '';
 		};
@@ -304,14 +304,10 @@
 			<div class="flex items-center space-x-4">
 				{#if user}
 					<!-- Desktop User Dropdown -->
-					<div
-						class="nav-dropdown user-dropdown desktop-nav"
-						onmouseenter={openUserDropdown}
-						onmouseleave={scheduleCloseUserDropdown}
-					>
+					<div class="nav-dropdown user-dropdown desktop-nav">
 						<button
 							class="user-dropdown-trigger"
-							onclick={() => (userDropdownOpen = !userDropdownOpen)}
+							onclick={toggleUserDropdown}
 							aria-expanded={userDropdownOpen}
 							aria-haspopup="true"
 							aria-label="User menu"

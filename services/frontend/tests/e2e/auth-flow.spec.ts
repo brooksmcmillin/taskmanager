@@ -92,8 +92,8 @@ test.describe('Authentication Flow', () => {
 		// Wait for navigation to load
 		await page.waitForURL('/', { timeout: 10000 });
 
-		// Hover over user profile icon to open dropdown
-		await page.hover('.user-dropdown-trigger');
+		// Click user profile icon to open dropdown (click-only, no hover)
+		await page.click('.user-dropdown-trigger');
 
 		// Wait for logout button to appear in dropdown
 		await page.waitForSelector('[data-testid=logout-button]', { state: 'visible', timeout: 10000 });

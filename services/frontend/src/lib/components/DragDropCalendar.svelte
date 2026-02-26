@@ -13,6 +13,7 @@
 	export let filters: TodoFilters = {};
 
 	const DEFAULT_PROJECT_COLOR = '#6b7280';
+	const MAX_VISIBLE_TASKS = 3;
 	const dispatch = createEventDispatcher<{ editTodo: Todo }>();
 
 	// Start from the previous week's Monday to show past/current/next week
@@ -26,7 +27,8 @@
 	let draggedTodoId: number | null = null;
 	let originalDate: string | null = null;
 	let isDragging = false;
-	let isTouchDevice = false;
+	// Per-day expand state for overflow
+	let expandedDays: Record<string, boolean> = {};
 
 	interface CalendarSubtaskItem {
 		id: number;
@@ -182,19 +184,28 @@
 		currentWeekStart = newDate;
 	}
 
+	function goToToday() {
+		const thisWeekMonday = getStartOfWeek(new Date());
+		thisWeekMonday.setDate(thisWeekMonday.getDate() - 7);
+		currentWeekStart = thisWeekMonday;
+	}
+
 	function handleEditTodo(todo: Todo) {
 		dispatch('editTodo', todo);
 	}
 
 	function handleTaskClick(todo: Todo) {
-		if (isTouchDevice) {
+		// Always open task detail on single click (desktop and touch)
+		if (!isDragging) {
 			handleEditTodo(todo);
 		}
 	}
 
-	onMount(() => {
-		isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+	function toggleDayExpand(dateStr: string) {
+		expandedDays = { ...expandedDays, [dateStr]: !expandedDays[dateStr] };
+	}
 
+	onMount(() => {
 		// Subscribe to pendingTodos and rebuild the calendar whenever it changes
 		// But don't update during drag operations to avoid interfering with the drag
 		const unsubscribe = pendingTodos.subscribe((value) => {
@@ -215,6 +226,7 @@
 		<h2 class="text-xl font-semibold">Task Calendar</h2>
 		<div class="flex gap-4">
 			<button class="btn btn-secondary btn-sm" on:click={prevWeek}>← Previous</button>
+			<button class="btn btn-secondary btn-sm" on:click={goToToday}>Today</button>
 			<button class="btn btn-secondary btn-sm" on:click={nextWeek}>Next →</button>
 		</div>
 	</div>
@@ -231,6 +243,11 @@
 
 		<div id="calendar-grid">
 			{#each days as { date, dateStr, isToday: isTodayDay }}
+				{@const allTasks = todosByDate[dateStr] || []}
+				{@const isExpanded = expandedDays[dateStr] || false}
+				{@const hiddenCount = Math.max(0, allTasks.length - MAX_VISIBLE_TASKS)}
+				{@const pendingSubtasks = subtasksByDate[dateStr] || []}
+				{@const overflow = isExpanded ? 0 : hiddenCount + pendingSubtasks.length}
 				<div class="calendar-day" class:today={isTodayDay} data-date={dateStr}>
 					<div class="calendar-date">
 						{date.getMonth() + 1}/{date.getDate()}
@@ -246,18 +263,19 @@
 						on:consider={(e) => handleConsider(dateStr, e)}
 						on:finalize={(e) => handleFinalize(dateStr, e)}
 					>
-						{#each todosByDate[dateStr] || [] as todo (todo.id)}
+						{#each allTasks as todo, idx (todo.id)}
+							{@const isHidden = !isExpanded && idx >= MAX_VISIBLE_TASKS}
 							{@const subtasks = todo.subtasks || []}
 							{@const completedSubtaskCount = subtasks.filter(
 								(s) => s.status === 'completed'
 							).length}
 							<div
 								class="calendar-task {todo.priority}-priority"
+								class:calendar-task-hidden={isHidden}
 								style="background-color: {hexTo50Shade(
 									todo.project_color || DEFAULT_PROJECT_COLOR
 								)}; border-left: 4px solid {todo.project_color || DEFAULT_PROJECT_COLOR}"
 								on:click={() => handleTaskClick(todo)}
-								on:dblclick={() => handleEditTodo(todo)}
 								role="button"
 								tabindex="0"
 								on:keydown={(e) => {
@@ -277,34 +295,71 @@
 							</div>
 						{/each}
 					</div>
-					{#each subtasksByDate[dateStr] || [] as subtask (subtask.id)}
-						<div
-							class="calendar-task calendar-subtask-item {subtask.priority}-priority"
-							style="background-color: {hexTo50Shade(
-								subtask.parentColor || DEFAULT_PROJECT_COLOR
-							)}; border-left: 4px solid {subtask.parentColor || DEFAULT_PROJECT_COLOR}"
-							on:click={() => goto(`/task/${subtask.id}`)}
-							role="button"
-							tabindex="0"
-							on:keydown={(e) => {
-								if (e.key === 'Enter') goto(`/task/${subtask.id}`);
-							}}
-						>
+					{#if isExpanded}
+						{#each subtasksByDate[dateStr] || [] as subtask (subtask.id)}
 							<div
-								class="calendar-subtask-parent"
-								style="background-color: {subtask.parentColor ||
-									DEFAULT_PROJECT_COLOR}; color: {contrastText(
+								class="calendar-task calendar-subtask-item {subtask.priority}-priority"
+								style="background-color: {hexTo50Shade(
 									subtask.parentColor || DEFAULT_PROJECT_COLOR
-								)}"
+								)}; border-left: 4px solid {subtask.parentColor || DEFAULT_PROJECT_COLOR}"
+								on:click={() => goto(`/task/${subtask.id}`)}
+								role="button"
+								tabindex="0"
+								on:keydown={(e) => {
+									if (e.key === 'Enter') goto(`/task/${subtask.id}`);
+								}}
 							>
-								#{subtask.parentId}
-								{subtask.parentTitle}
+								<div
+									class="calendar-subtask-parent"
+									style="background-color: {subtask.parentColor ||
+										DEFAULT_PROJECT_COLOR}; color: {contrastText(
+										subtask.parentColor || DEFAULT_PROJECT_COLOR
+									)}"
+								>
+									#{subtask.parentId}
+									{subtask.parentTitle}
+								</div>
+								<div class="task-title">{subtask.title}</div>
 							</div>
-							<div class="task-title">{subtask.title}</div>
-						</div>
-					{/each}
+						{/each}
+					{/if}
+					{#if overflow > 0}
+						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
+							+{overflow} more
+						</button>
+					{:else if isExpanded && (allTasks.length > MAX_VISIBLE_TASKS || (subtasksByDate[dateStr] || []).length > 0)}
+						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
+							Show less
+						</button>
+					{/if}
 				</div>
 			{/each}
 		</div>
 	</div>
 </div>
+
+<style>
+	.calendar-task-hidden {
+		display: none;
+	}
+
+	.calendar-overflow {
+		display: block;
+		width: 100%;
+		padding: 2px 4px;
+		margin-top: 2px;
+		border: none;
+		background: none;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		color: var(--primary-600, #2563eb);
+		cursor: pointer;
+		text-align: left;
+		border-radius: var(--radius-sm, 0.25rem);
+		transition: background 0.1s ease;
+	}
+
+	.calendar-overflow:hover {
+		background: var(--primary-50, #eff6ff);
+	}
+</style>

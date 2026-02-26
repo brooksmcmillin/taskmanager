@@ -211,8 +211,11 @@ test.describe('Deadline Type Feature', () => {
 			// Change deadline_type to flexible
 			await page.selectOption('[name=deadline_type]', 'flexible');
 
-			// Submit
+			// Submit and wait for form to close (returns to view mode)
 			await page.click('button[type=submit]');
+			await expect(page.locator('button:has-text("Edit Task")')).toBeVisible({
+				timeout: 10000
+			});
 			await page.waitForLoadState('networkidle');
 
 			// Verify via API that deadline_type was updated
