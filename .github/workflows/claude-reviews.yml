@@ -2,7 +2,7 @@ name: Claude Reviews
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -53,6 +53,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: "dependabot[bot]"
           prompt: |
             You are a code reviewer. Review this pull request for code quality, correctness, and maintainability.
 
@@ -149,6 +150,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: "dependabot[bot]"
           prompt: |
             You are a security reviewer. Review this pull request for security vulnerabilities and concerns.
 
@@ -203,3 +205,53 @@ jobs:
             Use `gh pr comment` with your Bash tool to leave your security review as a comment on the PR.
 
           claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh api:*)"'
+
+  review-gate:
+    name: Review Gate
+    needs: [code-review, security-review]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - name: Evaluate reviews and gate merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          REPO=${{ github.repository }}
+
+          echo "=== Fetching CI reviewer comments ==="
+
+          CODE_REVIEW=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '[.[] | select(.body | contains("<!-- claude-code-review -->"))] | last | .body // empty')
+
+          SECURITY_REVIEW=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '[.[] | select(.body | contains("<!-- claude-security-review -->"))] | last | .body // empty')
+
+          HAS_ISSUES=false
+
+          # Check code review for unresolved issues
+          if echo "$CODE_REVIEW" | grep -qE '### (New Issues|Still Open)'; then
+            echo "::error::Code review has unresolved issues"
+            HAS_ISSUES=true
+          else
+            echo "Code review: clean"
+          fi
+
+          # Check security review for unresolved issues
+          if echo "$SECURITY_REVIEW" | grep -qE '### (New Issues|Still Open)'; then
+            echo "::error::Security review has unresolved issues"
+            HAS_ISSUES=true
+          else
+            echo "Security review: clean"
+          fi
+
+          if [ "$HAS_ISSUES" = true ]; then
+            echo "::error::Review Gate FAILED — address the issues flagged by CI reviewers above."
+            exit 1
+          fi
+
+          echo "Review Gate passed — all CI reviews clean."
