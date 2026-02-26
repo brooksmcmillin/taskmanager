@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
-	import { getDeadlineTypeLabel, getDeadlineTypeColor } from '$lib/utils/deadline';
+	import {
+		getDeadlineTypeLabel,
+		getDeadlineTypeColor,
+		getDeadlineTypeBgColor
+	} from '$lib/utils/deadline';
 	import { toasts } from '$lib/stores/ui';
 	import type { Todo, Article, ApiResponse } from '$lib/types';
 
@@ -229,12 +233,13 @@
 											{/if}
 											{#if task.deadline_type && task.deadline_type !== 'preferred'}
 												<span
-													class="deadline-badge"
-													style="border-color: {getDeadlineTypeColor(
+													class="deadline-type-pill"
+													style="color: {getDeadlineTypeColor(
 														task.deadline_type
-													)}; color: {getDeadlineTypeColor(task.deadline_type)}"
-													>{getDeadlineTypeLabel(task.deadline_type)}</span
+													)}; background-color: {getDeadlineTypeBgColor(task.deadline_type)}"
 												>
+													{getDeadlineTypeLabel(task.deadline_type)}
+												</span>
 											{/if}
 											{#each task.tags as tag}
 												<span class="task-tag">{tag}</span>
@@ -268,12 +273,13 @@
 										{/if}
 										{#if task.deadline_type && task.deadline_type !== 'preferred'}
 											<span
-												class="deadline-badge"
-												style="border-color: {getDeadlineTypeColor(
+												class="deadline-type-pill"
+												style="color: {getDeadlineTypeColor(
 													task.deadline_type
-												)}; color: {getDeadlineTypeColor(task.deadline_type)}"
-												>{getDeadlineTypeLabel(task.deadline_type)}</span
+												)}; background-color: {getDeadlineTypeBgColor(task.deadline_type)}"
 											>
+												{getDeadlineTypeLabel(task.deadline_type)}
+											</span>
 										{/if}
 										{#each task.tags as tag}
 											<span class="task-tag">{tag}</span>
@@ -599,13 +605,13 @@
 		font-size: 0.6875rem;
 	}
 
-	.deadline-badge {
-		padding: 0 0.375rem;
-		border: 1px solid;
-		border-radius: var(--radius);
-		font-size: 0.6875rem;
+	.deadline-type-pill {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.0625rem 0.375rem;
+		font-size: 0.625rem;
 		font-weight: 600;
-		line-height: 1.4;
+		border-radius: 9999px;
 	}
 
 	.task-tag {

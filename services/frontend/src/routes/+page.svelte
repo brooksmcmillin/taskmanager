@@ -15,6 +15,11 @@
 	import { computeDueDateFilters } from '$lib/utils/dueDateFilter';
 	import type { DueDateOption, DueDateFilterValue } from '$lib/utils/dueDateFilter';
 	import { getPriorityColor } from '$lib/utils/priority';
+	import {
+		getDeadlineTypeColor,
+		getDeadlineTypeBgColor,
+		getDeadlineTypeLabel
+	} from '$lib/utils/deadline';
 	import { contrastText } from '$lib/utils/colors';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
@@ -349,6 +354,16 @@
 												{#if todo.due_date}
 													• Due: {formatDateDisplay(todo.due_date)}
 												{/if}
+												{#if todo.deadline_type && todo.deadline_type !== 'preferred'}
+													<span
+														class="deadline-type-pill"
+														style="color: {getDeadlineTypeColor(
+															todo.deadline_type
+														)}; background-color: {getDeadlineTypeBgColor(todo.deadline_type)}"
+													>
+														{getDeadlineTypeLabel(todo.deadline_type)}
+													</span>
+												{/if}
 											</div>
 										</div>
 										<div class="flex gap-2 ml-4">
@@ -507,6 +522,16 @@
 
 	.summary-week .summary-count {
 		color: var(--warning-700, #b45309);
+	}
+
+	.deadline-type-pill {
+		display: inline-block;
+		padding: 0.0625rem 0.375rem;
+		font-size: 0.625rem;
+		font-weight: 600;
+		border-radius: 9999px;
+		margin-left: 0.25rem;
+		vertical-align: middle;
 	}
 
 	/* Subtask badge on parent task row */

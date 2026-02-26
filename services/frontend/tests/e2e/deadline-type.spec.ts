@@ -226,6 +226,124 @@ test.describe('Deadline Type Feature', () => {
 		});
 	});
 
+	test.describe('Display in views', () => {
+		test('should show deadline type badge in task detail page', async ({ page }) => {
+			await createTodoViaAPI(page, 'Detail Badge Task', {
+				deadlineType: 'hard',
+				dueDate: getFutureDate(5)
+			});
+
+			const listResponse = await page.request.get('/api/todos');
+			const listData = await listResponse.json();
+			const todos = listData.data || listData;
+			const todo = todos.find((t: { title: string }) => t.title === 'Detail Badge Task');
+
+			await page.goto(`/task/${todo.id}`);
+			await page.waitForLoadState('networkidle');
+
+			const badge = page.locator('.deadline-type-badge');
+			await expect(badge).toBeVisible();
+			await expect(badge).toHaveText('Hard');
+		});
+
+		test('should show pill for non-preferred deadline type in list view', async ({ page }) => {
+			await createTodoViaAPI(page, 'Firm List Task', {
+				deadlineType: 'firm',
+				dueDate: getFutureDate(5)
+			});
+
+			await page.goto('/');
+			await page.waitForLoadState('networkidle');
+
+			// Switch to list view
+			await page.click('button:has-text("List View")');
+
+			const taskRow = page.locator('.todo-with-subtasks', {
+				has: page.locator('text=Firm List Task')
+			});
+			await expect(taskRow.locator('.deadline-type-pill')).toBeVisible();
+			await expect(taskRow.locator('.deadline-type-pill')).toHaveText('Firm');
+		});
+
+		test('should NOT show pill for preferred (default) deadline type in list view', async ({
+			page
+		}) => {
+			await createTodoViaAPI(page, 'Preferred List Task', {
+				deadlineType: 'preferred',
+				dueDate: getFutureDate(5)
+			});
+
+			await page.goto('/');
+			await page.waitForLoadState('networkidle');
+
+			// Switch to list view
+			await page.click('button:has-text("List View")');
+
+			// Find the task row, verify no pill inside it
+			const taskRow = page.locator('.todo-with-subtasks', {
+				has: page.locator('text=Preferred List Task')
+			});
+			await expect(taskRow).toBeVisible();
+			await expect(taskRow.locator('.deadline-type-pill')).toHaveCount(0);
+		});
+
+		test('should show deadline type label on calendar for non-preferred tasks', async ({
+			page
+		}) => {
+			await createTodoViaAPI(page, 'Hard Calendar Task', {
+				deadlineType: 'hard',
+				dueDate: getFutureDate(3)
+			});
+
+			await page.goto('/');
+			await page.waitForLoadState('networkidle');
+
+			// Calendar is the default view — scope to the specific task card
+			const taskCard = page.locator('.calendar-task', {
+				has: page.locator('text=Hard Calendar Task')
+			});
+			await expect(taskCard.locator('.calendar-deadline-type')).toBeVisible();
+			await expect(taskCard.locator('.calendar-deadline-type')).toHaveText('Hard');
+		});
+
+		test('should NOT show deadline type label on calendar for preferred tasks', async ({
+			page
+		}) => {
+			await createTodoViaAPI(page, 'Preferred Calendar Task', {
+				deadlineType: 'preferred',
+				dueDate: getFutureDate(3)
+			});
+
+			await page.goto('/');
+			await page.waitForLoadState('networkidle');
+
+			// Find the calendar task card, verify no deadline label inside it
+			const taskCard = page.locator('.calendar-task', {
+				has: page.locator('text=Preferred Calendar Task')
+			});
+			await expect(taskCard).toBeVisible();
+			await expect(taskCard.locator('.calendar-deadline-type')).toHaveCount(0);
+		});
+
+		test('should show pill for flexible deadline type in home dashboard', async ({ page }) => {
+			const d = new Date();
+			const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+			await createTodoViaAPI(page, 'Flexible Home Task', {
+				deadlineType: 'flexible',
+				dueDate: today
+			});
+
+			await page.goto('/home');
+			await page.waitForLoadState('networkidle');
+
+			const taskItem = page.locator('.task-item', {
+				has: page.locator('text=Flexible Home Task')
+			});
+			await expect(taskItem.locator('.deadline-type-pill')).toBeVisible();
+			await expect(taskItem.locator('.deadline-type-pill')).toHaveText('Flexible');
+		});
+	});
+
 	test.describe('API deadline type', () => {
 		test('should create todo with each valid deadline_type via API', async ({ page }) => {
 			const deadlineTypes = ['flexible', 'preferred', 'firm', 'hard'];

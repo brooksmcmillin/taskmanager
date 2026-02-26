@@ -1272,11 +1272,19 @@ h6 {
 	}
 }
 
-// Calendar subtask count badge (inside parent task cards)
-.calendar-subtask-indicator {
+// Calendar task meta row (deadline type + subtask count)
+.calendar-task-meta {
 	display: flex;
 	align-items: center;
+	gap: 4px;
 	margin-top: 2px;
+}
+
+.calendar-deadline-type {
+	font-size: 0.5625rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 }
 
 .calendar-subtask-count {

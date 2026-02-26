@@ -5,6 +5,7 @@
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { todos, pendingTodos } from '$lib/stores/todos';
 	import { hexTo50Shade, contrastText } from '$lib/utils/colors';
+	import { getDeadlineTypeColor, getDeadlineTypeLabel } from '$lib/utils/deadline';
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
 	import { goto } from '$app/navigation';
@@ -285,11 +286,22 @@
 								}}
 							>
 								<div class="task-title">{todo.title}</div>
-								{#if subtasks.length > 0}
-									<div class="calendar-subtask-indicator">
-										<span class="calendar-subtask-count"
-											>{completedSubtaskCount}/{subtasks.length}</span
-										>
+								{#if (todo.deadline_type && todo.deadline_type !== 'preferred') || subtasks.length > 0}
+									<div class="calendar-task-meta">
+										{#if todo.deadline_type && todo.deadline_type !== 'preferred'}
+											<span
+												class="calendar-deadline-type"
+												style="color: {getDeadlineTypeColor(todo.deadline_type)}"
+												title="{getDeadlineTypeLabel(todo.deadline_type)} deadline"
+											>
+												{getDeadlineTypeLabel(todo.deadline_type)}
+											</span>
+										{/if}
+										{#if subtasks.length > 0}
+											<span class="calendar-subtask-count"
+												>{completedSubtaskCount}/{subtasks.length}</span
+											>
+										{/if}
 									</div>
 								{/if}
 							</div>

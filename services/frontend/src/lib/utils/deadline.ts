@@ -2,26 +2,30 @@ import type { DeadlineType } from '$lib/types';
 
 export const DEADLINE_TYPE_CONFIG: Record<
 	DeadlineType,
-	{ label: string; color: string; description: string }
+	{ label: string; color: string; bgColor: string; description: string }
 > = {
 	flexible: {
 		label: 'Flexible',
 		color: '#6b7280',
+		bgColor: '#f1f5f9',
 		description: 'Reschedule freely'
 	},
 	preferred: {
 		label: 'Preferred',
 		color: '#3b82f6',
+		bgColor: '#eff6ff',
 		description: 'Soft target date'
 	},
 	firm: {
 		label: 'Firm',
 		color: '#f97316',
+		bgColor: '#fff7ed',
 		description: 'Avoid moving'
 	},
 	hard: {
 		label: 'Hard',
 		color: '#ef4444',
+		bgColor: '#fef2f2',
 		description: 'Never reschedule'
 	}
 } as const;
@@ -32,6 +36,10 @@ export function getDeadlineTypeLabel(type: string): string {
 
 export function getDeadlineTypeColor(type: string): string {
 	return DEADLINE_TYPE_CONFIG[type as DeadlineType]?.color || '#6b7280';
+}
+
+export function getDeadlineTypeBgColor(type: string): string {
+	return DEADLINE_TYPE_CONFIG[type as DeadlineType]?.bgColor || '#f1f5f9';
 }
 
 export function getDeadlineTypeDescription(type: string): string {
