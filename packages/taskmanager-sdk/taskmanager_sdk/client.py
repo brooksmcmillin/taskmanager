@@ -641,6 +641,148 @@ class TaskManagerClient:
             "DELETE", f"/todos/{todo_id}/attachments/{attachment_id}"
         )
 
+    # Wiki methods
+    def list_wiki_pages(self, q: str | None = None) -> ApiResponse:
+        """
+        List wiki pages for the current user.
+
+        Args:
+            q: Optional search query to filter pages by title or content
+
+        Returns:
+            ApiResponse with list of wiki page summaries
+        """
+        params: dict[str, str] = {}
+        if q is not None:
+            params["q"] = q
+        return self._make_request("GET", "/wiki", params=params or None)
+
+    def create_wiki_page(
+        self,
+        title: str,
+        content: str = "",
+        slug: str | None = None,
+    ) -> ApiResponse:
+        """
+        Create a new wiki page.
+
+        Args:
+            title: Page title (required, 1-500 chars)
+            content: Page content in markdown (default: "")
+            slug: Optional URL slug (auto-generated from title if not provided)
+
+        Returns:
+            ApiResponse with created wiki page data
+        """
+        data: dict[str, Any] = {"title": title, "content": content}
+        if slug is not None:
+            data["slug"] = slug
+        return self._make_request("POST", "/wiki", data)
+
+    def get_wiki_page(self, slug_or_id: str | int) -> ApiResponse:
+        """
+        Get a wiki page by slug or numeric ID.
+
+        Args:
+            slug_or_id: Page slug string or numeric ID
+
+        Returns:
+            ApiResponse with wiki page data including content
+        """
+        return self._make_request("GET", f"/wiki/{slug_or_id}")
+
+    def update_wiki_page(
+        self,
+        page_id: int,
+        title: str | None = None,
+        content: str | None = None,
+        slug: str | None = None,
+    ) -> ApiResponse:
+        """
+        Update a wiki page.
+
+        Args:
+            page_id: Wiki page ID
+            title: New title (optional)
+            content: New content (optional)
+            slug: New slug (optional)
+
+        Returns:
+            ApiResponse with updated wiki page data
+        """
+        data: dict[str, Any] = {}
+        if title is not None:
+            data["title"] = title
+        if content is not None:
+            data["content"] = content
+        if slug is not None:
+            data["slug"] = slug
+        return self._make_request("PUT", f"/wiki/{page_id}", data)
+
+    def delete_wiki_page(self, page_id: int) -> ApiResponse:
+        """
+        Delete a wiki page.
+
+        Args:
+            page_id: Wiki page ID to delete
+
+        Returns:
+            ApiResponse with deletion result
+        """
+        return self._make_request("DELETE", f"/wiki/{page_id}")
+
+    def link_wiki_page_to_task(self, page_id: int, todo_id: int) -> ApiResponse:
+        """
+        Link a wiki page to a task.
+
+        Args:
+            page_id: Wiki page ID
+            todo_id: Task ID to link
+
+        Returns:
+            ApiResponse with linked task data
+        """
+        return self._make_request(
+            "POST", f"/wiki/{page_id}/link-task", {"todo_id": todo_id}
+        )
+
+    def unlink_wiki_page_from_task(self, page_id: int, todo_id: int) -> ApiResponse:
+        """
+        Unlink a wiki page from a task.
+
+        Args:
+            page_id: Wiki page ID
+            todo_id: Task ID to unlink
+
+        Returns:
+            ApiResponse with deletion result
+        """
+        return self._make_request("DELETE", f"/wiki/{page_id}/link-task/{todo_id}")
+
+    def get_wiki_page_linked_tasks(self, page_id: int) -> ApiResponse:
+        """
+        Get tasks linked to a wiki page.
+
+        Args:
+            page_id: Wiki page ID
+
+        Returns:
+            ApiResponse with list of linked tasks
+        """
+        return self._make_request("GET", f"/wiki/{page_id}/linked-tasks")
+
+    def get_task_wiki_pages(self, todo_id: int) -> ApiResponse:
+        """
+        Get wiki pages linked to a task.
+
+        Args:
+            todo_id: Task ID
+
+        Returns:
+            ApiResponse with list of wiki page summaries
+        """
+        return self._make_request("GET", f"/todos/{todo_id}/wiki-pages")
+
     # Dependency methods
     def get_dependencies(self, todo_id: int) -> ApiResponse:
         """

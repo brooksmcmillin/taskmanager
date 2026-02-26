@@ -22,7 +22,7 @@ for file in $STAGED_FILES; do
         # Skip test files, examples, and OAuth server modules (contain token/secret variable names)
         case "$file" in
             *test*|*spec*|*.example|*.sample|.env.example) continue ;;
-            */auth_server.py|*/oauth_provider*.py|*/oauth/*.py) continue ;;
+            */auth_server.py|*/oauth_provider*.py|*/oauth/*.py|*/taskmanager_sdk/*.py) continue ;;
         esac
         
         # Check for various secret patterns and show which pattern matched

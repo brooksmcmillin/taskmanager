@@ -1,6 +1,7 @@
 """Unit tests for MCP server helper functions and tools."""
 
 import datetime
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -1571,3 +1572,341 @@ class TestCreateTasksBatch:
             call_args = mock_api_client.batch_create_todos.call_args
             todos = call_args[0][0] if call_args[0] else call_args[1]["todos"]
             assert todos[0]["parent_id"] == 42
+
+
+class TestWikiTools:
+    """Tests for wiki MCP tools."""
+
+    @pytest.fixture
+    def mock_api_client(self) -> MagicMock:
+        """Create a mock API client with wiki methods."""
+        client = MagicMock()
+        return client
+
+    def _create_server(self, mock_client: MagicMock) -> Any:
+        """Helper to create a patched MCP server and return tools dict."""
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            return server._tool_manager._tools
+
+    @pytest.mark.asyncio
+    async def test_list_wiki_pages_success(self, mock_api_client: MagicMock) -> None:
+        """Test listing wiki pages returns page summaries."""
+        import json
+
+        mock_api_client.list_wiki_pages.return_value = ApiResponse(
+            success=True,
+            data=[
+                {
+                    "id": 1,
+                    "title": "Page One",
+                    "slug": "page-one",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "updated_at": None,
+                },
+                {
+                    "id": 2,
+                    "title": "Page Two",
+                    "slug": "page-two",
+                    "created_at": "2026-01-02T00:00:00Z",
+                    "updated_at": None,
+                },
+            ],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_wiki_pages"].fn()
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 2
+            assert len(parsed["pages"]) == 2
+            assert parsed["pages"][0]["title"] == "Page One"
+
+    @pytest.mark.asyncio
+    async def test_list_wiki_pages_with_search(self, mock_api_client: MagicMock) -> None:
+        """Test listing wiki pages with search query."""
+        import json
+
+        mock_api_client.list_wiki_pages.return_value = ApiResponse(
+            success=True,
+            data=[
+                {
+                    "id": 1,
+                    "title": "Meeting Notes",
+                    "slug": "meeting-notes",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "updated_at": None,
+                }
+            ],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_wiki_pages"].fn(q="meeting")
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 1
+            mock_api_client.list_wiki_pages.assert_called_with(q="meeting")
+
+    @pytest.mark.asyncio
+    async def test_create_wiki_page_success(self, mock_api_client: MagicMock) -> None:
+        """Test creating a wiki page."""
+        import json
+
+        mock_api_client.create_wiki_page.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 5,
+                "title": "New Page",
+                "slug": "new-page",
+                "content": "# Hello",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": None,
+            },
+            status_code=201,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["create_wiki_page"].fn(title="New Page", content="# Hello")
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "created"
+            assert parsed["page"]["id"] == 5
+            assert parsed["page"]["slug"] == "new-page"
+
+    @pytest.mark.asyncio
+    async def test_get_wiki_page_by_slug(self, mock_api_client: MagicMock) -> None:
+        """Test getting a wiki page by slug."""
+        import json
+
+        mock_api_client.get_wiki_page.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 3,
+                "title": "My Page",
+                "slug": "my-page",
+                "content": "Content here",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": None,
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_wiki_page"].fn(slug_or_id="my-page")
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["page"]["id"] == 3
+            assert parsed["page"]["content"] == "Content here"
+
+    @pytest.mark.asyncio
+    async def test_get_wiki_page_not_found(self, mock_api_client: MagicMock) -> None:
+        """Test getting a wiki page that doesn't exist."""
+        import json
+
+        mock_api_client.get_wiki_page.return_value = ApiResponse(
+            success=False,
+            error="Wiki page not found",
+            status_code=404,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_wiki_page"].fn(slug_or_id="nonexistent")
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "not found" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_update_wiki_page_success(self, mock_api_client: MagicMock) -> None:
+        """Test updating a wiki page."""
+        import json
+
+        mock_api_client.update_wiki_page.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 3,
+                "title": "Updated Title",
+                "slug": "updated-title",
+                "content": "New content",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["update_wiki_page"].fn(
+                page_id=3, title="Updated Title", content="New content"
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "updated"
+            assert parsed["page"]["title"] == "Updated Title"
+
+    @pytest.mark.asyncio
+    async def test_delete_wiki_page_success(self, mock_api_client: MagicMock) -> None:
+        """Test deleting a wiki page."""
+        import json
+
+        mock_api_client.delete_wiki_page.return_value = ApiResponse(
+            success=True,
+            data={"deleted": True, "id": 3},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["delete_wiki_page"].fn(page_id=3)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "deleted"
+            assert parsed["page_id"] == 3
+
+    @pytest.mark.asyncio
+    async def test_link_wiki_page_to_task_success(self, mock_api_client: MagicMock) -> None:
+        """Test linking a wiki page to a task."""
+        import json
+
+        mock_api_client.link_wiki_page_to_task.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 10,
+                "title": "My Task",
+                "status": "pending",
+                "priority": "medium",
+                "due_date": None,
+            },
+            status_code=201,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["link_wiki_page_to_task"].fn(page_id=5, task_id="task_10")
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "linked"
+            assert parsed["page_id"] == 5
+            assert parsed["task_id"] == "task_10"
+            mock_api_client.link_wiki_page_to_task.assert_called_with(5, 10)
+
+    @pytest.mark.asyncio
+    async def test_link_wiki_page_invalid_task_id(self, mock_api_client: MagicMock) -> None:
+        """Test linking with invalid task ID format."""
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["link_wiki_page_to_task"].fn(page_id=5, task_id="invalid")
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "Invalid task_id" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_unlink_wiki_page_from_task_success(self, mock_api_client: MagicMock) -> None:
+        """Test unlinking a wiki page from a task."""
+        import json
+
+        mock_api_client.unlink_wiki_page_from_task.return_value = ApiResponse(
+            success=True,
+            data={"deleted": True, "page_id": 5, "todo_id": 10},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["unlink_wiki_page_from_task"].fn(page_id=5, task_id="10")
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "unlinked"
+            mock_api_client.unlink_wiki_page_from_task.assert_called_with(5, 10)
+
+    @pytest.mark.asyncio
+    async def test_get_wiki_page_linked_tasks(self, mock_api_client: MagicMock) -> None:
+        """Test getting tasks linked to a wiki page."""
+        import json
+
+        mock_api_client.get_wiki_page_linked_tasks.return_value = ApiResponse(
+            success=True,
+            data=[
+                {
+                    "id": 1,
+                    "title": "Task A",
+                    "status": "pending",
+                    "priority": "high",
+                    "due_date": "2026-03-01",
+                },
+                {
+                    "id": 2,
+                    "title": "Task B",
+                    "status": "completed",
+                    "priority": "low",
+                    "due_date": None,
+                },
+            ],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_wiki_page_linked_tasks"].fn(page_id=5)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 2
+            assert parsed["tasks"][0]["id"] == "task_1"
+            assert parsed["tasks"][1]["id"] == "task_2"
+
+    @pytest.mark.asyncio
+    async def test_get_task_wiki_pages(self, mock_api_client: MagicMock) -> None:
+        """Test getting wiki pages linked to a task."""
+        import json
+
+        mock_api_client.get_task_wiki_pages.return_value = ApiResponse(
+            success=True,
+            data=[
+                {
+                    "id": 1,
+                    "title": "Design Doc",
+                    "slug": "design-doc",
+                    "created_at": "2026-01-01T00:00:00Z",
+                    "updated_at": None,
+                },
+            ],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_task_wiki_pages"].fn(task_id="task_42")
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 1
+            assert parsed["pages"][0]["slug"] == "design-doc"
+            assert parsed["task_id"] == "task_42"
+            mock_api_client.get_task_wiki_pages.assert_called_with(42)
+
+    @pytest.mark.asyncio
+    async def test_get_task_wiki_pages_invalid_id(self, mock_api_client: MagicMock) -> None:
+        """Test getting wiki pages with invalid task ID."""
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_task_wiki_pages"].fn(task_id="abc")
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "Invalid task_id" in parsed["error"]

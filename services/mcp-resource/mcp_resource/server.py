@@ -658,10 +658,7 @@ def create_resource_server(
                         todo["parent_id"] = int(numeric_id)
                     except ValueError:
                         return json.dumps(
-                            {
-                                "error": f"Task at index {i}: invalid parent_id "
-                                f"format: {parent_id}"
-                            }
+                            {"error": f"Task at index {i}: invalid parent_id format: {parent_id}"}
                         )
 
                 todo_dicts.append(todo)
@@ -2037,6 +2034,410 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in remove_dependency: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    # -----------------------------------------------------------------------
+    # Wiki tools
+    # -----------------------------------------------------------------------
+
+    @app.tool()
+    @guard_tool(input_params=["q"], screen_output=True)
+    async def list_wiki_pages(q: str | None = None) -> str:
+        """
+        List wiki pages, optionally filtered by a search query.
+
+        Args:
+            q: Optional search query to filter pages by title or content
+
+        Returns:
+            JSON object with "pages" array containing wiki page summaries
+            with fields: id, title, slug, created_at, updated_at
+        """
+        logger.info(f"=== list_wiki_pages called: q={q} ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.list_wiki_pages(q=q)
+            logger.info(
+                f"list_wiki_pages response: success={response.success}, status={response.status_code}"
+            )
+
+            pages, pages_error = validate_list_response(response, "wiki pages", key="data")
+            if pages_error:
+                logger.error(f"Failed to list wiki pages: {pages_error}")
+                return json.dumps({"error": pages_error})
+
+            logger.info(f"Returning {len(pages)} wiki pages")
+            return json.dumps(
+                {
+                    "pages": pages,
+                    "count": len(pages),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in list_wiki_pages: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["title", "content"], screen_output=True)
+    async def create_wiki_page(
+        title: str,
+        content: str = "",
+        slug: str | None = None,
+    ) -> str:
+        """
+        Create a new wiki page.
+
+        Args:
+            title: Page title (required, 1-500 characters)
+            content: Page content in markdown format (optional, default: "")
+            slug: URL-friendly slug (optional, auto-generated from title if not provided).
+                  Must be lowercase letters, numbers, and hyphens only.
+
+        Returns:
+            JSON object with created page data including id, title, slug, content,
+            created_at, and updated_at
+        """
+        logger.info(f"=== create_wiki_page called: title='{title}', slug={slug} ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.create_wiki_page(title=title, content=content, slug=slug)
+            logger.info(
+                f"create_wiki_page response: success={response.success}, status={response.status_code}"
+            )
+
+            page, page_error = validate_dict_response(response, "created wiki page")
+            if page_error:
+                logger.error(f"Failed to create wiki page: {page_error}")
+                return json.dumps({"error": page_error})
+
+            logger.info(f"Created wiki page: {page}")
+            return json.dumps(
+                {
+                    "page": page,
+                    "status": "created",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in create_wiki_page: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_wiki_page(slug_or_id: str) -> str:
+        """
+        Get a wiki page by its slug or numeric ID.
+
+        Args:
+            slug_or_id: Page slug (e.g., "meeting-notes") or numeric ID (e.g., "42")
+
+        Returns:
+            JSON object with full page data including id, title, slug, content,
+            created_at, and updated_at
+        """
+        logger.info(f"=== get_wiki_page called: slug_or_id='{slug_or_id}' ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.get_wiki_page(slug_or_id)
+            logger.info(
+                f"get_wiki_page response: success={response.success}, status={response.status_code}"
+            )
+
+            page, page_error = validate_dict_response(response, "wiki page")
+            if page_error:
+                logger.error(f"Failed to get wiki page: {page_error}")
+                return json.dumps({"error": page_error})
+
+            logger.info(f"Retrieved wiki page: id={page.get('id') if page else None}")
+            return json.dumps(
+                {
+                    "page": page,
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in get_wiki_page: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["title", "content"], screen_output=True)
+    async def update_wiki_page(
+        page_id: int,
+        title: str | None = None,
+        content: str | None = None,
+        slug: str | None = None,
+    ) -> str:
+        """
+        Update an existing wiki page.
+
+        Args:
+            page_id: Wiki page ID to update
+            title: New page title (optional, 1-500 characters)
+            content: New page content in markdown format (optional)
+            slug: New URL-friendly slug (optional). Must be lowercase letters,
+                  numbers, and hyphens only.
+
+        Returns:
+            JSON object with updated page data including id, title, slug, content,
+            created_at, and updated_at
+        """
+        logger.info(
+            f"=== update_wiki_page called: page_id={page_id}, title={title}, slug={slug} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.update_wiki_page(
+                page_id=page_id, title=title, content=content, slug=slug
+            )
+            logger.info(
+                f"update_wiki_page response: success={response.success}, status={response.status_code}"
+            )
+
+            page, page_error = validate_dict_response(response, "updated wiki page")
+            if page_error:
+                logger.error(f"Failed to update wiki page: {page_error}")
+                return json.dumps({"error": page_error})
+
+            logger.info(f"Updated wiki page: {page}")
+            return json.dumps(
+                {
+                    "page": page,
+                    "status": "updated",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in update_wiki_page: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def delete_wiki_page(page_id: int) -> str:
+        """
+        Delete a wiki page permanently.
+
+        This is a hard delete - the page and all its task links will be removed.
+
+        Args:
+            page_id: Wiki page ID to delete
+
+        Returns:
+            JSON object confirming deletion with deleted status and page id
+        """
+        logger.info(f"=== delete_wiki_page called: page_id={page_id} ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.delete_wiki_page(page_id)
+            logger.info(
+                f"delete_wiki_page response: success={response.success}, status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to delete wiki page: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Deleted wiki page {page_id}")
+            return json.dumps(
+                {
+                    "page_id": page_id,
+                    "status": "deleted",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in delete_wiki_page: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def link_wiki_page_to_task(page_id: int, task_id: str) -> str:
+        """
+        Link a wiki page to a task.
+
+        Creates a bidirectional association between a wiki page and a task,
+        allowing related knowledge to be connected to actionable items.
+
+        Args:
+            page_id: Wiki page ID to link
+            task_id: Task ID - format "task_123" or just "123"
+
+        Returns:
+            JSON object confirming the link with linked task summary
+        """
+        logger.info(
+            f"=== link_wiki_page_to_task called: page_id={page_id}, task_id='{task_id}' ==="
+        )
+        try:
+            api_client = get_api_client()
+
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            response = api_client.link_wiki_page_to_task(page_id, todo_id)
+            logger.info(
+                f"link_wiki_page_to_task response: success={response.success}, status={response.status_code}"
+            )
+
+            task, task_error = validate_dict_response(response, "linked task")
+            if task_error:
+                logger.error(f"Failed to link wiki page to task: {task_error}")
+                return json.dumps({"error": task_error})
+
+            logger.info(f"Linked wiki page {page_id} to task {task_id}")
+            return json.dumps(
+                {
+                    "page_id": page_id,
+                    "task_id": task_id,
+                    "linked_task": task,
+                    "status": "linked",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in link_wiki_page_to_task: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def unlink_wiki_page_from_task(page_id: int, task_id: str) -> str:
+        """
+        Remove the link between a wiki page and a task.
+
+        Args:
+            page_id: Wiki page ID
+            task_id: Task ID to unlink - format "task_123" or just "123"
+
+        Returns:
+            JSON object confirming the link was removed
+        """
+        logger.info(
+            f"=== unlink_wiki_page_from_task called: page_id={page_id}, task_id='{task_id}' ==="
+        )
+        try:
+            api_client = get_api_client()
+
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            response = api_client.unlink_wiki_page_from_task(page_id, todo_id)
+            logger.info(
+                f"unlink_wiki_page_from_task response: success={response.success}, status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to unlink wiki page from task: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Unlinked wiki page {page_id} from task {task_id}")
+            return json.dumps(
+                {
+                    "page_id": page_id,
+                    "task_id": task_id,
+                    "status": "unlinked",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in unlink_wiki_page_from_task: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_wiki_page_linked_tasks(page_id: int) -> str:
+        """
+        Get all tasks linked to a wiki page.
+
+        Args:
+            page_id: Wiki page ID
+
+        Returns:
+            JSON object with "tasks" array containing linked task summaries
+            with fields: id, title, status, priority, due_date
+        """
+        logger.info(f"=== get_wiki_page_linked_tasks called: page_id={page_id} ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.get_wiki_page_linked_tasks(page_id)
+            logger.info(
+                f"get_wiki_page_linked_tasks response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            tasks, tasks_error = validate_list_response(response, "linked tasks", key="data")
+            if tasks_error:
+                logger.error(f"Failed to get linked tasks: {tasks_error}")
+                return json.dumps({"error": tasks_error})
+
+            # Prefix task IDs
+            for task in tasks:
+                if task.get("id") is not None:
+                    task["id"] = f"task_{task['id']}"
+
+            logger.info(f"Returning {len(tasks)} linked tasks for wiki page {page_id}")
+            return json.dumps(
+                {
+                    "page_id": page_id,
+                    "tasks": tasks,
+                    "count": len(tasks),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in get_wiki_page_linked_tasks: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_task_wiki_pages(task_id: str) -> str:
+        """
+        Get all wiki pages linked to a task.
+
+        Args:
+            task_id: Task ID - format "task_123" or just "123"
+
+        Returns:
+            JSON object with "pages" array containing wiki page summaries
+            with fields: id, title, slug, created_at, updated_at
+        """
+        logger.info(f"=== get_task_wiki_pages called: task_id='{task_id}' ===")
+        try:
+            api_client = get_api_client()
+
+            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
+            try:
+                todo_id = int(numeric_id)
+            except ValueError:
+                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+
+            response = api_client.get_task_wiki_pages(todo_id)
+            logger.info(
+                f"get_task_wiki_pages response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            pages, pages_error = validate_list_response(response, "wiki pages", key="data")
+            if pages_error:
+                logger.error(f"Failed to get task wiki pages: {pages_error}")
+                return json.dumps({"error": pages_error})
+
+            logger.info(f"Returning {len(pages)} wiki pages for task {task_id}")
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "pages": pages,
+                    "count": len(pages),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in get_task_wiki_pages: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     return app
