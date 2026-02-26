@@ -125,6 +125,30 @@ test.describe('Persist project filter across views (#224)', () => {
 		expect(page.url()).toContain(`project_id=${project.id}`);
 	});
 
+	test('should clear stale filter when project no longer exists', async ({ page }) => {
+		const project = await createProjectViaAPI(page, `Stale Project ${Date.now()}`);
+
+		// Set a project filter and persist it
+		await page.goto('/');
+		await page.waitForLoadState('networkidle');
+		await page.locator('.project-filter-container select').selectOption(String(project.id));
+		await page.waitForLoadState('networkidle');
+		expect(page.url()).toContain(`project_id=${project.id}`);
+
+		// Delete the project via API
+		const deleteRes = await page.request.delete(`/api/projects/${project.id}`);
+		expect(deleteRes.ok()).toBeTruthy();
+
+		// Navigate away and back — stale filter should be cleared
+		await page.goto('/home');
+		await page.waitForLoadState('networkidle');
+		await page.goto('/');
+		await page.waitForLoadState('networkidle');
+
+		// Filter should have been cleared since the project no longer exists
+		expect(page.url()).not.toContain('project_id');
+	});
+
 	test('should clear persisted filter when "All Projects" is selected', async ({ page }) => {
 		const project = await createProjectViaAPI(page, `Clear Project ${Date.now()}`);
 

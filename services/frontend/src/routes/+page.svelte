@@ -91,16 +91,31 @@
 	onMount(async () => {
 		// Restore project filter from localStorage if not in URL
 		if (!$page.url.searchParams.has('project_id')) {
-			const storedProjectId = localStorage.getItem(PROJECT_FILTER_KEY);
-			if (storedProjectId) {
+			const raw = localStorage.getItem(PROJECT_FILTER_KEY);
+			const parsed = raw ? parseInt(raw, 10) : NaN;
+			if (!isNaN(parsed) && parsed > 0) {
 				const url = new URL($page.url);
-				url.searchParams.set('project_id', storedProjectId);
+				url.searchParams.set('project_id', String(parsed));
 				await goto(url, { replaceState: true, keepFocus: true });
+			} else if (raw !== null) {
+				// Clear invalid stored value
+				localStorage.removeItem(PROJECT_FILTER_KEY);
 			}
 		}
 
 		// Load projects first
 		await projects.load();
+
+		// Clear stale project filter if the project no longer exists
+		if (selectedProjectId) {
+			const projectExists = $projects.some((p) => p.id === selectedProjectId);
+			if (!projectExists) {
+				localStorage.removeItem(PROJECT_FILTER_KEY);
+				const url = new URL($page.url);
+				url.searchParams.delete('project_id');
+				await goto(url, { replaceState: true, keepFocus: true });
+			}
+		}
 
 		// Load todos with filters if present
 		await todos.load({
