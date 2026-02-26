@@ -286,22 +286,24 @@
 								}}
 							>
 								<div class="task-title">{todo.title}</div>
-								<div class="calendar-task-meta">
-									{#if todo.deadline_type && todo.deadline_type !== 'preferred'}
-										<span
-											class="calendar-deadline-type"
-											style="color: {getDeadlineTypeColor(todo.deadline_type)}"
-											title="{getDeadlineTypeLabel(todo.deadline_type)} deadline"
-										>
-											{getDeadlineTypeLabel(todo.deadline_type)}
-										</span>
-									{/if}
-									{#if subtasks.length > 0}
-										<span class="calendar-subtask-count"
-											>{completedSubtaskCount}/{subtasks.length}</span
-										>
-									{/if}
-								</div>
+								{#if (todo.deadline_type && todo.deadline_type !== 'preferred') || subtasks.length > 0}
+									<div class="calendar-task-meta">
+										{#if todo.deadline_type && todo.deadline_type !== 'preferred'}
+											<span
+												class="calendar-deadline-type"
+												style="color: {getDeadlineTypeColor(todo.deadline_type)}"
+												title="{getDeadlineTypeLabel(todo.deadline_type)} deadline"
+											>
+												{getDeadlineTypeLabel(todo.deadline_type)}
+											</span>
+										{/if}
+										{#if subtasks.length > 0}
+											<span class="calendar-subtask-count"
+												>{completedSubtaskCount}/{subtasks.length}</span
+											>
+										{/if}
+									</div>
+								{/if}
 							</div>
 						{/each}
 					</div>
