@@ -207,10 +207,13 @@
 		});
 	}
 
+	// Sentinel key for tasks with no project — cannot collide with real project names
+	const INBOX_KEY = '\x00__inbox__';
+
 	// Group todos by project for list view
 	$: groupedTodos = $pendingTodos.reduce(
 		(acc, todo) => {
-			const projectName = todo.project_name || 'No Project';
+			const projectName = todo.project_name || INBOX_KEY;
 			if (!acc[projectName]) acc[projectName] = [];
 			acc[projectName].push(todo);
 			return acc;
@@ -218,8 +221,16 @@
 		{} as Record<string, Todo[]>
 	);
 
-	// Sort project names
-	$: sortedProjectNames = Object.keys(groupedTodos).sort();
+	// Sort project names, with Inbox (no-project) always last
+	$: sortedProjectNames = Object.keys(groupedTodos).sort((a, b) => {
+		if (a === INBOX_KEY) return 1;
+		if (b === INBOX_KEY) return -1;
+		return a.localeCompare(b);
+	});
+
+	function displayProjectName(key: string): string {
+		return key === INBOX_KEY ? 'Inbox' : key;
+	}
 </script>
 
 <svelte:head>
@@ -296,6 +307,24 @@
 		</div>
 	{/if}
 
+	<!-- Priority Legend -->
+	{#if initialLoadComplete && currentView === 'list'}
+		<div class="priority-legend mb-4">
+			<span class="legend-item">
+				<span class="legend-dot" style="background-color: #ef4444"></span> Urgent
+			</span>
+			<span class="legend-item">
+				<span class="legend-dot" style="background-color: #f97316"></span> High
+			</span>
+			<span class="legend-item">
+				<span class="legend-dot" style="background-color: #eab308"></span> Medium
+			</span>
+			<span class="legend-item">
+				<span class="legend-dot" style="background-color: #22c55e"></span> Low
+			</span>
+		</div>
+	{/if}
+
 	<!-- Task Detail Panel -->
 	<TaskDetailPanel
 		bind:this={taskDetailPanel}
@@ -311,12 +340,12 @@
 	<!-- List View -->
 	{#if currentView === 'list'}
 		<div id="list-view">
-			<div id="todo-lists" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+			<div id="todo-lists">
 				{#each sortedProjectNames as projectName}
 					{@const projectTodos = groupedTodos[projectName]}
 					<div class="card">
 						<div class="mb-3">
-							<h3 class="font-semibold text-lg text-gray-800">{projectName}</h3>
+							<h3 class="font-semibold text-lg text-gray-800">{displayProjectName(projectName)}</h3>
 						</div>
 						<div class="space-y-3">
 							{#each projectTodos as todo}
@@ -351,9 +380,7 @@
 											</div>
 											<div class="text-xs text-gray-500 mt-1.5 ml-4">
 												{todo.priority.charAt(0).toUpperCase() + todo.priority.slice(1)}
-												{#if todo.due_date}
-													• Due: {formatDateDisplay(todo.due_date)}
-												{/if}
+												• Due: {todo.due_date ? formatDateDisplay(todo.due_date) : 'No date'}
 												{#if todo.deadline_type && todo.deadline_type !== 'preferred'}
 													<span
 														class="deadline-type-pill"
@@ -370,14 +397,16 @@
 											<button
 												on:click|stopPropagation={() => openEditPanel(todo)}
 												class="btn btn-secondary btn-sm"
-												title="Edit todo"
+												data-tooltip="Edit todo"
+												aria-label="Edit todo"
 											>
 												✏️
 											</button>
 											<button
 												on:click|stopPropagation={() => handleCompleteTodo(todo.id)}
 												class="btn btn-success btn-sm"
-												title="Mark as complete"
+												data-tooltip="Mark as complete"
+												aria-label="Mark as complete"
 											>
 												✓
 											</button>
@@ -645,5 +674,68 @@
 		.subtask-item-card {
 			margin-left: 1rem;
 		}
+	}
+
+	/* Priority legend */
+	.priority-legend {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.legend-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.75rem;
+		color: var(--text-muted, #6b7280);
+		font-weight: 500;
+	}
+
+	.legend-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	/* CSS tooltips */
+	[data-tooltip] {
+		position: relative;
+	}
+
+	[data-tooltip]::after {
+		content: attr(data-tooltip);
+		position: absolute;
+		bottom: calc(100% + 6px);
+		left: 50%;
+		transform: translateX(-50%);
+		padding: 0.25rem 0.5rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		white-space: nowrap;
+		color: #fff;
+		background-color: var(--gray-800, #292524);
+		border-radius: var(--radius-sm, 0.25rem);
+		pointer-events: none;
+		opacity: 0;
+		transition: opacity 0.15s ease;
+		z-index: 10;
+	}
+
+	[data-tooltip]:hover::after {
+		opacity: 1;
+	}
+
+	/* CSS columns masonry layout */
+	#todo-lists {
+		columns: 2 340px;
+		column-gap: 1.5rem;
+	}
+
+	#todo-lists > :global(.card) {
+		break-inside: avoid;
+		margin-bottom: 1.5rem;
 	}
 </style>
