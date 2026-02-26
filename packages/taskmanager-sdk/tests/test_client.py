@@ -852,3 +852,66 @@ class TestErrorHandling:
         assert result.success is True
         assert "session" in client.cookies
         assert client.cookies["session"] == "abc123"
+
+
+class TestBatchCreateWithWikiPageId:
+    """Test batch_create_todos with wiki_page_id parameter."""
+
+    def test_batch_create_with_wiki_page_id(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test batch create sends wiki_page_id when provided."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [{"id": 1, "title": "Task 1"}],
+            "meta": {"count": 1, "wiki_page_id": 42, "wiki_links_created": 1},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.batch_create_todos([{"title": "Task 1"}], wiki_page_id=42)
+
+        assert result.success is True
+        # Verify the request payload includes wiki_page_id
+        call_args = mock_session.post.call_args
+        assert call_args.kwargs["json"]["wiki_page_id"] == 42
+        assert call_args.kwargs["json"]["todos"] == [{"title": "Task 1"}]
+
+    def test_batch_create_without_wiki_page_id(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test batch create omits wiki_page_id when not provided."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [{"id": 1, "title": "Task 1"}],
+            "meta": {"count": 1},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.batch_create_todos([{"title": "Task 1"}])
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert "wiki_page_id" not in call_args.kwargs["json"]
+
+    def test_batch_create_with_wiki_page_id_none(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test batch create omits wiki_page_id when explicitly None."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [{"id": 1, "title": "Task 1"}],
+            "meta": {"count": 1},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.batch_create_todos([{"title": "Task 1"}], wiki_page_id=None)
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert "wiki_page_id" not in call_args.kwargs["json"]

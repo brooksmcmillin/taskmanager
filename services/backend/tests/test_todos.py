@@ -1664,3 +1664,94 @@ async def test_batch_create_parent_index_multiple_parents(
     parent_b_id = data["data"][1]["id"]
     assert data["data"][2]["parent_id"] == parent_a_id
     assert data["data"][3]["parent_id"] == parent_b_id
+
+
+# ---------------------------------------------------------------------------
+# Batch create with wiki_page_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_batch_create_with_wiki_page_id(authenticated_client: AsyncClient):
+    """Batch creation with wiki_page_id links all tasks to the wiki page."""
+    # Create a wiki page first
+    wiki_resp = await authenticated_client.post(
+        "/api/wiki", json={"title": "Audit Report", "content": "Full report"}
+    )
+    assert wiki_resp.status_code == 201
+    wiki_page_id = wiki_resp.json()["data"]["id"]
+
+    # Batch create tasks with wiki_page_id
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Finding 1"},
+                {"title": "Finding 2"},
+                {"title": "Finding 3"},
+            ],
+            "wiki_page_id": wiki_page_id,
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 3
+    assert data["meta"]["wiki_page_id"] == wiki_page_id
+    assert data["meta"]["wiki_links_created"] == 3
+
+    # Verify all tasks are linked to the wiki page
+    linked = await authenticated_client.get(f"/api/wiki/{wiki_page_id}/linked-tasks")
+    assert linked.status_code == 200
+    linked_ids = {t["id"] for t in linked.json()["data"]}
+    created_ids = {t["id"] for t in data["data"]}
+    assert linked_ids == created_ids
+
+
+@pytest.mark.asyncio
+async def test_batch_create_with_invalid_wiki_page_id(
+    authenticated_client: AsyncClient,
+):
+    """Batch creation with nonexistent wiki_page_id returns 404."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [{"title": "Task 1"}],
+            "wiki_page_id": 99999,
+        },
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_batch_create_without_wiki_page_id(authenticated_client: AsyncClient):
+    """Batch creation without wiki_page_id still works (backward compat)."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "No wiki task 1"},
+                {"title": "No wiki task 2"},
+            ],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 2
+    assert "wiki_page_id" not in data["meta"]
+    assert "wiki_links_created" not in data["meta"]
+
+
+@pytest.mark.asyncio
+async def test_batch_create_wiki_page_id_null(authenticated_client: AsyncClient):
+    """Batch creation with explicit null wiki_page_id works normally."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [{"title": "Null wiki task"}],
+            "wiki_page_id": None,
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 1
+    assert "wiki_page_id" not in data["meta"]
