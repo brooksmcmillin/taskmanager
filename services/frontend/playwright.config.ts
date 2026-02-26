@@ -1,5 +1,7 @@
 import type { PlaywrightTestConfig } from '@playwright/test';
 
+const isCI = !!process.env.CI;
+
 const config: PlaywrightTestConfig = {
 	webServer: [
 		{
@@ -33,11 +35,9 @@ const config: PlaywrightTestConfig = {
 		video: 'retain-on-failure',
 		headless: true
 	},
-	reporter: [
-		['html', { outputFolder: 'playwright-report' }],
-		['list'],
-		['json', { outputFile: 'test-results.json' }]
-	],
+	reporter: isCI
+		? [['blob', { outputDir: 'blob-report' }], ['list']]
+		: [['html', { outputFolder: 'playwright-report' }], ['list'], ['json', { outputFile: 'test-results.json' }]],
 	timeout: 30000,
 	expect: {
 		timeout: 5000
@@ -45,9 +45,9 @@ const config: PlaywrightTestConfig = {
 	// Disable parallel execution until test isolation is fixed
 	// (shared test data can cause race conditions)
 	fullyParallel: false,
-	forbidOnly: !!process.env.CI,
-	retries: process.env.CI ? 2 : 0,
-	workers: process.env.CI ? 1 : undefined,
+	forbidOnly: isCI,
+	retries: isCI ? 2 : 0,
+	workers: isCI ? 1 : undefined,
 	projects: [
 		{
 			name: 'chromium',

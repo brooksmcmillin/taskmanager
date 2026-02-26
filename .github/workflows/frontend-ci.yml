@@ -13,10 +13,19 @@ on:
       - '.github/workflows/frontend-ci.yml'
   workflow_call:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
-    name: Frontend Tests
+    name: Frontend Tests (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3]
+        shardTotal: [3]
 
     services:
       postgres:
@@ -85,10 +94,12 @@ jobs:
         run: cp .env.example .env
 
       - name: Run type checking
+        if: matrix.shardIndex == 1
         working-directory: services/frontend
         run: npm run check
 
       - name: Run linter
+        if: matrix.shardIndex == 1
         working-directory: services/frontend
         run: npm run lint
 
@@ -100,11 +111,48 @@ jobs:
         working-directory: services/frontend
         env:
           PGPASSWORD: taskmanager  # pragma: allowlist secret
-        run: npm test
+        run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
 
-      - name: Upload test results
+      - name: Upload blob report
         uses: actions/upload-artifact@v6
         if: always()
+        with:
+          name: blob-report-${{ matrix.shardIndex }}
+          path: services/frontend/blob-report/
+          retention-days: 1
+
+  merge-reports:
+    name: Merge Playwright Reports
+    if: always()
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: services/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: services/frontend
+        run: npm ci
+
+      - name: Download blob reports
+        uses: actions/download-artifact@v6
+        with:
+          path: services/frontend/all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge reports
+        working-directory: services/frontend
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload merged report
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-report
           path: services/frontend/playwright-report/
