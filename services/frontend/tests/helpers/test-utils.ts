@@ -215,9 +215,15 @@ export async function createTodoViaAPI(
  * Useful in afterEach hooks
  */
 export async function cleanupTodos(page: Page) {
-	// This would require API access or UI cleanup
-	// For now, document that database should be reset between test runs
-	console.log('TODO: Implement todo cleanup');
+	const response = await page.request.get('/api/todos');
+	if (!response.ok()) return;
+
+	const json = await response.json();
+	const todos = json.data ?? [];
+
+	for (const todo of todos) {
+		await page.request.delete(`/api/todos/${todo.id}`);
+	}
 }
 
 /**
