@@ -398,7 +398,7 @@
 												on:click|stopPropagation={() => openEditPanel(todo)}
 												class="btn btn-secondary btn-sm"
 												data-tooltip="Edit todo"
-											aria-label="Edit todo"
+												aria-label="Edit todo"
 											>
 												✏️
 											</button>
