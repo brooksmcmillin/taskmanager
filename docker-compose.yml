@@ -121,6 +121,21 @@ services:
       - taskmanager_network
     restart: unless-stopped
 
+  # ========== MCP RELAY (dev tool) ==========
+  mcp-relay:
+    build:
+      context: .
+      dockerfile: services/mcp-relay/Dockerfile
+    container_name: taskmanager-mcp-relay
+    command: uv run --no-sync python -m mcp_relay.server --port 8002
+    ports:
+      - '8002:8002'
+    environment:
+      - MAX_MESSAGES_PER_CHANNEL=${MAX_MESSAGES_PER_CHANNEL:-1000}
+    networks:
+      - taskmanager_network
+    restart: unless-stopped
+
   # ========== MONITORING STACK ==========
   prometheus:
     image: prom/prometheus:latest
