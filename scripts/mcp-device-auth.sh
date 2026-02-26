@@ -30,19 +30,33 @@ if [[ ! -f "$CREDENTIALS_FILE" ]]; then
     exit 1
 fi
 
+# --- Helper: validate that a value is a positive integer ---
+assert_integer() {
+    local name="$1" value="$2"
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        echo "Error: Invalid $name value from server: $value" >&2
+        exit 1
+    fi
+}
+
 # --- Extract client credentials from Claude Code's stored config ---
-# Find the mcpOAuth key that matches the taskmanager server
-MCP_KEY=$(jq -r '.mcpOAuth | keys[] | select(startswith("taskmanager|"))' "$CREDENTIALS_FILE")
+# Find the mcpOAuth key that matches the taskmanager server (take first match)
+MCP_KEY=$(jq -r '.mcpOAuth | keys[] | select(startswith("taskmanager|"))' "$CREDENTIALS_FILE" | head -n1)
 if [[ -z "$MCP_KEY" ]]; then
     echo "Error: No taskmanager MCP OAuth entry found in credentials file." >&2
     exit 1
 fi
 
-CLIENT_ID=$(jq -r ".mcpOAuth[\"$MCP_KEY\"].clientId" "$CREDENTIALS_FILE")
-CLIENT_SECRET=$(jq -r ".mcpOAuth[\"$MCP_KEY\"].clientSecret" "$CREDENTIALS_FILE")
+CLIENT_ID=$(jq -r --arg key "$MCP_KEY" '.mcpOAuth[$key].clientId' "$CREDENTIALS_FILE")
+CLIENT_SECRET=$(jq -r --arg key "$MCP_KEY" '.mcpOAuth[$key].clientSecret' "$CREDENTIALS_FILE")
 
 if [[ -z "$CLIENT_ID" || "$CLIENT_ID" == "null" ]]; then
     echo "Error: No client_id found. Register the MCP server in Claude Code first." >&2
+    exit 1
+fi
+
+if [[ -z "$CLIENT_SECRET" || "$CLIENT_SECRET" == "null" ]]; then
+    echo "Error: No client_secret found. Register the MCP server in Claude Code first." >&2
     exit 1
 fi
 
@@ -54,8 +68,8 @@ echo "Requesting device code..."
 
 DEVICE_RESPONSE=$(curl -s -X POST "$DEVICE_CODE_ENDPOINT" \
     -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "client_id=$CLIENT_ID" \
-    -d "scope=$SCOPE")
+    --data-urlencode "client_id=$CLIENT_ID" \
+    --data-urlencode "scope=$SCOPE")
 
 # Check for errors
 if echo "$DEVICE_RESPONSE" | jq -e '.error' &>/dev/null; then
@@ -69,8 +83,11 @@ DEVICE_CODE=$(echo "$DEVICE_RESPONSE" | jq -r '.device_code')
 USER_CODE=$(echo "$DEVICE_RESPONSE" | jq -r '.user_code')
 VERIFICATION_URI=$(echo "$DEVICE_RESPONSE" | jq -r '.verification_uri')
 VERIFICATION_URI_COMPLETE=$(echo "$DEVICE_RESPONSE" | jq -r '.verification_uri_complete // empty')
-EXPIRES_IN=$(echo "$DEVICE_RESPONSE" | jq -r '.expires_in')
+EXPIRES_IN=$(echo "$DEVICE_RESPONSE" | jq -r '.expires_in // 300')
 INTERVAL=$(echo "$DEVICE_RESPONSE" | jq -r '.interval // 5')
+
+assert_integer "expires_in" "$EXPIRES_IN"
+assert_integer "interval" "$INTERVAL"
 
 echo ""
 echo "========================================="
@@ -92,35 +109,46 @@ while [[ $SECONDS -lt $DEADLINE ]]; do
 
     TOKEN_RESPONSE=$(curl -s -X POST "$TOKEN_ENDPOINT" \
         -H "Content-Type: application/x-www-form-urlencoded" \
-        -d "grant_type=$GRANT_TYPE" \
-        -d "device_code=$DEVICE_CODE" \
-        -d "client_id=$CLIENT_ID" \
-        -d "client_secret=$CLIENT_SECRET")
+        --data-urlencode "grant_type=$GRANT_TYPE" \
+        --data-urlencode "device_code=$DEVICE_CODE" \
+        --data-urlencode "client_id=$CLIENT_ID" \
+        --data-urlencode "client_secret=$CLIENT_SECRET")
 
     # Check if we got an access token
     ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
     if [[ -n "$ACCESS_TOKEN" ]]; then
         EXPIRES_IN_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.expires_in // 3600')
         REFRESH_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.refresh_token // empty')
+
+        assert_integer "expires_in (token)" "$EXPIRES_IN_TOKEN"
         EXPIRES_AT=$(( $(date +%s) * 1000 + EXPIRES_IN_TOKEN * 1000 ))
 
+        echo ""
         echo "Authorization successful!"
         echo ""
 
         # --- Step 3: Update Claude Code credentials ---
         # Back up the credentials file
         cp "$CREDENTIALS_FILE" "$CREDENTIALS_FILE.bak"
+        chmod 600 "$CREDENTIALS_FILE.bak"
+        trap 'rm -f "$CREDENTIALS_FILE.bak"' EXIT
 
-        # Update the access token and expiry
-        UPDATED=$(jq \
-            --arg key "$MCP_KEY" \
-            --arg token "$ACCESS_TOKEN" \
-            --argjson expires "$EXPIRES_AT" \
-            '.mcpOAuth[$key].accessToken = $token | .mcpOAuth[$key].expiresAt = $expires' \
-            "$CREDENTIALS_FILE")
+        # Update the access token, expiry, and refresh token
+        JQ_FILTER='.mcpOAuth[$key].accessToken = $token | .mcpOAuth[$key].expiresAt = $expires'
+        JQ_ARGS=(--arg key "$MCP_KEY" --arg token "$ACCESS_TOKEN" --argjson expires "$EXPIRES_AT")
 
-        echo "$UPDATED" > "$CREDENTIALS_FILE"
-        chmod 600 "$CREDENTIALS_FILE"
+        if [[ -n "$REFRESH_TOKEN" ]]; then
+            JQ_FILTER="$JQ_FILTER | .mcpOAuth[\$key].refreshToken = \$refresh"
+            JQ_ARGS+=(--arg refresh "$REFRESH_TOKEN")
+        fi
+
+        UPDATED=$(jq "${JQ_ARGS[@]}" "$JQ_FILTER" "$CREDENTIALS_FILE")
+
+        # Write atomically via temp file
+        TMPFILE=$(mktemp "${CREDENTIALS_FILE}.tmp.XXXXXX")
+        chmod 600 "$TMPFILE"
+        echo "$UPDATED" > "$TMPFILE"
+        mv "$TMPFILE" "$CREDENTIALS_FILE"
 
         echo "Updated Claude Code credentials:"
         echo "  Access token: ${ACCESS_TOKEN:0:20}..."
@@ -135,6 +163,11 @@ while [[ $SECONDS -lt $DEADLINE ]]; do
 
     # Check for errors
     ERROR=$(echo "$TOKEN_RESPONSE" | jq -r '.error // empty')
+    if [[ -z "$ERROR" ]]; then
+        echo ""
+        echo "Error: Unexpected response from server (no access_token or error field)" >&2
+        exit 1
+    fi
     case "$ERROR" in
         authorization_pending)
             printf "."
