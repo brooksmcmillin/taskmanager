@@ -1755,3 +1755,25 @@ async def test_batch_create_wiki_page_id_null(authenticated_client: AsyncClient)
     data = response.json()
     assert data["meta"]["count"] == 1
     assert "wiki_page_id" not in data["meta"]
+
+
+@pytest.mark.asyncio
+async def test_batch_create_with_estimated_hours(authenticated_client: AsyncClient):
+    """Test batch creation persists estimated_hours on each todo."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Task with estimate", "estimated_hours": 2.5},
+                {"title": "Task without estimate"},
+                {"title": "Task with zero estimate", "estimated_hours": 0},
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 3
+    assert data["data"][0]["estimated_hours"] == 2.5
+    assert data["data"][1]["estimated_hours"] is None
+    assert data["data"][2]["estimated_hours"] == 0
