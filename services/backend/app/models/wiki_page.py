@@ -71,5 +71,5 @@ class WikiPage(Base):
     linked_todos: Mapped[list[Todo]] = relationship(
         "Todo",
         secondary=todo_wiki_links,
-        backref="linked_wiki_pages",
+        back_populates="linked_wiki_pages",
     )

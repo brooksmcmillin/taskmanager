@@ -185,7 +185,11 @@ async def resolve_wiki_links(
 ) -> DataResponse[dict[str, str | None]]:
     """Batch resolve page titles to slugs. Returns {title: slug | null}."""
     all_titles = [t.strip() for t in titles.split(",") if t.strip()]
-    title_list = all_titles[:MAX_RESOLVE_TITLES]
+    if len(all_titles) > MAX_RESOLVE_TITLES:
+        raise errors.validation(
+            f"Too many titles ({len(all_titles)}). Maximum is {MAX_RESOLVE_TITLES}"
+        )
+    title_list = all_titles
     result_map: dict[str, str | None] = {}
     if title_list:
         result = await db.execute(
