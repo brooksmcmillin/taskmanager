@@ -1,16 +1,6 @@
 name: Frontend CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'services/frontend/**'
-      - '.github/workflows/frontend-ci.yml'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'services/frontend/**'
-      - '.github/workflows/frontend-ci.yml'
   workflow_call:
 
 concurrency:
