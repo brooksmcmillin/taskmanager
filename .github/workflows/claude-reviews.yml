@@ -90,10 +90,15 @@ jobs:
             - ~~Missing error handling in `parse_config()`~~ — Fixed
 
             ### Still Open
-            Previously flagged items that remain unaddressed. Reference only, no re-explanation.
+            Previously flagged items **within the PR's changed code** that remain unaddressed.
+            Do NOT include pre-existing issues outside the PR's scope here.
 
             ### New Issues
-            Newly discovered problems with full explanation.
+            Newly discovered problems **that must be fixed before merge**. Full explanation required.
+
+            ### Suggestions
+            Non-blocking observations: minor improvements, follow-up items, style preferences,
+            or pre-existing issues noticed outside the PR scope. These do not block merge.
 
             If everything is clean and there are no issues in any category, post a short "All clear" message (still include the marker).
 
@@ -187,10 +192,15 @@ jobs:
             - ~~SQL injection risk in `query_users()`~~ — Fixed
 
             ### Still Open
-            Previously flagged items that remain unaddressed. Reference only, no re-explanation.
+            Previously flagged items **within the PR's changed code** that remain unaddressed.
+            Do NOT include pre-existing issues outside the PR's scope here.
 
             ### New Issues
-            Newly discovered problems with full explanation.
+            Newly discovered problems **that must be fixed before merge**. Full explanation required.
+
+            ### Suggestions
+            Non-blocking observations: minor improvements, follow-up items, style preferences,
+            or pre-existing issues noticed outside the PR scope. These do not block merge.
 
             If everything is clean and there are no issues in any category, post a short "All clear" message (still include the marker).
 

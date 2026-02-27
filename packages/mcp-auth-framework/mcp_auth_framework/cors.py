@@ -42,6 +42,10 @@ def get_cors_origin(request: Request, allowed_origins: list[str]) -> str:
 def build_cors_headers(request: Request, allowed_origins: list[str]) -> dict[str, str]:
     """Build standard CORS headers for OAuth discovery endpoints.
 
+    Only includes Access-Control-Allow-Origin when the request origin is
+    in the allowlist. Omits it entirely for disallowed origins per the
+    CORS specification.
+
     Args:
         request: The incoming request.
         allowed_origins: List of allowed origin strings.
@@ -49,8 +53,11 @@ def build_cors_headers(request: Request, allowed_origins: list[str]) -> dict[str
     Returns:
         Dict of CORS headers.
     """
-    return {
-        "Access-Control-Allow-Origin": get_cors_origin(request, allowed_origins),
+    headers: dict[str, str] = {
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "*",
     }
+    origin = get_cors_origin(request, allowed_origins)
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+    return headers

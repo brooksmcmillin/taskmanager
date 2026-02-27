@@ -18,9 +18,8 @@ from mcp.server.fastmcp.server import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp_resource_framework.auth import IntrospectionTokenVerifier
 from mcp_resource_framework.middleware import NormalizePathMiddleware
+from mcp_resource_framework.oauth_discovery import register_oauth_discovery_endpoints
 from pydantic import AnyHttpUrl
-from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -210,19 +209,12 @@ def create_relay_server(
         ),
     )
 
-    @app.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
-    async def oauth_protected_resource(request: Request) -> JSONResponse:  # noqa: ARG001
-        """OAuth 2.0 Protected Resource Metadata (RFC 9908)."""
-        resource_url = server_url.rstrip("/")
-        auth_url = auth_server_public_url.rstrip("/")
-        return JSONResponse(
-            {
-                "resource": resource_url,
-                "authorization_servers": [auth_url],
-                "scopes_supported": DEFAULT_SCOPE,
-                "bearer_methods_supported": ["header"],
-            }
-        )
+    register_oauth_discovery_endpoints(
+        app,
+        server_url=server_url,
+        auth_server_public_url=auth_server_public_url,
+        scopes=DEFAULT_SCOPE,
+    )
 
     @app.tool()
     async def send_message(

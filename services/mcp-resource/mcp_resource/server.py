@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import os
+from functools import partial
 from typing import Any
 from urllib.parse import urlparse
 
@@ -13,11 +14,10 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp_auth_framework.cors import build_cors_headers, parse_allowed_origins
 from mcp_resource_framework.auth import IntrospectionTokenVerifier
 from mcp_resource_framework.middleware import NormalizePathMiddleware
+from mcp_resource_framework.oauth_discovery import register_oauth_discovery_endpoints
 from mcp_resource_framework.security import guard_tool
 from mcp_resource_framework.validation import validate_dict_response, validate_list_response
 from pydantic import AnyHttpUrl
-from starlette.requests import Request
-from starlette.responses import JSONResponse
 from taskmanager_sdk import VALID_DEADLINE_TYPES, TaskManagerClient
 
 logger = logging.getLogger(__name__)
@@ -138,110 +138,15 @@ def create_resource_server(
         ),
     )
 
-    # CORS middleware will be added when we run the server with uvicorn
-
-    # Add OAuth 2.0 discovery endpoints for client auto-configuration
-    # These endpoints allow MCP clients to discover OAuth configuration automatically
-
-    @app.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
-    async def oauth_protected_resource_main(request: Request) -> JSONResponse:
-        """OAuth 2.0 Protected Resource Metadata (RFC 9908) - Main endpoint"""
-        logger.info("=== OAuth Protected Resource Metadata Request (Main) ===")
-        logger.info(f"Request URL: {request.url}")
-        logger.info(f"Host header: {request.headers.get('host')}")
-
-        # Remove trailing slashes for OAuth spec compliance
-        resource_url = str(server_url).rstrip("/")
-        auth_server_url_no_slash = str(auth_server_public_url).rstrip("/")
-
-        logger.info(f"Returning resource: {resource_url}")
-        logger.info(f"Returning auth_servers: {auth_server_url_no_slash}")
-
-        return JSONResponse(
-            {
-                "resource": resource_url,
-                "authorization_servers": [auth_server_url_no_slash],
-                "scopes_supported": DEFAULT_SCOPE,
-                "bearer_methods_supported": ["header"],
-            }
-        )
-
-    def _build_oauth_metadata(auth_base: str, **extra: Any) -> dict[str, Any]:
-        """Build standard OAuth 2.0 Authorization Server Metadata dict."""
-        metadata: dict[str, Any] = {
-            "issuer": auth_base,
-            "authorization_endpoint": f"{auth_base}/authorize",
-            "token_endpoint": f"{auth_base}/token",
-            "introspection_endpoint": f"{auth_base}/introspect",
-            "registration_endpoint": f"{auth_base}/register",
-            "scopes_supported": DEFAULT_SCOPE,
-            "response_types_supported": ["code"],
-            "grant_types_supported": [
-                "authorization_code",
-                "refresh_token",
-                "urn:ietf:params:oauth:grant-type:device_code",
-            ],
-            "token_endpoint_auth_methods_supported": ["client_secret_post"],
-            "code_challenge_methods_supported": ["S256"],
-        }
-        metadata.update(extra)
-        return metadata
-
-    @app.custom_route("/.well-known/openid-configuration", methods=["GET", "OPTIONS"])
-    async def openid_configuration(request: Request) -> JSONResponse:
-        """OpenID Connect Discovery (aliases to OAuth Authorization Server Metadata)"""
-        if request.method == "OPTIONS":
-            return JSONResponse({}, headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS))
-
-        auth_base = str(auth_server_public_url).rstrip("/")
-        logger.info(f"OpenID Configuration request, issuer: {auth_base}")
-
-        return JSONResponse(
-            _build_oauth_metadata(auth_base),
-            headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS),
-        )
-
-    @app.custom_route("/.well-known/oauth-authorization-server", methods=["GET", "OPTIONS"])
-    async def oauth_authorization_server_metadata(request: Request) -> JSONResponse:
-        """OAuth 2.0 Authorization Server Metadata (RFC 8414)"""
-        if request.method == "OPTIONS":
-            return JSONResponse({}, headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS))
-
-        auth_base = str(auth_server_public_url).rstrip("/")
-        logger.info(f"OAuth Authorization Server Metadata request, auth_base: {auth_base}")
-
-        return JSONResponse(
-            _build_oauth_metadata(auth_base),
-            headers=build_cors_headers(request, ALLOWED_MCP_ORIGINS),
-        )
-
-    @app.custom_route("/mcp/.well-known/oauth-protected-resource", methods=["GET"])
-    async def oauth_protected_resource_metadata(request: Request) -> JSONResponse:
-        """OAuth 2.0 Protected Resource Metadata (RFC 9908)"""
-        resource_url = str(server_url).rstrip("/")
-        auth_server_url_no_slash = str(auth_server_public_url).rstrip("/")
-
-        logger.info(f"OAuth Protected Resource Metadata request, resource: {resource_url}")
-
-        return JSONResponse(
-            {
-                "resource": resource_url,
-                "authorization_servers": [auth_server_url_no_slash],
-                "scopes_supported": DEFAULT_SCOPE,
-                "bearer_methods_supported": ["header"],
-                "resource_documentation": f"{resource_url}/docs",
-            }
-        )
-
-    @app.custom_route("/.well-known/oauth-authorization-server/mcp", methods=["GET"])
-    async def oauth_authorization_server_metadata_for_mcp(
-        request: Request,
-    ) -> JSONResponse:
-        """Resource-specific OAuth 2.0 Authorization Server Metadata for /mcp resource"""
-        auth_base = str(auth_server_public_url).rstrip("/")
-        resource_url = str(server_url).rstrip("/")
-
-        return JSONResponse(_build_oauth_metadata(auth_base, resource=resource_url))
+    # Register all OAuth 2.0 discovery endpoints (RFC 9908, RFC 8414, OIDC)
+    register_oauth_discovery_endpoints(
+        app,
+        server_url=str(server_url),
+        auth_server_public_url=str(auth_server_public_url),
+        scopes=DEFAULT_SCOPE,
+        cors_header_builder=partial(build_cors_headers, allowed_origins=ALLOWED_MCP_ORIGINS),
+        resource_documentation=f"{str(server_url).rstrip('/')}/docs",
+    )
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
