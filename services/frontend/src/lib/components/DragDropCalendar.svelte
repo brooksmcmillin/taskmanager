@@ -253,10 +253,14 @@
 		expandedDays = { ...expandedDays, [dateStr]: !expandedDays[dateStr] };
 	}
 
-	$: hasAnyOverflow = days.some(({ dateStr }) => dayHasOverflow(dateStr));
+	// Reference todosByDate and subtasksByDate directly so Svelte tracks them as dependencies
+	$: hasAnyOverflow = todosByDate && subtasksByDate && days.some(({ dateStr }) => dayHasOverflow(dateStr));
 
+	// Reference todosByDate/subtasksByDate so Svelte tracks them as dependencies
 	$: allExpanded =
 		hasAnyOverflow &&
+		todosByDate &&
+		subtasksByDate &&
 		days.every(({ dateStr }) => !dayHasOverflow(dateStr) || expandedDays[dateStr]);
 
 	function toggleExpandAll() {
