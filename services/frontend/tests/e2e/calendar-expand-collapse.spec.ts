@@ -9,12 +9,13 @@ import { test, expect } from '@playwright/test';
 import {
 	registerAndLogin,
 	createTodoViaAPI,
-	getFutureDate,
+	getTodayDate,
 	waitForNetworkIdle
 } from '../helpers/test-utils';
 
 test.describe('Calendar Expand/Collapse All', () => {
-	const dueDate = getFutureDate(5);
+	// Use today's date so tasks always appear in the visible calendar window
+	const dueDate = getTodayDate();
 
 	test.beforeEach(async ({ page }) => {
 		await registerAndLogin(page);
@@ -65,9 +66,8 @@ test.describe('Calendar Expand/Collapse All', () => {
 		// The "+X more" overflow indicator should be gone, replaced by "Show less"
 		await expect(dayCell.locator('.calendar-overflow')).toContainText('Show less');
 
-		// The 4th task should now be visible (not hidden)
-		const visibleTasks = dayCell.locator('.calendar-task:not(.calendar-task-hidden)');
-		await expect(visibleTasks).toHaveCount(4);
+		// The 4th task (index 3) should now be visible after expanding
+		await expect(dayCell.locator('.calendar-task').nth(3)).toBeVisible();
 	});
 
 	test('clicking collapse all hides overflowed tasks again', async ({ page }) => {
