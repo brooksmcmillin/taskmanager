@@ -6,8 +6,6 @@ services:
       dockerfile: Dockerfile
     container_name: taskmanager-backend
     restart: unless-stopped
-    ports:
-      - '8000:8000'
     env_file:
       - .env
     environment:
@@ -28,6 +26,13 @@ services:
         condition: service_healthy
     networks:
       - taskmanager_network
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tm-api.rule=Host(`api.brooksmcmillin.com`)
+      - traefik.http.routers.tm-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.tm-api.middlewares=security-headers@file
+      - traefik.http.services.tm-api.loadbalancer.server.port=8000
 
   # ========== SVELTEKIT FRONTEND ==========
   frontend:
@@ -36,8 +41,6 @@ services:
       dockerfile: Dockerfile
     container_name: taskmanager-frontend
     restart: unless-stopped
-    ports:
-      - '3000:3000'
     environment:
       - BACKEND_URL=http://backend:8000
       - VITE_API_URL=http://backend:8000
@@ -47,15 +50,22 @@ services:
       - backend
     networks:
       - taskmanager_network
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tm-frontend.rule=Host(`todo.brooksmcmillin.com`)
+      - traefik.http.routers.tm-frontend.tls.certresolver=letsencrypt
+      - traefik.http.routers.tm-frontend.middlewares=security-headers@file
+      - traefik.http.services.tm-frontend.loadbalancer.server.port=3000
 
   postgres:
     image: pgvector/pgvector:pg15
     container_name: postgres_db
     restart: unless-stopped
+    ports:
+      - '127.0.0.1:5432:5432'
     env_file:
       - .env
-    ports:
-      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./services/db/certs/server.crt:/var/lib/postgresql/server.crt:ro
@@ -79,8 +89,6 @@ services:
       dockerfile: services/mcp-auth/Dockerfile
     container_name: taskmanager-mcp-auth
     command: uv run --no-sync python -m mcp_auth.auth_server --port 9000 --taskmanager-url http://backend:8000
-    ports:
-      - '9000:9000'
     environment:
       - TASKMANAGER_CLIENT_ID=${TASKMANAGER_CLIENT_ID}
       - TASKMANAGER_CLIENT_SECRET=${TASKMANAGER_CLIENT_SECRET}
@@ -95,6 +103,13 @@ services:
       - postgres
     networks:
       - taskmanager_network
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tm-mcp-auth.rule=Host(`mcp-auth.brooksmcmillin.com`)
+      - traefik.http.routers.tm-mcp-auth.tls.certresolver=letsencrypt
+      - traefik.http.routers.tm-mcp-auth.middlewares=security-headers@file
+      - traefik.http.services.tm-mcp-auth.loadbalancer.server.port=9000
     restart: unless-stopped
 
   mcp-resource:
@@ -103,8 +118,6 @@ services:
       dockerfile: services/mcp-resource/Dockerfile
     container_name: taskmanager-mcp-resource
     command: uv run --no-sync python -m mcp_resource.server --port 8001 --auth-server http://mcp-auth:9000 --auth-server-public-url ${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
-    ports:
-      - '8001:8001'
     environment:
       - TASKMANAGER_CLIENT_ID=${TASKMANAGER_CLIENT_ID}
       - TASKMANAGER_CLIENT_SECRET=${TASKMANAGER_CLIENT_SECRET}
@@ -119,6 +132,13 @@ services:
       - mcp-auth
     networks:
       - taskmanager_network
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tm-mcp.rule=Host(`mcp.brooksmcmillin.com`)
+      - traefik.http.routers.tm-mcp.tls.certresolver=letsencrypt
+      - traefik.http.routers.tm-mcp.middlewares=security-headers@file,mcp-cors@file
+      - traefik.http.services.tm-mcp.loadbalancer.server.port=8001
     restart: unless-stopped
 
   # ========== MCP RELAY (dev tool) ==========
@@ -128,8 +148,6 @@ services:
       dockerfile: services/mcp-relay/Dockerfile
     container_name: taskmanager-mcp-relay
     command: uv run --no-sync python -m mcp_relay.server --port 8002 --auth-server http://mcp-auth:9000 --auth-server-public-url ${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000} --server-url ${MCP_RELAY_SERVER_URL:-http://localhost:8002}
-    ports:
-      - '8002:8002'
     environment:
       - MAX_MESSAGES_PER_CHANNEL=${MAX_MESSAGES_PER_CHANNEL:-1000}
       - MAX_CHANNELS=${MAX_CHANNELS:-100}
@@ -139,6 +157,13 @@ services:
       - mcp-auth
     networks:
       - taskmanager_network
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tm-mcp-relay.rule=Host(`mcp-relay.brooksmcmillin.com`)
+      - traefik.http.routers.tm-mcp-relay.tls.certresolver=letsencrypt
+      - traefik.http.routers.tm-mcp-relay.middlewares=security-headers@file,mcp-cors@file
+      - traefik.http.services.tm-mcp-relay.loadbalancer.server.port=8002
     restart: unless-stopped
 
   # ========== MONITORING STACK ==========
@@ -146,8 +171,6 @@ services:
     image: prom/prometheus:latest
     container_name: taskmanager-prometheus
     restart: unless-stopped
-    ports:
-      - '9090:9090'
     volumes:
       - ./services/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -162,14 +185,15 @@ services:
     image: grafana/loki:3.0.0
     container_name: taskmanager-loki
     restart: unless-stopped
-    ports:
-      - '3100:3100'
     volumes:
       - ./services/monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - taskmanager_network
+      - proxy
+    labels:
+      - traefik.enable=false
 
   promtail:
     image: grafana/promtail:3.0.0
@@ -205,7 +229,7 @@ services:
     container_name: taskmanager-grafana
     restart: unless-stopped
     ports:
-      - '3001:3000'
+      - '127.0.0.1:3001:3000'
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -231,3 +255,5 @@ volumes:
 networks:
   taskmanager_network:
     driver: bridge
+  proxy:
+    external: true
