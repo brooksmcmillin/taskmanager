@@ -2068,3 +2068,30 @@ async def test_bulk_update_todos_with_nonexistent_category_auto_creates_project(
     assert todo1.json()["data"]["project_name"] == new_category
     assert todo2.json()["data"]["project_name"] == new_category
     assert todo1.json()["data"]["project_id"] == todo2.json()["data"]["project_id"]
+
+
+@pytest.mark.asyncio
+async def test_create_todo_category_auto_create_fails_at_project_limit(
+    authenticated_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Auto-creation is rejected when the user is at the project cap."""
+    import app.api.todos as todos_module
+
+    monkeypatch.setattr(todos_module, "_MAX_PROJECTS_PER_USER", 1)
+
+    # Create exactly one project to hit the cap
+    project_response = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "Only Project"},
+    )
+    assert project_response.status_code == 201
+
+    # Attempt to create a todo with a new category that would require auto-creation
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task", "category": "New Category Beyond Limit"},
+    )
+
+    assert response.status_code == 400
+    assert "maximum" in response.json()["detail"]["message"].lower()
