@@ -405,13 +405,19 @@ def _build_todo_response(
     )
 
 
+# Maximum number of projects a user may have (guards against unbounded auto-creation).
+_MAX_PROJECTS_PER_USER = 200
+
+
 async def _resolve_category_to_project(
     db: "DbSession", category: str, user_id: int
 ) -> int:
     """Resolve a category name to a project_id for the given user.
 
     Performs a case-insensitive match against the user's existing projects.
-    If no match is found, automatically creates a new project with the given name.
+    If no match is found, automatically creates a new project with the given name
+    provided the user has not yet reached the per-user project cap
+    (_MAX_PROJECTS_PER_USER).
 
     Because Project.name has a (user_id, lower(name)) unique constraint, any
     concurrent race by the same user hitting the same category will produce an
@@ -426,6 +432,10 @@ async def _resolve_category_to_project(
 
     Returns:
         The project ID (either existing or newly created).
+
+    Raises:
+        ApiError: If the user already has _MAX_PROJECTS_PER_USER projects and
+                  the category does not match any existing project.
     """
     # Try case-insensitive exact match against user's projects
     result = await db.execute(
@@ -437,6 +447,18 @@ async def _resolve_category_to_project(
     project = result.scalar_one_or_none()
     if project:
         return project.id
+
+    # Guard against unbounded project creation: count existing projects for user
+    count_result = await db.execute(
+        select(func.count(Project.id)).where(Project.user_id == user_id)
+    )
+    project_count = count_result.scalar() or 0
+    if project_count >= _MAX_PROJECTS_PER_USER:
+        raise errors.validation(
+            f"Cannot auto-create project '{category}': "
+            f"user has reached the maximum of {_MAX_PROJECTS_PER_USER} projects. "
+            "Please use an existing project or delete unused projects."
+        )
 
     # No match found — auto-create the project for this user.
     # Use a savepoint so that an IntegrityError (concurrent race) only rolls
