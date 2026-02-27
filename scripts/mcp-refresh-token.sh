@@ -104,14 +104,25 @@ fi
 echo "$(date -Iseconds) Refreshing access token..."
 
 # --- Request new token using refresh_token grant ---
-TOKEN_RESPONSE=$(curl -s -X POST "$TOKEN_ENDPOINT" \
+HTTP_CODE=0
+TOKEN_RESPONSE=$(curl -s --fail-with-body -w '\n%{http_code}' -X POST "$TOKEN_ENDPOINT" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     --data-urlencode "grant_type=refresh_token" \
     --data-urlencode "refresh_token=$REFRESH_TOKEN" \
     --data-urlencode "client_id=$CLIENT_ID" \
-    --data-urlencode "client_secret=$CLIENT_SECRET")
+    --data-urlencode "client_secret=$CLIENT_SECRET") || true
+HTTP_CODE=$(echo "$TOKEN_RESPONSE" | tail -n1)
+TOKEN_RESPONSE=$(echo "$TOKEN_RESPONSE" | sed '$d')
 
-# --- Check for errors ---
+# Check for HTTP-level failures (non-JSON 502/503, connection errors, etc.)
+if [[ -z "$TOKEN_RESPONSE" ]] || ! echo "$TOKEN_RESPONSE" | jq empty 2>/dev/null; then
+    echo "$(date -Iseconds) Error: Auth server returned non-JSON response (HTTP $HTTP_CODE)" >&2
+    echo "$(date -Iseconds) Response body: ${TOKEN_RESPONSE:-(empty)}" >&2
+    send_alert "MCP Token: Auth Server Error" "Auth server returned HTTP $HTTP_CODE with non-JSON response. Check server health."
+    exit 1
+fi
+
+# --- Check for OAuth errors ---
 ERROR=$(echo "$TOKEN_RESPONSE" | jq -r '.error // empty')
 if [[ -n "$ERROR" ]]; then
     DESC=$(echo "$TOKEN_RESPONSE" | jq -r '.error_description // "No description"')

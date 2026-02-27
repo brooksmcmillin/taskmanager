@@ -41,7 +41,7 @@ repos:
       - id: no-hardcoded-tokens
         name: no hardcoded tokens
         language: pygrep
-        entry: '(?i)(token|bearer)\w*\s*[=:]\s*["''][a-zA-Z0-9_./-]{16,}'
+        entry: '(?i)(token|bearer)\w*\s*[=:]\s*["'']?[a-zA-Z0-9_./-]{16,}'
         types: [text]
         exclude: |
           (?x)^(
