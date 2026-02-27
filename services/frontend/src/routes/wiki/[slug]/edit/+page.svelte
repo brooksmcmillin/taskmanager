@@ -5,17 +5,20 @@
 	import { wiki } from '$lib/stores/wiki';
 	import { toasts } from '$lib/stores/ui';
 	import { renderMarkdown, extractWikiLinks } from '$lib/utils/markdown';
-	import type { WikiPage } from '$lib/types';
+	import type { WikiPage, WikiTreeNode } from '$lib/types';
 
 	let wikiPage: WikiPage | null = $state(null);
 	let title = $state('');
 	let content = $state('');
+	let parentId: number | undefined = $state(undefined);
+	let tagsInput = $state('');
 	let saving = $state(false);
 	let loading = $state(true);
 	let error = $state('');
 	let showPreview = $state(false);
 	let renderedHtml = $state('');
 	let resolvedSlugs: Record<string, string | null> = $state({});
+	let eligibleParents: { id: number; title: string; depth: number }[] = $state([]);
 
 	let slug = $derived($page.params.slug ?? '');
 
@@ -24,12 +27,45 @@
 			wikiPage = await wiki.getBySlug(slug);
 			title = wikiPage.title;
 			content = wikiPage.content;
+			parentId = wikiPage.parent_id ?? undefined;
+			tagsInput = (wikiPage.tags || []).join(', ');
+
+			// Load tree for parent selector, excluding self and descendants
+			const tree = await wiki.loadTree();
+			const selfAndDescendants = collectDescendantIds(tree, wikiPage.id);
+			const parents: { id: number; title: string; depth: number }[] = [];
+			function collectParents(nodes: WikiTreeNode[], depth: number) {
+				for (const node of nodes) {
+					if (!selfAndDescendants.has(node.id) && depth <= 2) {
+						parents.push({ id: node.id, title: node.title, depth });
+						collectParents(node.children, depth + 1);
+					}
+				}
+			}
+			collectParents(tree, 1);
+			eligibleParents = parents;
 		} catch {
 			error = 'Page not found';
 		} finally {
 			loading = false;
 		}
 	});
+
+	function collectDescendantIds(nodes: WikiTreeNode[], targetId: number): Set<number> {
+		const ids = new Set<number>();
+		function walk(nodeList: WikiTreeNode[], collecting: boolean) {
+			for (const node of nodeList) {
+				if (node.id === targetId || collecting) {
+					ids.add(node.id);
+					walk(node.children, true);
+				} else {
+					walk(node.children, false);
+				}
+			}
+		}
+		walk(nodes, false);
+		return ids;
+	}
 
 	async function updatePreview() {
 		if (!showPreview) return;
@@ -50,10 +86,25 @@
 		if (!wikiPage || !title.trim()) return;
 		saving = true;
 		try {
-			const updated = await wiki.updatePage(wikiPage.id, {
+			const tags = tagsInput
+				.split(',')
+				.map((t) => t.trim())
+				.filter(Boolean);
+			const updateData: Record<string, unknown> = {
 				title: title.trim(),
-				content
-			});
+				content,
+				tags
+			};
+
+			// Handle parent changes
+			const originalParentId = wikiPage.parent_id;
+			if (parentId !== undefined && parentId !== originalParentId) {
+				updateData.parent_id = parentId;
+			} else if (parentId === undefined && originalParentId !== null) {
+				updateData.remove_parent = true;
+			}
+
+			const updated = await wiki.updatePage(wikiPage.id, updateData);
 			toasts.show('Page updated', 'success');
 			goto(`/wiki/${updated.slug}`);
 		} catch (e) {
@@ -61,6 +112,10 @@
 		} finally {
 			saving = false;
 		}
+	}
+
+	function indentLabel(title: string, depth: number): string {
+		return '\u00A0\u00A0'.repeat(depth - 1) + title;
 	}
 </script>
 
@@ -97,6 +152,29 @@
 						class="form-input"
 						required
 						maxlength="500"
+					/>
+				</div>
+
+				{#if eligibleParents.length > 0}
+					<div class="form-group">
+						<label for="parent" class="form-label">Parent Page</label>
+						<select id="parent" bind:value={parentId} class="form-input">
+							<option value={undefined}>None (root page)</option>
+							{#each eligibleParents as p}
+								<option value={p.id}>{indentLabel(p.title, p.depth)}</option>
+							{/each}
+						</select>
+					</div>
+				{/if}
+
+				<div class="form-group">
+					<label for="tags" class="form-label">Tags</label>
+					<input
+						id="tags"
+						type="text"
+						bind:value={tagsInput}
+						class="form-input"
+						placeholder="Comma-separated tags (e.g. design, frontend)"
 					/>
 				</div>
 
@@ -212,6 +290,10 @@
 		outline: none;
 		border-color: var(--primary-500);
 		box-shadow: 0 0 0 3px var(--primary-100);
+	}
+
+	select.form-input {
+		cursor: pointer;
 	}
 
 	.form-textarea {

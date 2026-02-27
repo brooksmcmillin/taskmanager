@@ -317,11 +317,37 @@ export interface ApiKeyCreateResponse extends ApiKey {
 }
 
 // Wiki types
+export interface WikiPageAncestor {
+	id: number;
+	title: string;
+	slug: string;
+}
+
+export interface WikiPageChildSummary {
+	id: number;
+	title: string;
+	slug: string;
+	child_count: number;
+}
+
+export interface WikiTreeNode {
+	id: number;
+	title: string;
+	slug: string;
+	tags: string[];
+	updated_at: string | null;
+	children: WikiTreeNode[];
+}
+
 export interface WikiPage {
 	id: number;
 	title: string;
 	slug: string;
 	content: string;
+	parent_id: number | null;
+	tags: string[];
+	ancestors: WikiPageAncestor[];
+	children: WikiPageChildSummary[];
 	created_at: string;
 	updated_at: string | null;
 }
@@ -330,6 +356,8 @@ export interface WikiPageSummary {
 	id: number;
 	title: string;
 	slug: string;
+	parent_id: number | null;
+	tags: string[];
 	created_at: string;
 	updated_at: string | null;
 }
@@ -338,12 +366,17 @@ export interface WikiPageCreate {
 	title: string;
 	content?: string;
 	slug?: string;
+	parent_id?: number;
+	tags?: string[];
 }
 
 export interface WikiPageUpdate {
 	title?: string;
 	content?: string;
 	slug?: string;
+	parent_id?: number;
+	remove_parent?: boolean;
+	tags?: string[];
 }
 
 export interface WikiLinkedTodo {

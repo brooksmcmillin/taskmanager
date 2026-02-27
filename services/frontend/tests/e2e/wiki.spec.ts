@@ -13,8 +13,8 @@ test.describe('Wiki Pages', () => {
 		await page.goto('/wiki');
 		await waitForNetworkIdle(page);
 
-		await expect(page.locator('.page-title', { hasText: 'Alpha Page' })).toBeVisible();
-		await expect(page.locator('.page-title', { hasText: 'Beta Page' })).toBeVisible();
+		await expect(page.locator('.node-title', { hasText: 'Alpha Page' })).toBeVisible();
+		await expect(page.locator('.node-title', { hasText: 'Beta Page' })).toBeVisible();
 	});
 
 	test('list page search filters results', async ({ page }) => {
@@ -114,7 +114,7 @@ test.describe('Wiki Pages', () => {
 		await waitForNetworkIdle(page);
 
 		// Deleted page should not appear
-		await expect(page.locator('.page-title', { hasText: 'Delete Me' })).not.toBeVisible();
+		await expect(page.locator('.node-title', { hasText: 'Delete Me' })).not.toBeVisible();
 	});
 
 	test('wiki links render as links', async ({ page }) => {
@@ -129,5 +129,94 @@ test.describe('Wiki Pages', () => {
 		const wikiLink = page.locator('.wiki-link');
 		await expect(wikiLink).toBeVisible();
 		await expect(wikiLink).toHaveAttribute('href', '/wiki/target-page');
+	});
+
+	test('create page with parent', async ({ page }) => {
+		const parentPage = await createWikiPageViaAPI(page, 'Parent Page');
+
+		// Use query param to set parent
+		await page.goto(`/wiki/new?parent=${parentPage.id}`);
+		await waitForNetworkIdle(page);
+
+		await page.fill('#title', 'Child Page');
+		await page.click('button[type=submit]');
+
+		await page.waitForURL(/\/wiki\/child-page/, { timeout: 10000 });
+		await waitForNetworkIdle(page);
+
+		// Should show breadcrumbs with parent
+		await expect(page.locator('.breadcrumb-link', { hasText: 'Parent Page' })).toBeVisible();
+	});
+
+	test('breadcrumb navigation', async ({ page }) => {
+		const parentPage = await createWikiPageViaAPI(page, 'Breadcrumb Parent');
+
+		// Create child via API with parent_id
+		const childResponse = await page.request.post('/api/wiki', {
+			data: { title: 'Breadcrumb Child', parent_id: parentPage.id }
+		});
+		const childPage = (await childResponse.json()).data;
+
+		await page.goto(`/wiki/${childPage.slug}`);
+		await waitForNetworkIdle(page);
+
+		// Breadcrumb should show Wiki > Parent > Current
+		await expect(page.locator('.breadcrumb-link', { hasText: 'Wiki' })).toBeVisible();
+		await expect(page.locator('.breadcrumb-link', { hasText: 'Breadcrumb Parent' })).toBeVisible();
+		await expect(
+			page.locator('.breadcrumb-current', { hasText: 'Breadcrumb Child' })
+		).toBeVisible();
+	});
+
+	test('child pages section on view page', async ({ page }) => {
+		const parentPage = await createWikiPageViaAPI(page, 'Pages Parent');
+
+		// Create child via API
+		await page.request.post('/api/wiki', {
+			data: { title: 'Sub Page One', parent_id: parentPage.id }
+		});
+
+		await page.goto(`/wiki/${parentPage.slug}`);
+		await waitForNetworkIdle(page);
+
+		// Should show child pages section
+		await expect(page.locator('.linked-item', { hasText: 'Sub Page One' })).toBeVisible();
+	});
+
+	test('tags displayed on view page', async ({ page }) => {
+		// Create page with tags via API
+		await page.request.post('/api/wiki', {
+			data: { title: 'Tagged Page', tags: ['design', 'ux'] }
+		});
+
+		await page.goto('/wiki/tagged-page');
+		await waitForNetworkIdle(page);
+
+		await expect(page.locator('.tag-chip', { hasText: 'design' })).toBeVisible();
+		await expect(page.locator('.tag-chip', { hasText: 'ux' })).toBeVisible();
+	});
+
+	test('tag filter chips on list page', async ({ page }) => {
+		await page.request.post('/api/wiki', {
+			data: { title: 'Tag Filter A', tags: ['python'] }
+		});
+		await page.request.post('/api/wiki', {
+			data: { title: 'Tag Filter B', tags: ['rust'] }
+		});
+
+		await page.goto('/wiki');
+		await waitForNetworkIdle(page);
+
+		// Both tag chips should appear
+		await expect(page.locator('.tag-chip', { hasText: 'python' })).toBeVisible();
+		await expect(page.locator('.tag-chip', { hasText: 'rust' })).toBeVisible();
+
+		// Click python tag to filter
+		await page.click('.tag-chip:has-text("python")');
+		await waitForNetworkIdle(page);
+
+		// Should show only python-tagged page (flat list mode)
+		await expect(page.locator('.page-title', { hasText: 'Tag Filter A' })).toBeVisible();
+		await expect(page.locator('.page-title', { hasText: 'Tag Filter B' })).not.toBeVisible();
 	});
 });

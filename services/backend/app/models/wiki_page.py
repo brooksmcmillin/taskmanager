@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -56,9 +57,13 @@ class WikiPage(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("wiki_pages.id", ondelete="CASCADE"), index=True
+    )
     title: Mapped[str] = mapped_column(String(500))
     slug: Mapped[str] = mapped_column(String(500), index=True)
     content: Mapped[str] = mapped_column(Text, default="")
+    tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
     revision_number: Mapped[int] = mapped_column(default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -72,6 +77,17 @@ class WikiPage(Base):
 
     # Relationships
     user: Mapped[User] = relationship("User", back_populates="wiki_pages")
+    parent: Mapped[WikiPage | None] = relationship(
+        "WikiPage",
+        remote_side=[id],
+        back_populates="children",
+        foreign_keys=[parent_id],
+    )
+    children: Mapped[list[WikiPage]] = relationship(
+        "WikiPage",
+        back_populates="parent",
+        foreign_keys=[parent_id],
+    )
     linked_todos: Mapped[list[Todo]] = relationship(
         "Todo",
         secondary=todo_wiki_links,
@@ -93,9 +109,7 @@ class WikiPageRevision(Base):
     wiki_page_id: Mapped[int] = mapped_column(
         ForeignKey("wiki_pages.id", ondelete="CASCADE"), index=True
     )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE")
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(500))
     slug: Mapped[str] = mapped_column(String(500))
     content: Mapped[str] = mapped_column(Text)
@@ -105,6 +119,4 @@ class WikiPageRevision(Base):
     )
 
     # Relationships
-    wiki_page: Mapped[WikiPage] = relationship(
-        "WikiPage", back_populates="revisions"
-    )
+    wiki_page: Mapped[WikiPage] = relationship("WikiPage", back_populates="revisions")

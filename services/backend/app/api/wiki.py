@@ -2,10 +2,12 @@
 
 import re
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy import func as sa_func
 
 from app.core.errors import errors
 from app.db.queries import get_resource_for_user
@@ -15,21 +17,32 @@ from app.models.wiki_page import WikiPage, WikiPageRevision, todo_wiki_links
 from app.schemas import DataResponse, ListResponse
 
 # ---------------------------------------------------------------------------
-# Schemas
+# Constants
 # ---------------------------------------------------------------------------
 
-RESERVED_SLUGS = {"new", "resolve"}
+RESERVED_SLUGS = {"new", "resolve", "tree"}
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MAX_SLUG_DEDUP = 100
 MAX_RESOLVE_TITLES = 50
 MAX_BATCH_LINK_TASKS = 100
 MAX_CONTENT_LENGTH = 500_000
+MAX_WIKI_DEPTH = 3
+MAX_TAGS = 20
+MAX_TAG_LENGTH = 50
+
+Tag = Annotated[str, Field(min_length=1, max_length=MAX_TAG_LENGTH)]
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
 
 
 class WikiPageCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     content: str = Field("", max_length=MAX_CONTENT_LENGTH)
     slug: str | None = Field(None, max_length=500)
+    parent_id: int | None = None
+    tags: list[Tag] = Field(default_factory=list, max_length=MAX_TAGS)
 
 
 class WikiPageUpdate(BaseModel):
@@ -37,6 +50,22 @@ class WikiPageUpdate(BaseModel):
     content: str | None = Field(None, max_length=MAX_CONTENT_LENGTH)
     slug: str | None = Field(None, max_length=500)
     append: bool = False
+    parent_id: int | None = None
+    remove_parent: bool = False
+    tags: list[Tag] | None = Field(None, max_length=MAX_TAGS)
+
+
+class WikiPageAncestor(BaseModel):
+    id: int
+    title: str
+    slug: str
+
+
+class WikiPageChildSummary(BaseModel):
+    id: int
+    title: str
+    slug: str
+    child_count: int = 0
 
 
 class WikiPageResponse(BaseModel):
@@ -46,11 +75,15 @@ class WikiPageResponse(BaseModel):
     title: str
     slug: str
     content: str
+    parent_id: int | None = None
+    tags: list[str] = Field(default_factory=list)
     revision_number: int = 1
     created_at: datetime
     updated_at: datetime | None
     slug_modified: bool = False
     requested_slug: str | None = None
+    ancestors: list[WikiPageAncestor] = Field(default_factory=list)
+    children: list[WikiPageChildSummary] = Field(default_factory=list)
 
 
 class WikiPageSummary(BaseModel):
@@ -59,12 +92,23 @@ class WikiPageSummary(BaseModel):
     id: int
     title: str
     slug: str
+    parent_id: int | None = None
+    tags: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime | None
 
 
 class WikiPageSearchResult(WikiPageSummary):
     content_snippet: str | None = None
+
+
+class WikiTreeNode(BaseModel):
+    id: int
+    title: str
+    slug: str
+    tags: list[str] = Field(default_factory=list)
+    updated_at: datetime | None = None
+    children: list["WikiTreeNode"] = Field(default_factory=list)
 
 
 class LinkedTodoResponse(BaseModel):
@@ -190,6 +234,167 @@ async def _save_revision(db: DbSession, page: WikiPage) -> None:
     db.add(revision)
 
 
+async def _get_ancestors(db: DbSession, page: WikiPage) -> list[WikiPageAncestor]:
+    """Walk parent chain and return root-first ancestor list."""
+    ancestors: list[WikiPageAncestor] = []
+    current = page
+    seen: set[int] = {page.id}
+    while current.parent_id is not None:
+        result = await db.execute(
+            select(WikiPage).where(
+                WikiPage.id == current.parent_id,
+                WikiPage.deleted_at.is_(None),
+            )
+        )
+        parent = result.scalar_one_or_none()
+        if parent is None or parent.id in seen:
+            break
+        seen.add(parent.id)
+        ancestors.append(
+            WikiPageAncestor(id=parent.id, title=parent.title, slug=parent.slug)
+        )
+        current = parent
+    ancestors.reverse()
+    return ancestors
+
+
+async def _get_children_with_counts(
+    db: DbSession, page_id: int, user_id: int
+) -> list[WikiPageChildSummary]:
+    """Get direct children of a page with their own child counts."""
+    # Subquery to count grandchildren per child
+    grandchild_count = (
+        select(
+            WikiPage.parent_id,
+            sa_func.count(WikiPage.id).label("cnt"),
+        )
+        .where(WikiPage.deleted_at.is_(None))
+        .group_by(WikiPage.parent_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(
+            WikiPage.id,
+            WikiPage.title,
+            WikiPage.slug,
+            sa_func.coalesce(grandchild_count.c.cnt, 0).label("child_count"),
+        )
+        .outerjoin(grandchild_count, grandchild_count.c.parent_id == WikiPage.id)
+        .where(
+            WikiPage.parent_id == page_id,
+            WikiPage.user_id == user_id,
+            WikiPage.deleted_at.is_(None),
+        )
+        .order_by(WikiPage.title)
+    )
+    result = await db.execute(stmt)
+    return [
+        WikiPageChildSummary(
+            id=row.id,
+            title=row.title,
+            slug=row.slug,
+            child_count=row.child_count,
+        )
+        for row in result.all()
+    ]
+
+
+async def _validate_parent(
+    db: DbSession,
+    user_id: int,
+    parent_id: int,
+    exclude_id: int | None = None,
+) -> None:
+    """Validate parent_id: exists, owned by user, not circular, depth OK."""
+    # Check existence and ownership
+    result = await db.execute(
+        select(WikiPage).where(
+            WikiPage.id == parent_id,
+            WikiPage.user_id == user_id,
+            WikiPage.deleted_at.is_(None),
+        )
+    )
+    parent = result.scalar_one_or_none()
+    if parent is None:
+        raise errors.validation("Parent page not found")
+
+    # Cannot be self
+    if exclude_id is not None and parent_id == exclude_id:
+        raise errors.validation("A page cannot be its own parent")
+
+    # Check depth: walk up from parent, counting levels
+    depth = 1  # parent is at least depth 1
+    current = parent
+    seen: set[int] = {parent_id}
+    if exclude_id is not None:
+        seen.add(exclude_id)
+    while current.parent_id is not None:
+        if current.parent_id in seen:
+            raise errors.validation("Circular parent reference detected")
+        seen.add(current.parent_id)
+        r = await db.execute(
+            select(WikiPage).where(
+                WikiPage.id == current.parent_id,
+                WikiPage.deleted_at.is_(None),
+            )
+        )
+        current = r.scalar_one_or_none()
+        if current is None:
+            break
+        depth += 1
+
+    # page_depth = depth of the moved/new page under the new parent
+    page_depth = depth + 1
+
+    # When reparenting, also account for the subtree depth below the moved page
+    subtree_depth = 0
+    if exclude_id is not None:
+        subtree_depth = await _get_subtree_depth(db, exclude_id)
+
+    if page_depth + subtree_depth > MAX_WIKI_DEPTH:
+        raise errors.validation(f"Maximum nesting depth of {MAX_WIKI_DEPTH} exceeded")
+
+
+async def _get_subtree_depth(db: DbSession, page_id: int) -> int:
+    """Return the maximum depth of descendants below page_id (0 if leaf)."""
+    max_depth = 0
+    # BFS with depth tracking
+    to_visit: list[tuple[int, int]] = [(page_id, 0)]
+    visited: set[int] = set()
+    while to_visit:
+        current_id, current_depth = to_visit.pop()
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+        result = await db.execute(
+            select(WikiPage.id).where(
+                WikiPage.parent_id == current_id,
+                WikiPage.deleted_at.is_(None),
+            )
+        )
+        for row in result.all():
+            child_depth = current_depth + 1
+            if child_depth > max_depth:
+                max_depth = child_depth
+            to_visit.append((row.id, child_depth))
+    return max_depth
+
+
+async def _soft_delete_descendants(db: DbSession, page_id: int) -> None:
+    """Recursively soft-delete all descendants of a page."""
+    result = await db.execute(
+        select(WikiPage).where(
+            WikiPage.parent_id == page_id,
+            WikiPage.deleted_at.is_(None),
+        )
+    )
+    children = result.scalars().all()
+    for child in children:
+        child.deleted_at = datetime.now(UTC)
+        await _soft_delete_descendants(db, child.id)
+
+
 # ---------------------------------------------------------------------------
 # Wiki router
 # ---------------------------------------------------------------------------
@@ -202,6 +407,8 @@ async def list_wiki_pages(
     user: CurrentUserFlexible,
     db: DbSession,
     q: str | None = Query(None, description="Search query"),
+    tag: str | None = Query(None, description="Filter by tag"),
+    parent_id: int | None = Query(None, description="Filter by parent (0=root only)"),
 ) -> ListResponse[WikiPageSearchResult]:
     """List wiki pages for the current user, optionally filtered by search."""
     query = select(WikiPage).where(
@@ -212,6 +419,15 @@ async def list_wiki_pages(
         query = query.where(
             WikiPage.title.ilike(f"%{q}%") | WikiPage.content.ilike(f"%{q}%")
         )
+    if tag:
+        query = query.where(
+            WikiPage.tags.op("@>")(sa_func.jsonb_build_array(tag))
+        )
+    if parent_id is not None:
+        if parent_id == 0:
+            query = query.where(WikiPage.parent_id.is_(None))
+        else:
+            query = query.where(WikiPage.parent_id == parent_id)
     query = query.order_by(WikiPage.updated_at.desc().nullslast())
     result = await db.execute(query)
     pages = result.scalars().all()
@@ -232,6 +448,10 @@ async def create_wiki_page(
     db: DbSession,
 ) -> DataResponse[WikiPageResponse]:
     """Create a new wiki page."""
+    # Validate parent
+    if body.parent_id is not None:
+        await _validate_parent(db, user.id, body.parent_id)
+
     requested_slug = body.slug
     if body.slug:
         validate_slug(body.slug)
@@ -245,12 +465,29 @@ async def create_wiki_page(
         title=body.title,
         slug=final_slug,
         content=body.content,
+        parent_id=body.parent_id,
+        tags=body.tags,
     )
     db.add(page)
     await db.flush()
     await db.refresh(page)
 
-    resp = WikiPageResponse.model_validate(page)
+    ancestors = await _get_ancestors(db, page)
+    children = await _get_children_with_counts(db, page.id, user.id)
+
+    resp = WikiPageResponse(
+        id=page.id,
+        title=page.title,
+        slug=page.slug,
+        content=page.content,
+        parent_id=page.parent_id,
+        tags=page.tags or [],
+        revision_number=page.revision_number,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        ancestors=ancestors,
+        children=children,
+    )
     if was_modified:
         resp.slug_modified = True
         resp.requested_slug = requested_slug or slug
@@ -285,6 +522,46 @@ async def resolve_wiki_links(
     return DataResponse(data=result_map)
 
 
+@router.get("/tree")
+async def get_wiki_tree(
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> DataResponse[list[WikiTreeNode]]:
+    """Get full nested tree of wiki pages."""
+    result = await db.execute(
+        select(WikiPage)
+        .where(
+            WikiPage.user_id == user.id,
+            WikiPage.deleted_at.is_(None),
+        )
+        .order_by(WikiPage.title)
+    )
+    pages = result.scalars().all()
+
+    # Build lookup maps
+    children_map: dict[int | None, list[WikiPage]] = {}
+    for p in pages:
+        children_map.setdefault(p.parent_id, []).append(p)
+
+    def build_tree(parent_id: int | None) -> list[WikiTreeNode]:
+        nodes: list[WikiTreeNode] = []
+        for p in children_map.get(parent_id, []):
+            nodes.append(
+                WikiTreeNode(
+                    id=p.id,
+                    title=p.title,
+                    slug=p.slug,
+                    tags=p.tags or [],
+                    updated_at=p.updated_at,
+                    children=build_tree(p.id),
+                )
+            )
+        return nodes
+
+    tree = build_tree(None)
+    return DataResponse(data=tree)
+
+
 @router.get("/{slug_or_id}")
 async def get_wiki_page(
     slug_or_id: str,
@@ -293,7 +570,22 @@ async def get_wiki_page(
 ) -> DataResponse[WikiPageResponse]:
     """Get a wiki page by slug or numeric ID."""
     page = await _resolve_page(db, user.id, slug_or_id)
-    return DataResponse(data=WikiPageResponse.model_validate(page))
+    ancestors = await _get_ancestors(db, page)
+    children = await _get_children_with_counts(db, page.id, user.id)
+    resp = WikiPageResponse(
+        id=page.id,
+        title=page.title,
+        slug=page.slug,
+        content=page.content,
+        parent_id=page.parent_id,
+        tags=page.tags or [],
+        revision_number=page.revision_number,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        ancestors=ancestors,
+        children=children,
+    )
+    return DataResponse(data=resp)
 
 
 @router.put("/{page_id}")
@@ -363,10 +655,36 @@ async def update_wiki_page(
         else:
             page.content = body.content
 
+    # Handle parent changes
+    if body.remove_parent:
+        page.parent_id = None
+    elif body.parent_id is not None:
+        await _validate_parent(db, user.id, body.parent_id, exclude_id=page.id)
+        page.parent_id = body.parent_id
+
+    # Handle tags
+    if body.tags is not None:
+        page.tags = body.tags
+
     await db.flush()
     await db.refresh(page)
 
-    resp = WikiPageResponse.model_validate(page)
+    ancestors = await _get_ancestors(db, page)
+    children = await _get_children_with_counts(db, page.id, user.id)
+
+    resp = WikiPageResponse(
+        id=page.id,
+        title=page.title,
+        slug=page.slug,
+        content=page.content,
+        parent_id=page.parent_id,
+        tags=page.tags or [],
+        revision_number=page.revision_number,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        ancestors=ancestors,
+        children=children,
+    )
     if slug_modified:
         resp.slug_modified = True
         resp.requested_slug = requested_slug
@@ -379,11 +697,12 @@ async def delete_wiki_page(
     user: CurrentUserFlexible,
     db: DbSession,
 ) -> dict:
-    """Soft-delete a wiki page."""
+    """Soft-delete a wiki page and all descendants."""
     page = await get_resource_for_user(
         db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
     page.deleted_at = datetime.now(UTC)
+    await _soft_delete_descendants(db, page.id)
     await db.flush()
     return {"data": {"deleted": True, "id": page_id}}
 
@@ -525,9 +844,7 @@ async def batch_link_tasks(
             already_linked.append(todo_id)
         else:
             await db.execute(
-                todo_wiki_links.insert().values(
-                    todo_id=todo_id, wiki_page_id=page.id
-                )
+                todo_wiki_links.insert().values(todo_id=todo_id, wiki_page_id=page.id)
             )
             linked.append(todo_id)
 
@@ -551,9 +868,7 @@ async def unlink_task(
     await get_resource_for_user(
         db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
-    await get_resource_for_user(
-        db, Todo, todo_id, user.id, errors.todo_not_found
-    )
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
 
     cursor: CursorResult = await db.execute(  # type: ignore[assignment]
         delete(todo_wiki_links).where(
@@ -604,9 +919,7 @@ async def get_todo_wiki_pages(
     db: DbSession,
 ) -> ListResponse[WikiPageSummary]:
     """List wiki pages linked to a task."""
-    await get_resource_for_user(
-        db, Todo, todo_id, user.id, errors.todo_not_found
-    )
+    await get_resource_for_user(db, Todo, todo_id, user.id, errors.todo_not_found)
 
     result = await db.execute(
         select(WikiPage)

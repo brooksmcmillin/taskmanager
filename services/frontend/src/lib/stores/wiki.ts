@@ -4,7 +4,8 @@ import type {
 	WikiPageSummary,
 	WikiPageCreate,
 	WikiPageUpdate,
-	WikiLinkedTodo
+	WikiLinkedTodo,
+	WikiTreeNode
 } from '$lib/types';
 import { api } from '$lib/api/client';
 import { logger } from '$lib/utils/logger';
@@ -16,10 +17,11 @@ function createWikiStore() {
 		subscribe,
 		set,
 
-		load: async (search?: string) => {
+		load: async (search?: string, tag?: string) => {
 			try {
 				const params: Record<string, string> = {};
 				if (search) params.q = search;
+				if (tag) params.tag = tag;
 				const response = await api.get<{ data: WikiPageSummary[]; meta: { count: number } }>(
 					'/api/wiki',
 					{ params }
@@ -27,6 +29,16 @@ function createWikiStore() {
 				set(response.data || []);
 			} catch (error) {
 				logger.error('Failed to load wiki pages:', error);
+				throw error;
+			}
+		},
+
+		loadTree: async (): Promise<WikiTreeNode[]> => {
+			try {
+				const response = await api.get<{ data: WikiTreeNode[] }>('/api/wiki/tree');
+				return response.data || [];
+			} catch (error) {
+				logger.error('Failed to load wiki tree:', error);
 				throw error;
 			}
 		},
@@ -59,6 +71,8 @@ function createWikiStore() {
 						id: response.data.id,
 						title: response.data.title,
 						slug: response.data.slug,
+						parent_id: response.data.parent_id,
+						tags: response.data.tags,
 						created_at: response.data.created_at,
 						updated_at: response.data.updated_at
 					},
@@ -81,6 +95,8 @@ function createWikiStore() {
 									id: response.data.id,
 									title: response.data.title,
 									slug: response.data.slug,
+									parent_id: response.data.parent_id,
+									tags: response.data.tags,
 									created_at: response.data.created_at,
 									updated_at: response.data.updated_at
 								}

@@ -65,6 +65,10 @@ async def test_create_page(authenticated_client: AsyncClient) -> None:
     assert data["slug"] == "my-first-page"
     assert data["content"] == "# Hello"
     assert data["id"] > 0
+    assert data["parent_id"] is None
+    assert data["tags"] == []
+    assert data["ancestors"] == []
+    assert data["children"] == []
 
 
 @pytest.mark.asyncio
@@ -133,6 +137,16 @@ async def test_create_page_reserved_slug_resolve(
 ) -> None:
     response = await authenticated_client.post(
         "/api/wiki", json={"title": "Resolve", "slug": "resolve"}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_create_page_reserved_slug_tree(
+    authenticated_client: AsyncClient,
+) -> None:
+    response = await authenticated_client.post(
+        "/api/wiki", json={"title": "Tree", "slug": "tree"}
     )
     assert response.status_code == 400
 
@@ -602,7 +616,9 @@ async def test_cannot_link_task_to_other_users_page(
 
 
 @pytest.mark.asyncio
-async def test_search_returns_content_snippet(authenticated_client: AsyncClient) -> None:
+async def test_search_returns_content_snippet(
+    authenticated_client: AsyncClient,
+) -> None:
     """Search results include a content snippet when a query matches content."""
     await authenticated_client.post(
         "/api/wiki",
@@ -759,9 +775,7 @@ async def test_revision_created_on_update(authenticated_client: AsyncClient) -> 
     assert "content" not in rev_data[0]
 
     # Full content is available via the specific revision endpoint
-    rev_detail = await authenticated_client.get(
-        f"/api/wiki/{page_id}/revisions/1"
-    )
+    rev_detail = await authenticated_client.get(f"/api/wiki/{page_id}/revisions/1")
     assert rev_detail.status_code == 200
     assert rev_detail.json()["data"]["content"] == "v1"
 
@@ -774,12 +788,8 @@ async def test_get_specific_revision(authenticated_client: AsyncClient) -> None:
     )
     page_id = create.json()["data"]["id"]
 
-    await authenticated_client.put(
-        f"/api/wiki/{page_id}", json={"content": "second"}
-    )
-    await authenticated_client.put(
-        f"/api/wiki/{page_id}", json={"content": "third"}
-    )
+    await authenticated_client.put(f"/api/wiki/{page_id}", json={"content": "second"})
+    await authenticated_client.put(f"/api/wiki/{page_id}", json={"content": "third"})
 
     # Get revision 1 (original state before first update)
     rev1 = await authenticated_client.get(f"/api/wiki/{page_id}/revisions/1")
@@ -813,9 +823,7 @@ async def test_revisions_for_nonexistent_page(
 @pytest.mark.asyncio
 async def test_batch_link_tasks(authenticated_client: AsyncClient) -> None:
     """Batch linking multiple tasks at once."""
-    page = await authenticated_client.post(
-        "/api/wiki", json={"title": "Batch Link"}
-    )
+    page = await authenticated_client.post("/api/wiki", json={"title": "Batch Link"})
     page_id = page.json()["data"]["id"]
     todo1_id = await _create_todo(authenticated_client)
     todo2_id = await _create_todo(authenticated_client)
@@ -834,9 +842,7 @@ async def test_batch_link_tasks(authenticated_client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_batch_link_tasks_mixed(authenticated_client: AsyncClient) -> None:
     """Batch link with already-linked, new, and not-found IDs."""
-    page = await authenticated_client.post(
-        "/api/wiki", json={"title": "Batch Mixed"}
-    )
+    page = await authenticated_client.post("/api/wiki", json={"title": "Batch Mixed"})
     page_id = page.json()["data"]["id"]
     todo_id = await _create_todo(authenticated_client)
 
@@ -896,9 +902,7 @@ async def test_slug_modified_on_update(authenticated_client: AsyncClient) -> Non
     await authenticated_client.post(
         "/api/wiki", json={"title": "Taken Slug", "slug": "target-slug"}
     )
-    create = await authenticated_client.post(
-        "/api/wiki", json={"title": "Other Page"}
-    )
+    create = await authenticated_client.post("/api/wiki", json={"title": "Other Page"})
     page_id = create.json()["data"]["id"]
 
     response = await authenticated_client.put(
@@ -909,3 +913,364 @@ async def test_slug_modified_on_update(authenticated_client: AsyncClient) -> Non
     assert data["slug"] == "target-slug-2"
     assert data["slug_modified"] is True
     assert data["requested_slug"] == "target-slug"
+
+
+# ---------------------------------------------------------------------------
+# Hierarchy tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_with_parent(authenticated_client: AsyncClient) -> None:
+    """Create a child page under a parent."""
+    parent = await authenticated_client.post("/api/wiki", json={"title": "Parent Page"})
+    parent_id = parent.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Child Page", "parent_id": parent_id}
+    )
+    assert child.status_code == 201
+    data = child.json()["data"]
+    assert data["parent_id"] == parent_id
+    assert len(data["ancestors"]) == 1
+    assert data["ancestors"][0]["title"] == "Parent Page"
+
+
+@pytest.mark.asyncio
+async def test_depth_limit(authenticated_client: AsyncClient) -> None:
+    """Cannot create pages beyond MAX_WIKI_DEPTH (3)."""
+    p1 = await authenticated_client.post("/api/wiki", json={"title": "Level 1"})
+    p1_id = p1.json()["data"]["id"]
+
+    p2 = await authenticated_client.post(
+        "/api/wiki", json={"title": "Level 2", "parent_id": p1_id}
+    )
+    p2_id = p2.json()["data"]["id"]
+
+    p3 = await authenticated_client.post(
+        "/api/wiki", json={"title": "Level 3", "parent_id": p2_id}
+    )
+    assert p3.status_code == 201
+    p3_id = p3.json()["data"]["id"]
+
+    # Level 4 should fail
+    p4 = await authenticated_client.post(
+        "/api/wiki", json={"title": "Level 4", "parent_id": p3_id}
+    )
+    assert p4.status_code == 400
+    assert "depth" in p4.json()["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_self_parent_rejected(authenticated_client: AsyncClient) -> None:
+    """Cannot set a page as its own parent."""
+    page = await authenticated_client.post("/api/wiki", json={"title": "Self Parent"})
+    page_id = page.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"parent_id": page_id}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_circular_ref_prevented(authenticated_client: AsyncClient) -> None:
+    """Cannot create circular parent references."""
+    p1 = await authenticated_client.post("/api/wiki", json={"title": "Circ A"})
+    p1_id = p1.json()["data"]["id"]
+
+    p2 = await authenticated_client.post(
+        "/api/wiki", json={"title": "Circ B", "parent_id": p1_id}
+    )
+    p2_id = p2.json()["data"]["id"]
+
+    # Try to set p1's parent to p2 (p2 is a child of p1)
+    response = await authenticated_client.put(
+        f"/api/wiki/{p1_id}", json={"parent_id": p2_id}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_cascade_soft_delete(authenticated_client: AsyncClient) -> None:
+    """Deleting a parent soft-deletes its children."""
+    parent = await authenticated_client.post("/api/wiki", json={"title": "Parent Del"})
+    parent_id = parent.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Child Del", "parent_id": parent_id}
+    )
+    child_id = child.json()["data"]["id"]
+
+    # Delete parent
+    response = await authenticated_client.delete(f"/api/wiki/{parent_id}")
+    assert response.status_code == 200
+
+    # Child should also be gone
+    child_get = await authenticated_client.get(f"/api/wiki/{child_id}")
+    assert child_get.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_ancestors_in_response(authenticated_client: AsyncClient) -> None:
+    """Getting a page returns its ancestor chain."""
+    root = await authenticated_client.post("/api/wiki", json={"title": "Root"})
+    root_id = root.json()["data"]["id"]
+
+    mid = await authenticated_client.post(
+        "/api/wiki", json={"title": "Mid", "parent_id": root_id}
+    )
+    mid_id = mid.json()["data"]["id"]
+
+    leaf = await authenticated_client.post(
+        "/api/wiki", json={"title": "Leaf", "parent_id": mid_id}
+    )
+    leaf_slug = leaf.json()["data"]["slug"]
+
+    response = await authenticated_client.get(f"/api/wiki/{leaf_slug}")
+    data = response.json()["data"]
+    assert len(data["ancestors"]) == 2
+    assert data["ancestors"][0]["title"] == "Root"
+    assert data["ancestors"][1]["title"] == "Mid"
+
+
+@pytest.mark.asyncio
+async def test_children_in_response(authenticated_client: AsyncClient) -> None:
+    """Getting a page returns its direct children with counts."""
+    parent = await authenticated_client.post("/api/wiki", json={"title": "P"})
+    parent_id = parent.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "C1", "parent_id": parent_id}
+    )
+    child_id = child.json()["data"]["id"]
+
+    # Add grandchild under child
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "GC1", "parent_id": child_id}
+    )
+
+    response = await authenticated_client.get(f"/api/wiki/{parent_id}")
+    data = response.json()["data"]
+    assert len(data["children"]) == 1
+    assert data["children"][0]["title"] == "C1"
+    assert data["children"][0]["child_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_tree_endpoint(authenticated_client: AsyncClient) -> None:
+    """The tree endpoint returns nested structure."""
+    root = await authenticated_client.post("/api/wiki", json={"title": "Tree Root"})
+    root_id = root.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "Tree Child", "parent_id": root_id}
+    )
+    await authenticated_client.post("/api/wiki", json={"title": "Orphan"})
+
+    response = await authenticated_client.get("/api/wiki/tree")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    # Should have 2 root nodes
+    titles = [n["title"] for n in data]
+    assert "Orphan" in titles
+    assert "Tree Root" in titles
+    root_node = next(n for n in data if n["title"] == "Tree Root")
+    assert len(root_node["children"]) == 1
+    assert root_node["children"][0]["title"] == "Tree Child"
+
+
+@pytest.mark.asyncio
+async def test_reparenting(authenticated_client: AsyncClient) -> None:
+    """Can move a page to a different parent."""
+    p1 = await authenticated_client.post("/api/wiki", json={"title": "Parent A"})
+    p1_id = p1.json()["data"]["id"]
+
+    p2 = await authenticated_client.post("/api/wiki", json={"title": "Parent B"})
+    p2_id = p2.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Moving Child", "parent_id": p1_id}
+    )
+    child_id = child.json()["data"]["id"]
+
+    # Move child to p2
+    response = await authenticated_client.put(
+        f"/api/wiki/{child_id}", json={"parent_id": p2_id}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["parent_id"] == p2_id
+    assert data["ancestors"][0]["title"] == "Parent B"
+
+
+@pytest.mark.asyncio
+async def test_reparenting_subtree_depth_violation(
+    authenticated_client: AsyncClient,
+) -> None:
+    """Moving a page with descendants cannot exceed MAX_WIKI_DEPTH."""
+    # Build chain: Root_A -> Child_A -> Grandchild_A (depth 3)
+    root_a = await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthA Root"}
+    )
+    root_a_id = root_a.json()["data"]["id"]
+
+    child_a = await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthA Child", "parent_id": root_a_id}
+    )
+    child_a_id = child_a.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthA Grand", "parent_id": child_a_id}
+    )
+
+    # Build: Root_B -> Child_B (depth 2)
+    root_b = await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthB Root"}
+    )
+    root_b_id = root_b.json()["data"]["id"]
+
+    child_b = await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthB Child", "parent_id": root_b_id}
+    )
+    child_b_id = child_b.json()["data"]["id"]
+
+    # Moving Root_A (which has 2 levels below) under Child_B (depth 2)
+    # would put Root_A at depth 3, Child_A at 4, Grandchild_A at 5 => reject
+    response = await authenticated_client.put(
+        f"/api/wiki/{root_a_id}", json={"parent_id": child_b_id}
+    )
+    assert response.status_code == 400
+    assert "depth" in response.json()["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_remove_parent(authenticated_client: AsyncClient) -> None:
+    """Can remove a page's parent to make it a root page."""
+    parent = await authenticated_client.post(
+        "/api/wiki", json={"title": "Remove Parent Test"}
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Becomes Root", "parent_id": parent_id}
+    )
+    child_id = child.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/wiki/{child_id}", json={"remove_parent": True}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["parent_id"] is None
+    assert response.json()["data"]["ancestors"] == []
+
+
+@pytest.mark.asyncio
+async def test_parent_not_found(authenticated_client: AsyncClient) -> None:
+    """Cannot set a non-existent page as parent."""
+    response = await authenticated_client.post(
+        "/api/wiki", json={"title": "Bad Parent", "parent_id": 99999}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_list_filter_by_parent_root(authenticated_client: AsyncClient) -> None:
+    """Filtering with parent_id=0 returns only root pages."""
+    root = await authenticated_client.post("/api/wiki", json={"title": "Root Only"})
+    root_id = root.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "Child Only", "parent_id": root_id}
+    )
+
+    response = await authenticated_client.get("/api/wiki", params={"parent_id": 0})
+    assert response.status_code == 200
+    titles = [p["title"] for p in response.json()["data"]]
+    assert "Root Only" in titles
+    assert "Child Only" not in titles
+
+
+# ---------------------------------------------------------------------------
+# Tag tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_with_tags(authenticated_client: AsyncClient) -> None:
+    """Create a page with tags."""
+    response = await authenticated_client.post(
+        "/api/wiki", json={"title": "Tagged", "tags": ["design", "frontend"]}
+    )
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["tags"] == ["design", "frontend"]
+
+
+@pytest.mark.asyncio
+async def test_update_tags(authenticated_client: AsyncClient) -> None:
+    """Update a page's tags."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Tag Update", "tags": ["old"]}
+    )
+    page_id = create.json()["data"]["id"]
+
+    response = await authenticated_client.put(
+        f"/api/wiki/{page_id}", json={"tags": ["new", "updated"]}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["tags"] == ["new", "updated"]
+
+
+@pytest.mark.asyncio
+async def test_clear_tags(authenticated_client: AsyncClient) -> None:
+    """Setting tags to empty list clears them."""
+    create = await authenticated_client.post(
+        "/api/wiki", json={"title": "Clear Tags", "tags": ["a", "b"]}
+    )
+    page_id = create.json()["data"]["id"]
+
+    response = await authenticated_client.put(f"/api/wiki/{page_id}", json={"tags": []})
+    assert response.status_code == 200
+    assert response.json()["data"]["tags"] == []
+
+
+@pytest.mark.asyncio
+async def test_filter_by_tag(authenticated_client: AsyncClient) -> None:
+    """List endpoint can filter by tag."""
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "Has Tag", "tags": ["python"]}
+    )
+    await authenticated_client.post("/api/wiki", json={"title": "No Tag", "tags": []})
+
+    response = await authenticated_client.get("/api/wiki", params={"tag": "python"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["meta"]["count"] == 1
+    assert data["data"][0]["title"] == "Has Tag"
+
+
+@pytest.mark.asyncio
+async def test_tags_in_list_response(authenticated_client: AsyncClient) -> None:
+    """Tags are included in list/summary responses."""
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "List Tags", "tags": ["api", "docs"]}
+    )
+
+    response = await authenticated_client.get("/api/wiki")
+    assert response.status_code == 200
+    page = response.json()["data"][0]
+    assert page["tags"] == ["api", "docs"]
+
+
+@pytest.mark.asyncio
+async def test_tags_in_tree_response(authenticated_client: AsyncClient) -> None:
+    """Tags are included in tree endpoint responses."""
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "Tree Tags", "tags": ["arch"]}
+    )
+
+    response = await authenticated_client.get("/api/wiki/tree")
+    assert response.status_code == 200
+    node = response.json()["data"][0]
+    assert node["tags"] == ["arch"]
