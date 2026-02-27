@@ -195,7 +195,7 @@
 				// Reload to ensure subtask changes are correctly reflected in the store
 				// (subtasks are nested inside parent todos, so updateTodo's local store
 				// update won't find them at the top level)
-				await todos.load({ status: 'pending', ...filters });
+				await todos.load({ ...filters, status: 'pending' });
 				const currentTodos = get(pendingTodos);
 				itemsByDate = groupTodosByDate(currentTodos);
 
@@ -206,7 +206,7 @@
 			} catch (error) {
 				logger.error('Failed to update todo date:', error);
 				// Reload all todos to revert the change
-				await todos.load({ status: 'pending', ...filters });
+				await todos.load({ ...filters, status: 'pending' });
 				const currentTodos = get(pendingTodos);
 				itemsByDate = groupTodosByDate(currentTodos);
 
@@ -298,7 +298,7 @@
 		});
 
 		// Load initial todos
-		todos.load({ status: 'pending', ...filters });
+		todos.load({ ...filters, status: 'pending' });
 
 		return unsubscribe;
 	});
@@ -490,8 +490,7 @@
 									class:calendar-task-hidden={isHidden}
 									style="background-color: {hexTo50Shade(
 										item.project_color || DEFAULT_PROJECT_COLOR
-									)}; border-left: 4px solid {item.project_color ||
-										DEFAULT_PROJECT_COLOR}"
+									)}; border-left: 4px solid {item.project_color || DEFAULT_PROJECT_COLOR}"
 									on:click={() => handleItemClick(item)}
 									role="button"
 									tabindex="0"

@@ -181,9 +181,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 
 		// Verify the tasks-container has flex: 1 (fills remaining space)
 		const tasksContainer = dayCell.locator('.tasks-container');
-		const flexGrow = await tasksContainer.evaluate(
-			(el) => window.getComputedStyle(el).flexGrow
-		);
+		const flexGrow = await tasksContainer.evaluate((el) => window.getComputedStyle(el).flexGrow);
 		expect(flexGrow).toBe('1');
 
 		// The tasks-container should be substantially taller than just its content
@@ -219,9 +217,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 		// The tasks-container should take up most of the day cell height
 		// (minus the date header which is ~20-30px)
 		const headerApproxHeight = 30;
-		expect(containerBox!.height).toBeGreaterThan(
-			dayCellBox!.height - headerApproxHeight - 20
-		);
+		expect(containerBox!.height).toBeGreaterThan(dayCellBox!.height - headerApproxHeight - 20);
 	});
 
 	test('drag parent task to a different day via the empty area', async ({ page }) => {
@@ -242,8 +238,9 @@ test.describe('Calendar Drop Target Coverage', () => {
 		await expect(todoItem).toBeVisible({ timeout: 15000 });
 
 		// Target: the tasks-container (dndzone) in the destination day, which now fills the cell
-		const targetContainer = page
-			.locator(`.calendar-day[data-date="${targetDate}"] .tasks-container`);
+		const targetContainer = page.locator(
+			`.calendar-day[data-date="${targetDate}"] .tasks-container`
+		);
 
 		// Set up response listener before the drag
 		const responsePromise = waitForApiResponse(page, '/api/todos/', 'PUT');
