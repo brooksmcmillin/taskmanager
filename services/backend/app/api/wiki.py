@@ -7,8 +7,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy import CursorResult, cast, delete, select, update
 from sqlalchemy import func as sa_func
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.errors import errors
 from app.db.queries import get_resource_for_user
@@ -418,7 +419,7 @@ async def list_wiki_pages(
             WikiPage.title.ilike(f"%{q}%") | WikiPage.content.ilike(f"%{q}%")
         )
     if tag:
-        query = query.where(WikiPage.tags.op("@>")(json.dumps([tag])))
+        query = query.where(WikiPage.tags.op("@>")(cast(json.dumps([tag]), JSONB)))
     if parent_id is not None:
         if parent_id == 0:
             query = query.where(WikiPage.parent_id.is_(None))
