@@ -21,6 +21,8 @@ from mcp_resource_framework.middleware import NormalizePathMiddleware
 from mcp_resource_framework.oauth_discovery import register_oauth_discovery_endpoints
 from pydantic import AnyHttpUrl
 
+from mcp_relay.debug import create_debug_app
+
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -397,7 +399,11 @@ def main(
         import uvicorn
 
         starlette_app = mcp_server.streamable_http_app()
+        debug_app = create_debug_app(store)
+        starlette_app.mount("/debug", debug_app)
         app = NormalizePathMiddleware(starlette_app)
+
+        logger.info(f"Debug UI: http://{host}:{port}/debug/")
 
         uvicorn.run(
             app,
