@@ -344,25 +344,26 @@ async def _validate_parent(
             break
         depth += 1
 
-    # parent is at depth `depth`, new page will be depth+1
-    if depth + 1 > MAX_WIKI_DEPTH:
+    # page_depth = depth of the moved/new page under the new parent
+    page_depth = depth + 1
+
+    # When reparenting, also account for the subtree depth below the moved page
+    subtree_depth = 0
+    if exclude_id is not None:
+        subtree_depth = await _get_subtree_depth(db, exclude_id)
+
+    if page_depth + subtree_depth > MAX_WIKI_DEPTH:
         raise errors.validation(f"Maximum nesting depth of {MAX_WIKI_DEPTH} exceeded")
 
-    # If we're reparenting an existing page, check that its subtree won't
-    # cause the new parent to be a descendant of the page being moved
-    if exclude_id is not None:
-        await _check_not_descendant(db, exclude_id, parent_id)
 
-
-async def _check_not_descendant(
-    db: DbSession, page_id: int, potential_descendant_id: int
-) -> None:
-    """Ensure potential_descendant_id is not a descendant of page_id."""
-    # BFS from page_id downward
-    to_visit = [page_id]
+async def _get_subtree_depth(db: DbSession, page_id: int) -> int:
+    """Return the maximum depth of descendants below page_id (0 if leaf)."""
+    max_depth = 0
+    # BFS with depth tracking
+    to_visit: list[tuple[int, int]] = [(page_id, 0)]
     visited: set[int] = set()
     while to_visit:
-        current_id = to_visit.pop()
+        current_id, current_depth = to_visit.pop()
         if current_id in visited:
             continue
         visited.add(current_id)
@@ -373,9 +374,11 @@ async def _check_not_descendant(
             )
         )
         for row in result.all():
-            if row.id == potential_descendant_id:
-                raise errors.validation("Cannot move a page under its own descendant")
-            to_visit.append(row.id)
+            child_depth = current_depth + 1
+            if child_depth > max_depth:
+                max_depth = child_depth
+            to_visit.append((row.id, child_depth))
+    return max_depth
 
 
 async def _soft_delete_descendants(db: DbSession, page_id: int) -> None:

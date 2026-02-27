@@ -1105,6 +1105,46 @@ async def test_reparenting(authenticated_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_reparenting_subtree_depth_violation(
+    authenticated_client: AsyncClient,
+) -> None:
+    """Moving a page with descendants cannot exceed MAX_WIKI_DEPTH."""
+    # Build chain: Root_A -> Child_A -> Grandchild_A (depth 3)
+    root_a = await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthA Root"}
+    )
+    root_a_id = root_a.json()["data"]["id"]
+
+    child_a = await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthA Child", "parent_id": root_a_id}
+    )
+    child_a_id = child_a.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthA Grand", "parent_id": child_a_id}
+    )
+
+    # Build: Root_B -> Child_B (depth 2)
+    root_b = await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthB Root"}
+    )
+    root_b_id = root_b.json()["data"]["id"]
+
+    child_b = await authenticated_client.post(
+        "/api/wiki", json={"title": "DepthB Child", "parent_id": root_b_id}
+    )
+    child_b_id = child_b.json()["data"]["id"]
+
+    # Moving Root_A (which has 2 levels below) under Child_B (depth 2)
+    # would put Root_A at depth 3, Child_A at 4, Grandchild_A at 5 => reject
+    response = await authenticated_client.put(
+        f"/api/wiki/{root_a_id}", json={"parent_id": child_b_id}
+    )
+    assert response.status_code == 400
+    assert "depth" in response.json()["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
 async def test_remove_parent(authenticated_client: AsyncClient) -> None:
     """Can remove a page's parent to make it a root page."""
     parent = await authenticated_client.post(
