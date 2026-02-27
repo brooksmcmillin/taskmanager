@@ -30,6 +30,7 @@
 	let isDragging = false;
 	// Per-day expand state for overflow
 	let expandedDays: Record<string, boolean> = {};
+	let allExpanded = false;
 	// Mobile: selected day for detail view
 	let selectedDay: string = formatDateForInput(new Date());
 
@@ -213,12 +214,16 @@
 		const newDate = new Date(currentWeekStart);
 		newDate.setDate(newDate.getDate() - 7);
 		currentWeekStart = newDate;
+		expandedDays = {};
+		allExpanded = false;
 	}
 
 	function nextWeek() {
 		const newDate = new Date(currentWeekStart);
 		newDate.setDate(newDate.getDate() + 7);
 		currentWeekStart = newDate;
+		expandedDays = {};
+		allExpanded = false;
 	}
 
 	function goToToday() {
@@ -226,6 +231,8 @@
 		thisWeekMonday.setDate(thisWeekMonday.getDate() - 7);
 		currentWeekStart = thisWeekMonday;
 		selectedDay = formatDateForInput(new Date());
+		expandedDays = {};
+		allExpanded = false;
 	}
 
 	function handleEditTodo(todo: Todo) {
@@ -241,6 +248,30 @@
 
 	function toggleDayExpand(dateStr: string) {
 		expandedDays = { ...expandedDays, [dateStr]: !expandedDays[dateStr] };
+		// Sync allExpanded based on whether all overflowing days are now expanded
+		allExpanded = days.every(({ dateStr: ds }) => {
+			const tasks = todosByDate[ds] || [];
+			const subs = subtasksByDate[ds] || [];
+			const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - tasks.length);
+			const hasOverflow = tasks.length > MAX_VISIBLE_TASKS || subs.length > freeSlots;
+			return !hasOverflow || expandedDays[ds];
+		});
+	}
+
+	$: hasAnyOverflow = days.some(({ dateStr }) => {
+		const tasks = todosByDate[dateStr] || [];
+		const subs = subtasksByDate[dateStr] || [];
+		const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - tasks.length);
+		return tasks.length > MAX_VISIBLE_TASKS || subs.length > freeSlots;
+	});
+
+	function toggleExpandAll() {
+		allExpanded = !allExpanded;
+		const newState: Record<string, boolean> = {};
+		for (const { dateStr } of days) {
+			newState[dateStr] = allExpanded;
+		}
+		expandedDays = newState;
 	}
 
 	onMount(() => {
@@ -266,6 +297,14 @@
 			<button class="btn btn-secondary btn-sm" on:click={prevWeek}>← Previous</button>
 			<button class="btn btn-secondary btn-sm" on:click={goToToday}>Today</button>
 			<button class="btn btn-secondary btn-sm" on:click={nextWeek}>Next →</button>
+			{#if hasAnyOverflow}
+				<button
+					class="btn btn-secondary btn-sm expand-all-btn"
+					on:click={toggleExpandAll}
+				>
+					{allExpanded ? 'Collapse All' : 'Expand All'}
+				</button>
+			{/if}
 		</div>
 	</div>
 
@@ -520,6 +559,10 @@
 		background: var(--primary-50, #eff6ff);
 	}
 
+	.expand-all-btn {
+		margin-left: 1rem;
+	}
+
 	/* Calendar header navigation */
 	.calendar-top-nav {
 		display: flex;
@@ -716,6 +759,10 @@
 		.calendar-top-nav {
 			flex-wrap: wrap;
 			gap: 0.5rem;
+		}
+
+		.expand-all-btn {
+			display: none;
 		}
 	}
 </style>
