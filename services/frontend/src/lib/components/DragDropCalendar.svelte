@@ -24,9 +24,13 @@
 		return thisWeekMonday;
 	})();
 
-	// Unified item type for the dndzone - represents both parent tasks and subtasks
+	// Unified item type for the dndzone - represents both parent tasks and subtasks.
+	// Uses a namespaced string `id` (e.g. "t-5", "s-12") for svelte-dnd-action uniqueness,
+	// since parent tasks and subtasks could theoretically share numeric IDs.
+	// The raw numeric `todoId` is used for API calls.
 	interface CalendarItem {
-		id: number;
+		id: string; // namespaced dndzone key: "t-{id}" for tasks, "s-{id}" for subtasks
+		todoId: number; // raw DB id for API calls
 		title: string;
 		priority: 'low' | 'medium' | 'high' | 'urgent';
 		due_date: string | null;
@@ -43,7 +47,7 @@
 
 	let itemsByDate: Record<string, CalendarItem[]> = {};
 	// Track drag operation state
-	let draggedItemId: number | null = null;
+	let draggedItemId: string | null = null;
 	let originalDate: string | null = null;
 	let isDragging = false;
 	// Per-day expand state for overflow
@@ -121,7 +125,8 @@
 				const dateStr = todo.due_date.split('T')[0];
 				if (!grouped[dateStr]) grouped[dateStr] = [];
 				grouped[dateStr].push({
-					id: todo.id,
+					id: `t-${todo.id}`,
+					todoId: todo.id,
 					title: todo.title,
 					priority: todo.priority,
 					due_date: todo.due_date,
@@ -140,7 +145,8 @@
 				if (!dateStr) return;
 				if (!grouped[dateStr]) grouped[dateStr] = [];
 				grouped[dateStr].push({
-					id: subtask.id,
+					id: `s-${subtask.id}`,
+					todoId: subtask.id,
 					title: subtask.title,
 					priority: subtask.priority,
 					due_date: dateStr,
@@ -159,15 +165,13 @@
 		// Track what's being dragged when drag starts
 		if (event.detail.info.trigger === 'dragStarted') {
 			isDragging = true;
-			const draggedId = event.detail.info.id;
-			// Convert draggedId to number for comparison with item.id
-			const draggedIdNum = typeof draggedId === 'string' ? parseInt(draggedId, 10) : draggedId;
-			// Find the item being dragged across all dates
+			const draggedId = String(event.detail.info.id);
+			// Find the item being dragged across all dates using the namespaced ID
 			for (const [, items] of Object.entries(itemsByDate)) {
 				if (items) {
-					const item = items.find((i) => i && i.id === draggedIdNum);
+					const item = items.find((i) => i && i.id === draggedId);
 					if (item && item.due_date) {
-						draggedItemId = draggedIdNum;
+						draggedItemId = draggedId;
 						originalDate = item.due_date.split('T')[0];
 						break;
 					}
@@ -186,7 +190,19 @@
 
 		// Only make API call if item was actually moved to a different date
 		if (draggedItemId !== null && originalDate !== null && originalDate !== dateStr) {
-			const itemId = draggedItemId;
+			// Find the dragged item to get its numeric todoId for the API call
+			const draggedItem = event.detail.items.find((i) => i && i.id === draggedItemId) as
+				| CalendarItem
+				| undefined;
+			const itemId = draggedItem?.todoId;
+
+			if (!itemId) {
+				logger.error('Could not find dragged item for API update');
+				isDragging = false;
+				draggedItemId = null;
+				originalDate = null;
+				return;
+			}
 
 			try {
 				// updateTodo sends PUT /api/todos/{id} - works for both parent tasks and subtasks
@@ -249,11 +265,11 @@
 	function handleItemClick(item: CalendarItem) {
 		if (isDragging) return;
 		if (item.isSubtask) {
-			goto(`/task/${item.id}`);
+			goto(`/task/${item.todoId}`);
 		} else {
 			// Look up the full Todo object from the store for the detail panel
 			const allTodos = get(pendingTodos);
-			const todo = allTodos.find((t) => t.id === item.id);
+			const todo = allTodos.find((t) => t.id === item.todoId);
 			if (todo) {
 				dispatch('editTodo', todo);
 			}
