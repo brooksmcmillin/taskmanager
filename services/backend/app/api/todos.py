@@ -5,7 +5,8 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import and_, case, select
+from sqlalchemy import and_, case, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import errors
 from app.db.queries import (
@@ -46,7 +47,9 @@ class TodoCreate(BaseModel):
     deadline_type: DeadlineType = DeadlineType.preferred
     project_id: int | None = None
     category: str | None = Field(
-        None, description="Project name (resolved to project_id)"
+        None,
+        max_length=100,
+        description="Project name (resolved to project_id)",
     )
     tags: list[str] = Field(default_factory=list)
     context: str | None = None
@@ -87,7 +90,9 @@ class TodoUpdate(BaseModel):
     deadline_type: DeadlineType | None = None
     project_id: int | None = None
     category: str | None = Field(
-        None, description="Project name (resolved to project_id)"
+        None,
+        max_length=100,
+        description="Project name (resolved to project_id)",
     )
     tags: list[str] | None = None
     context: str | None = None
@@ -400,19 +405,97 @@ def _build_todo_response(
     )
 
 
+# Maximum number of projects a user may have (guards against unbounded auto-creation).
+_MAX_PROJECTS_PER_USER = 200
+
+
 async def _resolve_category_to_project(
     db: "DbSession", category: str, user_id: int
-) -> int | None:
+) -> int:
     """Resolve a category name to a project_id for the given user.
 
+    Performs a case-insensitive match against the user's existing projects.
+    If no match is found, automatically creates a new project with the given name
+    provided the user has not yet reached the per-user project cap
+    (_MAX_PROJECTS_PER_USER).
+
+    Because Project.name has a (user_id, lower(name)) unique constraint, any
+    concurrent race by the same user hitting the same category will produce an
+    IntegrityError on the INSERT. That error is scoped to a savepoint so no
+    prior session work is discarded; the handler re-queries to find the winning
+    row and returns its ID.
+
+    Args:
+        db: Database session
+        category: Category/project name to resolve
+        user_id: ID of the authenticated user
+
     Returns:
-        The project ID if found, None otherwise.
+        The project ID (either existing or newly created).
+
+    Raises:
+        ApiError: If the user already has _MAX_PROJECTS_PER_USER projects and
+                  the category does not match any existing project.
     """
+    # Try case-insensitive exact match against user's projects
     result = await db.execute(
-        select(Project).where(Project.name == category, Project.user_id == user_id)
+        select(Project).where(
+            func.lower(Project.name) == category.lower(),
+            Project.user_id == user_id,
+        )
     )
     project = result.scalar_one_or_none()
-    return project.id if project else None
+    if project:
+        return project.id
+
+    # Guard against unbounded project creation: count existing projects for user.
+    # Use SELECT FOR UPDATE to lock the user's existing project rows, preventing
+    # concurrent requests from both passing the check and collectively overshooting
+    # the cap (same pattern used by create_api_key).
+    count_result = await db.execute(
+        select(Project.id).where(Project.user_id == user_id).with_for_update()
+    )
+    project_count = len(count_result.scalars().all())
+    if project_count >= _MAX_PROJECTS_PER_USER:
+        raise errors.validation(
+            f"Cannot auto-create project '{category}': "
+            f"user has reached the maximum of {_MAX_PROJECTS_PER_USER} projects. "
+            "Please use an existing project or delete unused projects."
+        )
+
+    # No match found — auto-create the project for this user.
+    # Use a savepoint so that an IntegrityError (concurrent race) only rolls
+    # back this INSERT and does not discard any prior flushed work in the
+    # surrounding transaction (critical for batch_create_todos correctness).
+    position = await get_next_position(db, Project, user_id)
+    new_project = Project(
+        user_id=user_id,
+        name=category,
+        position=position,
+    )
+    db.add(new_project)
+    try:
+        async with db.begin_nested():
+            await db.flush()
+    except IntegrityError:
+        # A concurrent insert (same user, same name) won the race.
+        # The savepoint rolls back new_project but SQLAlchemy moves it back
+        # to session.new (pending), so we must expunge it before the re-query
+        # to prevent autoflush from issuing the INSERT a second time.
+        db.expunge(new_project)
+        retry_result = await db.execute(
+            select(Project).where(
+                func.lower(Project.name) == category.lower(),
+                Project.user_id == user_id,
+            )
+        )
+        existing = retry_result.scalar_one_or_none()
+        if existing:
+            return existing.id
+        # Should not happen given the per-user unique constraint, but re-raise
+        # to surface the underlying issue rather than silently lose data.
+        raise
+    return new_project.id
 
 
 # Rule-based action type inference patterns
@@ -732,9 +815,9 @@ async def create_todo(
     """
     # Resolve category name to project_id
     if request.category and not request.project_id:
-        project_id = await _resolve_category_to_project(db, request.category, user.id)
-        if project_id:
-            request.project_id = project_id
+        request.project_id = await _resolve_category_to_project(
+            db, request.category, user.id
+        )
 
     # Verify parent todo exists and belongs to user if parent_id is provided
     if request.parent_id:
@@ -902,9 +985,9 @@ async def batch_create_todos(
     for i, item in enumerate(request.todos):
         # Resolve category name to project_id
         if item.category and not item.project_id:
-            project_id = await _resolve_category_to_project(db, item.category, user.id)
-            if project_id:
-                item.project_id = project_id
+            item.project_id = await _resolve_category_to_project(
+                db, item.category, user.id
+            )
 
         # Verify parent todo exists and belongs to user (only for parent_id,
         # not parent_index which references items within this batch)
@@ -1126,9 +1209,9 @@ async def update_todo(
     if "category" in update_data:
         category = update_data.pop("category")
         if category and "project_id" not in update_data:
-            project_id = await _resolve_category_to_project(db, category, user.id)
-            if project_id:
-                update_data["project_id"] = project_id
+            update_data["project_id"] = await _resolve_category_to_project(
+                db, category, user.id
+            )
 
     # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
@@ -1174,9 +1257,9 @@ async def bulk_update_todos(
     if "category" in update_data:
         category = update_data.pop("category")
         if category and "project_id" not in update_data:
-            project_id = await _resolve_category_to_project(db, category, user.id)
-            if project_id:
-                update_data["project_id"] = project_id
+            update_data["project_id"] = await _resolve_category_to_project(
+                db, category, user.id
+            )
 
     # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
