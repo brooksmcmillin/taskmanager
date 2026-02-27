@@ -36,8 +36,8 @@
 		if (wikiPage) {
 			try {
 				linkedTasks = await wiki.getLinkedTasks(wikiPage.id);
-			} catch {
-				// Non-critical: page still renders without linked tasks
+			} catch (e) {
+				console.warn('Failed to load linked tasks:', e);
 			}
 		}
 	}
