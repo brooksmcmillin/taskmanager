@@ -448,11 +448,14 @@ async def _resolve_category_to_project(
     if project:
         return project.id
 
-    # Guard against unbounded project creation: count existing projects for user
+    # Guard against unbounded project creation: count existing projects for user.
+    # Use SELECT FOR UPDATE to lock the user's existing project rows, preventing
+    # concurrent requests from both passing the check and collectively overshooting
+    # the cap (same pattern used by create_api_key).
     count_result = await db.execute(
-        select(func.count(Project.id)).where(Project.user_id == user_id)
+        select(Project.id).where(Project.user_id == user_id).with_for_update()
     )
-    project_count = count_result.scalar() or 0
+    project_count = len(count_result.scalars().all())
     if project_count >= _MAX_PROJECTS_PER_USER:
         raise errors.validation(
             f"Cannot auto-create project '{category}': "
