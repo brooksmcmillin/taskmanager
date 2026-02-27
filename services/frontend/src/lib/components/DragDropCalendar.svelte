@@ -30,7 +30,6 @@
 	let isDragging = false;
 	// Per-day expand state for overflow
 	let expandedDays: Record<string, boolean> = {};
-	let allExpanded = false;
 	// Mobile: selected day for detail view
 	let selectedDay: string = formatDateForInput(new Date());
 
@@ -215,7 +214,6 @@
 		newDate.setDate(newDate.getDate() - 7);
 		currentWeekStart = newDate;
 		expandedDays = {};
-		allExpanded = false;
 	}
 
 	function nextWeek() {
@@ -223,7 +221,6 @@
 		newDate.setDate(newDate.getDate() + 7);
 		currentWeekStart = newDate;
 		expandedDays = {};
-		allExpanded = false;
 	}
 
 	function goToToday() {
@@ -232,7 +229,6 @@
 		currentWeekStart = thisWeekMonday;
 		selectedDay = formatDateForInput(new Date());
 		expandedDays = {};
-		allExpanded = false;
 	}
 
 	function handleEditTodo(todo: Todo) {
@@ -246,30 +242,30 @@
 		}
 	}
 
-	function toggleDayExpand(dateStr: string) {
-		expandedDays = { ...expandedDays, [dateStr]: !expandedDays[dateStr] };
-		// Sync allExpanded based on whether all overflowing days are now expanded
-		allExpanded = days.every(({ dateStr: ds }) => {
-			const tasks = todosByDate[ds] || [];
-			const subs = subtasksByDate[ds] || [];
-			const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - tasks.length);
-			const hasOverflow = tasks.length > MAX_VISIBLE_TASKS || subs.length > freeSlots;
-			return !hasOverflow || expandedDays[ds];
-		});
-	}
-
-	$: hasAnyOverflow = days.some(({ dateStr }) => {
+	function dayHasOverflow(dateStr: string): boolean {
 		const tasks = todosByDate[dateStr] || [];
 		const subs = subtasksByDate[dateStr] || [];
 		const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - tasks.length);
 		return tasks.length > MAX_VISIBLE_TASKS || subs.length > freeSlots;
-	});
+	}
+
+	function toggleDayExpand(dateStr: string) {
+		expandedDays = { ...expandedDays, [dateStr]: !expandedDays[dateStr] };
+	}
+
+	$: hasAnyOverflow = days.some(({ dateStr }) => dayHasOverflow(dateStr));
+
+	$: allExpanded =
+		hasAnyOverflow &&
+		days.every(({ dateStr }) => !dayHasOverflow(dateStr) || expandedDays[dateStr]);
 
 	function toggleExpandAll() {
-		allExpanded = !allExpanded;
+		const expanding = !allExpanded;
 		const newState: Record<string, boolean> = {};
 		for (const { dateStr } of days) {
-			newState[dateStr] = allExpanded;
+			if (dayHasOverflow(dateStr)) {
+				newState[dateStr] = expanding;
+			}
 		}
 		expandedDays = newState;
 	}
