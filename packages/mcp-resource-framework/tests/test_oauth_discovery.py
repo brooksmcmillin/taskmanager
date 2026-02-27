@@ -6,6 +6,7 @@ from starlette.requests import Request
 from starlette.testclient import TestClient
 
 from mcp_resource_framework.oauth_discovery import (
+    CorsHeaderBuilder,
     register_oauth_discovery_endpoints,
 )
 
@@ -15,8 +16,9 @@ SCOPES = ["read"]
 
 
 def _make_app_with_discovery(
-    cors_header_builder: object | None = None,
+    cors_header_builder: CorsHeaderBuilder | None = None,
     scopes: list[str] | None = None,
+    resource_documentation: str | None = None,
 ) -> TestClient:
     """Create a minimal Starlette app with OAuth discovery endpoints via FastMCP."""
     from mcp.server.fastmcp.server import FastMCP
@@ -28,6 +30,7 @@ def _make_app_with_discovery(
         auth_server_public_url=AUTH_URL,
         scopes=scopes or SCOPES,
         cors_header_builder=cors_header_builder,
+        resource_documentation=resource_documentation,
     )
 
     # Get the underlying Starlette app
@@ -71,6 +74,26 @@ class TestProtectedResourceMetadata:
         data = resp.json()
         assert data["resource"] == "https://mcp.example.com"
         assert data["authorization_servers"] == ["https://auth.example.com"]
+
+    def test_resource_documentation_included_when_provided(self) -> None:
+        client = _make_app_with_discovery(
+            resource_documentation="https://mcp.example.com/docs"
+        )
+        resp = client.get("/.well-known/oauth-protected-resource")
+        assert resp.json()["resource_documentation"] == "https://mcp.example.com/docs"
+
+    def test_resource_documentation_on_mcp_path(self) -> None:
+        client = _make_app_with_discovery(
+            resource_documentation="https://mcp.example.com/docs"
+        )
+        resp = client.get("/mcp/.well-known/oauth-protected-resource")
+        assert resp.json()["resource_documentation"] == "https://mcp.example.com/docs"
+
+    def test_resource_documentation_omitted_by_default(self) -> None:
+        client = _make_app_with_discovery()
+        assert "resource_documentation" not in client.get(
+            "/.well-known/oauth-protected-resource"
+        ).json()
 
 
 class TestAuthorizationServerMetadata:
@@ -148,9 +171,25 @@ class TestCorsSupport:
         resp = client.get("/.well-known/openid-configuration")
         assert resp.headers["Access-Control-Allow-Origin"] == "https://app.example.com"
 
+    def test_cors_headers_on_mcp_auth_server_metadata(self) -> None:
+        client = _make_app_with_discovery(cors_header_builder=self._mock_cors_builder)
+        resp = client.get("/.well-known/oauth-authorization-server/mcp")
+        assert resp.headers["Access-Control-Allow-Origin"] == "https://app.example.com"
+
+    def test_cors_options_on_mcp_auth_server_metadata(self) -> None:
+        client = _make_app_with_discovery(cors_header_builder=self._mock_cors_builder)
+        resp = client.options("/.well-known/oauth-authorization-server/mcp")
+        assert resp.status_code == 200
+        assert resp.headers["Access-Control-Allow-Origin"] == "https://app.example.com"
+
     def test_no_cors_by_default(self) -> None:
         client = _make_app_with_discovery()
         resp = client.get("/.well-known/oauth-authorization-server")
+        assert "Access-Control-Allow-Origin" not in resp.headers
+
+    def test_no_cors_on_mcp_endpoint_by_default(self) -> None:
+        client = _make_app_with_discovery()
+        resp = client.get("/.well-known/oauth-authorization-server/mcp")
         assert "Access-Control-Allow-Origin" not in resp.headers
 
 

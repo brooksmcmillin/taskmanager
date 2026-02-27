@@ -18,7 +18,6 @@ Usage:
     )
 """
 
-import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -26,12 +25,10 @@ from mcp.server.fastmcp.server import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-logger = logging.getLogger(__name__)
-
 # Type for an optional CORS header builder: (request) -> headers dict
 CorsHeaderBuilder = Callable[[Request], dict[str, str]]
 
-DEFAULT_SCOPES = ["read"]
+DEFAULT_SCOPES: tuple[str, ...] = ("read",)
 
 
 def _build_oauth_metadata(
@@ -64,14 +61,19 @@ def _build_protected_resource_metadata(
     resource_url: str,
     auth_url: str,
     scopes: list[str],
+    *,
+    resource_documentation: str | None = None,
 ) -> dict[str, Any]:
     """Build OAuth 2.0 Protected Resource Metadata (RFC 9908)."""
-    return {
+    metadata: dict[str, Any] = {
         "resource": resource_url,
         "authorization_servers": [auth_url],
         "scopes_supported": scopes,
         "bearer_methods_supported": ["header"],
     }
+    if resource_documentation:
+        metadata["resource_documentation"] = resource_documentation
+    return metadata
 
 
 def register_oauth_discovery_endpoints(
@@ -81,6 +83,7 @@ def register_oauth_discovery_endpoints(
     auth_server_public_url: str,
     scopes: list[str] | None = None,
     cors_header_builder: CorsHeaderBuilder | None = None,
+    resource_documentation: str | None = None,
 ) -> None:
     """Register all OAuth 2.0 discovery endpoints on a FastMCP app.
 
@@ -103,8 +106,10 @@ def register_oauth_discovery_endpoints(
             a dict of CORS headers. When provided, the authorization server
             metadata endpoints will include CORS headers and handle OPTIONS
             preflight requests. When None, no CORS headers are added.
+        resource_documentation: Optional URL to resource documentation, included
+            in protected resource metadata responses when provided.
     """
-    resolved_scopes = scopes or DEFAULT_SCOPES
+    resolved_scopes = list(scopes) if scopes is not None else list(DEFAULT_SCOPES)
 
     # Strip trailing slashes once
     resource_url = server_url.rstrip("/")
@@ -116,14 +121,24 @@ def register_oauth_discovery_endpoints(
     async def oauth_protected_resource(request: Request) -> JSONResponse:  # noqa: ARG001
         """OAuth 2.0 Protected Resource Metadata (RFC 9908)."""
         return JSONResponse(
-            _build_protected_resource_metadata(resource_url, auth_url, resolved_scopes)
+            _build_protected_resource_metadata(
+                resource_url,
+                auth_url,
+                resolved_scopes,
+                resource_documentation=resource_documentation,
+            )
         )
 
     @app.custom_route("/mcp/.well-known/oauth-protected-resource", methods=["GET"])
     async def oauth_protected_resource_mcp(request: Request) -> JSONResponse:  # noqa: ARG001
         """OAuth 2.0 Protected Resource Metadata for /mcp path (RFC 9908)."""
         return JSONResponse(
-            _build_protected_resource_metadata(resource_url, auth_url, resolved_scopes)
+            _build_protected_resource_metadata(
+                resource_url,
+                auth_url,
+                resolved_scopes,
+                resource_documentation=resource_documentation,
+            )
         )
 
     # --- RFC 8414: Authorization Server Metadata ---
@@ -152,6 +167,18 @@ def register_oauth_discovery_endpoints(
                 _build_oauth_metadata(auth_url, resolved_scopes),
                 headers=_cors(request),
             )
+
+        @app.custom_route(
+            "/.well-known/oauth-authorization-server/mcp", methods=["GET", "OPTIONS"]
+        )
+        async def oauth_authorization_server_mcp(request: Request) -> JSONResponse:
+            """Resource-specific OAuth 2.0 Authorization Server Metadata for /mcp."""
+            if request.method == "OPTIONS":
+                return JSONResponse({}, headers=_cors(request))
+            return JSONResponse(
+                _build_oauth_metadata(auth_url, resolved_scopes, resource=resource_url),
+                headers=_cors(request),
+            )
     else:
 
         @app.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
@@ -164,9 +191,9 @@ def register_oauth_discovery_endpoints(
             """OpenID Connect Discovery (aliases OAuth Authorization Server Metadata)."""
             return JSONResponse(_build_oauth_metadata(auth_url, resolved_scopes))
 
-    @app.custom_route("/.well-known/oauth-authorization-server/mcp", methods=["GET"])
-    async def oauth_authorization_server_mcp(request: Request) -> JSONResponse:  # noqa: ARG001
-        """Resource-specific OAuth 2.0 Authorization Server Metadata for /mcp."""
-        return JSONResponse(
-            _build_oauth_metadata(auth_url, resolved_scopes, resource=resource_url)
-        )
+        @app.custom_route("/.well-known/oauth-authorization-server/mcp", methods=["GET"])
+        async def oauth_authorization_server_mcp(request: Request) -> JSONResponse:  # noqa: ARG001
+            """Resource-specific OAuth 2.0 Authorization Server Metadata for /mcp."""
+            return JSONResponse(
+                _build_oauth_metadata(auth_url, resolved_scopes, resource=resource_url)
+            )

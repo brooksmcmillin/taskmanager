@@ -145,6 +145,7 @@ def create_resource_server(
         auth_server_public_url=str(auth_server_public_url),
         scopes=DEFAULT_SCOPE,
         cors_header_builder=partial(build_cors_headers, allowed_origins=ALLOWED_MCP_ORIGINS),
+        resource_documentation=f"{str(server_url).rstrip('/')}/docs",
     )
 
     @app.tool()
