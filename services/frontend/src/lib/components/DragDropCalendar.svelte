@@ -9,7 +9,7 @@
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
 	import { goto } from '$app/navigation';
-	import type { Todo, TodoFilters } from '$lib/types';
+	import type { Todo, TodoFilters, Subtask } from '$lib/types';
 
 	export let filters: TodoFilters = {};
 
@@ -23,28 +23,37 @@
 		thisWeekMonday.setDate(thisWeekMonday.getDate() - 7);
 		return thisWeekMonday;
 	})();
-	let todosByDate: Record<string, Todo[]> = {};
+
+	// Unified item type for the dndzone - represents both parent tasks and subtasks.
+	// Uses a namespaced string `id` (e.g. "t-5", "s-12") for svelte-dnd-action uniqueness,
+	// since parent tasks and subtasks could theoretically share numeric IDs.
+	// The raw numeric `todoId` is used for API calls.
+	interface CalendarItem {
+		id: string; // namespaced dndzone key: "t-{id}" for tasks, "s-{id}" for subtasks
+		todoId: number; // raw DB id for API calls
+		title: string;
+		priority: 'low' | 'medium' | 'high' | 'urgent';
+		due_date: string | null;
+		isSubtask: boolean;
+		// Parent task fields (present when isSubtask is false)
+		project_color?: string | null;
+		deadline_type?: string | null;
+		subtasks?: Subtask[];
+		// Subtask fields (present when isSubtask is true)
+		parentId?: number;
+		parentTitle?: string;
+		parentColor?: string | null;
+	}
+
+	let itemsByDate: Record<string, CalendarItem[]> = {};
 	// Track drag operation state
-	let draggedTodoId: number | null = null;
+	let draggedItemId: string | null = null;
 	let originalDate: string | null = null;
 	let isDragging = false;
 	// Per-day expand state for overflow
 	let expandedDays: Record<string, boolean> = {};
 	// Mobile: selected day for detail view
 	let selectedDay: string = formatDateForInput(new Date());
-
-	interface CalendarSubtaskItem {
-		id: number;
-		title: string;
-		priority: 'low' | 'medium' | 'high' | 'urgent';
-		status: string;
-		due_date: string;
-		parentId: number;
-		parentTitle: string;
-		parentColor: string | null;
-	}
-
-	let subtasksByDate: Record<string, CalendarSubtaskItem[]> = {};
 
 	interface Day {
 		date: Date;
@@ -63,9 +72,10 @@
 		}
 	}
 
-	// Selected day data for mobile detail view
-	$: selectedDayTasks = todosByDate[selectedDay] || [];
-	$: selectedDaySubtasks = subtasksByDate[selectedDay] || [];
+	// Mobile detail view: derive parent tasks and subtasks from itemsByDate
+	$: selectedDayItems = itemsByDate[selectedDay] || [];
+	$: selectedDayTasks = selectedDayItems.filter((i) => !i.isSubtask);
+	$: selectedDaySubtasks = selectedDayItems.filter((i) => i.isSubtask);
 
 	function formatDayHeader(dateStr: string): string {
 		const [year, month, day] = dateStr.split('-').map(Number);
@@ -101,22 +111,30 @@
 		});
 	}
 
-	function groupTodosByDate(todosList: Todo[]): Record<string, Todo[]> {
-		const grouped: Record<string, Todo[]> = {};
-		const subtaskGrouped: Record<string, CalendarSubtaskItem[]> = {};
+	function groupTodosByDate(todosList: Todo[]): Record<string, CalendarItem[]> {
+		const grouped: Record<string, CalendarItem[]> = {};
 
 		// Initialize arrays for all visible dates
 		for (const day of days) {
 			grouped[day.dateStr] = [];
-			subtaskGrouped[day.dateStr] = [];
 		}
 
-		// Add todos to their respective dates
+		// Add todos and their subtasks to their respective dates
 		todosList.forEach((todo) => {
 			if (todo.due_date) {
 				const dateStr = todo.due_date.split('T')[0];
 				if (!grouped[dateStr]) grouped[dateStr] = [];
-				grouped[dateStr].push(todo);
+				grouped[dateStr].push({
+					id: `t-${todo.id}`,
+					todoId: todo.id,
+					title: todo.title,
+					priority: todo.priority,
+					due_date: todo.due_date,
+					isSubtask: false,
+					project_color: todo.project_color,
+					deadline_type: todo.deadline_type,
+					subtasks: todo.subtasks
+				});
 			}
 
 			// Extract pending subtasks as separate calendar items
@@ -125,13 +143,14 @@
 				if (subtask.status === 'completed') return;
 				const dateStr = subtask.due_date ? subtask.due_date.split('T')[0] : parentDueDate;
 				if (!dateStr) return;
-				if (!subtaskGrouped[dateStr]) subtaskGrouped[dateStr] = [];
-				subtaskGrouped[dateStr].push({
-					id: subtask.id,
+				if (!grouped[dateStr]) grouped[dateStr] = [];
+				grouped[dateStr].push({
+					id: `s-${subtask.id}`,
+					todoId: subtask.id,
 					title: subtask.title,
 					priority: subtask.priority,
-					status: subtask.status,
 					due_date: dateStr,
+					isSubtask: true,
 					parentId: todo.id,
 					parentTitle: todo.title,
 					parentColor: todo.project_color || null
@@ -139,24 +158,21 @@
 			});
 		});
 
-		subtasksByDate = subtaskGrouped;
 		return grouped;
 	}
 
-	function handleConsider(dateStr: string, event: CustomEvent<DndEvent<Todo>>) {
+	function handleConsider(dateStr: string, event: CustomEvent<DndEvent<CalendarItem>>) {
 		// Track what's being dragged when drag starts
 		if (event.detail.info.trigger === 'dragStarted') {
 			isDragging = true;
-			const draggedId = event.detail.info.id;
-			// Convert draggedId to number for comparison with todo.id
-			const draggedIdNum = typeof draggedId === 'string' ? parseInt(draggedId, 10) : draggedId;
-			// Find the todo being dragged across all dates
-			for (const [date, todosInDate] of Object.entries(todosByDate)) {
-				if (todosInDate) {
-					const todo = todosInDate.find((t) => t && t.id === draggedIdNum);
-					if (todo && todo.due_date) {
-						draggedTodoId = draggedIdNum;
-						originalDate = todo.due_date.split('T')[0];
+			const draggedId = String(event.detail.info.id);
+			// Find the item being dragged across all dates using the namespaced ID
+			for (const [, items] of Object.entries(itemsByDate)) {
+				if (items) {
+					const item = items.find((i) => i && i.id === draggedId);
+					if (item && item.due_date) {
+						draggedItemId = draggedId;
+						originalDate = item.due_date.split('T')[0];
 						break;
 					}
 				}
@@ -165,46 +181,61 @@
 
 		// Update local state - svelte-dnd-action gives us the new items array for this date
 		// This is what the date WILL look like if the drag completes
-		todosByDate = { ...todosByDate, [dateStr]: event.detail.items as Todo[] };
+		itemsByDate = { ...itemsByDate, [dateStr]: event.detail.items as CalendarItem[] };
 	}
 
-	async function handleFinalize(dateStr: string, event: CustomEvent<DndEvent<Todo>>) {
+	async function handleFinalize(dateStr: string, event: CustomEvent<DndEvent<CalendarItem>>) {
 		// Update local state first - this is what svelte-dnd-action expects
-		todosByDate = { ...todosByDate, [dateStr]: event.detail.items as Todo[] };
+		itemsByDate = { ...itemsByDate, [dateStr]: event.detail.items as CalendarItem[] };
 
 		// Only make API call if item was actually moved to a different date
-		if (draggedTodoId !== null && originalDate !== null && originalDate !== dateStr) {
-			const todoId = draggedTodoId;
+		if (draggedItemId !== null && originalDate !== null && originalDate !== dateStr) {
+			// Find the dragged item to get its numeric todoId for the API call
+			const draggedItem = event.detail.items.find((i) => i && i.id === draggedItemId) as
+				| CalendarItem
+				| undefined;
+			const itemId = draggedItem?.todoId;
+
+			if (!itemId) {
+				logger.error('Could not find dragged item for API update');
+				isDragging = false;
+				draggedItemId = null;
+				originalDate = null;
+				return;
+			}
 
 			try {
-				// Make API call while still blocking store subscriptions
-				await todos.updateTodo(todoId, { due_date: dateStr });
+				// updateTodo sends PUT /api/todos/{id} - works for both parent tasks and subtasks
+				await todos.updateTodo(itemId, { due_date: dateStr });
 
-				// After API succeeds, manually rebuild from store to get authoritative data
+				// Reload to ensure subtask changes are correctly reflected in the store
+				// (subtasks are nested inside parent todos, so updateTodo's local store
+				// update won't find them at the top level)
+				await todos.load({ ...filters, status: 'pending' });
 				const currentTodos = get(pendingTodos);
-				todosByDate = groupTodosByDate(currentTodos);
+				itemsByDate = groupTodosByDate(currentTodos);
 
 				// Clear drag tracking AFTER manual rebuild to prevent subscription race
 				isDragging = false;
-				draggedTodoId = null;
+				draggedItemId = null;
 				originalDate = null;
 			} catch (error) {
 				logger.error('Failed to update todo date:', error);
 				// Reload all todos to revert the change
-				await todos.load({ status: 'pending', ...filters });
+				await todos.load({ ...filters, status: 'pending' });
 				const currentTodos = get(pendingTodos);
-				todosByDate = groupTodosByDate(currentTodos);
+				itemsByDate = groupTodosByDate(currentTodos);
 
 				// Clear drag tracking after error recovery
 				isDragging = false;
-				draggedTodoId = null;
+				draggedItemId = null;
 				originalDate = null;
 			}
 		} else {
 			// Item was dropped in same column or drag cancelled
 			// Just clear drag state - local state already updated above
 			isDragging = false;
-			draggedTodoId = null;
+			draggedItemId = null;
 			originalDate = null;
 		}
 	}
@@ -231,37 +262,35 @@
 		expandedDays = {};
 	}
 
-	function handleEditTodo(todo: Todo) {
-		dispatch('editTodo', todo);
-	}
-
-	function handleTaskClick(todo: Todo) {
-		// Always open task detail on single click (desktop and touch)
-		if (!isDragging) {
-			handleEditTodo(todo);
+	function handleItemClick(item: CalendarItem) {
+		if (isDragging) return;
+		if (item.isSubtask) {
+			goto(`/task/${item.todoId}`);
+		} else {
+			// Look up the full Todo object from the store for the detail panel
+			const allTodos = get(pendingTodos);
+			const todo = allTodos.find((t) => t.id === item.todoId);
+			if (todo) {
+				dispatch('editTodo', todo);
+			}
 		}
 	}
 
 	function dayHasOverflow(dateStr: string): boolean {
-		const tasks = todosByDate[dateStr] || [];
-		const subs = subtasksByDate[dateStr] || [];
-		const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - tasks.length);
-		return tasks.length > MAX_VISIBLE_TASKS || subs.length > freeSlots;
+		const items = itemsByDate[dateStr] || [];
+		return items.length > MAX_VISIBLE_TASKS;
 	}
 
 	function toggleDayExpand(dateStr: string) {
 		expandedDays = { ...expandedDays, [dateStr]: !expandedDays[dateStr] };
 	}
 
-	// Reference todosByDate and subtasksByDate directly so Svelte tracks them as dependencies
-	$: hasAnyOverflow =
-		todosByDate && subtasksByDate && days.some(({ dateStr }) => dayHasOverflow(dateStr));
+	// Reference itemsByDate directly so Svelte tracks it as a dependency
+	$: hasAnyOverflow = itemsByDate && days.some(({ dateStr }) => dayHasOverflow(dateStr));
 
-	// Reference todosByDate/subtasksByDate so Svelte tracks them as dependencies
 	$: allExpanded =
 		hasAnyOverflow &&
-		todosByDate &&
-		subtasksByDate &&
+		itemsByDate &&
 		days.every(({ dateStr }) => !dayHasOverflow(dateStr) || expandedDays[dateStr]);
 
 	function toggleExpandAll() {
@@ -280,12 +309,12 @@
 		// But don't update during drag operations to avoid interfering with the drag
 		const unsubscribe = pendingTodos.subscribe((value) => {
 			if (!isDragging) {
-				todosByDate = groupTodosByDate(value);
+				itemsByDate = groupTodosByDate(value);
 			}
 		});
 
 		// Load initial todos
-		todos.load({ status: 'pending', ...filters });
+		todos.load({ ...filters, status: 'pending' });
 
 		return unsubscribe;
 	});
@@ -315,8 +344,7 @@
 		</div>
 		<div class="week-strip-grid">
 			{#each days as { date, dateStr, isToday: isTodayDay }}
-				{@const taskCount =
-					(todosByDate[dateStr] || []).length + (subtasksByDate[dateStr] || []).length}
+				{@const taskCount = (itemsByDate[dateStr] || []).length}
 				<button
 					class="day-pill"
 					class:selected={selectedDay === dateStr}
@@ -342,31 +370,31 @@
 				<div class="day-detail-empty">No tasks scheduled</div>
 			{:else}
 				<div class="day-detail-tasks">
-					{#each selectedDayTasks as todo (todo.id)}
-						{@const subtasks = todo.subtasks || []}
+					{#each selectedDayTasks as item (item.id)}
+						{@const subtasks = item.subtasks || []}
 						{@const completedSubtaskCount = subtasks.filter((s) => s.status === 'completed').length}
 						<div
 							class="mobile-task-card"
-							style="border-left: 4px solid {todo.project_color ||
+							style="border-left: 4px solid {item.project_color ||
 								DEFAULT_PROJECT_COLOR}; background-color: {hexTo50Shade(
-								todo.project_color || DEFAULT_PROJECT_COLOR
+								item.project_color || DEFAULT_PROJECT_COLOR
 							)}"
-							on:click={() => handleTaskClick(todo)}
+							on:click={() => handleItemClick(item)}
 							role="button"
 							tabindex="0"
 							on:keydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') handleTaskClick(todo);
+								if (e.key === 'Enter' || e.key === ' ') handleItemClick(item);
 							}}
 						>
-							<div class="mobile-task-title">{todo.title}</div>
+							<div class="mobile-task-title">{item.title}</div>
 							<div class="mobile-task-meta">
-								<span class="mobile-task-priority">{todo.priority}</span>
-								{#if todo.deadline_type && todo.deadline_type !== 'preferred'}
+								<span class="mobile-task-priority">{item.priority}</span>
+								{#if item.deadline_type && item.deadline_type !== 'preferred'}
 									<span
 										class="mobile-task-deadline"
-										style="color: {getDeadlineTypeColor(todo.deadline_type)}"
+										style="color: {getDeadlineTypeColor(item.deadline_type)}"
 									>
-										{getDeadlineTypeLabel(todo.deadline_type)}
+										{getDeadlineTypeLabel(item.deadline_type)}
 									</span>
 								{/if}
 								{#if subtasks.length > 0}
@@ -422,17 +450,9 @@
 
 		<div id="calendar-grid">
 			{#each days as { date, dateStr, isToday: isTodayDay }}
-				{@const allTasks = todosByDate[dateStr] || []}
+				{@const allItems = itemsByDate[dateStr] || []}
 				{@const isExpanded = expandedDays[dateStr] || false}
-				{@const hiddenCount = Math.max(0, allTasks.length - MAX_VISIBLE_TASKS)}
-				{@const pendingSubtasks = subtasksByDate[dateStr] || []}
-				{@const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - allTasks.length)}
-				{@const visibleSubtaskCount = isExpanded
-					? pendingSubtasks.length
-					: Math.min(pendingSubtasks.length, freeSlots)}
-				{@const overflow = isExpanded
-					? 0
-					: hiddenCount + (pendingSubtasks.length - visibleSubtaskCount)}
+				{@const overflow = isExpanded ? 0 : Math.max(0, allItems.length - MAX_VISIBLE_TASKS)}
 				<div class="calendar-day" class:today={isTodayDay} data-date={dateStr}>
 					<div class="calendar-date">
 						{date.getMonth() + 1}/{date.getDate()}
@@ -440,7 +460,7 @@
 					<div
 						class="tasks-container"
 						use:dndzone={{
-							items: todosByDate[dateStr] || [],
+							items: itemsByDate[dateStr] || [],
 							dropTargetStyle: { outline: '2px dashed #3b82f6' },
 							type: 'todo',
 							flipDurationMs: 200
@@ -448,80 +468,80 @@
 						on:consider={(e) => handleConsider(dateStr, e)}
 						on:finalize={(e) => handleFinalize(dateStr, e)}
 					>
-						{#each allTasks as todo, idx (todo.id)}
+						{#each allItems as item, idx (item.id)}
 							{@const isHidden = !isExpanded && idx >= MAX_VISIBLE_TASKS}
-							{@const subtasks = todo.subtasks || []}
-							{@const completedSubtaskCount = subtasks.filter(
-								(s) => s.status === 'completed'
-							).length}
-							<div
-								class="calendar-task {todo.priority}-priority"
-								class:calendar-task-hidden={isHidden}
-								style="background-color: {hexTo50Shade(
-									todo.project_color || DEFAULT_PROJECT_COLOR
-								)}; border-left: 4px solid {todo.project_color || DEFAULT_PROJECT_COLOR}"
-								on:click={() => handleTaskClick(todo)}
-								role="button"
-								tabindex="0"
-								on:keydown={(e) => {
-									if (e.key === 'Enter' || e.key === ' ') {
-										handleEditTodo(todo);
-									}
-								}}
-							>
-								<div class="task-title">{todo.title}</div>
-								{#if (todo.deadline_type && todo.deadline_type !== 'preferred') || subtasks.length > 0}
-									<div class="calendar-task-meta">
-										{#if todo.deadline_type && todo.deadline_type !== 'preferred'}
-											<span
-												class="calendar-deadline-type"
-												style="color: {getDeadlineTypeColor(todo.deadline_type)}"
-												title="{getDeadlineTypeLabel(todo.deadline_type)} deadline"
-											>
-												{getDeadlineTypeLabel(todo.deadline_type)}
-											</span>
-										{/if}
-										{#if subtasks.length > 0}
-											<span class="calendar-subtask-count"
-												>{completedSubtaskCount}/{subtasks.length}</span
-											>
-										{/if}
+							{#if item.isSubtask}
+								<div
+									class="calendar-task calendar-subtask-item {item.priority}-priority"
+									class:calendar-task-hidden={isHidden}
+									style="background-color: {hexTo50Shade(
+										item.parentColor || DEFAULT_PROJECT_COLOR
+									)}; border-left: 4px solid {item.parentColor || DEFAULT_PROJECT_COLOR}"
+									on:click={() => handleItemClick(item)}
+									role="button"
+									tabindex="0"
+									on:keydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') handleItemClick(item);
+									}}
+								>
+									<div
+										class="calendar-subtask-parent"
+										style="background-color: {item.parentColor ||
+											DEFAULT_PROJECT_COLOR}; color: {contrastText(
+											item.parentColor || DEFAULT_PROJECT_COLOR
+										)}"
+									>
+										#{item.parentId}
+										{item.parentTitle}
 									</div>
-								{/if}
-							</div>
+									<div class="task-title">{item.title}</div>
+								</div>
+							{:else}
+								{@const subtasks = item.subtasks || []}
+								{@const completedSubtaskCount = subtasks.filter(
+									(s) => s.status === 'completed'
+								).length}
+								<div
+									class="calendar-task {item.priority}-priority"
+									class:calendar-task-hidden={isHidden}
+									style="background-color: {hexTo50Shade(
+										item.project_color || DEFAULT_PROJECT_COLOR
+									)}; border-left: 4px solid {item.project_color || DEFAULT_PROJECT_COLOR}"
+									on:click={() => handleItemClick(item)}
+									role="button"
+									tabindex="0"
+									on:keydown={(e) => {
+										if (e.key === 'Enter' || e.key === ' ') handleItemClick(item);
+									}}
+								>
+									<div class="task-title">{item.title}</div>
+									{#if (item.deadline_type && item.deadline_type !== 'preferred') || subtasks.length > 0}
+										<div class="calendar-task-meta">
+											{#if item.deadline_type && item.deadline_type !== 'preferred'}
+												<span
+													class="calendar-deadline-type"
+													style="color: {getDeadlineTypeColor(item.deadline_type)}"
+													title="{getDeadlineTypeLabel(item.deadline_type)} deadline"
+												>
+													{getDeadlineTypeLabel(item.deadline_type)}
+												</span>
+											{/if}
+											{#if subtasks.length > 0}
+												<span class="calendar-subtask-count"
+													>{completedSubtaskCount}/{subtasks.length}</span
+												>
+											{/if}
+										</div>
+									{/if}
+								</div>
+							{/if}
 						{/each}
 					</div>
-					{#each isExpanded ? pendingSubtasks : pendingSubtasks.slice(0, visibleSubtaskCount) as subtask (subtask.id)}
-						<div
-							class="calendar-task calendar-subtask-item {subtask.priority}-priority"
-							style="background-color: {hexTo50Shade(
-								subtask.parentColor || DEFAULT_PROJECT_COLOR
-							)}; border-left: 4px solid {subtask.parentColor || DEFAULT_PROJECT_COLOR}"
-							on:click={() => goto(`/task/${subtask.id}`)}
-							role="button"
-							tabindex="0"
-							on:keydown={(e) => {
-								if (e.key === 'Enter' || e.key === ' ') goto(`/task/${subtask.id}`);
-							}}
-						>
-							<div
-								class="calendar-subtask-parent"
-								style="background-color: {subtask.parentColor ||
-									DEFAULT_PROJECT_COLOR}; color: {contrastText(
-									subtask.parentColor || DEFAULT_PROJECT_COLOR
-								)}"
-							>
-								#{subtask.parentId}
-								{subtask.parentTitle}
-							</div>
-							<div class="task-title">{subtask.title}</div>
-						</div>
-					{/each}
 					{#if overflow > 0}
 						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
 							+{overflow} more
 						</button>
-					{:else if isExpanded && (allTasks.length > MAX_VISIBLE_TASKS || pendingSubtasks.length > 0)}
+					{:else if isExpanded && allItems.length > MAX_VISIBLE_TASKS}
 						<button class="calendar-overflow" on:click={() => toggleDayExpand(dateStr)}>
 							Show less
 						</button>
