@@ -454,7 +454,10 @@ async def _resolve_category_to_project(
             await db.flush()
     except IntegrityError:
         # A concurrent insert (same user, same name) won the race.
-        # Re-query to find the row that already exists for this user.
+        # The savepoint rolls back new_project but SQLAlchemy moves it back
+        # to session.new (pending), so we must expunge it before the re-query
+        # to prevent autoflush from issuing the INSERT a second time.
+        db.expunge(new_project)
         retry_result = await db.execute(
             select(Project).where(
                 func.lower(Project.name) == category.lower(),

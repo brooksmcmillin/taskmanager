@@ -36,7 +36,7 @@ class Project(Base):
         # duplicate names (case-insensitively) within the same user.
         Index(
             "uq_projects_user_lower_name",
-            "user_id",
+            text("user_id"),
             text("lower(name)"),
             unique=True,
         ),
