@@ -1,7 +1,7 @@
 """Wiki page API routes."""
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -118,7 +118,7 @@ class LinkedTodoResponse(BaseModel):
     title: str
     status: str
     priority: str
-    due_date: str | None = None
+    due_date: date | None = None
 
 
 class LinkTaskRequest(BaseModel):
