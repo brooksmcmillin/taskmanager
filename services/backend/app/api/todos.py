@@ -413,13 +413,11 @@ async def _resolve_category_to_project(
     Performs a case-insensitive match against the user's existing projects.
     If no match is found, automatically creates a new project with the given name.
 
-    Because Project.name has a global UNIQUE constraint (not scoped per user),
-    concurrent requests from different users with the same category name can
-    race. The IntegrityError is handled by re-querying to find the conflicting
-    row and returning whichever project owns that name for this user. If no
-    user-owned project is found after the conflict, the conflict is from another
-    user entirely, so we fall back to the original category name unchanged and
-    let the caller decide how to proceed.
+    Because Project.name has a (user_id, lower(name)) unique constraint, any
+    concurrent race by the same user hitting the same category will produce an
+    IntegrityError on the INSERT. That error is scoped to a savepoint so no
+    prior session work is discarded; the handler re-queries to find the winning
+    row and returns its ID.
 
     Args:
         db: Database session
@@ -441,8 +439,9 @@ async def _resolve_category_to_project(
         return project.id
 
     # No match found — auto-create the project for this user.
-    # Project.name has a global UNIQUE constraint, so guard against concurrent
-    # inserts (or collisions with another user's project name) via IntegrityError.
+    # Use a savepoint so that an IntegrityError (concurrent race) only rolls
+    # back this INSERT and does not discard any prior flushed work in the
+    # surrounding transaction (critical for batch_create_todos correctness).
     position = await get_next_position(db, Project, user_id)
     new_project = Project(
         user_id=user_id,
@@ -451,11 +450,11 @@ async def _resolve_category_to_project(
     )
     db.add(new_project)
     try:
-        await db.flush()
+        async with db.begin_nested():
+            await db.flush()
     except IntegrityError:
-        # Another row with this name already exists (race or cross-user conflict).
-        # Roll back the failed insert and re-query for the user's own project.
-        await db.rollback()
+        # A concurrent insert (same user, same name) won the race.
+        # Re-query to find the row that already exists for this user.
         retry_result = await db.execute(
             select(Project).where(
                 func.lower(Project.name) == category.lower(),
@@ -465,9 +464,8 @@ async def _resolve_category_to_project(
         existing = retry_result.scalar_one_or_none()
         if existing:
             return existing.id
-        # The conflict is from another user's project with the same name.
-        # Re-raise so the caller receives a proper 500 rather than silent
-        # data loss; this scenario requires a schema migration to fix.
+        # Should not happen given the per-user unique constraint, but re-raise
+        # to surface the underlying issue rather than silently lose data.
         raise
     return new_project.id
 
