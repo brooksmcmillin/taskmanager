@@ -21,6 +21,8 @@ from mcp_resource_framework.middleware import NormalizePathMiddleware
 from mcp_resource_framework.oauth_discovery import register_oauth_discovery_endpoints
 from pydantic import AnyHttpUrl
 
+from mcp_relay.debug import create_debug_app
+
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -397,6 +399,21 @@ def main(
         import uvicorn
 
         starlette_app = mcp_server.streamable_http_app()
+
+        debug_enabled = os.environ.get("MCP_RELAY_DEBUG_UI", "").lower() in ("1", "true", "yes")
+        if debug_enabled:
+            debug_token = os.environ.get("MCP_RELAY_DEBUG_TOKEN")
+            debug_app = create_debug_app(store, token=debug_token)
+            starlette_app.mount("/debug", debug_app)
+            if debug_token:
+                logger.info(f"Debug UI: http://{host}:{port}/debug/ (token-protected)")
+            else:
+                logger.warning(
+                    f"Debug UI: http://{host}:{port}/debug/ (NO AUTH — set MCP_RELAY_DEBUG_TOKEN)"
+                )
+        else:
+            logger.info("Debug UI disabled (set MCP_RELAY_DEBUG_UI=true to enable)")
+
         app = NormalizePathMiddleware(starlette_app)
 
         uvicorn.run(
