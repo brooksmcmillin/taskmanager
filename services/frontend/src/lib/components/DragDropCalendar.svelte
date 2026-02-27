@@ -213,12 +213,14 @@
 		const newDate = new Date(currentWeekStart);
 		newDate.setDate(newDate.getDate() - 7);
 		currentWeekStart = newDate;
+		expandedDays = {};
 	}
 
 	function nextWeek() {
 		const newDate = new Date(currentWeekStart);
 		newDate.setDate(newDate.getDate() + 7);
 		currentWeekStart = newDate;
+		expandedDays = {};
 	}
 
 	function goToToday() {
@@ -226,6 +228,7 @@
 		thisWeekMonday.setDate(thisWeekMonday.getDate() - 7);
 		currentWeekStart = thisWeekMonday;
 		selectedDay = formatDateForInput(new Date());
+		expandedDays = {};
 	}
 
 	function handleEditTodo(todo: Todo) {
@@ -239,8 +242,37 @@
 		}
 	}
 
+	function dayHasOverflow(dateStr: string): boolean {
+		const tasks = todosByDate[dateStr] || [];
+		const subs = subtasksByDate[dateStr] || [];
+		const freeSlots = Math.max(0, MAX_VISIBLE_TASKS - tasks.length);
+		return tasks.length > MAX_VISIBLE_TASKS || subs.length > freeSlots;
+	}
+
 	function toggleDayExpand(dateStr: string) {
 		expandedDays = { ...expandedDays, [dateStr]: !expandedDays[dateStr] };
+	}
+
+	// Reference todosByDate and subtasksByDate directly so Svelte tracks them as dependencies
+	$: hasAnyOverflow =
+		todosByDate && subtasksByDate && days.some(({ dateStr }) => dayHasOverflow(dateStr));
+
+	// Reference todosByDate/subtasksByDate so Svelte tracks them as dependencies
+	$: allExpanded =
+		hasAnyOverflow &&
+		todosByDate &&
+		subtasksByDate &&
+		days.every(({ dateStr }) => !dayHasOverflow(dateStr) || expandedDays[dateStr]);
+
+	function toggleExpandAll() {
+		const expanding = !allExpanded;
+		const newState: Record<string, boolean> = {};
+		for (const { dateStr } of days) {
+			if (dayHasOverflow(dateStr)) {
+				newState[dateStr] = expanding;
+			}
+		}
+		expandedDays = newState;
 	}
 
 	onMount(() => {
@@ -266,6 +298,11 @@
 			<button class="btn btn-secondary btn-sm" on:click={prevWeek}>← Previous</button>
 			<button class="btn btn-secondary btn-sm" on:click={goToToday}>Today</button>
 			<button class="btn btn-secondary btn-sm" on:click={nextWeek}>Next →</button>
+			{#if hasAnyOverflow}
+				<button class="btn btn-secondary btn-sm expand-all-btn" on:click={toggleExpandAll}>
+					{allExpanded ? 'Collapse All' : 'Expand All'}
+				</button>
+			{/if}
 		</div>
 	</div>
 
@@ -520,6 +557,10 @@
 		background: var(--primary-50, #eff6ff);
 	}
 
+	.expand-all-btn {
+		margin-left: 1rem;
+	}
+
 	/* Calendar header navigation */
 	.calendar-top-nav {
 		display: flex;
@@ -716,6 +757,10 @@
 		.calendar-top-nav {
 			flex-wrap: wrap;
 			gap: 0.5rem;
+		}
+
+		.expand-all-btn {
+			display: none;
 		}
 	}
 </style>
