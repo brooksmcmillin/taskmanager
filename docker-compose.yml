@@ -192,6 +192,8 @@ services:
     networks:
       - taskmanager_network
       - proxy
+    labels:
+      - traefik.enable=false
 
   promtail:
     image: grafana/promtail:3.0.0
