@@ -254,7 +254,8 @@
 	}
 
 	// Reference todosByDate and subtasksByDate directly so Svelte tracks them as dependencies
-	$: hasAnyOverflow = todosByDate && subtasksByDate && days.some(({ dateStr }) => dayHasOverflow(dateStr));
+	$: hasAnyOverflow =
+		todosByDate && subtasksByDate && days.some(({ dateStr }) => dayHasOverflow(dateStr));
 
 	// Reference todosByDate/subtasksByDate so Svelte tracks them as dependencies
 	$: allExpanded =
