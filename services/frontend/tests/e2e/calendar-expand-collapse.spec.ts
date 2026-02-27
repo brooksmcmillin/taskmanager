@@ -6,12 +6,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import {
-	registerAndLogin,
-	createTodoViaAPI,
-	getTodayDate,
-	waitForNetworkIdle
-} from '../helpers/test-utils';
+import { registerAndLogin, createTodoViaAPI, getTodayDate } from '../helpers/test-utils';
 
 test.describe('Calendar Expand/Collapse All', () => {
 	// Use today's date so tasks always appear in the visible calendar window
@@ -19,11 +14,11 @@ test.describe('Calendar Expand/Collapse All', () => {
 
 	test.beforeEach(async ({ page }) => {
 		await registerAndLogin(page);
-		await page.waitForSelector('#drag-drop-calendar', { timeout: 10000 });
 	});
 
 	test('expand all button is hidden when no days overflow', async ({ page }) => {
-		// With no tasks, no overflow exists
+		await page.goto('/');
+		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 		await expect(page.locator('.expand-all-btn')).not.toBeVisible();
 	});
 
@@ -33,12 +28,10 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Overflow Task ${i}`, { dueDate });
 		}
 
-		// Reload to pick up new tasks
-		await page.reload();
-		await page.waitForSelector('#drag-drop-calendar', { timeout: 10000 });
-		await waitForNetworkIdle(page);
+		await page.goto('/');
+		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
-		await expect(page.locator('.expand-all-btn')).toBeVisible();
+		await expect(page.locator('.expand-all-btn')).toBeVisible({ timeout: 10000 });
 		await expect(page.locator('.expand-all-btn')).toHaveText('Expand All');
 	});
 
@@ -49,13 +42,12 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Toggle Task ${i}`, { dueDate });
 		}
 
-		await page.reload();
-		await page.waitForSelector('#drag-drop-calendar', { timeout: 10000 });
-		await waitForNetworkIdle(page);
+		await page.goto('/');
+		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
-		// Verify overflow indicator is visible before expanding
+		// Wait for overflow indicator to appear (confirms tasks are loaded)
 		const dayCell = page.locator(`.calendar-day[data-date="${dueDate}"]`);
-		await expect(dayCell.locator('.calendar-overflow')).toContainText('more');
+		await expect(dayCell.locator('.calendar-overflow')).toContainText('more', { timeout: 10000 });
 
 		// Click Expand All
 		await page.locator('.expand-all-btn').click();
@@ -75,9 +67,11 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Collapse Task ${i}`, { dueDate });
 		}
 
-		await page.reload();
-		await page.waitForSelector('#drag-drop-calendar', { timeout: 10000 });
-		await waitForNetworkIdle(page);
+		await page.goto('/');
+		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
+
+		// Wait for tasks to load and expand button to appear
+		await expect(page.locator('.expand-all-btn')).toBeVisible({ timeout: 10000 });
 
 		// Expand, then collapse
 		await page.locator('.expand-all-btn').click();
@@ -96,11 +90,11 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Sync Task ${i}`, { dueDate });
 		}
 
-		await page.reload();
-		await page.waitForSelector('#drag-drop-calendar', { timeout: 10000 });
-		await waitForNetworkIdle(page);
+		await page.goto('/');
+		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
-		// Button should say Expand All initially
+		// Wait for expand button
+		await expect(page.locator('.expand-all-btn')).toBeVisible({ timeout: 10000 });
 		await expect(page.locator('.expand-all-btn')).toHaveText('Expand All');
 
 		// Manually expand the one overflowing day
@@ -116,11 +110,11 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Nav Task ${i}`, { dueDate });
 		}
 
-		await page.reload();
-		await page.waitForSelector('#drag-drop-calendar', { timeout: 10000 });
-		await waitForNetworkIdle(page);
+		await page.goto('/');
+		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
-		// Expand all
+		// Wait for expand button and expand all
+		await expect(page.locator('.expand-all-btn')).toBeVisible({ timeout: 10000 });
 		await page.locator('.expand-all-btn').click();
 		await expect(page.locator('.expand-all-btn')).toHaveText('Collapse All');
 
@@ -130,7 +124,7 @@ test.describe('Calendar Expand/Collapse All', () => {
 
 		// After navigating back, expandedDays was reset so the overflow should be collapsed
 		const dayCell = page.locator(`.calendar-day[data-date="${dueDate}"]`);
-		await expect(dayCell.locator('.calendar-overflow')).toContainText('more');
+		await expect(dayCell.locator('.calendar-overflow')).toContainText('more', { timeout: 10000 });
 		await expect(page.locator('.expand-all-btn')).toHaveText('Expand All');
 	});
 });
