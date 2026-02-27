@@ -155,6 +155,8 @@ services:
       - MAX_CHANNELS=${MAX_CHANNELS:-100}
       - MCP_AUTH_SERVER=http://mcp-auth:9000
       - MCP_AUTH_SERVER_PUBLIC_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
+      - MCP_RELAY_DEBUG_UI=${MCP_RELAY_DEBUG_UI:-false}
+      - MCP_RELAY_DEBUG_TOKEN=${MCP_RELAY_DEBUG_TOKEN:-}
     depends_on:
       - mcp-auth
     networks:

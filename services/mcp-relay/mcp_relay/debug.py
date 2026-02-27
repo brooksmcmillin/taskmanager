@@ -5,12 +5,34 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
 if TYPE_CHECKING:
+    from starlette.types import ASGIApp
+
     from mcp_relay.server import MessageStore
+
+MAX_SENDER_LENGTH = 128
+
+
+class TokenAuthMiddleware(BaseHTTPMiddleware):
+    """Require a Bearer token matching the configured debug token."""
+
+    def __init__(self, app: ASGIApp, token: str) -> None:
+        super().__init__(app)
+        self.token = token
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]  # noqa: ANN001
+        auth = request.headers.get("authorization", "")
+        if auth != f"Bearer {self.token}":
+            return JSONResponse(
+                {"error": "Unauthorized — set Authorization: Bearer <MCP_RELAY_DEBUG_TOKEN>"},
+                status_code=401,
+            )
+        return await call_next(request)
 
 
 async def channels_handler(request: Request) -> JSONResponse:
@@ -43,6 +65,9 @@ async def messages_handler(request: Request) -> JSONResponse:
     except ValueError:
         return JSONResponse({"error": "Invalid limit parameter"}, status_code=400)
 
+    if limit <= 0:
+        limit = 100
+
     try:
         messages = store.get(channel, since=since, limit=limit)
     except ValueError as e:
@@ -68,7 +93,7 @@ async def send_handler(request: Request) -> JSONResponse:
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
 
     content = body.get("content", "")
-    sender = body.get("sender", "debug-ui")
+    sender = str(body.get("sender", "debug-ui"))[:MAX_SENDER_LENGTH]
 
     if not content:
         return JSONResponse({"error": "content is required"}, status_code=400)
@@ -94,19 +119,38 @@ async def index_handler(request: Request) -> HTMLResponse:
     return HTMLResponse(DEBUG_HTML)
 
 
-def create_debug_app(store: MessageStore) -> Starlette:
-    """Create the debug Starlette sub-application."""
+def create_debug_app(store: MessageStore, token: str | None = None) -> Starlette:
+    """Create the debug Starlette sub-application.
+
+    Args:
+        store: The MessageStore instance to expose.
+        token: If provided, all requests must include ``Authorization: Bearer <token>``.
+    """
+    middleware = []
+    if token:
+        middleware.append(
+            _middleware_entry(TokenAuthMiddleware, token=token),
+        )
+
     app = Starlette(
         routes=[
             Route("/", index_handler),
             Route("/api/channels", channels_handler),
-            Route("/api/channels/{channel}/messages", messages_handler),
+            Route("/api/channels/{channel}/messages", messages_handler, methods=["GET"]),
             Route("/api/channels/{channel}/messages", send_handler, methods=["POST"]),
             Route("/api/channels/{channel}/clear", clear_handler, methods=["POST"]),
-        ]
+        ],
+        middleware=middleware,
     )
     app.state.store = store
     return app
+
+
+def _middleware_entry(cls: type, **kwargs: str) -> object:
+    """Build a Starlette Middleware entry without importing Middleware at module level."""
+    from starlette.middleware import Middleware
+
+    return Middleware(cls, **kwargs)
 
 
 DEBUG_HTML = """\

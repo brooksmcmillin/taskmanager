@@ -8,6 +8,8 @@ from starlette.testclient import TestClient
 from mcp_relay.debug import create_debug_app
 from mcp_relay.server import MessageStore
 
+TEST_TOKEN = "test-debug-token-12345"
+
 
 @pytest.fixture
 def store() -> MessageStore:
@@ -16,8 +18,51 @@ def store() -> MessageStore:
 
 @pytest.fixture
 def client(store: MessageStore) -> TestClient:
+    """Client for the debug app *without* token auth (simulates no-token config)."""
     app = create_debug_app(store)
     return TestClient(app)
+
+
+@pytest.fixture
+def auth_client(store: MessageStore) -> TestClient:
+    """Client for the debug app *with* token auth enabled."""
+    app = create_debug_app(store, token=TEST_TOKEN)
+    return TestClient(app)
+
+
+class TestDebugAuth:
+    """Tests for token authentication on the debug app."""
+
+    def test_rejects_missing_token(self, auth_client: TestClient) -> None:
+        resp = auth_client.get("/")
+        assert resp.status_code == 401
+        assert "Unauthorized" in resp.json()["error"]
+
+    def test_rejects_wrong_token(self, auth_client: TestClient) -> None:
+        resp = auth_client.get("/", headers={"Authorization": "Bearer wrong-token"})
+        assert resp.status_code == 401
+
+    def test_accepts_correct_token(self, auth_client: TestClient) -> None:
+        resp = auth_client.get("/", headers={"Authorization": f"Bearer {TEST_TOKEN}"})
+        assert resp.status_code == 200
+        assert "MCP Relay Debug" in resp.text
+
+    def test_api_requires_token(self, auth_client: TestClient) -> None:
+        resp = auth_client.get("/api/channels")
+        assert resp.status_code == 401
+
+    def test_api_works_with_token(self, auth_client: TestClient) -> None:
+        resp = auth_client.get(
+            "/api/channels",
+            headers={"Authorization": f"Bearer {TEST_TOKEN}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"channels": []}
+
+    def test_no_token_config_allows_all(self, client: TestClient) -> None:
+        """When no token is configured, all requests pass through."""
+        resp = client.get("/")
+        assert resp.status_code == 200
 
 
 class TestDebugIndex:
@@ -104,6 +149,15 @@ class TestDebugMessagesAPI:
         assert data["messages"][0]["content"] == "msg-7"
         assert data["messages"][2]["content"] == "msg-9"
 
+    def test_limit_zero_returns_default(self, client: TestClient, store: MessageStore) -> None:
+        for i in range(5):
+            store.add("debug", f"msg-{i}")
+
+        resp = client.get("/api/channels/debug/messages?limit=0")
+        data = resp.json()
+        # limit=0 should be treated as the default (100), returning all 5 messages
+        assert data["count"] == 5
+
     def test_invalid_limit(self, client: TestClient) -> None:
         resp = client.get("/api/channels/debug/messages?limit=abc")
         assert resp.status_code == 400
@@ -185,6 +239,23 @@ class TestDebugSendAPI:
         )
         assert resp.status_code == 400
         assert "Message too large" in resp.json()["error"]
+
+    def test_sender_length_capped(self, client: TestClient, store: MessageStore) -> None:
+        long_sender = "x" * 200
+        resp = client.post(
+            "/api/channels/test/messages",
+            json={"content": "msg", "sender": long_sender},
+        )
+        assert resp.status_code == 201
+        assert len(resp.json()["sender"]) == 128
+
+    def test_sender_non_string_coerced(self, client: TestClient) -> None:
+        resp = client.post(
+            "/api/channels/test/messages",
+            json={"content": "msg", "sender": 12345},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["sender"] == "12345"
 
 
 class TestDebugClearAPI:
