@@ -5,19 +5,47 @@
 	import { wiki } from '$lib/stores/wiki';
 	import { toasts } from '$lib/stores/ui';
 	import { renderMarkdown, extractWikiLinks } from '$lib/utils/markdown';
+	import type { WikiTreeNode } from '$lib/types';
 
 	let title = $state('');
 	let content = $state('');
+	let parentId: number | undefined = $state(undefined);
+	let tagsInput = $state('');
 	let saving = $state(false);
 	let showPreview = $state(false);
 	let renderedHtml = $state('');
 	let resolvedSlugs: Record<string, string | null> = $state({});
+	let eligibleParents: { id: number; title: string; depth: number }[] = $state([]);
 
-	onMount(() => {
+	onMount(async () => {
 		// Pre-fill title from query param (wiki-link create flow)
 		const titleParam = $page.url.searchParams.get('title');
 		if (titleParam) {
 			title = titleParam;
+		}
+
+		// Pre-fill parent from query param
+		const parentParam = $page.url.searchParams.get('parent');
+		if (parentParam) {
+			parentId = parseInt(parentParam, 10);
+		}
+
+		// Load tree for parent selector (only pages at depth <= 2 can be parents)
+		try {
+			const tree = await wiki.loadTree();
+			const parents: { id: number; title: string; depth: number }[] = [];
+			function collectParents(nodes: WikiTreeNode[], depth: number) {
+				for (const node of nodes) {
+					if (depth <= 2) {
+						parents.push({ id: node.id, title: node.title, depth });
+						collectParents(node.children, depth + 1);
+					}
+				}
+			}
+			collectParents(tree, 1);
+			eligibleParents = parents;
+		} catch {
+			// Non-critical, parent selector just won't show options
 		}
 	});
 
@@ -40,14 +68,27 @@
 		if (!title.trim()) return;
 		saving = true;
 		try {
-			const page = await wiki.add({ title: title.trim(), content });
+			const tags = tagsInput
+				.split(',')
+				.map((t) => t.trim())
+				.filter(Boolean);
+			const newPage = await wiki.add({
+				title: title.trim(),
+				content,
+				parent_id: parentId,
+				tags: tags.length > 0 ? tags : undefined
+			});
 			toasts.show('Page created', 'success');
-			goto(`/wiki/${page.slug}`);
+			goto(`/wiki/${newPage.slug}`);
 		} catch (error) {
 			toasts.show('Failed to create page: ' + (error as Error).message, 'error');
 		} finally {
 			saving = false;
 		}
+	}
+
+	function indentLabel(title: string, depth: number): string {
+		return '\u00A0\u00A0'.repeat(depth - 1) + title;
 	}
 </script>
 
@@ -77,6 +118,29 @@
 					placeholder="Page title"
 					required
 					maxlength="500"
+				/>
+			</div>
+
+			{#if eligibleParents.length > 0}
+				<div class="form-group">
+					<label for="parent" class="form-label">Parent Page</label>
+					<select id="parent" bind:value={parentId} class="form-input">
+						<option value={undefined}>None (root page)</option>
+						{#each eligibleParents as p}
+							<option value={p.id}>{indentLabel(p.title, p.depth)}</option>
+						{/each}
+					</select>
+				</div>
+			{/if}
+
+			<div class="form-group">
+				<label for="tags" class="form-label">Tags</label>
+				<input
+					id="tags"
+					type="text"
+					bind:value={tagsInput}
+					class="form-input"
+					placeholder="Comma-separated tags (e.g. design, frontend)"
 				/>
 			</div>
 
@@ -180,6 +244,10 @@
 		outline: none;
 		border-color: var(--primary-500);
 		box-shadow: 0 0 0 3px var(--primary-100);
+	}
+
+	select.form-input {
+		cursor: pointer;
 	}
 
 	.form-textarea {

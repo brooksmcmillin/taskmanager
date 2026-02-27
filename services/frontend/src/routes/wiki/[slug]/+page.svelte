@@ -69,7 +69,20 @@
 
 <main class="container py-8">
 	<div class="wiki-view">
-		<a href="/wiki" class="back-link">&larr; Back to wiki</a>
+		<!-- Breadcrumbs -->
+		{#if wikiPage}
+			<nav class="breadcrumbs" aria-label="Breadcrumb">
+				<a href="/wiki" class="breadcrumb-link">Wiki</a>
+				{#each wikiPage.ancestors as ancestor}
+					<span class="breadcrumb-sep">/</span>
+					<a href="/wiki/{ancestor.slug}" class="breadcrumb-link">{ancestor.title}</a>
+				{/each}
+				<span class="breadcrumb-sep">/</span>
+				<span class="breadcrumb-current">{wikiPage.title}</span>
+			</nav>
+		{:else}
+			<a href="/wiki" class="back-link">&larr; Back to wiki</a>
+		{/if}
 
 		{#if loading}
 			<div class="loading-state">Loading page...</div>
@@ -104,6 +117,15 @@
 				{/if}
 			</div>
 
+			<!-- Tags -->
+			{#if wikiPage.tags && wikiPage.tags.length > 0}
+				<div class="page-tags">
+					{#each wikiPage.tags as tag}
+						<a href="/wiki?tag={encodeURIComponent(tag)}" class="tag-chip">{tag}</a>
+					{/each}
+				</div>
+			{/if}
+
 			<div class="page-content wiki-content">
 				{#if renderedHtml}
 					{@html renderedHtml}
@@ -111,6 +133,36 @@
 					<p class="text-muted">This page has no content yet.</p>
 				{/if}
 			</div>
+
+			<!-- Child Pages -->
+			{#if wikiPage.children && wikiPage.children.length > 0}
+				<div class="linked-section">
+					<div class="section-header">
+						<h2>Child Pages</h2>
+						<a href="/wiki/new?parent={wikiPage.id}" class="btn btn-secondary btn-sm"
+							>New Child Page</a
+						>
+					</div>
+					<div class="linked-list">
+						{#each wikiPage.children as child (child.id)}
+							<a href="/wiki/{child.slug}" class="linked-item">
+								<span class="linked-title">{child.title}</span>
+								{#if child.child_count > 0}
+									<span class="child-count"
+										>{child.child_count} subpage{child.child_count !== 1 ? 's' : ''}</span
+									>
+								{/if}
+							</a>
+						{/each}
+					</div>
+				</div>
+			{:else}
+				<div class="add-child-link">
+					<a href="/wiki/new?parent={wikiPage.id}" class="btn btn-secondary btn-sm"
+						>New Child Page</a
+					>
+				</div>
+			{/if}
 
 			<!-- Linked Tasks -->
 			{#if linkedTasks.length > 0}
@@ -134,6 +186,34 @@
 	.wiki-view {
 		max-width: 800px;
 		margin: 0 auto;
+	}
+
+	.breadcrumbs {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+		font-size: 0.875rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.breadcrumb-link {
+		color: var(--text-secondary);
+		text-decoration: none;
+		transition: color var(--transition-fast);
+	}
+
+	.breadcrumb-link:hover {
+		color: var(--primary-600);
+	}
+
+	.breadcrumb-sep {
+		color: var(--text-muted);
+	}
+
+	.breadcrumb-current {
+		color: var(--text-primary);
+		font-weight: 500;
 	}
 
 	.back-link {
@@ -186,7 +266,28 @@
 	.page-meta-bar {
 		font-size: 0.75rem;
 		color: var(--text-muted);
-		margin-bottom: 2rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.page-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.tag-chip {
+		font-size: 0.75rem;
+		padding: 0.125rem 0.5rem;
+		border-radius: 9999px;
+		background: var(--primary-100);
+		color: var(--primary-700);
+		text-decoration: none;
+		transition: all var(--transition-fast);
+	}
+
+	.tag-chip:hover {
+		background: var(--primary-200);
 	}
 
 	.page-content {
@@ -282,9 +383,16 @@
 		text-decoration-style: dashed;
 	}
 
-	/* Linked tasks section */
+	/* Sections */
 	.linked-section {
 		margin-top: 2rem;
+	}
+
+	.section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 0.75rem;
 	}
 
 	.linked-section h2 {
@@ -292,6 +400,10 @@
 		font-weight: 600;
 		color: var(--text-primary);
 		margin: 0 0 0.75rem 0;
+	}
+
+	.section-header h2 {
+		margin: 0;
 	}
 
 	.linked-list {
@@ -325,6 +437,15 @@
 	.linked-status {
 		font-size: 0.75rem;
 		color: var(--text-muted);
+	}
+
+	.child-count {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.add-child-link {
+		margin-top: 1.5rem;
 	}
 
 	.btn-danger-outline {
