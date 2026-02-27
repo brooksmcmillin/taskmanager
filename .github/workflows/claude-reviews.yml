@@ -102,6 +102,15 @@ jobs:
 
             If everything is clean and there are no issues in any category, post a short "All clear" message (still include the marker).
 
+            ## Verdict
+
+            At the very end of your comment, you MUST include a machine-readable verdict line as an HTML comment:
+            - `<!-- verdict: pass -->` if there are NO blocking issues (i.e., no New Issues or Still Open items that must be fixed before merge)
+            - `<!-- verdict: fail -->` if there ARE blocking issues that must be fixed before merge
+
+            Only use `fail` for issues that genuinely block the PR. Informational items, suggestions, and
+            pre-existing issues outside the PR's scope should NOT cause a fail verdict — put those in Suggestions.
+
             ## Review Focus Areas
             - Correctness: logic errors, edge cases, error handling
             - Maintainability: readability, structure, naming
@@ -204,6 +213,15 @@ jobs:
 
             If everything is clean and there are no issues in any category, post a short "All clear" message (still include the marker).
 
+            ## Verdict
+
+            At the very end of your comment, you MUST include a machine-readable verdict line as an HTML comment:
+            - `<!-- verdict: pass -->` if there are NO blocking issues (i.e., no New Issues or Still Open items that must be fixed before merge)
+            - `<!-- verdict: fail -->` if there ARE blocking issues that must be fixed before merge
+
+            Only use `fail` for issues that genuinely block the PR. Informational items, suggestions, and
+            pre-existing issues outside the PR's scope should NOT cause a fail verdict — put those in Suggestions.
+
             ## Security Review Focus Areas
             - Injection vulnerabilities (SQL, command, XSS, template injection)
             - Authentication and authorization issues
@@ -243,20 +261,28 @@ jobs:
 
           HAS_ISSUES=false
 
-          # Check code review for unresolved issues
-          if echo "$CODE_REVIEW" | grep -qE '### (New Issues|Still Open)'; then
-            echo "::error::Code review has unresolved issues"
+          # Check code review verdict
+          CODE_VERDICT=$(echo "$CODE_REVIEW" | grep -oP '<!-- verdict: \K(pass|fail)' | tail -1)
+          if [ -z "$CODE_VERDICT" ]; then
+            echo "::error::Code review missing verdict line (<!-- verdict: pass/fail -->)"
+            HAS_ISSUES=true
+          elif [ "$CODE_VERDICT" = "fail" ]; then
+            echo "::error::Code review verdict: fail"
             HAS_ISSUES=true
           else
-            echo "Code review: clean"
+            echo "Code review verdict: pass"
           fi
 
-          # Check security review for unresolved issues
-          if echo "$SECURITY_REVIEW" | grep -qE '### (New Issues|Still Open)'; then
-            echo "::error::Security review has unresolved issues"
+          # Check security review verdict
+          SECURITY_VERDICT=$(echo "$SECURITY_REVIEW" | grep -oP '<!-- verdict: \K(pass|fail)' | tail -1)
+          if [ -z "$SECURITY_VERDICT" ]; then
+            echo "::error::Security review missing verdict line (<!-- verdict: pass/fail -->)"
+            HAS_ISSUES=true
+          elif [ "$SECURITY_VERDICT" = "fail" ]; then
+            echo "::error::Security review verdict: fail"
             HAS_ISSUES=true
           else
-            echo "Security review: clean"
+            echo "Security review verdict: pass"
           fi
 
           if [ "$HAS_ISSUES" = true ]; then
