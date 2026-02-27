@@ -63,7 +63,7 @@ class WikiPage(Base):
     title: Mapped[str] = mapped_column(String(500))
     slug: Mapped[str] = mapped_column(String(500), index=True)
     content: Mapped[str] = mapped_column(Text, default="")
-    tags: Mapped[list] = mapped_column(JSONB, default=list)
+    tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
     revision_number: Mapped[int] = mapped_column(default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

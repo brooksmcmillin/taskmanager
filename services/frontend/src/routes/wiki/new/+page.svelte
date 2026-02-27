@@ -27,7 +27,10 @@
 		// Pre-fill parent from query param
 		const parentParam = $page.url.searchParams.get('parent');
 		if (parentParam) {
-			parentId = parseInt(parentParam, 10);
+			const parsed = parseInt(parentParam, 10);
+			if (!isNaN(parsed)) {
+				parentId = parsed;
+			}
 		}
 
 		// Load tree for parent selector (only pages at depth <= 2 can be parents)

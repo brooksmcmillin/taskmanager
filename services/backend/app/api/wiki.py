@@ -1,7 +1,9 @@
 """Wiki page API routes."""
 
+import json
 import re
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,6 +28,10 @@ MAX_RESOLVE_TITLES = 50
 MAX_BATCH_LINK_TASKS = 100
 MAX_CONTENT_LENGTH = 500_000
 MAX_WIKI_DEPTH = 3
+MAX_TAGS = 20
+MAX_TAG_LENGTH = 50
+
+Tag = Annotated[str, Field(min_length=1, max_length=MAX_TAG_LENGTH)]
 
 # ---------------------------------------------------------------------------
 # Schemas
@@ -37,7 +43,7 @@ class WikiPageCreate(BaseModel):
     content: str = Field("", max_length=MAX_CONTENT_LENGTH)
     slug: str | None = Field(None, max_length=500)
     parent_id: int | None = None
-    tags: list[str] = Field(default_factory=list)
+    tags: list[Tag] = Field(default_factory=list, max_length=MAX_TAGS)
 
 
 class WikiPageUpdate(BaseModel):
@@ -47,7 +53,7 @@ class WikiPageUpdate(BaseModel):
     append: bool = False
     parent_id: int | None = None
     remove_parent: bool = False
-    tags: list[str] | None = None
+    tags: list[Tag] | None = Field(None, max_length=MAX_TAGS)
 
 
 class WikiPageAncestor(BaseModel):
@@ -412,7 +418,7 @@ async def list_wiki_pages(
             WikiPage.title.ilike(f"%{q}%") | WikiPage.content.ilike(f"%{q}%")
         )
     if tag:
-        query = query.where(WikiPage.tags.op("@>")(f'["{tag}"]'))
+        query = query.where(WikiPage.tags.op("@>")(json.dumps([tag])))
     if parent_id is not None:
         if parent_id == 0:
             query = query.where(WikiPage.parent_id.is_(None))
@@ -465,9 +471,19 @@ async def create_wiki_page(
     ancestors = await _get_ancestors(db, page)
     children = await _get_children_with_counts(db, page.id, user.id)
 
-    resp = WikiPageResponse.model_validate(page)
-    resp.ancestors = ancestors
-    resp.children = children
+    resp = WikiPageResponse(
+        id=page.id,
+        title=page.title,
+        slug=page.slug,
+        content=page.content,
+        parent_id=page.parent_id,
+        tags=page.tags or [],
+        revision_number=page.revision_number,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        ancestors=ancestors,
+        children=children,
+    )
     if was_modified:
         resp.slug_modified = True
         resp.requested_slug = requested_slug or slug
@@ -552,9 +568,19 @@ async def get_wiki_page(
     page = await _resolve_page(db, user.id, slug_or_id)
     ancestors = await _get_ancestors(db, page)
     children = await _get_children_with_counts(db, page.id, user.id)
-    resp = WikiPageResponse.model_validate(page)
-    resp.ancestors = ancestors
-    resp.children = children
+    resp = WikiPageResponse(
+        id=page.id,
+        title=page.title,
+        slug=page.slug,
+        content=page.content,
+        parent_id=page.parent_id,
+        tags=page.tags or [],
+        revision_number=page.revision_number,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        ancestors=ancestors,
+        children=children,
+    )
     return DataResponse(data=resp)
 
 
@@ -642,9 +668,19 @@ async def update_wiki_page(
     ancestors = await _get_ancestors(db, page)
     children = await _get_children_with_counts(db, page.id, user.id)
 
-    resp = WikiPageResponse.model_validate(page)
-    resp.ancestors = ancestors
-    resp.children = children
+    resp = WikiPageResponse(
+        id=page.id,
+        title=page.title,
+        slug=page.slug,
+        content=page.content,
+        parent_id=page.parent_id,
+        tags=page.tags or [],
+        revision_number=page.revision_number,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        ancestors=ancestors,
+        children=children,
+    )
     if slug_modified:
         resp.slug_modified = True
         resp.requested_slug = requested_slug
