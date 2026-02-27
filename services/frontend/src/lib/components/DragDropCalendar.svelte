@@ -298,10 +298,7 @@
 			<button class="btn btn-secondary btn-sm" on:click={goToToday}>Today</button>
 			<button class="btn btn-secondary btn-sm" on:click={nextWeek}>Next →</button>
 			{#if hasAnyOverflow}
-				<button
-					class="btn btn-secondary btn-sm expand-all-btn"
-					on:click={toggleExpandAll}
-				>
+				<button class="btn btn-secondary btn-sm expand-all-btn" on:click={toggleExpandAll}>
 					{allExpanded ? 'Collapse All' : 'Expand All'}
 				</button>
 			{/if}
