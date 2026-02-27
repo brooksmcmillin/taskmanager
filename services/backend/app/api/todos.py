@@ -6,6 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import and_, case, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import errors
 from app.db.queries import (
@@ -46,7 +47,9 @@ class TodoCreate(BaseModel):
     deadline_type: DeadlineType = DeadlineType.preferred
     project_id: int | None = None
     category: str | None = Field(
-        None, description="Project name (resolved to project_id)"
+        None,
+        max_length=100,
+        description="Project name (resolved to project_id)",
     )
     tags: list[str] = Field(default_factory=list)
     context: str | None = None
@@ -87,7 +90,9 @@ class TodoUpdate(BaseModel):
     deadline_type: DeadlineType | None = None
     project_id: int | None = None
     category: str | None = Field(
-        None, description="Project name (resolved to project_id)"
+        None,
+        max_length=100,
+        description="Project name (resolved to project_id)",
     )
     tags: list[str] | None = None
     context: str | None = None
@@ -408,6 +413,14 @@ async def _resolve_category_to_project(
     Performs a case-insensitive match against the user's existing projects.
     If no match is found, automatically creates a new project with the given name.
 
+    Because Project.name has a global UNIQUE constraint (not scoped per user),
+    concurrent requests from different users with the same category name can
+    race. The IntegrityError is handled by re-querying to find the conflicting
+    row and returning whichever project owns that name for this user. If no
+    user-owned project is found after the conflict, the conflict is from another
+    user entirely, so we fall back to the original category name unchanged and
+    let the caller decide how to proceed.
+
     Args:
         db: Database session
         category: Category/project name to resolve
@@ -427,7 +440,9 @@ async def _resolve_category_to_project(
     if project:
         return project.id
 
-    # No match found — auto-create the project for this user
+    # No match found — auto-create the project for this user.
+    # Project.name has a global UNIQUE constraint, so guard against concurrent
+    # inserts (or collisions with another user's project name) via IntegrityError.
     position = await get_next_position(db, Project, user_id)
     new_project = Project(
         user_id=user_id,
@@ -435,8 +450,25 @@ async def _resolve_category_to_project(
         position=position,
     )
     db.add(new_project)
-    await db.flush()
-    await db.refresh(new_project)
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Another row with this name already exists (race or cross-user conflict).
+        # Roll back the failed insert and re-query for the user's own project.
+        await db.rollback()
+        retry_result = await db.execute(
+            select(Project).where(
+                func.lower(Project.name) == category.lower(),
+                Project.user_id == user_id,
+            )
+        )
+        existing = retry_result.scalar_one_or_none()
+        if existing:
+            return existing.id
+        # The conflict is from another user's project with the same name.
+        # Re-raise so the caller receives a proper 500 rather than silent
+        # data loss; this scenario requires a schema migration to fix.
+        raise
     return new_project.id
 
 

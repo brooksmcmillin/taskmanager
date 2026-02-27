@@ -1961,3 +1961,110 @@ async def test_batch_create_todos_with_case_insensitive_category_match(
     assert data["meta"]["count"] == 2
     assert data["data"][0]["project_id"] == project_id
     assert data["data"][1]["project_id"] == project_id
+
+
+@pytest.mark.asyncio
+async def test_update_todo_with_nonexistent_category_auto_creates_project(
+    authenticated_client: AsyncClient,
+):
+    """Test that updating a todo with a non-existent category auto-creates it."""
+    # Create a todo without a category
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to update"},
+    )
+    assert create_response.status_code == 201
+    todo_id = create_response.json()["data"]["id"]
+
+    new_category = "Update Auto Category"
+
+    # Update the todo with a new category that doesn't exist
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"category": new_category},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["project_name"] == new_category
+    assert data["project_id"] is not None
+
+    # Verify the project was auto-created
+    projects = await authenticated_client.get("/api/projects")
+    project_names = [p["name"] for p in projects.json()["data"]]
+    assert new_category in project_names
+
+
+@pytest.mark.asyncio
+async def test_update_todo_with_case_insensitive_category_match(
+    authenticated_client: AsyncClient,
+):
+    """Test that updating a todo matches categories case-insensitively."""
+    # Create a project
+    project_response = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "Update Project"},
+    )
+    assert project_response.status_code == 201
+    project_id = project_response.json()["data"]["id"]
+
+    # Create a todo without a category
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to update"},
+    )
+    assert create_response.status_code == 201
+    todo_id = create_response.json()["data"]["id"]
+
+    # Update the todo with a differently-cased category
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"category": "update project"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["project_id"] == project_id
+    assert data["project_name"] == "Update Project"
+
+
+@pytest.mark.asyncio
+async def test_bulk_update_todos_with_nonexistent_category_auto_creates_project(
+    authenticated_client: AsyncClient,
+):
+    """Test bulk update auto-creates a project for a non-existent category."""
+    # Create two todos
+    create1 = await authenticated_client.post(
+        "/api/todos", json={"title": "Bulk task 1"}
+    )
+    create2 = await authenticated_client.post(
+        "/api/todos", json={"title": "Bulk task 2"}
+    )
+    assert create1.status_code == 201
+    assert create2.status_code == 201
+    id1 = create1.json()["data"]["id"]
+    id2 = create2.json()["data"]["id"]
+
+    new_category = "Bulk Auto Category"
+
+    # Bulk-update both todos with a new category
+    response = await authenticated_client.put(
+        "/api/todos",
+        json={"ids": [id1, id2], "updates": {"category": new_category}},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["data"]["updated"] == 2
+
+    # Verify the project was auto-created
+    projects = await authenticated_client.get("/api/projects")
+    project_names_list = [p["name"] for p in projects.json()["data"]]
+    assert new_category in project_names_list
+
+    # Verify both todos now belong to the new project
+    todo1 = await authenticated_client.get(f"/api/todos/{id1}")
+    todo2 = await authenticated_client.get(f"/api/todos/{id2}")
+    assert todo1.json()["data"]["project_name"] == new_category
+    assert todo2.json()["data"]["project_name"] == new_category
+    assert todo1.json()["data"]["project_id"] == todo2.json()["data"]["project_id"]
