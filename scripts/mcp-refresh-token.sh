@@ -9,10 +9,14 @@
 # indefinitely.
 #
 # Usage:
-#   ./scripts/mcp-refresh-token.sh
+#   NTFY_TOKEN=tk_... ./scripts/mcp-refresh-token.sh
 #
 # Cron example (every 45 minutes):
-#   */45 * * * * /path/to/taskmanager/scripts/mcp-refresh-token.sh >> /tmp/mcp-refresh.log 2>&1
+#   */45 * * * * NTFY_TOKEN=tk_... /path/to/taskmanager/scripts/mcp-refresh-token.sh >> /tmp/mcp-refresh.log 2>&1
+#
+# Environment variables:
+#   NTFY_TOKEN  - (required) ntfy bearer token for push notifications
+#   NTFY_URL    - (optional) ntfy topic URL, defaults to https://ntfy.brooksmcmillin.com/mcp-alerts
 #
 # Requirements: curl, jq
 
@@ -22,8 +26,8 @@ set -euo pipefail
 CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
 AUTH_SERVER="https://mcp-auth.brooksmcmillin.com"
 TOKEN_ENDPOINT="$AUTH_SERVER/token"
-NTFY_URL="https://ntfy.brooksmcmillin.com/mcp-alerts"
-NTFY_TOKEN="tk_cjzc9w0qyvr4ouy0y8ww8vkl218hb"
+NTFY_URL="${NTFY_URL:-https://ntfy.brooksmcmillin.com/mcp-alerts}"
+: "${NTFY_TOKEN:?Error: NTFY_TOKEN environment variable is not set}"
 
 # --- Alert helper: send push notification on failure ---
 send_alert() {
@@ -136,9 +140,10 @@ assert_integer "expires_in" "$EXPIRES_IN"
 NEW_EXPIRES_AT=$(( $(date +%s) * 1000 + EXPIRES_IN * 1000 ))
 
 # --- Update Claude Code credentials ---
+TMPFILE=""
 cp "$CREDENTIALS_FILE" "$CREDENTIALS_FILE.bak"
 chmod 600 "$CREDENTIALS_FILE.bak"
-trap 'rm -f "$CREDENTIALS_FILE.bak"' EXIT
+trap 'rm -f "$CREDENTIALS_FILE.bak" "$TMPFILE"' EXIT
 
 JQ_FILTER='.mcpOAuth[$key].accessToken = $token | .mcpOAuth[$key].expiresAt = $expires'
 JQ_ARGS=(--arg key "$MCP_KEY" --arg token "$ACCESS_TOKEN" --argjson expires "$NEW_EXPIRES_AT")
@@ -157,9 +162,4 @@ echo "$UPDATED" > "$TMPFILE"
 mv "$TMPFILE" "$CREDENTIALS_FILE"
 
 EXPIRY_DATE=$(date -d @$((NEW_EXPIRES_AT / 1000)) 2>/dev/null || date -r $((NEW_EXPIRES_AT / 1000)) 2>/dev/null || echo "${NEW_EXPIRES_AT}ms")
-echo "$(date -Iseconds) Token refreshed successfully."
-echo "  Access token: ${ACCESS_TOKEN:0:20}..."
-echo "  Expires at: $EXPIRY_DATE"
-if [[ -n "$NEW_REFRESH_TOKEN" ]]; then
-    echo "  Refresh token rotated: ${NEW_REFRESH_TOKEN:0:20}..."
-fi
+echo "$(date -Iseconds) Token refreshed successfully. Expires at: $EXPIRY_DATE"
