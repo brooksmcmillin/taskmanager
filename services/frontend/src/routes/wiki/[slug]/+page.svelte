@@ -28,11 +28,17 @@
 		try {
 			wikiPage = await wiki.getBySlug(slug);
 			await renderContent();
-			linkedTasks = await wiki.getLinkedTasks(wikiPage.id);
 		} catch {
 			error = 'Page not found';
 		} finally {
 			loading = false;
+		}
+		if (wikiPage) {
+			try {
+				linkedTasks = await wiki.getLinkedTasks(wikiPage.id);
+			} catch (e) {
+				console.warn('Failed to load linked tasks:', e);
+			}
 		}
 	}
 
