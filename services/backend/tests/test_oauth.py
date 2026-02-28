@@ -973,7 +973,14 @@ async def test_token_endpoint_inactive_client(client: AsyncClient, db_session):
 async def test_token_endpoint_public_client_skips_secret(
     client: AsyncClient, public_oauth_client, test_user, db_session
 ):
-    """Test that public clients can use token endpoint without a client secret."""
+    """Test that public clients can use token endpoint without a client secret.
+
+    Public clients must use PKCE instead of a client secret.
+    """
+    code_verifier = "public-client-skips-secret-verifier"
+    digest = hashlib.sha256(code_verifier.encode()).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
     auth_code = AuthorizationCode(
         code="public-client-code",
         client_id=public_oauth_client.client_id,
@@ -981,6 +988,8 @@ async def test_token_endpoint_public_client_skips_secret(
         redirect_uri="http://localhost:3000/callback",
         scopes=json.dumps(["read"]),
         expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
     )
     db_session.add(auth_code)
     await db_session.commit()
@@ -992,6 +1001,7 @@ async def test_token_endpoint_public_client_skips_secret(
             "client_id": public_oauth_client.client_id,
             "code": "public-client-code",
             "redirect_uri": "http://localhost:3000/callback",
+            "code_verifier": code_verifier,
         },
     )
 
