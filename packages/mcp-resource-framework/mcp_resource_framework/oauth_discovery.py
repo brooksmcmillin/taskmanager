@@ -43,6 +43,7 @@ def _build_oauth_metadata(
         "token_endpoint": f"{auth_base}/token",
         "introspection_endpoint": f"{auth_base}/introspect",
         "registration_endpoint": f"{auth_base}/register",
+        "revocation_endpoint": f"{auth_base}/revoke",
         "scopes_supported": scopes,
         "response_types_supported": ["code"],
         "grant_types_supported": [

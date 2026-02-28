@@ -125,6 +125,7 @@ async def _validate_access_token(db: DbSession, token: str):
         select(AccessToken)
         .where(AccessToken.token == token)  # SQL filter (OK for performance)
         .where(AccessToken.expires_at > datetime.now(UTC))
+        .where(AccessToken.revoked.is_(False))
     )
     access_token = result.scalar_one_or_none()
 

@@ -169,6 +169,7 @@ async def _handle_refresh_token(
             == refresh_token,  # SQL filter (OK for performance)
             AccessToken.client_id == client.client_id,
             AccessToken.refresh_token_expires_at > datetime.now(UTC),
+            AccessToken.revoked.is_(False),
         )
     )
     old_token = result.scalar_one_or_none()
@@ -351,6 +352,88 @@ async def _handle_device_code(db, client: OAuthClient, device_code: str | None) 
         "refresh_token": access_token.refresh_token,
         "scope": " ".join(scopes_list),
     }
+
+
+@router.post("/revoke")
+async def revoke_endpoint(
+    db: DbSession,
+    token: str = Form(...),
+    client_id: str = Form(...),
+    client_secret: str | None = Form(None),
+    token_type_hint: str | None = Form(None),
+) -> dict:
+    """Token revocation endpoint (RFC 7009).
+
+    Revokes an access token or refresh token. Per RFC 7009, always returns
+    200 OK regardless of whether the token was found, already revoked, or
+    belongs to a different client — this prevents token existence disclosure.
+    """
+    # Validate client
+    result = await db.execute(
+        select(OAuthClient).where(
+            OAuthClient.client_id == client_id,
+            OAuthClient.is_active.is_(True),
+        )
+    )
+    client = result.scalar_one_or_none()
+
+    if not client:
+        raise errors.oauth_invalid_client()
+
+    # Verify client secret for confidential clients
+    if (
+        not client.is_public
+        and client.client_secret_hash
+        and (
+            not client_secret
+            or not verify_password(client_secret, client.client_secret_hash)
+        )
+    ):
+        raise errors.oauth_invalid_client()
+
+    # Lookup token — search order depends on token_type_hint
+    access_token_record = None
+    if token_type_hint == "refresh_token":
+        # Hint says refresh token: search refresh_token first, fall back to token
+        result = await db.execute(
+            select(AccessToken).where(
+                AccessToken.refresh_token == token,
+                AccessToken.client_id == client.client_id,
+            )
+        )
+        access_token_record = result.scalar_one_or_none()
+        if not access_token_record:
+            result = await db.execute(
+                select(AccessToken).where(
+                    AccessToken.token == token,
+                    AccessToken.client_id == client.client_id,
+                )
+            )
+            access_token_record = result.scalar_one_or_none()
+    else:
+        # No hint or access_token hint: search token first, fall back to refresh_token
+        result = await db.execute(
+            select(AccessToken).where(
+                AccessToken.token == token,
+                AccessToken.client_id == client.client_id,
+            )
+        )
+        access_token_record = result.scalar_one_or_none()
+        if not access_token_record:
+            result = await db.execute(
+                select(AccessToken).where(
+                    AccessToken.refresh_token == token,
+                    AccessToken.client_id == client.client_id,
+                )
+            )
+            access_token_record = result.scalar_one_or_none()
+
+    # If found, revoke it. Per RFC 7009: always return 200 OK.
+    if access_token_record:
+        access_token_record.revoked = True
+        await db.commit()
+
+    return {}
 
 
 @router.get("/verify")

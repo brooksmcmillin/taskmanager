@@ -120,6 +120,12 @@ class TestAuthorizationServerMetadata:
         assert data["issuer"] == AUTH_URL
         assert data["resource"] == SERVER_URL
 
+    def test_revocation_endpoint(self) -> None:
+        client = _make_app_with_discovery()
+        resp = client.get("/.well-known/oauth-authorization-server")
+        data = resp.json()
+        assert data["revocation_endpoint"] == f"{AUTH_URL}/revoke"
+
     def test_grant_types(self) -> None:
         client = _make_app_with_discovery()
         resp = client.get("/.well-known/oauth-authorization-server")
