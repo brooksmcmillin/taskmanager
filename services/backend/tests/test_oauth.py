@@ -977,7 +977,7 @@ async def test_token_endpoint_public_client_skips_secret(
 
     Public clients must use PKCE instead of a client secret.
     """
-    code_verifier = "public-client-skips-secret-verifier"
+    code_verifier = TEST_CODE_VERIFIER
     digest = hashlib.sha256(code_verifier.encode()).digest()
     code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
@@ -1529,7 +1529,7 @@ async def test_public_client_with_pkce_succeeds(
     client: AsyncClient, public_oauth_client, test_user, db_session
 ):
     """Test that a public client token exchange succeeds when PKCE is present."""
-    code_verifier = "valid-pkce-verifier-for-public-client"
+    code_verifier = TEST_CODE_VERIFIER
     digest = hashlib.sha256(code_verifier.encode()).digest()
     code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
