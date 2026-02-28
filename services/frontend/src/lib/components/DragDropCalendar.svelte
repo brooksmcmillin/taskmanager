@@ -376,9 +376,9 @@
 						{@const completedSubtaskCount = subtasks.filter((s) => s.status === 'completed').length}
 						<div
 							class="mobile-task-card"
-							style="border-left: 4px solid {getPriorityColor(item.priority)}; background-color: {hexTo50Shade(
-								item.project_color || DEFAULT_PROJECT_COLOR
-							)}"
+							style="border-left: 4px solid {getPriorityColor(
+								item.priority
+							)}; background-color: {hexTo50Shade(item.project_color || DEFAULT_PROJECT_COLOR)}"
 							on:click={() => handleItemClick(item)}
 							role="button"
 							tabindex="0"
@@ -408,9 +408,9 @@
 					{#each selectedDaySubtasks as subtask (subtask.id)}
 						<div
 							class="mobile-task-card mobile-subtask-card"
-							style="border-left: 4px solid {getPriorityColor(subtask.priority)}; background-color: {hexTo50Shade(
-								subtask.parentColor || DEFAULT_PROJECT_COLOR
-							)}"
+							style="border-left: 4px solid {getPriorityColor(
+								subtask.priority
+							)}; background-color: {hexTo50Shade(subtask.parentColor || DEFAULT_PROJECT_COLOR)}"
 							on:click={() => goto(`/task/${subtask.id}`)}
 							role="button"
 							tabindex="0"
