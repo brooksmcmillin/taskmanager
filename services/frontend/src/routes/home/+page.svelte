@@ -6,6 +6,7 @@
 		getDeadlineTypeColor,
 		getDeadlineTypeBgColor
 	} from '$lib/utils/deadline';
+	import { stripHtml } from '$lib/utils/markdown';
 	import { toasts } from '$lib/stores/ui';
 	import type { Todo, Article, ApiResponse } from '$lib/types';
 
@@ -333,11 +334,19 @@
 							class:read={article.is_read}
 							href={article.url}
 							target="_blank"
-							rel="noopener"
+							rel="noopener noreferrer"
+							onclick={() => {
+								if (!article.is_read) {
+									article.is_read = true;
+									api.post(`/api/news/${article.id}/read`, { is_read: true }).catch(() => {
+										article.is_read = false;
+									});
+								}
+							}}
 						>
 							<div class="article-title">{article.title}</div>
 							{#if article.summary}
-								<div class="article-summary">{article.summary}</div>
+								<div class="article-summary">{stripHtml(article.summary)}</div>
 							{/if}
 							<div class="article-meta">
 								<span class="article-source">{article.feed_source_name}</span>
@@ -668,6 +677,11 @@
 
 	.article-item:hover {
 		background: var(--bg-hover);
+	}
+
+	.article-item.read {
+		background-color: var(--bg-page);
+		opacity: 0.75;
 	}
 
 	.article-item.read .article-title {

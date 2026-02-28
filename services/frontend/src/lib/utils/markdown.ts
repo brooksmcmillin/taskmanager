@@ -2,6 +2,17 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 /**
+ * Strip HTML tags and decode entities, returning plain text.
+ * Useful for displaying RSS feed summaries as plain text.
+ */
+export function stripHtml(html: string): string {
+	const clean = DOMPurify.sanitize(html, { ALLOWED_TAGS: [] });
+	// DOMPurify with no allowed tags strips all elements, leaving text content.
+	// Collapse whitespace runs (from removed block elements) into single spaces.
+	return clean.replace(/\s+/g, ' ').trim();
+}
+
+/**
  * Extract [[Page Title]] references from markdown content.
  */
 export function extractWikiLinks(content: string): string[] {

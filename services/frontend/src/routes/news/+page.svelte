@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import { toasts } from '$lib/stores/ui';
+	import { stripHtml } from '$lib/utils/markdown';
 	import type { Article, ArticleRating, ApiResponse } from '$lib/types';
 
 	let articles: Article[] = $state([]);
@@ -257,7 +258,7 @@
 	{:else}
 		<div class="space-y-4">
 			{#each articles as article (article.id)}
-				<div class="card p-5 hover:shadow-md transition-shadow" class:opacity-60={article.is_read}>
+				<div class="article-card" class:article-read={article.is_read}>
 					<div class="flex justify-between items-start gap-4">
 						<div class="flex-1">
 							<div class="flex items-center gap-2 mb-2">
@@ -266,6 +267,9 @@
 									target="_blank"
 									rel="noopener noreferrer"
 									class="text-xl font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+									onclick={() => {
+										if (!article.is_read) markAsRead(article.id, true);
+									}}
 								>
 									{article.title}
 								</a>
@@ -296,7 +300,7 @@
 							</div>
 
 							{#if article.summary}
-								<p class="article-summary">{article.summary}</p>
+								<p class="article-summary">{stripHtml(article.summary)}</p>
 							{/if}
 
 							{#if article.keywords.length > 0}
@@ -519,6 +523,26 @@
 		-webkit-line-clamp: 3;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
+	}
+
+	/* Article card */
+	.article-card {
+		background: var(--bg-card);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-lg);
+		padding: 1.25rem;
+		transition:
+			box-shadow 0.15s ease,
+			background-color 0.15s ease;
+	}
+
+	.article-card:hover {
+		box-shadow: var(--shadow-md);
+	}
+
+	.article-card.article-read {
+		background-color: var(--bg-page);
+		opacity: 0.75;
 	}
 
 	.badge {
