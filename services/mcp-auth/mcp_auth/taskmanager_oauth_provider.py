@@ -83,9 +83,6 @@ class TaskManagerAuthSettings(BaseSettings):
     # MCP-specific settings
     mcp_scope: str = "read"  # Default scope for MCP access
 
-    # Session settings for admin operations (if needed)
-    admin_session_cookie: str | None = None  # For auto-registering clients
-
     def get_public_url(self) -> str:
         """Get the public base URL for user-facing redirects."""
         return self.public_base_url or self.base_url
@@ -386,29 +383,80 @@ class TaskManagerOAuthProvider(
         """
         Register a new OAuth client.
 
-        This stores the client information locally and optionally registers
-        it with the taskmanager system if admin credentials are available.
+        This stores the client information locally and persists it to the
+        taskmanager backend if a valid API client is available.
         """
         if client_info.client_id is None:
             raise ValueError("client_id is required for OAuth client registration")
         self.clients[client_info.client_id] = client_info
         logger.info(f"Registered OAuth client: {client_info.client_id}")
 
-        # See #185 for auto-registration with taskmanager backend
-        if self.settings.admin_session_cookie:
+        # Auto-register with taskmanager backend for persistence (#185)
+        if self.api_client:
             await self._register_with_taskmanager(client_info)
+
+    # Allowlists for scope and grant-type values forwarded to the backend.
+    # Prevents external dynamic registration from requesting elevated privileges.
+    ALLOWED_SCOPES = {"read", "write"}
+    ALLOWED_GRANT_TYPES = {"authorization_code", "refresh_token"}
 
     async def _register_with_taskmanager(self, client_info: OAuthClientInformationFull) -> None:
         """
-        Register client with taskmanager (requires admin session).
+        Register client with taskmanager backend for persistence.
 
-        This is a stub for automatically registering MCP clients with your
-        taskmanager system. You'll need to implement the admin authentication
-        part based on your needs.
+        Uses client credentials authentication via the SDK to POST to
+        /api/oauth/clients/system. Failures are logged but do not block
+        the in-memory registration.
         """
-        # Not yet implemented — see #185
-        logger.info("Auto-registration with taskmanager not yet implemented")
-        pass
+        valid_client = self._ensure_valid_api_client()
+        if not valid_client:
+            logger.warning(
+                "Cannot auto-register client with backend: no valid API client"
+            )
+            return
+
+        try:
+            # Map OAuthClientInformationFull fields to SDK parameters
+            name = getattr(client_info, "client_name", None) or str(client_info.client_id)
+            redirect_uris = [str(uri) for uri in (client_info.redirect_uris or [])]
+
+            # Filter to allowed values to prevent privilege escalation via
+            # dynamic client registration (RFC 7591).
+            grant_types = [
+                g for g in (client_info.grant_types or []) if g in self.ALLOWED_GRANT_TYPES
+            ] or ["authorization_code", "refresh_token"]
+            scopes = [
+                s for s in (client_info.scope or "").split() if s in self.ALLOWED_SCOPES
+            ] or ["read"]
+
+            response = valid_client.create_system_oauth_client(
+                name=name,
+                redirect_uris=redirect_uris,
+                grant_types=grant_types,
+                scopes=scopes,
+            )
+
+            if response.success:
+                backend_id = (
+                    response.data.get("client_id", "unknown")
+                    if isinstance(response.data, dict)
+                    else "unknown"
+                )
+                logger.info(
+                    f"Auto-registered client {client_info.client_id} with taskmanager backend "
+                    f"(backend client_id: {backend_id})"
+                )
+            else:
+                logger.warning(
+                    f"Failed to auto-register client {client_info.client_id} "
+                    f"with backend: {response.error}"
+                )
+        except Exception as e:
+            logger.error(
+                f"Error auto-registering client {client_info.client_id} "
+                f"with backend: {e}",
+                exc_info=True,
+            )
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
