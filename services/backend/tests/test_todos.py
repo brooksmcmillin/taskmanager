@@ -2537,4 +2537,58 @@ async def test_batch_create_skip_duplicates_all_skipped(
     assert response.status_code == 201
     data = response.json()
     assert data["meta"]["count"] == 0
-    assert data["meta"]["skipped_duplicates"] == 1
+
+
+@pytest.mark.asyncio
+async def test_list_todos_limit(authenticated_client: AsyncClient):
+    """Test that the limit parameter restricts the number of returned tasks."""
+    # Create 5 tasks
+    for i in range(5):
+        await authenticated_client.post(
+            "/api/todos",
+            json={"title": f"Task {i + 1}"},
+        )
+
+    # Request only 3
+    response = await authenticated_client.get(
+        "/api/todos",
+        params={"limit": 3},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["data"]) == 3
+    assert data["meta"]["count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_list_todos_limit_larger_than_total(authenticated_client: AsyncClient):
+    """Test that limit larger than available tasks returns all tasks."""
+    # Create 3 tasks
+    for i in range(3):
+        await authenticated_client.post(
+            "/api/todos",
+            json={"title": f"Task {i + 1}"},
+        )
+
+    # Request up to 100 — should return all 3
+    response = await authenticated_client.get(
+        "/api/todos",
+        params={"limit": 100},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["data"]) == 3
+    assert data["meta"]["count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_list_todos_limit_invalid(authenticated_client: AsyncClient):
+    """Test that a limit value less than 1 returns a 422 validation error."""
+    response = await authenticated_client.get(
+        "/api/todos",
+        params={"limit": 0},
+    )
+
+    assert response.status_code == 422

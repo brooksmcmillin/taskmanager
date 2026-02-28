@@ -842,6 +842,9 @@ async def list_todos(
     deadline_type: Literal["flexible", "preferred", "firm", "hard"] | None = Query(
         None, description="Filter by deadline type"
     ),
+    limit: int | None = Query(
+        None, ge=1, description="Maximum number of tasks to return"
+    ),
     include_subtasks: bool = Query(False),
     order_by: Literal["position", "due_date", "deadline_type"] | None = Query(
         None, description="Sort order"
@@ -853,6 +856,7 @@ async def list_todos(
     Use parent_id to get subtasks of a specific todo.
     Use include_subtasks=true to include subtasks in the response.
     Use order_by='position' to sort by manual position instead of due date.
+    Use limit to cap the number of results returned.
     """
     query = (
         select(
@@ -877,6 +881,9 @@ async def list_todos(
         deadline_type=deadline_type,
         order_by=order_by,
     )
+
+    if limit is not None:
+        query = query.limit(limit)
 
     result = await db.execute(query)
     rows = result.all()
