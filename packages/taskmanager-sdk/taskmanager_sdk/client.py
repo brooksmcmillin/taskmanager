@@ -847,6 +847,143 @@ class TaskManagerClient:
             "GET", f"/wiki/{page_id}/revisions/{revision_number}"
         )
 
+    # Snippet methods
+    def list_snippets(
+        self,
+        q: str | None = None,
+        category: str | None = None,
+        tag: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> ApiResponse:
+        """
+        List snippets with optional filters.
+
+        Args:
+            q: Search query (searches title, content, category)
+            category: Filter by category
+            tag: Filter by tag
+            date_from: Filter snippets from this date (YYYY-MM-DD)
+            date_to: Filter snippets up to this date (YYYY-MM-DD)
+
+        Returns:
+            ApiResponse with list of snippet summaries
+        """
+        params: dict[str, str] = {}
+        if q is not None:
+            params["q"] = q
+        if category is not None:
+            params["category"] = category
+        if tag is not None:
+            params["tag"] = tag
+        if date_from is not None:
+            params["date_from"] = date_from
+        if date_to is not None:
+            params["date_to"] = date_to
+        return self._make_request("GET", "/snippets", params=params)
+
+    def create_snippet(
+        self,
+        category: str,
+        title: str,
+        content: str = "",
+        snippet_date: str | None = None,
+        tags: list[str] | None = None,
+    ) -> ApiResponse:
+        """
+        Create a new snippet.
+
+        Args:
+            category: Snippet category (required)
+            title: Snippet title (required)
+            content: Snippet content (optional, default "")
+            snippet_date: Date for the snippet, YYYY-MM-DD
+                          (optional, defaults to today)
+            tags: List of tags (optional)
+
+        Returns:
+            ApiResponse with created snippet data
+        """
+        data: dict[str, Any] = {
+            "category": category,
+            "title": title,
+            "content": content,
+        }
+        if snippet_date is not None:
+            data["snippet_date"] = snippet_date
+        if tags is not None:
+            data["tags"] = tags
+        return self._make_request("POST", "/snippets", data)
+
+    def get_snippet(self, snippet_id: int) -> ApiResponse:
+        """
+        Get a snippet by ID.
+
+        Args:
+            snippet_id: Snippet ID
+
+        Returns:
+            ApiResponse with full snippet data
+        """
+        return self._make_request("GET", f"/snippets/{snippet_id}")
+
+    def update_snippet(
+        self,
+        snippet_id: int,
+        category: str | None = None,
+        title: str | None = None,
+        content: str | None = None,
+        snippet_date: str | None = None,
+        tags: list[str] | None = None,
+    ) -> ApiResponse:
+        """
+        Update an existing snippet.
+
+        Args:
+            snippet_id: Snippet ID
+            category: New category (optional)
+            title: New title (optional)
+            content: New content (optional)
+            snippet_date: New date in YYYY-MM-DD format (optional)
+            tags: New tags (optional)
+
+        Returns:
+            ApiResponse with updated snippet data
+        """
+        data: dict[str, Any] = {}
+        if category is not None:
+            data["category"] = category
+        if title is not None:
+            data["title"] = title
+        if content is not None:
+            data["content"] = content
+        if snippet_date is not None:
+            data["snippet_date"] = snippet_date
+        if tags is not None:
+            data["tags"] = tags
+        return self._make_request("PUT", f"/snippets/{snippet_id}", data)
+
+    def delete_snippet(self, snippet_id: int) -> ApiResponse:
+        """
+        Delete a snippet (soft-delete).
+
+        Args:
+            snippet_id: Snippet ID to delete
+
+        Returns:
+            ApiResponse with deletion result
+        """
+        return self._make_request("DELETE", f"/snippets/{snippet_id}")
+
+    def get_snippet_categories(self) -> ApiResponse:
+        """
+        Get snippet categories with counts.
+
+        Returns:
+            ApiResponse with list of categories and their snippet counts
+        """
+        return self._make_request("GET", "/snippets/categories")
+
     # Dependency methods
     def get_dependencies(self, todo_id: int) -> ApiResponse:
         """

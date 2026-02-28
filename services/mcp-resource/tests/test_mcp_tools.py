@@ -2260,3 +2260,305 @@ class TestWikiTools:
             result = await tools["get_wiki_page_revision"].fn(page_id=5, revision_number=99)
             parsed = json.loads(result)
             assert "error" in parsed
+
+
+class TestSnippetTools:
+    """Tests for snippet MCP tools."""
+
+    @pytest.mark.asyncio
+    async def test_list_snippets_success(self) -> None:
+        """Test list_snippets returns snippet data."""
+        mock_client = MagicMock()
+        mock_client.list_snippets.return_value = ApiResponse(
+            success=True,
+            data={
+                "data": [
+                    {
+                        "id": 1,
+                        "category": "standup",
+                        "title": "Daily standup",
+                        "snippet_date": "2026-02-28",
+                        "tags": ["dev"],
+                        "created_at": "2026-02-28T10:00:00Z",
+                        "updated_at": None,
+                    },
+                    {
+                        "id": 2,
+                        "category": "til",
+                        "title": "TIL about Python",
+                        "snippet_date": "2026-02-27",
+                        "tags": ["python"],
+                        "created_at": "2026-02-27T10:00:00Z",
+                        "updated_at": None,
+                    },
+                ]
+            },
+            status_code=200,
+        )
+
+        response = mock_client.list_snippets()
+        snippets, error = validate_list_response(response, "snippets", key="data")
+
+        assert error is None
+        assert len(snippets) == 2
+        assert snippets[0]["category"] == "standup"
+        assert snippets[1]["category"] == "til"
+
+    @pytest.mark.asyncio
+    async def test_list_snippets_empty(self) -> None:
+        """Test list_snippets with no snippets."""
+        mock_client = MagicMock()
+        mock_client.list_snippets.return_value = ApiResponse(
+            success=True,
+            data={"data": []},
+            status_code=200,
+        )
+
+        response = mock_client.list_snippets()
+        snippets, error = validate_list_response(response, "snippets", key="data")
+
+        assert error is None
+        assert len(snippets) == 0
+
+    @pytest.mark.asyncio
+    async def test_list_snippets_api_error(self) -> None:
+        """Test list_snippets handles API errors."""
+        mock_client = MagicMock()
+        mock_client.list_snippets.return_value = ApiResponse(
+            success=False,
+            error="Authentication failed",
+            status_code=401,
+        )
+
+        response = mock_client.list_snippets()
+        snippets, error = validate_list_response(response, "snippets", key="data")
+
+        assert error == "Authentication failed"
+        assert snippets == []
+
+    @pytest.mark.asyncio
+    async def test_create_snippet_success(self) -> None:
+        """Test create_snippet creates a snippet."""
+        mock_client = MagicMock()
+        mock_client.create_snippet.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 1,
+                "category": "standup",
+                "title": "Daily standup",
+                "content": "Worked on features",
+                "snippet_date": "2026-02-28",
+                "tags": ["dev"],
+                "created_at": "2026-02-28T10:00:00Z",
+            },
+            status_code=201,
+        )
+
+        response = mock_client.create_snippet(
+            category="standup", title="Daily standup", content="Worked on features"
+        )
+        snippet, error = validate_dict_response(response, "created snippet")
+
+        assert error is None
+        assert snippet is not None
+        assert snippet["id"] == 1
+        assert snippet["category"] == "standup"
+        assert snippet["title"] == "Daily standup"
+
+    @pytest.mark.asyncio
+    async def test_create_snippet_error(self) -> None:
+        """Test create_snippet handles API errors."""
+        mock_client = MagicMock()
+        mock_client.create_snippet.return_value = ApiResponse(
+            success=False,
+            error="Validation error: title is required",
+            status_code=400,
+        )
+
+        response = mock_client.create_snippet(category="standup", title="")
+        snippet, error = validate_dict_response(response, "created snippet")
+
+        assert error == "Validation error: title is required"
+        assert snippet is None
+
+    @pytest.mark.asyncio
+    async def test_get_snippet_success(self) -> None:
+        """Test get_snippet retrieves a single snippet."""
+        mock_client = MagicMock()
+        mock_client.get_snippet.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 42,
+                "category": "meeting",
+                "title": "Sprint planning",
+                "content": "Discussed roadmap",
+                "snippet_date": "2026-02-28",
+                "tags": ["sprint", "planning"],
+                "created_at": "2026-02-28T10:00:00Z",
+                "updated_at": None,
+            },
+            status_code=200,
+        )
+
+        response = mock_client.get_snippet(42)
+        snippet, error = validate_dict_response(response, "snippet")
+
+        assert error is None
+        assert snippet is not None
+        assert snippet["id"] == 42
+        assert snippet["title"] == "Sprint planning"
+        assert snippet["tags"] == ["sprint", "planning"]
+
+    @pytest.mark.asyncio
+    async def test_get_snippet_not_found(self) -> None:
+        """Test get_snippet handles snippet not found."""
+        mock_client = MagicMock()
+        mock_client.get_snippet.return_value = ApiResponse(
+            success=False,
+            error="Snippet not found",
+            status_code=404,
+        )
+
+        response = mock_client.get_snippet(999)
+        snippet, error = validate_dict_response(response, "snippet")
+
+        assert error == "Snippet not found"
+        assert snippet is None
+
+    @pytest.mark.asyncio
+    async def test_update_snippet_success(self) -> None:
+        """Test update_snippet updates a snippet."""
+        mock_client = MagicMock()
+        mock_client.update_snippet.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 1,
+                "category": "standup",
+                "title": "Updated title",
+                "content": "Updated content",
+                "snippet_date": "2026-02-28",
+                "tags": ["updated"],
+                "created_at": "2026-02-28T10:00:00Z",
+                "updated_at": "2026-02-28T12:00:00Z",
+            },
+            status_code=200,
+        )
+
+        response = mock_client.update_snippet(
+            snippet_id=1, title="Updated title", content="Updated content"
+        )
+        snippet, error = validate_dict_response(response, "updated snippet")
+
+        assert error is None
+        assert snippet is not None
+        assert snippet["title"] == "Updated title"
+        assert snippet["updated_at"] is not None
+
+    @pytest.mark.asyncio
+    async def test_update_snippet_not_found(self) -> None:
+        """Test update_snippet handles snippet not found."""
+        mock_client = MagicMock()
+        mock_client.update_snippet.return_value = ApiResponse(
+            success=False,
+            error="Snippet not found",
+            status_code=404,
+        )
+
+        response = mock_client.update_snippet(snippet_id=999, title="New title")
+        snippet, error = validate_dict_response(response, "updated snippet")
+
+        assert error == "Snippet not found"
+        assert snippet is None
+
+    @pytest.mark.asyncio
+    async def test_delete_snippet_success(self) -> None:
+        """Test delete_snippet successfully deletes a snippet."""
+        mock_client = MagicMock()
+        mock_client.delete_snippet.return_value = ApiResponse(
+            success=True,
+            data={"deleted": True, "id": 1},
+            status_code=200,
+        )
+
+        response = mock_client.delete_snippet(1)
+
+        assert response.success is True
+        assert response.data is not None
+        assert response.data.get("deleted") is True
+
+    @pytest.mark.asyncio
+    async def test_delete_snippet_not_found(self) -> None:
+        """Test delete_snippet handles snippet not found."""
+        mock_client = MagicMock()
+        mock_client.delete_snippet.return_value = ApiResponse(
+            success=False,
+            error="Snippet not found",
+            status_code=404,
+        )
+
+        response = mock_client.delete_snippet(999)
+
+        assert response.success is False
+        assert response.error == "Snippet not found"
+
+    @pytest.mark.asyncio
+    async def test_get_snippet_categories_success(self) -> None:
+        """Test get_snippet_categories returns categories with counts."""
+        mock_client = MagicMock()
+        mock_client.get_snippet_categories.return_value = ApiResponse(
+            success=True,
+            data={
+                "data": [
+                    {"category": "standup", "count": 10},
+                    {"category": "til", "count": 5},
+                    {"category": "meeting", "count": 3},
+                ]
+            },
+            status_code=200,
+        )
+
+        response = mock_client.get_snippet_categories()
+        categories, error = validate_list_response(response, "categories", key="data")
+
+        assert error is None
+        assert len(categories) == 3
+        assert categories[0]["category"] == "standup"
+        assert categories[0]["count"] == 10
+
+    @pytest.mark.asyncio
+    async def test_get_snippet_categories_empty(self) -> None:
+        """Test get_snippet_categories with no categories."""
+        mock_client = MagicMock()
+        mock_client.get_snippet_categories.return_value = ApiResponse(
+            success=True,
+            data={"data": []},
+            status_code=200,
+        )
+
+        response = mock_client.get_snippet_categories()
+        categories, error = validate_list_response(response, "categories", key="data")
+
+        assert error is None
+        assert len(categories) == 0
+
+    def test_snippet_response_structure(self) -> None:
+        """Test snippet response data structure."""
+        snippet = {
+            "id": 1,
+            "category": "standup",
+            "title": "Daily standup",
+            "content": "Worked on features",
+            "snippet_date": "2026-02-28",
+            "tags": ["dev", "daily"],
+            "created_at": "2026-02-28T10:00:00Z",
+            "updated_at": None,
+        }
+
+        assert "id" in snippet
+        assert "category" in snippet
+        assert "title" in snippet
+        assert "content" in snippet
+        assert "snippet_date" in snippet
+        assert "tags" in snippet
+        assert isinstance(snippet["tags"], list)
+        assert "created_at" in snippet

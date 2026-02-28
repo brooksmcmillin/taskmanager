@@ -915,3 +915,192 @@ class TestBatchCreateWithWikiPageId:
         assert result.success is True
         call_args = mock_session.post.call_args
         assert "wiki_page_id" not in call_args.kwargs["json"]
+
+
+class TestSnippets:
+    """Test snippet methods."""
+
+    def test_list_snippets(
+        self,
+        client: TaskManagerClient,
+        mock_session: Mock,
+        sample_snippet: dict[str, str | int | list[str] | None],
+    ) -> None:
+        """Test listing snippets."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [sample_snippet],
+            "meta": {"count": 1},
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.list_snippets()
+
+        assert result.success is True
+        assert result.data is not None
+        mock_session.get.assert_called_once()
+
+    def test_list_snippets_with_filters(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test listing snippets with all filter params."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {"data": [], "meta": {"count": 0}}
+        mock_session.get.return_value = mock_response
+
+        result = client.list_snippets(
+            q="standup",
+            category="daily",
+            tag="dev",
+            date_from="2026-02-01",
+            date_to="2026-02-28",
+        )
+
+        assert result.success is True
+        call_args = mock_session.get.call_args
+        params = call_args.kwargs["params"]
+        assert params["q"] == "standup"
+        assert params["category"] == "daily"
+        assert params["tag"] == "dev"
+        assert params["date_from"] == "2026-02-01"
+        assert params["date_to"] == "2026-02-28"
+
+    def test_create_snippet(
+        self,
+        client: TaskManagerClient,
+        mock_session: Mock,
+        sample_snippet: dict[str, str | int | list[str] | None],
+    ) -> None:
+        """Test creating a snippet with all fields."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {"data": sample_snippet}
+        mock_session.post.return_value = mock_response
+
+        result = client.create_snippet(
+            category="standup",
+            title="Daily standup notes",
+            content="Worked on snippet feature",
+            snippet_date="2026-02-28",
+            tags=["dev", "daily"],
+        )
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        body = call_args.kwargs["json"]
+        assert body["category"] == "standup"
+        assert body["title"] == "Daily standup notes"
+        assert body["content"] == "Worked on snippet feature"
+        assert body["snippet_date"] == "2026-02-28"
+        assert body["tags"] == ["dev", "daily"]
+
+    def test_create_snippet_minimal(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test creating a snippet with only required fields."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 2, "category": "til", "title": "TIL"},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.create_snippet(category="til", title="TIL")
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        body = call_args.kwargs["json"]
+        assert body["category"] == "til"
+        assert body["title"] == "TIL"
+        assert body["content"] == ""
+        assert "snippet_date" not in body
+        assert "tags" not in body
+
+    def test_get_snippet(
+        self,
+        client: TaskManagerClient,
+        mock_session: Mock,
+        sample_snippet: dict[str, str | int | list[str] | None],
+    ) -> None:
+        """Test getting a snippet by ID."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {"data": sample_snippet}
+        mock_session.get.return_value = mock_response
+
+        result = client.get_snippet(1)
+
+        assert result.success is True
+        mock_session.get.assert_called_once()
+        call_args = mock_session.get.call_args
+        assert "/snippets/1" in call_args.args[0]
+
+    def test_update_snippet(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test updating a snippet with partial fields."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 1, "title": "Updated title", "category": "standup"}
+        }
+        mock_session.put.return_value = mock_response
+
+        result = client.update_snippet(1, title="Updated title", tags=["updated"])
+
+        assert result.success is True
+        call_args = mock_session.put.call_args
+        body = call_args.kwargs["json"]
+        assert body["title"] == "Updated title"
+        assert body["tags"] == ["updated"]
+        assert "category" not in body
+        assert "content" not in body
+
+    def test_delete_snippet(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test deleting a snippet by ID."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {"data": {"deleted": True, "id": 1}}
+        mock_session.delete.return_value = mock_response
+
+        result = client.delete_snippet(1)
+
+        assert result.success is True
+        mock_session.delete.assert_called_once()
+        call_args = mock_session.delete.call_args
+        assert "/snippets/1" in call_args.args[0]
+
+    def test_get_snippet_categories(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test listing snippet categories."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [
+                {"category": "standup", "count": 5},
+                {"category": "til", "count": 3},
+            ]
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.get_snippet_categories()
+
+        assert result.success is True
+        assert result.data is not None
+        # SDK unwraps {"data": [...]} so result.data is the list directly
+        assert len(result.data) == 2
+        assert result.data[0]["category"] == "standup"
+        assert result.data[0]["count"] == 5
