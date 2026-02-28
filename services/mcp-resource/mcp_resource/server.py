@@ -2673,7 +2673,7 @@ def create_resource_server(
                 logger.error(f"Failed to create snippet: {snippet_error}")
                 return json.dumps({"error": snippet_error})
 
-            logger.info(f"Created snippet: {snippet}")
+            logger.info(f"Created snippet: id={snippet.get('id') if snippet else None}")
             return json.dumps(
                 {
                     "snippet": snippet,
@@ -2771,7 +2771,7 @@ def create_resource_server(
                 logger.error(f"Failed to update snippet: {snippet_error}")
                 return json.dumps({"error": snippet_error})
 
-            logger.info(f"Updated snippet: {snippet}")
+            logger.info(f"Updated snippet: id={snippet.get('id') if snippet else None}")
             return json.dumps(
                 {
                     "snippet": snippet,
