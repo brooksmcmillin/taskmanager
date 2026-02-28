@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from app.models.recurring_task import RecurringTask
     from app.models.registration_code import RegistrationCode
     from app.models.session import Session
+    from app.models.snippet import Snippet
     from app.models.todo import Todo
     from app.models.webauthn_credential import WebAuthnCredential
     from app.models.wiki_page import WikiPage
@@ -81,4 +82,7 @@ class User(Base):
     )
     wiki_pages: Mapped[list[WikiPage]] = relationship(
         "WikiPage", back_populates="user", cascade="all, delete-orphan"
+    )
+    snippets: Mapped[list[Snippet]] = relationship(
+        "Snippet", back_populates="user", cascade="all, delete-orphan"
     )

@@ -231,6 +231,32 @@ export async function createWikiPageViaAPI(
 }
 
 /**
+ * Create a snippet via the backend API directly
+ */
+export async function createSnippetViaAPI(
+	page: Page,
+	category: string,
+	title: string,
+	options: {
+		content?: string;
+		snippet_date?: string;
+		tags?: string[];
+	} = {}
+): Promise<{ id: number; category: string; title: string; snippet_date: string }> {
+	const body: Record<string, unknown> = { category, title };
+	if (options.content) body.content = options.content;
+	if (options.snippet_date) body.snippet_date = options.snippet_date;
+	if (options.tags) body.tags = options.tags;
+
+	const response = await page.request.post('/api/snippets', { data: body });
+	if (!response.ok()) {
+		throw new Error(`Failed to create snippet: ${response.status()} ${await response.text()}`);
+	}
+	const json = await response.json();
+	return json.data;
+}
+
+/**
  * Cleanup helper - delete all todos created by a user
  * Useful in afterEach hooks
  */

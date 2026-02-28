@@ -230,6 +230,11 @@ class Errors:
         """NOT_FOUND_012: Wiki page not found."""
         return ApiError("NOT_FOUND_012", 404, "Wiki page not found")
 
+    @staticmethod
+    def snippet_not_found() -> ApiError:
+        """NOT_FOUND_013: Snippet not found."""
+        return ApiError("NOT_FOUND_013", 404, "Snippet not found")
+
     # =========================================================================
     # Conflict Errors (CONFLICT_001 - CONFLICT_002)
     # =========================================================================
