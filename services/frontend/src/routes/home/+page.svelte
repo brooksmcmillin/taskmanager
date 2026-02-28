@@ -334,12 +334,13 @@
 							class:read={article.is_read}
 							href={article.url}
 							target="_blank"
-							rel="noopener"
+							rel="noopener noreferrer"
 							onclick={() => {
 								if (!article.is_read) {
-									api.post(`/api/news/${article.id}/read`, { is_read: true }).catch(() => {});
 									article.is_read = true;
-									articles = articles;
+									api.post(`/api/news/${article.id}/read`, { is_read: true }).catch(() => {
+										article.is_read = false;
+									});
 								}
 							}}
 						>
