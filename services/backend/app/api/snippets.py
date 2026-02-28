@@ -103,7 +103,7 @@ async def list_snippets(
         stmt = stmt.where(Snippet.category == category)
 
     if tag:
-        stmt = stmt.where(Snippet.tags.op("@>")(f'["{tag}"]'))
+        stmt = stmt.where(Snippet.tags.contains([tag]))
 
     if date_from:
         stmt = stmt.where(Snippet.snippet_date >= date_from)

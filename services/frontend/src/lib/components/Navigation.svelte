@@ -297,7 +297,9 @@
 						</div>
 
 						<a href="/wiki" class="nav-link" class:active={currentPath.startsWith('/wiki')}>Wiki</a>
-						<a href="/snippets" class="nav-link" class:active={currentPath.startsWith('/snippets')}>Snippets</a>
+						<a href="/snippets" class="nav-link" class:active={currentPath.startsWith('/snippets')}
+							>Snippets</a
+						>
 						<a href="/trash" class="nav-link" class:active={currentPath === '/trash'}>Trash</a>
 					</div>
 				{/if}
