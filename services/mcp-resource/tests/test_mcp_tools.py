@@ -225,26 +225,6 @@ class TestMCPToolsIntegration:
         assert len(tasks) == 2
 
     @pytest.mark.asyncio
-    async def test_get_categories_with_wrapped_response(self, mock_api_client: MagicMock) -> None:
-        """Test get_categories handles wrapped {'categories': [...]} response."""
-        mock_api_client.get_categories.return_value = ApiResponse(
-            success=True,
-            data={
-                "categories": [
-                    {"name": "Work", "task_count": 5},
-                    {"name": "Personal", "task_count": 3},
-                ]
-            },
-            status_code=200,
-        )
-
-        response = mock_api_client.get_categories()
-        categories, error = validate_list_response(response, "categories")
-        assert error is None
-        assert len(categories) == 2
-        assert categories[0]["name"] == "Work"
-
-    @pytest.mark.asyncio
     async def test_search_tasks_with_wrapped_response(self, mock_api_client: MagicMock) -> None:
         """Test search_tasks handles wrapped {'tasks': [...]} response."""
         mock_api_client.search_tasks.return_value = ApiResponse(
@@ -289,63 +269,6 @@ class TestMCPToolsIntegration:
         tasks, error = validate_list_response(response, "tasks")
         assert error == "Authentication failed"
         assert tasks == []
-
-
-class TestHealthCheckTool:
-    """Tests for check_task_system_status health check tool."""
-
-    @pytest.mark.asyncio
-    async def test_health_check_all_healthy(self) -> None:
-        """Test health check reports healthy when all services work."""
-        mock_client = MagicMock()
-        mock_client.get_projects.return_value = ApiResponse(
-            success=True,
-            data=[{"id": 1, "name": "Project"}],
-            status_code=200,
-        )
-        mock_client.get_todos.return_value = ApiResponse(
-            success=True,
-            data=[{"id": 1, "title": "Task"}],
-            status_code=200,
-        )
-
-        # Verify the responses would pass validation
-        projects, proj_error = validate_list_response(mock_client.get_projects(), "projects")
-        tasks, task_error = validate_list_response(mock_client.get_todos(), "tasks")
-
-        assert proj_error is None
-        assert task_error is None
-        assert len(projects) == 1
-        assert len(tasks) == 1
-
-    @pytest.mark.asyncio
-    async def test_health_check_projects_unhealthy(self) -> None:
-        """Test health check detects projects service failure."""
-        mock_client = MagicMock()
-        mock_client.get_projects.return_value = ApiResponse(
-            success=False,
-            error="Database connection failed",
-            status_code=500,
-        )
-
-        projects, proj_error = validate_list_response(mock_client.get_projects(), "projects")
-        assert proj_error == "Database connection failed"
-        assert projects == []
-
-    @pytest.mark.asyncio
-    async def test_health_check_invalid_format(self) -> None:
-        """Test health check detects invalid response format."""
-        mock_client = MagicMock()
-        mock_client.get_projects.return_value = ApiResponse(
-            success=True,
-            data="unexpected string",  # Should be list
-            status_code=200,
-        )
-
-        projects, proj_error = validate_list_response(mock_client.get_projects(), "projects")
-        assert proj_error is not None
-        assert "expected list" in proj_error
-        assert projects == []
 
 
 class TestTaskTransformation:
@@ -627,38 +550,6 @@ class TestAttachmentTools:
 
         assert error is None
         assert len(attachments) == 0
-
-    @pytest.mark.asyncio
-    async def test_delete_attachment_success(self) -> None:
-        """Test delete_task_attachment successful response."""
-        mock_client = MagicMock()
-        mock_client._make_request.return_value = ApiResponse(
-            success=True,
-            data={"deleted": True, "id": 5},
-            status_code=200,
-        )
-
-        response = mock_client._make_request("DELETE", "/todos/10/attachments/5")
-
-        assert response.success is True
-        assert response.data is not None
-        assert response.data.get("deleted") is True
-        assert response.data.get("id") == 5
-
-    @pytest.mark.asyncio
-    async def test_delete_attachment_not_found(self) -> None:
-        """Test delete_task_attachment when attachment doesn't exist."""
-        mock_client = MagicMock()
-        mock_client._make_request.return_value = ApiResponse(
-            success=False,
-            error="Attachment not found",
-            status_code=404,
-        )
-
-        response = mock_client._make_request("DELETE", "/todos/10/attachments/999")
-
-        assert response.success is False
-        assert response.error == "Attachment not found"
 
     def test_attachment_response_structure(self) -> None:
         """Test attachment response data structure."""
@@ -1011,37 +902,6 @@ class TestDependencyTools:
 
         assert response.success is False
         assert response.error is not None
-
-    @pytest.mark.asyncio
-    async def test_remove_dependency_success(self) -> None:
-        """Test remove_dependency removes a dependency relationship."""
-        mock_client = MagicMock()
-        mock_client._make_request.return_value = ApiResponse(
-            success=True,
-            data={"deleted": True, "dependency_id": 5},
-            status_code=200,
-        )
-
-        response = mock_client._make_request("DELETE", "/todos/10/dependencies/5")
-
-        assert response.success is True
-        assert response.data is not None
-        assert response.data.get("deleted") is True
-
-    @pytest.mark.asyncio
-    async def test_remove_dependency_not_found(self) -> None:
-        """Test remove_dependency handles missing dependency."""
-        mock_client = MagicMock()
-        mock_client._make_request.return_value = ApiResponse(
-            success=False,
-            error="Dependency not found",
-            status_code=404,
-        )
-
-        response = mock_client._make_request("DELETE", "/todos/10/dependencies/999")
-
-        assert response.success is False
-        assert response.error == "Dependency not found"
 
     def test_dependency_id_parsing(self) -> None:
         """Test parsing dependency IDs in task_N format."""
@@ -1808,43 +1668,8 @@ class TestWikiTools:
             return server._tool_manager._tools
 
     @pytest.mark.asyncio
-    async def test_list_wiki_pages_success(self, mock_api_client: MagicMock) -> None:
-        """Test listing wiki pages returns page summaries."""
-        import json
-
-        mock_api_client.list_wiki_pages.return_value = ApiResponse(
-            success=True,
-            data=[
-                {
-                    "id": 1,
-                    "title": "Page One",
-                    "slug": "page-one",
-                    "created_at": "2026-01-01T00:00:00Z",
-                    "updated_at": None,
-                },
-                {
-                    "id": 2,
-                    "title": "Page Two",
-                    "slug": "page-two",
-                    "created_at": "2026-01-02T00:00:00Z",
-                    "updated_at": None,
-                },
-            ],
-            status_code=200,
-        )
-
-        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
-            tools = self._create_server(mock_api_client)
-            result = await tools["list_wiki_pages"].fn()
-            parsed = json.loads(result)
-            assert "error" not in parsed
-            assert parsed["count"] == 2
-            assert len(parsed["pages"]) == 2
-            assert parsed["pages"][0]["title"] == "Page One"
-
-    @pytest.mark.asyncio
-    async def test_list_wiki_pages_with_search(self, mock_api_client: MagicMock) -> None:
-        """Test listing wiki pages with search query."""
+    async def test_search_wiki_pages_success(self, mock_api_client: MagicMock) -> None:
+        """Test searching wiki pages returns matching page summaries."""
         import json
 
         mock_api_client.list_wiki_pages.return_value = ApiResponse(
@@ -1863,10 +1688,11 @@ class TestWikiTools:
 
         with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
             tools = self._create_server(mock_api_client)
-            result = await tools["list_wiki_pages"].fn(q="meeting")
+            result = await tools["search_wiki_pages"].fn(q="meeting")
             parsed = json.loads(result)
             assert "error" not in parsed
             assert parsed["count"] == 1
+            assert parsed["pages"][0]["title"] == "Meeting Notes"
             mock_api_client.list_wiki_pages.assert_called_with(q="meeting")
 
     @pytest.mark.asyncio
@@ -2027,25 +1853,6 @@ class TestWikiTools:
             assert "Invalid task_id" in parsed["error"]
 
     @pytest.mark.asyncio
-    async def test_unlink_wiki_page_from_task_success(self, mock_api_client: MagicMock) -> None:
-        """Test unlinking a wiki page from a task."""
-        import json
-
-        mock_api_client.unlink_wiki_page_from_task.return_value = ApiResponse(
-            success=True,
-            data={"deleted": True, "page_id": 5, "todo_id": 10},
-            status_code=200,
-        )
-
-        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
-            tools = self._create_server(mock_api_client)
-            result = await tools["unlink_wiki_page_from_task"].fn(page_id=5, task_id="10")
-            parsed = json.loads(result)
-            assert "error" not in parsed
-            assert parsed["status"] == "unlinked"
-            mock_api_client.unlink_wiki_page_from_task.assert_called_with(5, 10)
-
-    @pytest.mark.asyncio
     async def test_get_wiki_page_linked_tasks(self, mock_api_client: MagicMock) -> None:
         """Test getting tasks linked to a wiki page."""
         import json
@@ -2188,78 +1995,6 @@ class TestWikiTools:
             parsed = json.loads(result)
             assert "error" in parsed
             assert "Invalid task_id" in parsed["error"]
-
-    @pytest.mark.asyncio
-    async def test_get_wiki_page_revisions_success(self, mock_api_client: MagicMock) -> None:
-        """Test listing revisions for a wiki page."""
-        import json
-
-        mock_api_client.get_wiki_page_revisions.return_value = ApiResponse(
-            success=True,
-            data=[
-                {
-                    "id": 1,
-                    "wiki_page_id": 5,
-                    "title": "Old Title",
-                    "slug": "old-title",
-                    "revision_number": 1,
-                    "created_at": "2026-01-01T00:00:00Z",
-                },
-            ],
-            status_code=200,
-        )
-
-        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
-            tools = self._create_server(mock_api_client)
-            result = await tools["get_wiki_page_revisions"].fn(page_id=5)
-            parsed = json.loads(result)
-            assert "error" not in parsed
-            assert parsed["count"] == 1
-            assert parsed["revisions"][0]["revision_number"] == 1
-
-    @pytest.mark.asyncio
-    async def test_get_wiki_page_revision_success(self, mock_api_client: MagicMock) -> None:
-        """Test getting a specific revision of a wiki page."""
-        import json
-
-        mock_api_client.get_wiki_page_revision.return_value = ApiResponse(
-            success=True,
-            data={
-                "id": 1,
-                "wiki_page_id": 5,
-                "title": "Rev 1 Title",
-                "slug": "rev-1-title",
-                "content": "Rev 1 content",
-                "revision_number": 1,
-                "created_at": "2026-01-01T00:00:00Z",
-            },
-            status_code=200,
-        )
-
-        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
-            tools = self._create_server(mock_api_client)
-            result = await tools["get_wiki_page_revision"].fn(page_id=5, revision_number=1)
-            parsed = json.loads(result)
-            assert "error" not in parsed
-            assert parsed["revision"]["revision_number"] == 1
-            assert parsed["revision"]["content"] == "Rev 1 content"
-
-    @pytest.mark.asyncio
-    async def test_get_wiki_page_revision_not_found(self, mock_api_client: MagicMock) -> None:
-        """Test getting a revision that doesn't exist."""
-        import json
-
-        mock_api_client.get_wiki_page_revision.return_value = ApiResponse(
-            success=False,
-            error="Revision not found",
-            status_code=404,
-        )
-
-        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
-            tools = self._create_server(mock_api_client)
-            result = await tools["get_wiki_page_revision"].fn(page_id=5, revision_number=99)
-            parsed = json.loads(result)
-            assert "error" in parsed
 
 
 class TestSnippetTools:
@@ -2582,45 +2317,141 @@ class TestSnippetTools:
             assert "error" in parsed
             assert parsed["error"] == "Snippet not found"
 
+
+class TestResourceDefinitions:
+    """Tests for MCP resource definitions (read-only lookups)."""
+
+    def _create_server(self, mock_client: MagicMock) -> Any:
+        """Helper to create a patched MCP server."""
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            return create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+
+    def test_categories_resource_registered(self) -> None:
+        """Test that taskmanager://categories resource is registered."""
+        mock_client = MagicMock()
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            resources = server._resource_manager._resources
+            assert "taskmanager://categories" in resources
+
+    def test_snippet_categories_resource_registered(self) -> None:
+        """Test that taskmanager://snippets/categories resource is registered."""
+        mock_client = MagicMock()
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            resources = server._resource_manager._resources
+            assert "taskmanager://snippets/categories" in resources
+
+    def test_wiki_pages_resource_registered(self) -> None:
+        """Test that taskmanager://wiki/pages resource is registered."""
+        mock_client = MagicMock()
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            resources = server._resource_manager._resources
+            assert "taskmanager://wiki/pages" in resources
+
+    def test_deleted_tools_not_registered(self) -> None:
+        """Test that removed tools are no longer registered."""
+        mock_client = MagicMock()
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            tools = server._tool_manager._tools
+            removed_tools = [
+                "check_task_system_status",
+                "delete_task_attachment",
+                "delete_task_comment",
+                "get_wiki_page_revisions",
+                "get_wiki_page_revision",
+                "unlink_wiki_page_from_task",
+                "remove_dependency",
+                "get_categories",
+                "get_snippet_categories",
+                "list_wiki_pages",
+            ]
+            for name in removed_tools:
+                assert name not in tools, f"Tool {name!r} should have been removed"
+
+    def test_search_wiki_pages_tool_registered(self) -> None:
+        """Test that search_wiki_pages (renamed from list_wiki_pages) is registered."""
+        mock_client = MagicMock()
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            tools = server._tool_manager._tools
+            assert "search_wiki_pages" in tools
+
     @pytest.mark.asyncio
-    async def test_get_snippet_categories_success(self, mock_api_client: MagicMock) -> None:
-        """Test get_snippet_categories returns categories with counts."""
+    async def test_categories_resource_returns_data(self) -> None:
+        """Test that the categories resource calls the API and returns data."""
         import json
 
-        mock_api_client.get_snippet_categories.return_value = ApiResponse(
+        mock_client = MagicMock()
+        mock_client.get_categories.return_value = ApiResponse(
+            success=True,
+            data={"categories": [{"name": "Work", "task_count": 5}]},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            resource = server._resource_manager._resources["taskmanager://categories"]
+            result = await resource.fn()
+            parsed = json.loads(result)
+            assert "categories" in parsed
+            assert len(parsed["categories"]) == 1
+            assert parsed["categories"][0]["name"] == "Work"
+
+    @pytest.mark.asyncio
+    async def test_snippet_categories_resource_returns_data(self) -> None:
+        """Test that the snippet categories resource returns data."""
+        import json
+
+        mock_client = MagicMock()
+        mock_client.get_snippet_categories.return_value = ApiResponse(
             success=True,
             data=[
                 {"category": "standup", "count": 10},
                 {"category": "til", "count": 5},
-                {"category": "meeting", "count": 3},
             ],
             status_code=200,
         )
 
-        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
-            tools = self._create_server(mock_api_client)
-            result = await tools["get_snippet_categories"].fn()
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            resource = server._resource_manager._resources["taskmanager://snippets/categories"]
+            result = await resource.fn()
             parsed = json.loads(result)
-            assert "error" not in parsed
-            assert parsed["count"] == 3
-            assert len(parsed["categories"]) == 3
-            assert parsed["categories"][0]["category"] == "standup"
+            assert "categories" in parsed
+            assert len(parsed["categories"]) == 2
 
     @pytest.mark.asyncio
-    async def test_get_snippet_categories_empty(self, mock_api_client: MagicMock) -> None:
-        """Test get_snippet_categories with no categories."""
+    async def test_wiki_pages_resource_returns_data(self) -> None:
+        """Test that the wiki pages resource returns data."""
         import json
 
-        mock_api_client.get_snippet_categories.return_value = ApiResponse(
+        mock_client = MagicMock()
+        mock_client.list_wiki_pages.return_value = ApiResponse(
             success=True,
-            data=[],
+            data=[
+                {"id": 1, "title": "Page One", "slug": "page-one"},
+            ],
             status_code=200,
         )
 
-        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
-            tools = self._create_server(mock_api_client)
-            result = await tools["get_snippet_categories"].fn()
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            resource = server._resource_manager._resources["taskmanager://wiki/pages"]
+            result = await resource.fn()
             parsed = json.loads(result)
-            assert "error" not in parsed
-            assert parsed["count"] == 0
-            assert parsed["categories"] == []
+            assert "pages" in parsed
+            assert parsed["count"] == 1
+            assert parsed["pages"][0]["title"] == "Page One"
+            # Ensure it calls list_wiki_pages without a query
+            mock_client.list_wiki_pages.assert_called_once_with()
