@@ -123,6 +123,11 @@ class BatchTodoCreate(BaseModel):
     """
 
     todos: list[TodoCreate] = Field(..., min_length=1, max_length=50)
+    skip_duplicates: bool = Field(
+        False,
+        description="If true, silently skip todos whose title matches an "
+        "existing active todo instead of rejecting the entire batch.",
+    )
     wiki_page_id: int | None = Field(
         None,
         description="Wiki page ID to auto-link to all created tasks",
@@ -803,6 +808,29 @@ async def list_todos(
     return ListResponse(data=tasks, meta={"count": len(tasks)})
 
 
+async def _find_duplicate_active_todo(
+    db: "DbSession",
+    user_id: int,
+    title: str,
+) -> Todo | None:
+    """Check for an existing active todo with the same title (case-insensitive).
+
+    Only considers todos with status 'pending' or 'in_progress' — completed
+    and cancelled tasks are ignored so users can re-create them.
+    """
+    normalized = title.strip()
+    stmt = (
+        select(Todo)
+        .where(Todo.user_id == user_id)
+        .where(func.lower(func.trim(Todo.title)) == normalized.lower())
+        .where(Todo.status.in_([Status.pending, Status.in_progress]))
+        .where(Todo.deleted_at.is_(None))
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 @router.post("", status_code=201)
 async def create_todo(
     request: TodoCreate,
@@ -818,6 +846,11 @@ async def create_todo(
         request.project_id = await _resolve_category_to_project(
             db, request.category, user.id
         )
+
+    # Check for duplicate active todo with same title
+    existing = await _find_duplicate_active_todo(db, user.id, request.title)
+    if existing:
+        raise errors.duplicate_todo(existing.id, existing.title)
 
     # Verify parent todo exists and belongs to user if parent_id is provided
     if request.parent_id:
@@ -974,15 +1007,45 @@ async def batch_create_todos(
     # Check for circular dependencies within the batch using topological sort
     _validate_batch_dependency_graph(request.todos)
 
+    # Phase 0c: Duplicate detection — check all titles against existing active
+    # todos and within the batch itself.
+    skipped_indices: set[int] = set()
+    seen_titles: dict[str, int] = {}  # normalized title -> first batch index
+    for i, item in enumerate(request.todos):
+        normalized = item.title.strip().lower()
+
+        # Intra-batch duplicate
+        if normalized in seen_titles:
+            if request.skip_duplicates:
+                skipped_indices.add(i)
+                continue
+            raise errors.duplicate_todo(
+                existing_id=0,
+                title=item.title.strip(),
+            )
+        seen_titles[normalized] = i
+
+        # Check against existing DB todos
+        existing = await _find_duplicate_active_todo(db, user.id, item.title)
+        if existing:
+            if request.skip_duplicates:
+                skipped_indices.add(i)
+                continue
+            raise errors.duplicate_todo(existing.id, existing.title)
+
     # Phase 1: Validate all items and prepare Todo objects before any writes.
     # Items with parent_index skip parent_id assignment here — it's set in
     # phase 3 after all items have been flushed and have real IDs.
     prepared: list[Todo] = []
-    # Track which batch index each prepared Todo corresponds to, and which
+    # Maps from original batch index to prepared list index, and which
     # items need parent_index resolution.
+    batch_to_prepared: dict[int, int] = {}
     parent_index_map: dict[int, int] = {}  # prepared idx -> parent batch idx
 
     for i, item in enumerate(request.todos):
+        if i in skipped_indices:
+            continue
+
         # Resolve category name to project_id
         if item.category and not item.project_id:
             item.project_id = await _resolve_category_to_project(
@@ -1001,9 +1064,16 @@ async def batch_create_todos(
                     "Only one level of nesting is allowed."
                 )
 
-        # Record parent_index for later resolution
+        # Record parent_index for later resolution (skip if parent was skipped)
         if item.parent_index is not None:
-            parent_index_map[i] = item.parent_index
+            if item.parent_index in skipped_indices:
+                raise errors.validation(
+                    f"Todo at index {i}: parent at index {item.parent_index} "
+                    f"was skipped as a duplicate."
+                )
+            parent_index_map[len(prepared)] = item.parent_index
+
+        batch_to_prepared[i] = len(prepared)
 
         # Auto-assign position if not provided.
         # For parent_index items, parent_id is not yet known so we pass None
@@ -1058,9 +1128,10 @@ async def batch_create_todos(
         await db.refresh(todo)
 
     # Phase 3: Resolve parent_index references now that all items have IDs
-    for child_idx, parent_batch_idx in parent_index_map.items():
-        child_todo = prepared[child_idx]
-        parent_todo = prepared[parent_batch_idx]
+    for child_prepared_idx, parent_batch_idx in parent_index_map.items():
+        child_todo = prepared[child_prepared_idx]
+        parent_prepared_idx = batch_to_prepared[parent_batch_idx]
+        parent_todo = prepared[parent_prepared_idx]
         child_todo.parent_id = parent_todo.id
         # Recalculate position under the new parent
         child_todo.position = await get_next_position(
@@ -1071,12 +1142,16 @@ async def batch_create_todos(
 
     # Phase 4: Create dependency relationships using the now-assigned IDs
     for i, item in enumerate(request.todos):
+        if i in skipped_indices:
+            continue
         if item.depends_on:
             for dep_idx in item.depends_on:
+                if dep_idx in skipped_indices:
+                    continue
                 await db.execute(
                     task_dependencies.insert().values(
-                        dependent_id=prepared[i].id,
-                        dependency_id=prepared[dep_idx].id,
+                        dependent_id=prepared[batch_to_prepared[i]].id,
+                        dependency_id=prepared[batch_to_prepared[dep_idx]].id,
                     )
                 )
     await db.flush()
@@ -1099,6 +1174,8 @@ async def batch_create_todos(
             )
 
     result: dict = {"data": created, "meta": {"count": len(created)}}
+    if skipped_indices:
+        result["meta"]["skipped_duplicates"] = len(skipped_indices)
     if request.wiki_page_id is not None:
         result["meta"]["wiki_page_id"] = request.wiki_page_id
         result["meta"]["wiki_links_created"] = len(created)

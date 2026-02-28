@@ -278,6 +278,16 @@ class Errors:
         """CONFLICT_007: Wiki page already linked to task."""
         return ApiError("CONFLICT_007", 409, "Wiki page is already linked to this task")
 
+    @staticmethod
+    def duplicate_todo(existing_id: int, title: str) -> ApiError:
+        """CONFLICT_008: Duplicate active todo exists."""
+        return ApiError(
+            "CONFLICT_008",
+            409,
+            f"An active todo with this title already exists: '{title}'",
+            {"existing_id": existing_id, "title": title},
+        )
+
     # =========================================================================
     # Registration Code Errors (REG_001 - REG_003)
     # =========================================================================
