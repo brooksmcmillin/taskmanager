@@ -863,6 +863,54 @@ async def test_batch_create_explicit_fields_override_tag_inference(
 
 
 @pytest.mark.asyncio
+async def test_create_todo_compound_tag_no_false_positive_match(
+    authenticated_client: AsyncClient,
+):
+    """Test that compound tags don't false-positively match short keyword substrings.
+
+    'work-order' must NOT match the 'order' pattern and be misclassified as
+    purchase. Exact normalized-tag matching must be used, not substring search.
+    """
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            # Title has no purchase-related keywords so tag matching is the
+            # only potential classification source for this task.
+            "title": "Process incoming maintenance request",
+            "tags": ["work-order"],
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    # "work-order" is not in TAG_PATTERNS; should not be classified as purchase
+    assert data["action_type"] is None
+    assert data["autonomy_tier"] is None
+    assert data["agent_actionable"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_todo_underscore_tag_normalizes_to_hyphen(
+    authenticated_client: AsyncClient,
+):
+    """Test that tags using underscores are treated identically to hyphenated ones."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Audit the security module",
+            "tags": ["security_review"],  # underscore variant
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    # "security_review" normalizes to "security-review" → review / tier 1
+    assert data["action_type"] == "review"
+    assert data["autonomy_tier"] == 1
+    assert data["agent_actionable"] is True
+
+
+@pytest.mark.asyncio
 async def test_update_todo_autonomy_tier(authenticated_client: AsyncClient):
     """Test updating autonomy_tier on an existing todo."""
     # Create a todo

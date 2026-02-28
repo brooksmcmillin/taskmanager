@@ -614,65 +614,80 @@ ACTION_PATTERNS: dict[ActionType, tuple[list[str], bool]] = {
     ),
 }
 
-# Tag-based inference patterns: tag keyword -> (action_type, agent_actionable)
-# Tags provide strong, explicit signals checked before title/description keywords.
-# Each entry maps a tag keyword (matched as a substring after normalization) to
-# a specific action_type and whether an agent can act on it autonomously.
-TAG_PATTERNS: list[tuple[str, ActionType, bool]] = [
-    # Code / engineering tags
-    ("security-review", ActionType.review, True),
-    ("security_review", ActionType.review, True),
-    ("code-review", ActionType.review, True),
-    ("code_review", ActionType.review, True),
-    ("pr-review", ActionType.review, True),
-    ("pr_review", ActionType.review, True),
-    ("code-fix", ActionType.code, True),
-    ("code_fix", ActionType.code, True),
-    ("bug-fix", ActionType.code, True),
-    ("bug_fix", ActionType.code, True),
-    ("refactor", ActionType.code, True),
-    ("implement", ActionType.code, True),
-    ("feature", ActionType.code, True),
-    # Documentation tags
-    ("doc-audit", ActionType.document, True),
-    ("doc_audit", ActionType.document, True),
-    ("documentation", ActionType.document, True),
-    ("doc-update", ActionType.document, True),
-    ("doc_update", ActionType.document, True),
-    ("docs", ActionType.document, True),
-    ("writing", ActionType.document, True),
-    # Research tags
-    ("research", ActionType.research, True),
-    ("investigate", ActionType.research, True),
-    ("analysis", ActionType.research, True),
-    ("explore", ActionType.research, True),
-    # Review / audit tags
-    ("audit", ActionType.review, True),
-    ("review", ActionType.review, True),
-    ("inspect", ActionType.review, True),
-    # Email / communication tags
-    ("email", ActionType.email, True),
-    ("follow-up", ActionType.email, True),
-    ("follow_up", ActionType.email, True),
-    # Data entry tags
-    ("data-entry", ActionType.data_entry, True),
-    ("data_entry", ActionType.data_entry, True),
-    ("data-import", ActionType.data_entry, True),
-    ("data_import", ActionType.data_entry, True),
-    # Scheduling tags
-    ("meeting", ActionType.schedule, False),
-    ("schedule", ActionType.schedule, False),
-    ("calendar", ActionType.schedule, False),
-    # Purchase tags
-    ("purchase", ActionType.purchase, False),
-    ("buy", ActionType.purchase, False),
-    ("order", ActionType.purchase, False),
-    # Errand / physical tags
-    ("errand", ActionType.errand, False),
-    ("physical", ActionType.manual, False),
-    ("in-person", ActionType.manual, False),
-    ("in_person", ActionType.manual, False),
+# Tag-based inference patterns: normalized-tag -> action_type
+#
+# Tags are normalized before matching: lowercased, stripped, and underscores
+# replaced with hyphens so that "security_review" and "security-review" are
+# treated as identical.  Matching is exact (full normalized tag equality),
+# which prevents substring false-positives such as "work-order" matching the
+# "order" → purchase pattern.
+#
+# Ordered by priority: the first pattern that matches any tag wins.
+# More-specific compound tags (e.g. "security-review") are listed before
+# their component single-word tags (e.g. "review") so that the compound
+# match takes precedence.  Do NOT reorder without verifying that no
+# higher-specificity intent is displaced by a more generic pattern.
+#
+# actionable is derived at runtime from ACTION_PATTERNS to keep both
+# maps in sync automatically.
+TAG_PATTERNS: list[tuple[str, ActionType]] = [
+    # Review / audit — specific compound tags first, then generic token
+    ("security-review", ActionType.review),
+    ("code-review", ActionType.review),
+    ("pr-review", ActionType.review),
+    ("doc-audit", ActionType.document),
+    ("audit", ActionType.review),
+    ("review", ActionType.review),
+    ("inspect", ActionType.review),
+    # Code / engineering — specific compounds before generic tokens
+    ("code-fix", ActionType.code),
+    ("bug-fix", ActionType.code),
+    ("refactor", ActionType.code),
+    ("implement", ActionType.code),
+    ("feature", ActionType.code),
+    # Documentation
+    ("doc-update", ActionType.document),
+    ("documentation", ActionType.document),
+    ("docs", ActionType.document),
+    ("writing", ActionType.document),
+    # Research
+    ("research", ActionType.research),
+    ("investigate", ActionType.research),
+    ("analysis", ActionType.research),
+    # Email / communication
+    ("email", ActionType.email),
+    ("follow-up", ActionType.email),
+    # Data entry — compound before generic tokens to avoid
+    # matching "data" or "entry" in unrelated tags
+    ("data-entry", ActionType.data_entry),
+    ("data-import", ActionType.data_entry),
+    # Scheduling
+    ("meeting", ActionType.schedule),
+    ("schedule", ActionType.schedule),
+    ("calendar", ActionType.schedule),
+    # Purchase — exact-match only to avoid "work-order" → purchase
+    ("purchase", ActionType.purchase),
+    ("buy", ActionType.purchase),
+    # Errand / physical
+    ("errand", ActionType.errand),
+    ("in-person", ActionType.manual),
+    ("physical", ActionType.manual),
 ]
+
+
+def _normalize_tag(tag: str) -> str:
+    """Normalize a tag for pattern matching.
+
+    Lowercases, strips whitespace, and replaces underscores with hyphens
+    so that "security_review" and "security-review" are treated as identical.
+
+    Args:
+        tag: Raw tag string
+
+    Returns:
+        Normalized tag string
+    """
+    return tag.lower().strip().replace("_", "-")
 
 
 def infer_action_type(
@@ -683,6 +698,9 @@ def infer_action_type(
     """Infer action type, agent actionability, and autonomy tier from task.
 
     Tags are checked first as they provide explicit, unambiguous signals.
+    Each tag is normalized (lowercased, underscores → hyphens) and matched
+    exactly against TAG_PATTERNS, preventing false-positive substring hits
+    (e.g., "work-order" will NOT match the "order" → purchase pattern).
     Falls back to keyword matching against title and description text.
     Returns (None, None, None) if no pattern matches, allowing the agent
     to classify later via LLM.
@@ -696,11 +714,13 @@ def infer_action_type(
         Tuple of (action_type, agent_actionable, autonomy_tier) or
         (None, None, None) if unknown.
     """
-    # Check tags first — they are explicit signals with higher confidence
+    # Check tags first — they are explicit signals with higher confidence.
+    # actionable is derived from ACTION_PATTERNS to keep both maps in sync.
     if tags:
-        normalized_tags = [t.lower().strip() for t in tags]
-        for tag_keyword, action_type, actionable in TAG_PATTERNS:
-            if any(tag_keyword in tag for tag in normalized_tags):
+        normalized_tags = {_normalize_tag(t) for t in tags}
+        for tag_pattern, action_type in TAG_PATTERNS:
+            if tag_pattern in normalized_tags:
+                _, actionable = ACTION_PATTERNS[action_type]
                 default_tier = ACTION_TYPE_DEFAULT_TIER.get(action_type)
                 tier_value = default_tier.value if default_tier else None
                 return action_type, actionable, tier_value
