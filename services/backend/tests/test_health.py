@@ -58,6 +58,8 @@ async def test_health_degraded_when_subsystem_fails(client: AsyncClient) -> None
     """Test health check returns degraded when a subsystem probe fails."""
     from unittest.mock import AsyncMock, MagicMock
 
+    from sqlalchemy.exc import OperationalError
+
     from app.dependencies import get_db
     from app.main import app
 
@@ -69,9 +71,9 @@ async def test_health_degraded_when_subsystem_fails(client: AsyncClient) -> None
         # First call is SELECT 1 (connectivity check) - succeed
         if call_count == 1:
             return MagicMock()
-        # Second call is tasks probe - fail
+        # Second call is tasks probe - fail with a SQLAlchemy error
         if call_count == 2:
-            raise Exception("simulated table failure")
+            raise OperationalError("SELECT", {}, Exception("table missing"))
         # All others succeed
         return MagicMock()
 

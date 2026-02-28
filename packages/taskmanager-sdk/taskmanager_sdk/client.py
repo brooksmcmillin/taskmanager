@@ -185,7 +185,10 @@ class TaskManagerClient:
             response = self.session.get(
                 url, headers=headers, cookies=self.cookies
             )
-            json_data = response.json()
+            try:
+                json_data = response.json()
+            except (ValueError, requests.exceptions.JSONDecodeError):
+                json_data = None
             return ApiResponse(
                 success=response.status_code == 200,
                 data=json_data,

@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import (
@@ -145,11 +146,14 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
         try:
             await db.execute(select(model.id).limit(1))
             subsystems[name] = {"status": "healthy"}
-        except Exception:
+        except SQLAlchemyError:
             await db.rollback()
             subsystems[name] = {"status": "unhealthy"}
             all_healthy = False
 
+    # Return 200 for both healthy and degraded so monitoring tools that
+    # parse the response body can distinguish partial failures from full
+    # outages (which return 503).
     status = "healthy" if all_healthy else "degraded"
     return JSONResponse(
         status_code=200,

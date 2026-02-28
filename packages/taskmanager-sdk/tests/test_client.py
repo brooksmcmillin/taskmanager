@@ -908,6 +908,23 @@ class TestHealthCheck:
         with pytest.raises(NetworkError):
             client.health_check()
 
+    def test_health_check_non_json_response(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test health_check handles non-JSON response (e.g. proxy HTML error)."""
+        mock_response = Mock()
+        mock_response.status_code = 502
+        mock_response.json.side_effect = requests.exceptions.JSONDecodeError(
+            "Expecting value", "", 0
+        )
+        mock_session.get.return_value = mock_response
+
+        result = client.health_check()
+
+        assert result.success is False
+        assert result.data is None
+        assert result.status_code == 502
+
 
 class TestBatchCreateWithWikiPageId:
     """Test batch_create_todos with wiki_page_id parameter."""
