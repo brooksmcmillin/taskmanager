@@ -111,6 +111,24 @@ async def authorize_post(
     code_challenge_method: str = Form(""),
 ) -> RedirectResponse:
     """Process authorization consent."""
+    # Re-validate the client and redirect_uri before issuing any redirect.
+    # The form fields are attacker-controlled, so we must not trust redirect_uri
+    # without checking it against the client's registered redirect URIs.
+    result = await db.execute(
+        select(OAuthClient).where(
+            OAuthClient.client_id == client_id,
+            OAuthClient.is_active.is_(True),
+        )
+    )
+    client = result.scalar_one_or_none()
+
+    if not client:
+        raise errors.oauth_invalid_client()
+
+    redirect_uris_list = json.loads(client.redirect_uris)
+    if redirect_uri not in redirect_uris_list:
+        raise errors.oauth_invalid_redirect()
+
     if action == "deny":
         params = urlencode({"error": "access_denied", "state": state})
         # Use 303 to convert POST to GET for OAuth callback

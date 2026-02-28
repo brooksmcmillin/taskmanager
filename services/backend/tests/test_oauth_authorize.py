@@ -768,3 +768,146 @@ async def test_authorize_empty_scope_allowed(
     assert response.status_code == 303
     location = response.headers["location"]
     assert "code=" in location
+
+
+# =============================================================================
+# POST /authorize redirect_uri Re-validation Security Tests (task #457)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_rejects_unregistered_redirect_uri_on_allow(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that POST /authorize rejects an unregistered redirect_uri on allow.
+
+    Security: An attacker must not be able to inject an arbitrary redirect_uri
+    in the form POST to capture the authorization code.
+    """
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://evil.com/steal",
+            "scope": "read",
+            "state": "test-state",
+        },
+        follow_redirects=False,
+    )
+    # Must return an error, NOT redirect to the attacker's URI
+    assert response.status_code == 400
+    # Must not redirect to the evil URI
+    assert response.headers.get("location", "") != "http://evil.com/steal"
+    # Response should indicate invalid redirect
+    assert "redirect" in response.text.lower() or "invalid" in response.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_rejects_unregistered_redirect_uri_on_deny(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that POST /authorize rejects an unregistered redirect_uri on deny.
+
+    Security: Even when the user denies consent, the attacker must not receive
+    a redirect to their URI (which would leak the error response to them).
+    """
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "deny",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://evil.com/steal",
+            "scope": "read",
+            "state": "test-state",
+        },
+        follow_redirects=False,
+    )
+    # Must return an error, NOT redirect to the attacker's URI
+    assert response.status_code == 400
+    assert response.headers.get("location", "") != "http://evil.com/steal"
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_accepts_registered_redirect_uri(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that POST /authorize accepts a valid registered redirect_uri."""
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read",
+            "state": "valid-state",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    location = response.headers["location"]
+    assert location.startswith("http://localhost:3000/callback")
+    assert "code=" in location
+    assert "state=valid-state" in location
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_rejects_invalid_client_id(
+    authenticated_client: AsyncClient,
+):
+    """Test that POST /authorize rejects an invalid client_id."""
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": "nonexistent-client",
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_rejects_inactive_client(
+    authenticated_client: AsyncClient, inactive_oauth_client
+):
+    """Test that POST /authorize rejects an inactive client."""
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": inactive_oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_no_open_redirect_on_allow(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that various malicious redirect URIs are rejected in POST allow."""
+    evil_uris = [
+        "http://evil.com/callback",
+        "https://attacker.com/steal",
+        "http://localhost:3000/callback/extra",
+        "http://localhost:3000.evil.com/callback",
+    ]
+    for evil_uri in evil_uris:
+        response = await authenticated_client.post(
+            "/api/oauth/authorize",
+            data={
+                "action": "allow",
+                "client_id": oauth_client.client_id,
+                "redirect_uri": evil_uri,
+                "scope": "read",
+            },
+            follow_redirects=False,
+        )
+        assert response.status_code == 400, f"Expected 400 for URI: {evil_uri}"
+        assert response.headers.get("location", "") != evil_uri
