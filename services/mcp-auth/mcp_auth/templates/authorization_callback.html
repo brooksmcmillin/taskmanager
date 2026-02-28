@@ -67,6 +67,26 @@
             font-size: 0.9375rem;
             line-height: 1.6;
         }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #1c1917;
+            }
+
+            .card {
+                background: #292524;
+                border-color: #44403c;
+                box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.2), 0 4px 6px -4px rgb(0 0 0 / 0.15);
+            }
+
+            h1 {
+                color: {{ '#f87171' if error else '#4ade80' }};
+            }
+
+            p {
+                color: #a8a29e;
+            }
+        }
     </style>
 </head>
 <body>
