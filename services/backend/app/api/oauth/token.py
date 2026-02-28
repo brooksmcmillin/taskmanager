@@ -116,6 +116,11 @@ async def _handle_authorization_code(
     if auth_code.redirect_uri != redirect_uri:
         raise errors.oauth_invalid_redirect()
 
+    # Enforce PKCE for public clients: public clients have no client secret,
+    # so without PKCE an intercepted authorization code can be freely exchanged.
+    if client.is_public and not auth_code.code_challenge:
+        raise errors.oauth_pkce_required()
+
     # Verify PKCE
     if auth_code.code_challenge:
         if not code_verifier:
