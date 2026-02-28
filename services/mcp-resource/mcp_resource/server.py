@@ -148,129 +148,43 @@ def create_resource_server(
         resource_documentation=f"{str(server_url).rstrip('/')}/docs",
     )
 
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
-    async def check_task_system_status() -> dict[str, Any]:
-        """
-        Check the health and operational status of the task management backend.
+    # -----------------------------------------------------------------------
+    # MCP Resources (read-only lookups, no @guard_tool needed)
+    # -----------------------------------------------------------------------
 
-        Verifies connectivity to the backend API and returns status information
-        about each major subsystem. Use this tool before performing operations
-        to diagnose system availability issues.
+    @app.resource("taskmanager://categories")
+    async def resource_categories() -> str:
+        """List all task categories with the count of tasks in each."""
+        api_client = get_api_client()
+        response = api_client.get_categories()
+        categories, error = validate_list_response(response, "categories")
+        if error:
+            return json.dumps({"error": error})
+        return json.dumps({"categories": categories})
 
-        Returns:
-            JSON object with overall status and individual component checks:
-            - overall_status: "healthy", "degraded", or "unhealthy"
-            - backend_api: Backend API connectivity status
-            - projects_service: Projects/categories service status
-            - tasks_service: Tasks service status
-            - timestamp: When the check was performed
-            - message: Human-readable status summary
-        """
-        logger.info("=== check_task_system_status called ===")
-        now = datetime.datetime.now(tz=datetime.UTC)
-        checks: dict[str, dict[str, Any]] = {}
-        errors: list[str] = []
+    @app.resource("taskmanager://snippets/categories")
+    async def resource_snippet_categories() -> str:
+        """List all snippet categories with the count of snippets in each."""
+        api_client = get_api_client()
+        response = api_client.get_snippet_categories()
+        categories, error = validate_list_response(response, "categories", key="data")
+        if error:
+            return json.dumps({"error": error})
+        return json.dumps({"categories": categories})
 
-        try:
-            api_client = get_api_client()
+    @app.resource("taskmanager://wiki/pages")
+    async def resource_wiki_pages() -> str:
+        """List all wiki pages (id, title, slug, timestamps)."""
+        api_client = get_api_client()
+        response = api_client.list_wiki_pages()
+        pages, error = validate_list_response(response, "wiki pages", key="data")
+        if error:
+            return json.dumps({"error": error})
+        return json.dumps({"pages": pages, "count": len(pages)})
 
-            # Check projects service
-            try:
-                projects_response = api_client.get_projects()
-                if projects_response.success:
-                    projects, proj_error = validate_list_response(projects_response, "projects")
-                    if proj_error:
-                        checks["projects_service"] = {
-                            "status": "degraded",
-                            "error": proj_error,
-                        }
-                        errors.append(f"Projects service: {proj_error}")
-                    else:
-                        checks["projects_service"] = {
-                            "status": "healthy",
-                            "project_count": len(projects),
-                        }
-                else:
-                    checks["projects_service"] = {
-                        "status": "unhealthy",
-                        "error": projects_response.error or "Request failed",
-                        "status_code": projects_response.status_code,
-                    }
-                    errors.append(f"Projects service: {projects_response.error}")
-            except Exception as e:
-                checks["projects_service"] = {
-                    "status": "unhealthy",
-                    "error": str(e),
-                }
-                errors.append(f"Projects service: {e}")
-
-            # Check tasks service
-            try:
-                tasks_response = api_client.get_todos()
-                if tasks_response.success:
-                    tasks, task_error = validate_list_response(tasks_response, "tasks")
-                    if task_error:
-                        checks["tasks_service"] = {
-                            "status": "degraded",
-                            "error": task_error,
-                        }
-                        errors.append(f"Tasks service: {task_error}")
-                    else:
-                        checks["tasks_service"] = {
-                            "status": "healthy",
-                            "task_count": len(tasks),
-                        }
-                else:
-                    checks["tasks_service"] = {
-                        "status": "unhealthy",
-                        "error": tasks_response.error or "Request failed",
-                        "status_code": tasks_response.status_code,
-                    }
-                    errors.append(f"Tasks service: {tasks_response.error}")
-            except Exception as e:
-                checks["tasks_service"] = {
-                    "status": "unhealthy",
-                    "error": str(e),
-                }
-                errors.append(f"Tasks service: {e}")
-
-            # Backend API is reachable if we got here
-            checks["backend_api"] = {"status": "healthy"}
-
-        except Exception as e:
-            # Complete backend failure
-            logger.error(f"Backend connectivity check failed: {e}", exc_info=True)
-            checks["backend_api"] = {
-                "status": "unhealthy",
-                "error": str(e),
-            }
-            checks["projects_service"] = {"status": "unknown"}
-            checks["tasks_service"] = {"status": "unknown"}
-            errors.append(f"Backend API: {e}")
-
-        # Determine overall status
-        statuses = [c.get("status") for c in checks.values()]
-        if all(s == "healthy" for s in statuses):
-            overall_status = "healthy"
-            message = "All systems operational"
-        elif any(s == "unhealthy" for s in statuses):
-            overall_status = "unhealthy"
-            message = f"System errors detected: {'; '.join(errors)}"
-        else:
-            overall_status = "degraded"
-            message = f"Some issues detected: {'; '.join(errors)}"
-
-        logger.info(f"Health check result: {overall_status}")
-        return {
-            "overall_status": overall_status,
-            "backend_api": checks.get("backend_api", {}),
-            "projects_service": checks.get("projects_service", {}),
-            "tasks_service": checks.get("tasks_service", {}),
-            "timestamp": now.isoformat(),
-            "current_time": now.isoformat(),
-            "message": message,
-        }
+    # -----------------------------------------------------------------------
+    # MCP Tools
+    # -----------------------------------------------------------------------
 
     @app.tool()
     @guard_tool(input_params=["status", "category"], screen_output=True)
@@ -796,44 +710,6 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
-    async def get_categories() -> str:
-        """
-        List all available task categories.
-
-        Returns a list of all categories (projects) with the count of tasks in each.
-
-        Returns:
-            JSON object with "categories" array containing objects with name and task_count fields
-        """
-        logger.info("=== get_categories called ===")
-        try:
-            api_client = get_api_client()
-            logger.debug("API client created successfully")
-
-            # SDK provides dedicated endpoint with task counts
-            response = api_client.get_categories()
-            logger.info(
-                f"get_categories response: success={response.success}, status={response.status_code}"
-            )
-
-            categories, categories_error = validate_list_response(response, "categories")
-            if categories_error:
-                logger.error(f"Failed to get categories: {categories_error}")
-                return json.dumps({"error": categories_error})
-
-            logger.info(f"Returning {len(categories)} categories")
-            return json.dumps(
-                {
-                    "categories": categories,
-                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Exception in get_categories: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
-
-    @app.tool()
     @guard_tool(input_params=["name", "description"], screen_output=True)
     async def create_project(
         name: str,
@@ -1048,56 +924,6 @@ def create_resource_server(
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
-    async def delete_task_attachment(task_id: str, attachment_id: int) -> str:
-        """
-        Delete an attachment from a task.
-
-        Args:
-            task_id: Task ID - format "task_123" or just "123"
-            attachment_id: Attachment ID to delete
-
-        Returns:
-            JSON object confirming deletion with deleted status and id
-        """
-        logger.info(
-            f"=== delete_task_attachment called: task_id='{task_id}', attachment_id={attachment_id} ==="
-        )
-        try:
-            api_client = get_api_client()
-            logger.debug("API client created successfully")
-
-            # Extract numeric ID from task_id
-            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
-            try:
-                todo_id = int(numeric_id)
-            except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
-
-            # Delete attachment using SDK method
-            response = api_client.delete_attachment(todo_id, attachment_id)
-            logger.info(
-                f"delete_attachment response: success={response.success}, status={response.status_code}"
-            )
-
-            if not response.success:
-                logger.error(f"Failed to delete attachment: {response.error}")
-                return json.dumps({"error": response.error})
-
-            logger.info(f"Deleted attachment {attachment_id} from task {task_id}")
-            return json.dumps(
-                {
-                    "task_id": task_id,
-                    "attachment_id": attachment_id,
-                    "status": "deleted",
-                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Exception in delete_task_attachment: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
-
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
     async def list_task_comments(task_id: str) -> str:
         """
         List all comments for a specific task.
@@ -1188,53 +1014,6 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in add_task_comment: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
-
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
-    async def delete_task_comment(task_id: str, comment_id: int) -> str:
-        """
-        Delete a comment from a task.
-
-        Args:
-            task_id: Task ID - format "task_123" or just "123"
-            comment_id: Comment ID to delete
-
-        Returns:
-            JSON object confirming deletion with deleted status and id
-        """
-        logger.info(
-            f"=== delete_task_comment called: task_id='{task_id}', comment_id={comment_id} ==="
-        )
-        try:
-            api_client = get_api_client()
-
-            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
-            try:
-                todo_id = int(numeric_id)
-            except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
-
-            response = api_client.delete_comment(todo_id, comment_id)
-            logger.info(
-                f"delete_comment response: success={response.success}, status={response.status_code}"
-            )
-
-            if not response.success:
-                logger.error(f"Failed to delete comment: {response.error}")
-                return json.dumps({"error": response.error})
-
-            logger.info(f"Deleted comment {comment_id} from task {task_id}")
-            return json.dumps(
-                {
-                    "task_id": task_id,
-                    "comment_id": comment_id,
-                    "status": "deleted",
-                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Exception in delete_task_comment: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     @app.tool()
@@ -1943,90 +1722,32 @@ def create_resource_server(
             logger.error(f"Exception in add_dependency: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
-    async def remove_dependency(task_id: str, dependency_id: str) -> str:
-        """
-        Remove a dependency from a task.
-
-        Removes the relationship where task_id depends on dependency_id.
-
-        Args:
-            task_id: The dependent task ID - format "task_123" or just "123"
-            dependency_id: The dependency task to remove - format "task_123" or just "123"
-
-        Returns:
-            JSON object confirming the dependency was removed
-        """
-        logger.info(
-            f"=== remove_dependency called: task_id='{task_id}', dependency_id='{dependency_id}' ==="
-        )
-        try:
-            api_client = get_api_client()
-            logger.debug("API client created successfully")
-
-            # Extract numeric IDs
-            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
-            try:
-                todo_id = int(numeric_id)
-            except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
-
-            dep_numeric_id = (
-                dependency_id.replace("task_", "")
-                if dependency_id.startswith("task_")
-                else dependency_id
-            )
-            try:
-                dep_id = int(dep_numeric_id)
-            except ValueError:
-                return json.dumps({"error": f"Invalid dependency_id format: {dependency_id}"})
-
-            response = api_client.remove_dependency(todo_id, dep_id)
-            logger.info(
-                f"remove_dependency response: success={response.success}, status={response.status_code}"
-            )
-
-            if not response.success:
-                logger.error(f"Failed to remove dependency: {response.error}")
-                return json.dumps({"error": response.error})
-
-            logger.info(f"Removed dependency: task {task_id} no longer depends on {dependency_id}")
-            return json.dumps(
-                {
-                    "task_id": task_id,
-                    "dependency_id": dependency_id,
-                    "status": "removed",
-                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Exception in remove_dependency: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
-
     # -----------------------------------------------------------------------
     # Wiki tools
     # -----------------------------------------------------------------------
 
     @app.tool()
     @guard_tool(input_params=["q"], screen_output=True)
-    async def list_wiki_pages(q: str | None = None) -> str:
+    async def search_wiki_pages(q: str) -> str:
         """
-        List wiki pages, optionally filtered by a search query.
+        Search wiki pages by title or content.
+
+        For a full listing of all pages without filtering, use the
+        ``taskmanager://wiki/pages`` resource instead.
 
         Args:
-            q: Optional search query to filter pages by title or content
+            q: Search query to filter pages by title or content (required)
 
         Returns:
             JSON object with "pages" array containing wiki page summaries
             with fields: id, title, slug, created_at, updated_at
         """
-        logger.info(f"=== list_wiki_pages called: q={q} ===")
+        logger.info(f"=== search_wiki_pages called: q={q} ===")
         try:
             api_client = get_api_client()
             response = api_client.list_wiki_pages(q=q)
             logger.info(
-                f"list_wiki_pages response: success={response.success}, status={response.status_code}"
+                f"search_wiki_pages response: success={response.success}, status={response.status_code}"
             )
 
             pages, pages_error = validate_list_response(response, "wiki pages", key="data")
@@ -2043,7 +1764,7 @@ def create_resource_server(
                 }
             )
         except Exception as e:
-            logger.error(f"Exception in list_wiki_pages: {e}", exc_info=True)
+            logger.error(f"Exception in search_wiki_pages: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     @app.tool()
@@ -2276,53 +1997,6 @@ def create_resource_server(
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
-    async def unlink_wiki_page_from_task(page_id: int, task_id: str) -> str:
-        """
-        Remove the link between a wiki page and a task.
-
-        Args:
-            page_id: Wiki page ID
-            task_id: Task ID to unlink - format "task_123" or just "123"
-
-        Returns:
-            JSON object confirming the link was removed
-        """
-        logger.info(
-            f"=== unlink_wiki_page_from_task called: page_id={page_id}, task_id='{task_id}' ==="
-        )
-        try:
-            api_client = get_api_client()
-
-            numeric_id = task_id.replace("task_", "") if task_id.startswith("task_") else task_id
-            try:
-                todo_id = int(numeric_id)
-            except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
-
-            response = api_client.unlink_wiki_page_from_task(page_id, todo_id)
-            logger.info(
-                f"unlink_wiki_page_from_task response: success={response.success}, status={response.status_code}"
-            )
-
-            if not response.success:
-                logger.error(f"Failed to unlink wiki page from task: {response.error}")
-                return json.dumps({"error": response.error})
-
-            logger.info(f"Unlinked wiki page {page_id} from task {task_id}")
-            return json.dumps(
-                {
-                    "page_id": page_id,
-                    "task_id": task_id,
-                    "status": "unlinked",
-                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Exception in unlink_wiki_page_from_task: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
-
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
     async def get_wiki_page_linked_tasks(page_id: int) -> str:
         """
         Get all tasks linked to a wiki page.
@@ -2473,94 +2147,6 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in batch_link_wiki_page_to_tasks: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
-
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
-    async def get_wiki_page_revisions(page_id: int) -> str:
-        """
-        List revision history for a wiki page.
-
-        Each update to a wiki page creates a revision snapshot of the previous
-        state. Use this to view the history of changes.
-
-        Args:
-            page_id: Wiki page ID
-
-        Returns:
-            JSON object with "revisions" array containing revision summaries
-            with fields: id, wiki_page_id, title, slug, content, revision_number, created_at
-        """
-        logger.info(f"=== get_wiki_page_revisions called: page_id={page_id} ===")
-        try:
-            api_client = get_api_client()
-            response = api_client.get_wiki_page_revisions(page_id)
-            logger.info(
-                f"get_wiki_page_revisions response: success={response.success}, "
-                f"status={response.status_code}"
-            )
-
-            revisions, rev_error = validate_list_response(response, "revisions", key="data")
-            if rev_error:
-                logger.error(f"Failed to get revisions: {rev_error}")
-                return json.dumps({"error": rev_error})
-
-            logger.info(f"Returning {len(revisions)} revisions for wiki page {page_id}")
-            return json.dumps(
-                {
-                    "page_id": page_id,
-                    "revisions": revisions,
-                    "count": len(revisions),
-                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Exception in get_wiki_page_revisions: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
-
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
-    async def get_wiki_page_revision(page_id: int, revision_number: int) -> str:
-        """
-        Get a specific revision of a wiki page.
-
-        Retrieves the full content of a page at a particular revision number.
-
-        Args:
-            page_id: Wiki page ID
-            revision_number: Revision number to retrieve
-
-        Returns:
-            JSON object with revision data including title, slug, content,
-            revision_number, and created_at
-        """
-        logger.info(
-            f"=== get_wiki_page_revision called: page_id={page_id}, "
-            f"revision_number={revision_number} ==="
-        )
-        try:
-            api_client = get_api_client()
-            response = api_client.get_wiki_page_revision(page_id, revision_number)
-            logger.info(
-                f"get_wiki_page_revision response: success={response.success}, "
-                f"status={response.status_code}"
-            )
-
-            revision, rev_error = validate_dict_response(response, "revision")
-            if rev_error:
-                logger.error(f"Failed to get revision: {rev_error}")
-                return json.dumps({"error": rev_error})
-
-            logger.info(f"Retrieved revision {revision_number} for wiki page {page_id}")
-            return json.dumps(
-                {
-                    "page_id": page_id,
-                    "revision": revision,
-                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Exception in get_wiki_page_revision: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     # -----------------------------------------------------------------------
@@ -2821,45 +2407,6 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in delete_snippet: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
-
-    @app.tool()
-    @guard_tool(input_params=[], screen_output=True)
-    async def get_snippet_categories() -> str:
-        """
-        List snippet categories with counts.
-
-        Returns all categories that have been used in snippets, along with the
-        number of snippets in each category.
-
-        Returns:
-            JSON object with "categories" array containing objects with
-            "category" (string) and "count" (integer) fields
-        """
-        logger.info("=== get_snippet_categories called ===")
-        try:
-            api_client = get_api_client()
-            response = api_client.get_snippet_categories()
-            logger.info(
-                f"get_snippet_categories response: success={response.success}, "
-                f"status={response.status_code}"
-            )
-
-            categories, cat_error = validate_list_response(response, "categories", key="data")
-            if cat_error:
-                logger.error(f"Failed to get snippet categories: {cat_error}")
-                return json.dumps({"error": cat_error})
-
-            logger.info(f"Returning {len(categories)} snippet categories")
-            return json.dumps(
-                {
-                    "categories": categories,
-                    "count": len(categories),
-                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
-                }
-            )
-        except Exception as e:
-            logger.error(f"Exception in get_snippet_categories: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
     return app
