@@ -1644,6 +1644,95 @@ class TestCreateTasksBatch:
             assert todos[2]["estimated_hours"] == 0
 
 
+class TestCreateTaskCategoryResolution:
+    """Tests verifying that create_task and create_tasks include the resolved category
+    in their responses, so callers can confirm what project was matched or auto-created.
+    """
+
+    def _make_server_tools(self, mock_client: MagicMock) -> Any:
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            return server._tool_manager._tools
+
+    @pytest.mark.asyncio
+    async def test_create_task_response_includes_resolved_category(self) -> None:
+        """Test that create_task includes the project_name from the API as 'category'."""
+        import json
+
+        mock_client = MagicMock()
+        mock_client.create_todo.return_value = ApiResponse(
+            success=True,
+            data={"id": 42, "title": "My Task", "project_name": "Work"},
+            status_code=201,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            tools = self._make_server_tools(mock_client)
+            result = await tools["create_task"].fn(title="My Task", category="Work")
+            parsed = json.loads(result)
+
+        assert "error" not in parsed
+        assert parsed["category"] == "Work"
+
+    @pytest.mark.asyncio
+    async def test_create_task_response_category_none_when_no_project(self) -> None:
+        """Test that create_task category is None when the API returns no project_name."""
+        import json
+
+        mock_client = MagicMock()
+        mock_client.create_todo.return_value = ApiResponse(
+            success=True,
+            data={"id": 7, "title": "Uncategorized"},
+            status_code=201,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            tools = self._make_server_tools(mock_client)
+            result = await tools["create_task"].fn(title="Uncategorized")
+            parsed = json.loads(result)
+
+        assert "error" not in parsed
+        assert parsed["category"] is None
+
+    @pytest.mark.asyncio
+    async def test_create_tasks_response_includes_resolved_category_per_task(self) -> None:
+        """Test that create_tasks includes project_name as 'category' for each task."""
+        import json
+
+        mock_client = MagicMock()
+        mock_client.batch_create_todos.return_value = ApiResponse(
+            success=True,
+            data=[
+                {"id": 1, "title": "Task A", "project_name": "Work"},
+                {"id": 2, "title": "Task B", "project_name": None},
+            ],
+            status_code=201,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            tools = self._make_server_tools(mock_client)
+            result = await tools["create_tasks"].fn(
+                tasks=[
+                    {"title": "Task A", "category": "Work"},
+                    {"title": "Task B"},
+                ]
+            )
+            parsed = json.loads(result)
+
+        assert "error" not in parsed
+        assert parsed["count"] == 2
+        assert parsed["created"][0]["category"] == "Work"
+        assert parsed["created"][1]["category"] is None
+
+
 class TestWikiTools:
     """Tests for wiki MCP tools."""
 
