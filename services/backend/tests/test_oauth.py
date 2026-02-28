@@ -973,7 +973,14 @@ async def test_token_endpoint_inactive_client(client: AsyncClient, db_session):
 async def test_token_endpoint_public_client_skips_secret(
     client: AsyncClient, public_oauth_client, test_user, db_session
 ):
-    """Test that public clients can use token endpoint without a client secret."""
+    """Test that public clients can use token endpoint without a client secret.
+
+    Public clients must use PKCE instead of a client secret.
+    """
+    code_verifier = TEST_CODE_VERIFIER
+    digest = hashlib.sha256(code_verifier.encode()).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
     auth_code = AuthorizationCode(
         code="public-client-code",
         client_id=public_oauth_client.client_id,
@@ -981,6 +988,8 @@ async def test_token_endpoint_public_client_skips_secret(
         redirect_uri="http://localhost:3000/callback",
         scopes=json.dumps(["read"]),
         expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
     )
     db_session.add(auth_code)
     await db_session.commit()
@@ -992,6 +1001,7 @@ async def test_token_endpoint_public_client_skips_secret(
             "client_id": public_oauth_client.client_id,
             "code": "public-client-code",
             "redirect_uri": "http://localhost:3000/callback",
+            "code_verifier": code_verifier,
         },
     )
 
@@ -1469,3 +1479,123 @@ async def test_revoked_token_cannot_be_refreshed(
     )
     assert refresh_response.status_code == 400
     assert refresh_response.json()["detail"]["code"] == "OAUTH_004"
+
+
+# ===========================================================================
+# PKCE enforcement for public clients
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_public_client_without_pkce_is_rejected(
+    client: AsyncClient, public_oauth_client, test_user, db_session
+):
+    """Test public client token exchange is rejected when no code_challenge was stored.
+
+    Public clients have no client secret, so PKCE is the only protection against
+    authorization code interception attacks.
+    """
+    # Authorization code issued WITHOUT PKCE challenge
+    auth_code = AuthorizationCode(
+        code="no-pkce-public-code",
+        client_id=public_oauth_client.client_id,
+        user_id=test_user.id,
+        redirect_uri="http://localhost:3000/callback",
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    db_session.add(auth_code)
+    await db_session.commit()
+
+    # Attempt to exchange without PKCE
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": public_oauth_client.client_id,
+            "code": "no-pkce-public-code",
+            "redirect_uri": "http://localhost:3000/callback",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "OAUTH_011"
+
+
+@pytest.mark.asyncio
+async def test_public_client_with_pkce_succeeds(
+    client: AsyncClient, public_oauth_client, test_user, db_session
+):
+    """Test that a public client token exchange succeeds when PKCE is present."""
+    code_verifier = TEST_CODE_VERIFIER
+    digest = hashlib.sha256(code_verifier.encode()).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
+    auth_code = AuthorizationCode(
+        code="pkce-public-client-code",
+        client_id=public_oauth_client.client_id,
+        user_id=test_user.id,
+        redirect_uri="http://localhost:3000/callback",
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
+    )
+    db_session.add(auth_code)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": public_oauth_client.client_id,
+            "code": "pkce-public-client-code",
+            "redirect_uri": "http://localhost:3000/callback",
+            "code_verifier": code_verifier,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["scope"] == "read"
+
+
+@pytest.mark.asyncio
+async def test_confidential_client_without_pkce_still_works(
+    client: AsyncClient, oauth_client, test_user, db_session
+):
+    """Test that a confidential client token exchange works without PKCE.
+
+    Confidential clients authenticate with a client secret, so PKCE is optional.
+    This ensures backward compatibility for existing confidential client deployments.
+    """
+    auth_code = AuthorizationCode(
+        code="confidential-no-pkce-code",
+        client_id=oauth_client.client_id,
+        user_id=test_user.id,
+        redirect_uri="http://localhost:3000/callback",
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        code_challenge=None,
+        code_challenge_method=None,
+    )
+    db_session.add(auth_code)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+            "code": "confidential-no-pkce-code",
+            "redirect_uri": "http://localhost:3000/callback",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data

@@ -393,6 +393,15 @@ class Errors:
         """OAUTH_010: Device code expired."""
         return ApiError("OAUTH_010", 400, "Device code has expired")
 
+    @staticmethod
+    def oauth_pkce_required() -> ApiError:
+        """OAUTH_011: PKCE required for public clients."""
+        return ApiError(
+            "OAUTH_011",
+            400,
+            "PKCE is required for public clients",
+        )
+
     # =========================================================================
     # GitHub OAuth Errors (GITHUB_001 - GITHUB_005)
     # =========================================================================
