@@ -5,11 +5,22 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 
 	export let data;
 
-	// Redirect to login if not authenticated (client-side)
+	// Initialize theme on all pages (ThemeToggle only mounts when Navigation is visible)
 	onMount(() => {
+		if (browser) {
+			const savedTheme = localStorage.getItem('theme');
+			if (savedTheme) {
+				document.documentElement.setAttribute('data-theme', savedTheme);
+			} else {
+				const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+				document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+			}
+		}
+
 		const publicRoutes = ['/login', '/register', '/oauth/authorize', '/privacy', '/terms'];
 		const isPublicRoute = publicRoutes.some((route) => $page.url.pathname.startsWith(route));
 
