@@ -1181,3 +1181,248 @@ async def test_verify_token_revoked(
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "AUTH_004"
+
+
+# =============================================================================
+# Token Revocation Endpoint (RFC 7009)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_revoke_access_token_success(
+    client: AsyncClient, oauth_client, test_user, db_session
+):
+    """Test revoking an access token sets revoked=True in DB."""
+    access_token = AccessToken(
+        token="revoke-me-token",
+        client_id=oauth_client.client_id,
+        user_id=test_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        revoked=False,
+    )
+    db_session.add(access_token)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "revoke-me-token",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 200
+
+    # Verify token is revoked in DB
+    await db_session.refresh(access_token)
+    assert access_token.revoked is True
+
+
+@pytest.mark.asyncio
+async def test_revoke_refresh_token_success(
+    client: AsyncClient, oauth_client, test_user, db_session
+):
+    """Test revoking by refresh token with token_type_hint=refresh_token."""
+    access_token = AccessToken(
+        token="at-for-revoke-rt",
+        client_id=oauth_client.client_id,
+        user_id=test_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        refresh_token="revoke-me-refresh",
+        refresh_token_expires_at=datetime.now(UTC) + timedelta(days=30),
+        revoked=False,
+    )
+    db_session.add(access_token)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "revoke-me-refresh",
+            "token_type_hint": "refresh_token",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 200
+
+    await db_session.refresh(access_token)
+    assert access_token.revoked is True
+
+
+@pytest.mark.asyncio
+async def test_revoke_access_token_hint_fallback(
+    client: AsyncClient, oauth_client, test_user, db_session
+):
+    """Test hint says refresh_token but value is actually an access token — fallback works."""
+    access_token = AccessToken(
+        token="fallback-at-value",
+        client_id=oauth_client.client_id,
+        user_id=test_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        revoked=False,
+    )
+    db_session.add(access_token)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "fallback-at-value",
+            "token_type_hint": "refresh_token",  # wrong hint
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 200
+
+    await db_session.refresh(access_token)
+    assert access_token.revoked is True
+
+
+@pytest.mark.asyncio
+async def test_revoke_invalid_token_returns_200(client: AsyncClient, oauth_client):
+    """Test that revoking an unknown token still returns 200 (RFC 7009)."""
+    response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "nonexistent-token",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_revoke_already_revoked_returns_200(
+    client: AsyncClient, oauth_client, test_user, db_session
+):
+    """Test that revoking an already-revoked token is idempotent (returns 200)."""
+    access_token = AccessToken(
+        token="already-revoked-token",
+        client_id=oauth_client.client_id,
+        user_id=test_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        revoked=True,
+    )
+    db_session.add(access_token)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "already-revoked-token",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_revoke_wrong_client_returns_200(
+    client: AsyncClient, oauth_client, public_oauth_client, test_user, db_session
+):
+    """Test that token belonging to different client returns 200 but is not revoked."""
+    access_token = AccessToken(
+        token="other-client-token",
+        client_id=public_oauth_client.client_id,  # belongs to public client
+        user_id=test_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        revoked=False,
+    )
+    db_session.add(access_token)
+    await db_session.commit()
+
+    # Try to revoke using oauth_client (confidential), not the public client
+    response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "other-client-token",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 200
+
+    # Token should NOT be revoked (wrong client)
+    await db_session.refresh(access_token)
+    assert access_token.revoked is False
+
+
+@pytest.mark.asyncio
+async def test_revoke_invalid_client(client: AsyncClient):
+    """Test that bad client_id/secret returns 401."""
+    response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "some-token",
+            "client_id": "invalid-client-id",
+            "client_secret": "invalid-secret",  # pragma: allowlist secret
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "OAUTH_001"
+
+
+@pytest.mark.asyncio
+async def test_revoke_missing_token_param(client: AsyncClient, oauth_client):
+    """Test that missing token parameter returns 422 (validation error)."""
+    response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_revoked_token_rejected_by_validate(
+    client: AsyncClient, oauth_client, test_user, db_session
+):
+    """Test that after revoking, the token is rejected by /api/oauth/verify."""
+    access_token = AccessToken(
+        token="revoke-then-verify",
+        client_id=oauth_client.client_id,
+        user_id=test_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        revoked=False,
+    )
+    db_session.add(access_token)
+    await db_session.commit()
+
+    # Revoke the token
+    revoke_response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "revoke-then-verify",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+    assert revoke_response.status_code == 200
+
+    # Verify the token is now rejected
+    verify_response = await client.get(
+        "/api/oauth/verify",
+        headers={"Authorization": "Bearer revoke-then-verify"},
+    )
+    assert verify_response.status_code == 401
+    assert verify_response.json()["detail"]["code"] == "AUTH_004"
