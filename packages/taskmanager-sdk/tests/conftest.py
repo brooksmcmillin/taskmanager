@@ -81,6 +81,21 @@ def sample_todo() -> dict[str, str | int | float | list[str] | None]:
 
 
 @pytest.fixture
+def sample_snippet() -> dict[str, str | int | list[str] | None]:
+    """Sample snippet data."""
+    return {
+        "id": 1,
+        "category": "standup",
+        "title": "Daily standup notes",
+        "content": "Worked on snippet feature",
+        "snippet_date": "2026-02-28",
+        "tags": ["dev", "daily"],
+        "created_at": "2026-02-28T10:00:00Z",
+        "updated_at": None,
+    }
+
+
+@pytest.fixture
 def sample_oauth_client() -> dict[str, str | int | bool | list[str]]:
     """Sample OAuth client data."""
     return {

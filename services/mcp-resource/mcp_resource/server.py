@@ -2563,6 +2563,305 @@ def create_resource_server(
             logger.error(f"Exception in get_wiki_page_revision: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
+    # -----------------------------------------------------------------------
+    # Snippet tools
+    # -----------------------------------------------------------------------
+
+    @app.tool()
+    @guard_tool(input_params=["q"], screen_output=True)
+    async def list_snippets(
+        q: str | None = None,
+        category: str | None = None,
+        tag: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> str:
+        """
+        List snippets (dated log entries), optionally filtered.
+
+        Snippets are short, dated entries organized by category with tags.
+        Use this to browse or search the user's snippet log.
+
+        Args:
+            q: Optional search query to filter by title, content, or category
+            category: Optional category filter (e.g., "standup", "til")
+            tag: Optional tag filter
+            date_from: Optional start date filter (YYYY-MM-DD)
+            date_to: Optional end date filter (YYYY-MM-DD)
+
+        Returns:
+            JSON object with "snippets" array containing snippet summaries
+            with fields: id, category, title, snippet_date, tags, created_at, updated_at
+        """
+        logger.info(
+            f"=== list_snippets called: q={q}, category={category}, "
+            f"tag={tag}, date_from={date_from}, date_to={date_to} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.list_snippets(
+                q=q, category=category, tag=tag, date_from=date_from, date_to=date_to
+            )
+            logger.info(
+                f"list_snippets response: success={response.success}, status={response.status_code}"
+            )
+
+            snippets, snippets_error = validate_list_response(response, "snippets", key="data")
+            if snippets_error:
+                logger.error(f"Failed to list snippets: {snippets_error}")
+                return json.dumps({"error": snippets_error})
+
+            logger.info(f"Returning {len(snippets)} snippets")
+            return json.dumps(
+                {
+                    "snippets": snippets,
+                    "count": len(snippets),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in list_snippets: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["category", "title", "content"], screen_output=True)
+    async def create_snippet(
+        category: str,
+        title: str,
+        content: str = "",
+        snippet_date: str | None = None,
+        tags: list[str] | None = None,
+    ) -> str:
+        """
+        Create a new snippet (dated log entry).
+
+        Snippets are short, dated entries organized by category. Use them for
+        standups, TIL entries, meeting notes, decision logs, etc.
+
+        Args:
+            category: Snippet category (required, e.g., "standup", "til", "meeting")
+            title: Snippet title (required, 1-500 characters)
+            content: Snippet content (optional, default: "")
+            snippet_date: Date for the snippet in YYYY-MM-DD format
+                          (optional, defaults to today)
+            tags: List of tags (optional)
+
+        Returns:
+            JSON object with created snippet data including id, category, title,
+            content, snippet_date, tags, created_at
+        """
+        logger.info(
+            f"=== create_snippet called: category='{category}', title='{title}', "
+            f"snippet_date={snippet_date}, tags={tags} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.create_snippet(
+                category=category,
+                title=title,
+                content=content,
+                snippet_date=snippet_date,
+                tags=tags,
+            )
+            logger.info(
+                f"create_snippet response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            snippet, snippet_error = validate_dict_response(response, "created snippet")
+            if snippet_error:
+                logger.error(f"Failed to create snippet: {snippet_error}")
+                return json.dumps({"error": snippet_error})
+
+            logger.info(f"Created snippet: id={snippet.get('id') if snippet else None}")
+            return json.dumps(
+                {
+                    "snippet": snippet,
+                    "status": "created",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in create_snippet: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_snippet(snippet_id: int) -> str:
+        """
+        Get a snippet by its ID.
+
+        Args:
+            snippet_id: Snippet ID
+
+        Returns:
+            JSON object with full snippet data including id, category, title,
+            content, snippet_date, tags, created_at, updated_at
+        """
+        logger.info(f"=== get_snippet called: snippet_id={snippet_id} ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.get_snippet(snippet_id)
+            logger.info(
+                f"get_snippet response: success={response.success}, status={response.status_code}"
+            )
+
+            snippet, snippet_error = validate_dict_response(response, "snippet")
+            if snippet_error:
+                logger.error(f"Failed to get snippet: {snippet_error}")
+                return json.dumps({"error": snippet_error})
+
+            logger.info(f"Retrieved snippet: id={snippet.get('id') if snippet else None}")
+            return json.dumps(
+                {
+                    "snippet": snippet,
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in get_snippet: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["category", "title", "content"], screen_output=True)
+    async def update_snippet(
+        snippet_id: int,
+        category: str | None = None,
+        title: str | None = None,
+        content: str | None = None,
+        snippet_date: str | None = None,
+        tags: list[str] | None = None,
+    ) -> str:
+        """
+        Update an existing snippet.
+
+        Args:
+            snippet_id: Snippet ID to update
+            category: New category (optional)
+            title: New title (optional, 1-500 characters)
+            content: New content (optional)
+            snippet_date: New date in YYYY-MM-DD format (optional)
+            tags: New tags list (optional)
+
+        Returns:
+            JSON object with updated snippet data including id, category, title,
+            content, snippet_date, tags, created_at, updated_at
+        """
+        logger.info(
+            f"=== update_snippet called: snippet_id={snippet_id}, category={category}, "
+            f"title={title}, snippet_date={snippet_date}, tags={tags} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.update_snippet(
+                snippet_id=snippet_id,
+                category=category,
+                title=title,
+                content=content,
+                snippet_date=snippet_date,
+                tags=tags,
+            )
+            logger.info(
+                f"update_snippet response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            snippet, snippet_error = validate_dict_response(response, "updated snippet")
+            if snippet_error:
+                logger.error(f"Failed to update snippet: {snippet_error}")
+                return json.dumps({"error": snippet_error})
+
+            logger.info(f"Updated snippet: id={snippet.get('id') if snippet else None}")
+            return json.dumps(
+                {
+                    "snippet": snippet,
+                    "status": "updated",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in update_snippet: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def delete_snippet(snippet_id: int) -> str:
+        """
+        Soft-delete a snippet.
+
+        The snippet will no longer appear in listings or be fetchable, but its
+        data is preserved internally.
+
+        Args:
+            snippet_id: Snippet ID to delete
+
+        Returns:
+            JSON object confirming deletion with deleted status and snippet id
+        """
+        logger.info(f"=== delete_snippet called: snippet_id={snippet_id} ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.delete_snippet(snippet_id)
+            logger.info(
+                f"delete_snippet response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to delete snippet: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Deleted snippet {snippet_id}")
+            return json.dumps(
+                {
+                    "snippet_id": snippet_id,
+                    "status": "deleted",
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in delete_snippet: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_snippet_categories() -> str:
+        """
+        List snippet categories with counts.
+
+        Returns all categories that have been used in snippets, along with the
+        number of snippets in each category.
+
+        Returns:
+            JSON object with "categories" array containing objects with
+            "category" (string) and "count" (integer) fields
+        """
+        logger.info("=== get_snippet_categories called ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.get_snippet_categories()
+            logger.info(
+                f"get_snippet_categories response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            categories, cat_error = validate_list_response(response, "categories", key="data")
+            if cat_error:
+                logger.error(f"Failed to get snippet categories: {cat_error}")
+                return json.dumps({"error": cat_error})
+
+            logger.info(f"Returning {len(categories)} snippet categories")
+            return json.dumps(
+                {
+                    "categories": categories,
+                    "count": len(categories),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in get_snippet_categories: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
     return app
 
 
