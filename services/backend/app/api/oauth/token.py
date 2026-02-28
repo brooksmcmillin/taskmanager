@@ -169,6 +169,7 @@ async def _handle_refresh_token(
             == refresh_token,  # SQL filter (OK for performance)
             AccessToken.client_id == client.client_id,
             AccessToken.refresh_token_expires_at > datetime.now(UTC),
+            AccessToken.revoked.is_(False),
         )
     )
     old_token = result.scalar_one_or_none()

@@ -1426,3 +1426,46 @@ async def test_revoked_token_rejected_by_validate(
     )
     assert verify_response.status_code == 401
     assert verify_response.json()["detail"]["code"] == "AUTH_004"
+
+
+@pytest.mark.asyncio
+async def test_revoked_token_cannot_be_refreshed(
+    client: AsyncClient, oauth_client, test_user, db_session
+):
+    """Test that after revoking, the refresh token is also rejected."""
+    access_token = AccessToken(
+        token="revoke-then-refresh-at",
+        client_id=oauth_client.client_id,
+        user_id=test_user.id,
+        scopes=json.dumps(["read"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+        refresh_token="revoke-then-refresh-rt",
+        refresh_token_expires_at=datetime.now(UTC) + timedelta(days=30),
+        revoked=False,
+    )
+    db_session.add(access_token)
+    await db_session.commit()
+
+    # Revoke the token
+    revoke_response = await client.post(
+        "/api/oauth/revoke",
+        data={
+            "token": "revoke-then-refresh-at",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+    assert revoke_response.status_code == 200
+
+    # Attempt to use the refresh token — should fail
+    refresh_response = await client.post(
+        "/api/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": oauth_client.client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+            "refresh_token": "revoke-then-refresh-rt",
+        },
+    )
+    assert refresh_response.status_code == 400
+    assert refresh_response.json()["detail"]["code"] == "OAUTH_004"
