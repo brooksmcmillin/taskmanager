@@ -237,3 +237,83 @@ class TestRegisterWithTaskmanager:
 
         call_kwargs = mock_api.create_system_oauth_client.call_args[1]
         assert call_kwargs["grant_types"] == ["authorization_code", "refresh_token"]
+
+    @pytest.mark.asyncio
+    async def test_success_with_none_data(self) -> None:
+        """Handles success=True but data=None without raising."""
+        mock_api = MagicMock()
+        mock_api.token_expires_at = 9999999999
+        mock_api.create_system_oauth_client.return_value = MagicMock(
+            success=True, data=None
+        )
+        provider = _create_provider(api_client=mock_api)
+        client_info = _create_client_info()
+
+        # Should not raise AttributeError
+        await provider._register_with_taskmanager(client_info)
+
+    @pytest.mark.asyncio
+    async def test_filters_disallowed_scopes(self) -> None:
+        """Strips scopes not in the allowlist."""
+        mock_api = MagicMock()
+        mock_api.token_expires_at = 9999999999
+        mock_api.create_system_oauth_client.return_value = MagicMock(
+            success=True, data={"client_id": "id"}
+        )
+        provider = _create_provider(api_client=mock_api)
+        client_info = _create_client_info(scope="read admin superuser write")
+
+        await provider._register_with_taskmanager(client_info)
+
+        call_kwargs = mock_api.create_system_oauth_client.call_args[1]
+        assert call_kwargs["scopes"] == ["read", "write"]
+
+    @pytest.mark.asyncio
+    async def test_filters_disallowed_grant_types(self) -> None:
+        """Strips grant_types not in the allowlist."""
+        mock_api = MagicMock()
+        mock_api.token_expires_at = 9999999999
+        mock_api.create_system_oauth_client.return_value = MagicMock(
+            success=True, data={"client_id": "id"}
+        )
+        provider = _create_provider(api_client=mock_api)
+        client_info = _create_client_info(
+            grant_types=["authorization_code", "client_credentials", "refresh_token"]
+        )
+
+        await provider._register_with_taskmanager(client_info)
+
+        call_kwargs = mock_api.create_system_oauth_client.call_args[1]
+        assert call_kwargs["grant_types"] == ["authorization_code", "refresh_token"]
+
+    @pytest.mark.asyncio
+    async def test_all_scopes_disallowed_falls_back_to_default(self) -> None:
+        """Falls back to default when all requested scopes are disallowed."""
+        mock_api = MagicMock()
+        mock_api.token_expires_at = 9999999999
+        mock_api.create_system_oauth_client.return_value = MagicMock(
+            success=True, data={"client_id": "id"}
+        )
+        provider = _create_provider(api_client=mock_api)
+        client_info = _create_client_info(scope="admin superuser")
+
+        await provider._register_with_taskmanager(client_info)
+
+        call_kwargs = mock_api.create_system_oauth_client.call_args[1]
+        assert call_kwargs["scopes"] == ["read"]
+
+    @pytest.mark.asyncio
+    async def test_all_grant_types_disallowed_falls_back_to_default(self) -> None:
+        """Falls back to defaults when all requested grant_types are disallowed."""
+        mock_api = MagicMock()
+        mock_api.token_expires_at = 9999999999
+        mock_api.create_system_oauth_client.return_value = MagicMock(
+            success=True, data={"client_id": "id"}
+        )
+        provider = _create_provider(api_client=mock_api)
+        client_info = _create_client_info(grant_types=["client_credentials", "implicit"])
+
+        await provider._register_with_taskmanager(client_info)
+
+        call_kwargs = mock_api.create_system_oauth_client.call_args[1]
+        assert call_kwargs["grant_types"] == ["authorization_code", "refresh_token"]
