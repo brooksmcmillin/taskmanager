@@ -162,6 +162,41 @@ class TaskManagerClient:
         except requests.exceptions.RequestException as e:
             raise NetworkError(str(e)) from e
 
+    # Health check
+    def health_check(self) -> ApiResponse:
+        """Check backend health with per-subsystem status.
+
+        Calls GET /health on the backend root (outside /api).
+
+        Returns:
+            ApiResponse with status, subsystems, and timestamp
+        """
+        # Strip /api suffix to reach the root health endpoint
+        root_url = self.base_url
+        if root_url.endswith("/api"):
+            root_url = root_url[:-4]
+
+        url = f"{root_url}/health"
+        headers: dict[str, str] = {}
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
+
+        try:
+            response = self.session.get(
+                url, headers=headers, cookies=self.cookies
+            )
+            try:
+                json_data = response.json()
+            except (ValueError, requests.exceptions.JSONDecodeError):
+                json_data = None
+            return ApiResponse(
+                success=response.status_code == 200,
+                data=json_data,
+                status_code=response.status_code,
+            )
+        except requests.exceptions.RequestException as e:
+            raise NetworkError(str(e)) from e
+
     # Authentication methods
     def login(self, email: str, password: str) -> ApiResponse:
         """

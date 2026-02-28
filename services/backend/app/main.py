@@ -2,12 +2,17 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
+from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import (
     admin_loki,
@@ -32,6 +37,7 @@ from app.api.oauth import authorize, clients, device, github, token
 from app.config import settings
 from app.core.csrf import CSRFMiddleware
 from app.db.database import init_db
+from app.dependencies import get_db
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -104,6 +110,56 @@ Instrumentator(
 
 
 @app.get("/health")
-async def health_check() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "healthy"}
+async def health_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
+    """Health check endpoint with per-subsystem status."""
+    from app.models.project import Project
+    from app.models.snippet import Snippet
+    from app.models.todo import Todo
+    from app.models.wiki_page import WikiPage
+
+    timestamp = datetime.now(UTC).isoformat()
+
+    # Probe database connectivity
+    try:
+        await db.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "subsystems": {},
+                "timestamp": timestamp,
+            },
+        )
+
+    # Probe each subsystem table
+    subsystem_models: dict[str, type] = {
+        "tasks": Todo,
+        "projects": Project,
+        "wiki": WikiPage,
+        "snippets": Snippet,
+    }
+    subsystems: dict[str, dict[str, str]] = {}
+    all_healthy = True
+
+    for name, model in subsystem_models.items():
+        try:
+            await db.execute(select(model.id).limit(1))
+            subsystems[name] = {"status": "healthy"}
+        except SQLAlchemyError:
+            await db.rollback()
+            subsystems[name] = {"status": "unhealthy"}
+            all_healthy = False
+
+    # Return 200 for both healthy and degraded so monitoring tools that
+    # parse the response body can distinguish partial failures from full
+    # outages (which return 503).
+    status = "healthy" if all_healthy else "degraded"
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": status,
+            "subsystems": subsystems,
+            "timestamp": timestamp,
+        },
+    )

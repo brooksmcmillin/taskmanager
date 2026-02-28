@@ -854,6 +854,78 @@ class TestErrorHandling:
         assert client.cookies["session"] == "abc123"
 
 
+class TestHealthCheck:
+    """Test health_check method."""
+
+    def test_health_check_returns_data(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test health_check returns ApiResponse with health data."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "status": "healthy",
+            "subsystems": {
+                "tasks": {"status": "healthy"},
+                "projects": {"status": "healthy"},
+                "wiki": {"status": "healthy"},
+                "snippets": {"status": "healthy"},
+            },
+            "timestamp": "2026-02-28T12:00:00+00:00",
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.health_check()
+
+        assert result.success is True
+        assert result.data["status"] == "healthy"
+        assert "subsystems" in result.data
+        assert result.status_code == 200
+
+    def test_health_check_strips_api_prefix(
+        self, mock_session: Mock
+    ) -> None:
+        """Test health_check correctly strips /api from base_url."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"status": "healthy"}
+        mock_session.get.return_value = mock_response
+
+        c = TaskManagerClient("http://example.com:8000/api", session=mock_session)
+        c.health_check()
+
+        call_url = mock_session.get.call_args[0][0]
+        assert call_url == "http://example.com:8000/health"
+
+    def test_health_check_network_error(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test health_check raises NetworkError on connection failure."""
+        mock_session.get.side_effect = requests.exceptions.ConnectionError(
+            "Connection refused"
+        )
+
+        with pytest.raises(NetworkError):
+            client.health_check()
+
+    def test_health_check_non_json_response(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test health_check handles non-JSON response (e.g. proxy HTML error)."""
+        mock_response = Mock()
+        mock_response.status_code = 502
+        mock_response.json.side_effect = requests.exceptions.JSONDecodeError(
+            "Expecting value", "", 0
+        )
+        mock_session.get.return_value = mock_response
+
+        result = client.health_check()
+
+        assert result.success is False
+        assert result.data is None
+        assert result.status_code == 502
+
+
 class TestBatchCreateWithWikiPageId:
     """Test batch_create_todos with wiki_page_id parameter."""
 

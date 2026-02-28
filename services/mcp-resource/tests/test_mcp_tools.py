@@ -2423,6 +2423,44 @@ class TestResourceDefinitions:
                 oauth_strict=False,
             )
 
+    def test_health_resource_registered(self) -> None:
+        """Test that taskmanager://health resource is registered."""
+        mock_client = MagicMock()
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            resources = server._resource_manager._resources
+            assert "taskmanager://health" in resources
+
+    @pytest.mark.asyncio
+    async def test_health_resource_returns_data(self) -> None:
+        """Test that the health resource calls the SDK and returns data."""
+        import json
+
+        mock_client = MagicMock()
+        mock_client.health_check.return_value = ApiResponse(
+            success=True,
+            data={
+                "status": "healthy",
+                "subsystems": {
+                    "tasks": {"status": "healthy"},
+                    "projects": {"status": "healthy"},
+                    "wiki": {"status": "healthy"},
+                    "snippets": {"status": "healthy"},
+                },
+                "timestamp": "2026-02-28T12:00:00+00:00",
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = self._create_server(mock_client)
+            resource = server._resource_manager._resources["taskmanager://health"]
+            result = await resource.fn()
+            parsed = json.loads(result)
+            assert parsed["status"] == "healthy"
+            assert "subsystems" in parsed
+            assert parsed["subsystems"]["wiki"]["status"] == "healthy"
+
     def test_categories_resource_registered(self) -> None:
         """Test that taskmanager://categories resource is registered."""
         mock_client = MagicMock()
@@ -2454,7 +2492,6 @@ class TestResourceDefinitions:
             server = self._create_server(mock_client)
             tools = server._tool_manager._tools
             removed_tools = [
-                "check_task_system_status",
                 "delete_task_attachment",
                 "delete_task_comment",
                 "get_wiki_page_revisions",

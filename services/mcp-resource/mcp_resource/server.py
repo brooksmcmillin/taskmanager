@@ -152,6 +152,16 @@ def create_resource_server(
     # MCP Resources (read-only lookups, no @guard_tool needed)
     # -----------------------------------------------------------------------
 
+    @app.resource("taskmanager://health")
+    async def resource_health() -> str:
+        """Backend health check with per-subsystem status."""
+        api_client = get_api_client()
+        response = api_client.health_check()
+        data, error = validate_dict_response(response, "health")
+        if error:
+            return json.dumps({"error": error})
+        return json.dumps(data)
+
     @app.resource("taskmanager://categories")
     async def resource_categories() -> str:
         """List all task categories with the count of tasks in each."""
