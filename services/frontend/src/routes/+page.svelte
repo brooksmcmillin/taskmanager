@@ -410,7 +410,7 @@
 								<div class="todo-with-subtasks">
 									<div
 										class="flex items-center justify-between p-4 border rounded border-l-4 hover:shadow-md transition-shadow cursor-pointer"
-										style="border-left-color: {todo.project_color || '#6b7280'}"
+										style="border-left-color: {getPriorityColor(todo.priority)}"
 										on:click={() => openTaskDetail(todo)}
 										role="button"
 										tabindex="0"
@@ -471,7 +471,7 @@
 										<a
 											class="subtask-item-card"
 											href="/task/{subtask.id}"
-											style="border-left-color: {todo.project_color || '#6b7280'}"
+											style="border-left-color: {getPriorityColor(subtask.priority)}"
 										>
 											<div
 												class="subtask-item-parent-header"
