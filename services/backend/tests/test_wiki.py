@@ -283,9 +283,16 @@ async def test_resolve_titles(authenticated_client: AsyncClient) -> None:
 # ---------------------------------------------------------------------------
 
 
+_todo_counter = 0
+
+
 async def _create_todo(client: AsyncClient) -> int:
     """Helper to create a todo and return its ID."""
-    response = await client.post("/api/todos", json={"title": "Test Task"})
+    global _todo_counter
+    _todo_counter += 1
+    response = await client.post(
+        "/api/todos", json={"title": f"Test Task {_todo_counter}"}
+    )
     assert response.status_code == 201
     return response.json()["data"]["id"]
 
@@ -1110,9 +1117,7 @@ async def test_reparenting_subtree_depth_violation(
 ) -> None:
     """Moving a page with descendants cannot exceed MAX_WIKI_DEPTH."""
     # Build chain: Root_A -> Child_A -> Grandchild_A (depth 3)
-    root_a = await authenticated_client.post(
-        "/api/wiki", json={"title": "DepthA Root"}
-    )
+    root_a = await authenticated_client.post("/api/wiki", json={"title": "DepthA Root"})
     root_a_id = root_a.json()["data"]["id"]
 
     child_a = await authenticated_client.post(
@@ -1125,9 +1130,7 @@ async def test_reparenting_subtree_depth_violation(
     )
 
     # Build: Root_B -> Child_B (depth 2)
-    root_b = await authenticated_client.post(
-        "/api/wiki", json={"title": "DepthB Root"}
-    )
+    root_b = await authenticated_client.post("/api/wiki", json={"title": "DepthB Root"})
     root_b_id = root_b.json()["data"]["id"]
 
     child_b = await authenticated_client.post(

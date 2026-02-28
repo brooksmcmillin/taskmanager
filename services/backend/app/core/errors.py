@@ -288,6 +288,23 @@ class Errors:
             {"existing_id": existing_id, "title": title},
         )
 
+    @staticmethod
+    def intra_batch_duplicate(
+        batch_index: int, duplicate_index: int, title: str
+    ) -> ApiError:
+        """CONFLICT_009: Duplicate title within the same batch."""
+        return ApiError(
+            "CONFLICT_009",
+            409,
+            f"Duplicate title within batch: '{title}' at index {duplicate_index} "
+            f"conflicts with index {batch_index}",
+            {
+                "first_index": batch_index,
+                "duplicate_index": duplicate_index,
+                "title": title,
+            },
+        )
+
     # =========================================================================
     # Registration Code Errors (REG_001 - REG_003)
     # =========================================================================

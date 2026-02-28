@@ -965,9 +965,13 @@ async def batch_create_todos(
 ) -> dict:
     """Create multiple todos in a single request.
 
-    Accepts up to 50 todo objects. All todos are created atomically—if any
-    validation fails, none are created. Validation runs for all items before
-    any database writes occur.
+    Accepts up to 50 todo objects. By default, if any validation fails or a
+    duplicate is detected, none are created.
+
+    When ``skip_duplicates`` is ``True``, items whose titles match an existing
+    active todo or another item in the same batch are silently skipped instead
+    of causing the entire request to fail. The response includes the count of
+    skipped items.
 
     Each task can include a ``depends_on`` field with a list of 0-based indices
     referring to other tasks in the same batch. After all tasks are created,
@@ -1019,8 +1023,9 @@ async def batch_create_todos(
             if request.skip_duplicates:
                 skipped_indices.add(i)
                 continue
-            raise errors.duplicate_todo(
-                existing_id=0,
+            raise errors.intra_batch_duplicate(
+                batch_index=seen_titles[normalized],
+                duplicate_index=i,
                 title=item.title.strip(),
             )
         seen_titles[normalized] = i
@@ -1030,6 +1035,9 @@ async def batch_create_todos(
         if existing:
             if request.skip_duplicates:
                 skipped_indices.add(i)
+                # Mark as seen so later batch items with the same title are
+                # caught by the in-memory check instead of a redundant DB query.
+                seen_titles[normalized] = i
                 continue
             raise errors.duplicate_todo(existing.id, existing.title)
 
@@ -1147,7 +1155,10 @@ async def batch_create_todos(
         if item.depends_on:
             for dep_idx in item.depends_on:
                 if dep_idx in skipped_indices:
-                    continue
+                    raise errors.validation(
+                        f"Todo at index {i}: dependency at index {dep_idx} "
+                        f"was skipped as a duplicate."
+                    )
                 await db.execute(
                     task_dependencies.insert().values(
                         dependent_id=prepared[batch_to_prepared[i]].id,

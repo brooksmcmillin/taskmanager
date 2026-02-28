@@ -1818,11 +1818,13 @@ async def test_create_todo_with_case_insensitive_category_match(
     assert project_response.status_code == 201
     project_id = project_response.json()["data"]["id"]
 
-    # Create todos using different casings
-    for casing in ["work tasks", "WORK TASKS", "Work Tasks", "wOrK tAsKs"]:
+    # Create todos using different casings — each must have a unique title
+    for idx, casing in enumerate(
+        ["work tasks", "WORK TASKS", "Work Tasks", "wOrK tAsKs"]
+    ):
         response = await authenticated_client.post(
             "/api/todos",
-            json={"title": f"Task with casing '{casing}'", "category": casing},
+            json={"title": f"Category test task {idx}", "category": casing},
         )
         assert response.status_code == 201, f"Failed for casing: {casing}"
         data = response.json()["data"]
@@ -2154,7 +2156,7 @@ async def test_create_duplicate_allowed_after_completion(
     todo_id = response1.json()["data"]["id"]
 
     # Complete the first todo
-    await authenticated_client.patch(
+    await authenticated_client.put(
         f"/api/todos/{todo_id}", json={"status": "completed"}
     )
 
@@ -2176,7 +2178,7 @@ async def test_create_duplicate_allowed_after_cancellation(
     assert response1.status_code == 201
     todo_id = response1.json()["data"]["id"]
 
-    await authenticated_client.patch(
+    await authenticated_client.put(
         f"/api/todos/{todo_id}", json={"status": "cancelled"}
     )
 
@@ -2236,7 +2238,10 @@ async def test_batch_create_rejects_intra_batch_duplicate(
         },
     )
     assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "CONFLICT_008"
+    detail = response.json()["detail"]
+    assert detail["code"] == "CONFLICT_009"
+    assert detail["details"]["first_index"] == 0
+    assert detail["details"]["duplicate_index"] == 1
 
 
 @pytest.mark.asyncio
