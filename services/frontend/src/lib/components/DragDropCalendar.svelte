@@ -6,6 +6,7 @@
 	import { todos, pendingTodos } from '$lib/stores/todos';
 	import { hexTo50Shade, contrastText } from '$lib/utils/colors';
 	import { getDeadlineTypeColor, getDeadlineTypeLabel } from '$lib/utils/deadline';
+	import { getPriorityColor } from '$lib/utils/priority';
 	import { getStartOfWeek, formatDateForInput, isToday } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
 	import { goto } from '$app/navigation';
@@ -375,10 +376,9 @@
 						{@const completedSubtaskCount = subtasks.filter((s) => s.status === 'completed').length}
 						<div
 							class="mobile-task-card"
-							style="border-left: 4px solid {item.project_color ||
-								DEFAULT_PROJECT_COLOR}; background-color: {hexTo50Shade(
-								item.project_color || DEFAULT_PROJECT_COLOR
-							)}"
+							style="border-left: 4px solid {getPriorityColor(
+								item.priority
+							)}; background-color: {hexTo50Shade(item.project_color || DEFAULT_PROJECT_COLOR)}"
 							on:click={() => handleItemClick(item)}
 							role="button"
 							tabindex="0"
@@ -408,10 +408,9 @@
 					{#each selectedDaySubtasks as subtask (subtask.id)}
 						<div
 							class="mobile-task-card mobile-subtask-card"
-							style="border-left: 4px solid {subtask.parentColor ||
-								DEFAULT_PROJECT_COLOR}; background-color: {hexTo50Shade(
-								subtask.parentColor || DEFAULT_PROJECT_COLOR
-							)}"
+							style="border-left: 4px solid {getPriorityColor(
+								subtask.priority
+							)}; background-color: {hexTo50Shade(subtask.parentColor || DEFAULT_PROJECT_COLOR)}"
 							on:click={() => goto(`/task/${subtask.id}`)}
 							role="button"
 							tabindex="0"
@@ -476,7 +475,7 @@
 									class:calendar-task-hidden={isHidden}
 									style="background-color: {hexTo50Shade(
 										item.parentColor || DEFAULT_PROJECT_COLOR
-									)}; border-left: 4px solid {item.parentColor || DEFAULT_PROJECT_COLOR}"
+									)}; border-left: 4px solid {getPriorityColor(item.priority)}"
 									on:click={() => handleItemClick(item)}
 									role="button"
 									tabindex="0"
@@ -506,7 +505,7 @@
 									class:calendar-task-hidden={isHidden}
 									style="background-color: {hexTo50Shade(
 										item.project_color || DEFAULT_PROJECT_COLOR
-									)}; border-left: 4px solid {item.project_color || DEFAULT_PROJECT_COLOR}"
+									)}; border-left: 4px solid {getPriorityColor(item.priority)}"
 									on:click={() => handleItemClick(item)}
 									role="button"
 									tabindex="0"
