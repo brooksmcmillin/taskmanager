@@ -22,6 +22,7 @@ from app.api import (
     registration_codes,
     search,
     service_accounts,
+    snippets,
     todos,
     trash,
     webauthn,
@@ -85,6 +86,7 @@ app.include_router(webauthn.router)
 app.include_router(github.router)
 app.include_router(admin_loki.router)
 app.include_router(service_accounts.router)
+app.include_router(snippets.router)
 app.include_router(wiki.router)
 app.include_router(wiki.todo_wiki_router)
 

@@ -386,3 +386,46 @@ export interface WikiLinkedTodo {
 	priority: string;
 	due_date: string | null;
 }
+
+// Snippets
+export interface Snippet {
+	id: number;
+	category: string;
+	title: string;
+	content: string;
+	snippet_date: string;
+	tags: string[];
+	created_at: string;
+	updated_at: string | null;
+}
+
+export interface SnippetSummary {
+	id: number;
+	category: string;
+	title: string;
+	snippet_date: string;
+	tags: string[];
+	created_at: string;
+	updated_at: string | null;
+}
+
+export interface SnippetCreate {
+	category: string;
+	title: string;
+	content?: string;
+	snippet_date?: string;
+	tags?: string[];
+}
+
+export interface SnippetUpdate {
+	category?: string;
+	title?: string;
+	content?: string;
+	snippet_date?: string;
+	tags?: string[];
+}
+
+export interface CategoryCount {
+	category: string;
+	count: number;
+}
