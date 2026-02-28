@@ -1818,11 +1818,13 @@ async def test_create_todo_with_case_insensitive_category_match(
     assert project_response.status_code == 201
     project_id = project_response.json()["data"]["id"]
 
-    # Create todos using different casings
-    for casing in ["work tasks", "WORK TASKS", "Work Tasks", "wOrK tAsKs"]:
+    # Create todos using different casings — each must have a unique title
+    for idx, casing in enumerate(
+        ["work tasks", "WORK TASKS", "Work Tasks", "wOrK tAsKs"]
+    ):
         response = await authenticated_client.post(
             "/api/todos",
-            json={"title": f"Task with casing '{casing}'", "category": casing},
+            json={"title": f"Category test task {idx}", "category": casing},
         )
         assert response.status_code == 201, f"Failed for casing: {casing}"
         data = response.json()["data"]
@@ -2095,3 +2097,220 @@ async def test_create_todo_category_auto_create_fails_at_project_limit(
 
     assert response.status_code == 400
     assert "maximum" in response.json()["detail"]["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Task deduplication tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_duplicate_todo_rejected(authenticated_client: AsyncClient):
+    """Creating a todo with the same title as an active todo is rejected."""
+    response1 = await authenticated_client.post(
+        "/api/todos", json={"title": "Buy milk"}
+    )
+    assert response1.status_code == 201
+
+    response2 = await authenticated_client.post(
+        "/api/todos", json={"title": "Buy milk"}
+    )
+    assert response2.status_code == 409
+    detail = response2.json()["detail"]
+    assert detail["code"] == "CONFLICT_008"
+    assert detail["details"]["existing_id"] == response1.json()["data"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_create_duplicate_todo_case_insensitive(
+    authenticated_client: AsyncClient,
+):
+    """Duplicate detection is case-insensitive and trims whitespace."""
+    response1 = await authenticated_client.post(
+        "/api/todos", json={"title": "Buy Milk"}
+    )
+    assert response1.status_code == 201
+
+    # Different case
+    response2 = await authenticated_client.post(
+        "/api/todos", json={"title": "buy milk"}
+    )
+    assert response2.status_code == 409
+
+    # Extra whitespace
+    response3 = await authenticated_client.post(
+        "/api/todos", json={"title": "  Buy Milk  "}
+    )
+    assert response3.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_create_duplicate_allowed_after_completion(
+    authenticated_client: AsyncClient,
+):
+    """Completing a todo allows creating another with the same title."""
+    response1 = await authenticated_client.post(
+        "/api/todos", json={"title": "Buy milk"}
+    )
+    assert response1.status_code == 201
+    todo_id = response1.json()["data"]["id"]
+
+    # Complete the first todo
+    await authenticated_client.put(
+        f"/api/todos/{todo_id}", json={"status": "completed"}
+    )
+
+    # Now the same title should be allowed
+    response2 = await authenticated_client.post(
+        "/api/todos", json={"title": "Buy milk"}
+    )
+    assert response2.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_create_duplicate_allowed_after_cancellation(
+    authenticated_client: AsyncClient,
+):
+    """Cancelling a todo allows creating another with the same title."""
+    response1 = await authenticated_client.post(
+        "/api/todos", json={"title": "Buy milk"}
+    )
+    assert response1.status_code == 201
+    todo_id = response1.json()["data"]["id"]
+
+    await authenticated_client.put(
+        f"/api/todos/{todo_id}", json={"status": "cancelled"}
+    )
+
+    response2 = await authenticated_client.post(
+        "/api/todos", json={"title": "Buy milk"}
+    )
+    assert response2.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_create_duplicate_different_descriptions_still_rejected(
+    authenticated_client: AsyncClient,
+):
+    """Two todos with the same title but different descriptions are duplicates."""
+    await authenticated_client.post(
+        "/api/todos", json={"title": "Buy milk", "description": "From store A"}
+    )
+
+    response = await authenticated_client.post(
+        "/api/todos", json={"title": "Buy milk", "description": "From store B"}
+    )
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_batch_create_rejects_duplicate_against_existing(
+    authenticated_client: AsyncClient,
+):
+    """Batch creation rejects when a title matches an existing active todo."""
+    await authenticated_client.post("/api/todos", json={"title": "Existing task"})
+
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "New task"},
+                {"title": "Existing task"},
+            ]
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "CONFLICT_008"
+
+
+@pytest.mark.asyncio
+async def test_batch_create_rejects_intra_batch_duplicate(
+    authenticated_client: AsyncClient,
+):
+    """Batch creation rejects when two items in the same batch have the same title."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {"title": "Same task"},
+                {"title": "Same Task"},
+            ]
+        },
+    )
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "CONFLICT_009"
+    assert detail["details"]["first_index"] == 0
+    assert detail["details"]["duplicate_index"] == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_create_skip_duplicates_against_existing(
+    authenticated_client: AsyncClient,
+):
+    """With skip_duplicates=True, existing duplicates are silently skipped."""
+    await authenticated_client.post("/api/todos", json={"title": "Existing task"})
+
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "skip_duplicates": True,
+            "todos": [
+                {"title": "New task"},
+                {"title": "Existing task"},
+                {"title": "Another new task"},
+            ],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 2
+    assert data["meta"]["skipped_duplicates"] == 1
+    titles = [t["title"] for t in data["data"]]
+    assert "New task" in titles
+    assert "Another new task" in titles
+    assert "Existing task" not in titles
+
+
+@pytest.mark.asyncio
+async def test_batch_create_skip_duplicates_intra_batch(
+    authenticated_client: AsyncClient,
+):
+    """With skip_duplicates=True, intra-batch duplicates are silently skipped."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "skip_duplicates": True,
+            "todos": [
+                {"title": "Task A"},
+                {"title": "Task B"},
+                {"title": "task a"},
+            ],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 2
+    assert data["meta"]["skipped_duplicates"] == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_create_skip_duplicates_all_skipped(
+    authenticated_client: AsyncClient,
+):
+    """With skip_duplicates=True and all items duplicated, returns empty list."""
+    await authenticated_client.post("/api/todos", json={"title": "Only task"})
+
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "skip_duplicates": True,
+            "todos": [
+                {"title": "Only task"},
+            ],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["meta"]["count"] == 0
+    assert data["meta"]["skipped_duplicates"] == 1

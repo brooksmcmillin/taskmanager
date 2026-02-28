@@ -492,6 +492,7 @@ def create_resource_server(
     @guard_tool(screen_output=True)
     async def create_tasks(
         tasks: list[dict[str, Any]],
+        skip_duplicates: bool = True,
         wiki_page_id: int | None = None,
     ) -> str:
         """
@@ -525,6 +526,9 @@ def create_resource_server(
                   in this batch that must be completed before this task.
                   Example: [0, 1] means this task depends on the first and
                   second tasks in the batch.
+            skip_duplicates: If true (default), silently skip tasks whose title
+                matches an existing active task instead of failing the entire
+                batch. Set to false to reject the batch on any duplicate.
             wiki_page_id: Optional wiki page ID to auto-link to all created tasks.
                 When provided, every task created in this batch is automatically
                 linked to the specified wiki page, eliminating the need for
@@ -615,7 +619,11 @@ def create_resource_server(
                 todo_dicts.append(todo)
 
             api_client = get_api_client()
-            response = api_client.batch_create_todos(todo_dicts, wiki_page_id=wiki_page_id)
+            response = api_client.batch_create_todos(
+                todo_dicts,
+                skip_duplicates=skip_duplicates,
+                wiki_page_id=wiki_page_id,
+            )
 
             created_tasks, list_error = validate_list_response(response, "batch created tasks")
             if list_error:
@@ -641,6 +649,11 @@ def create_resource_server(
                 "count": len(results),
                 "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
+            # Propagate skipped_duplicates count from the API response
+            meta = response.data.get("meta", {}) if isinstance(response.data, dict) else {}
+            skipped = meta.get("skipped_duplicates", 0)
+            if skipped:
+                result["skipped_duplicates"] = skipped
             if wiki_page_id is not None:
                 result["wiki_page_id"] = wiki_page_id
                 result["wiki_links_created"] = len(results)

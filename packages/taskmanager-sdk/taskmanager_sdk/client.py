@@ -409,6 +409,7 @@ class TaskManagerClient:
     def batch_create_todos(
         self,
         todos: list[dict[str, Any]],
+        skip_duplicates: bool = False,
         wiki_page_id: int | None = None,
     ) -> ApiResponse:
         """
@@ -421,6 +422,9 @@ class TaskManagerClient:
                    parent_id, etc.) plus:
                    - depends_on: List of 0-based indices of other tasks in
                      the batch that this task depends on.
+            skip_duplicates: If true, silently skip todos whose title
+                             matches an existing active todo instead of
+                             rejecting the batch.
             wiki_page_id: Optional wiki page ID to auto-link to all
                           created tasks.
 
@@ -428,6 +432,8 @@ class TaskManagerClient:
             ApiResponse with list of created todos
         """
         data: dict[str, Any] = {"todos": todos}
+        if skip_duplicates:
+            data["skip_duplicates"] = True
         if wiki_page_id is not None:
             data["wiki_page_id"] = wiki_page_id
         return self._make_request("POST", "/todos/batch", data)
