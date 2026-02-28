@@ -387,10 +387,15 @@ def create_resource_server(
                 logger.warning("Task data missing 'id' field")
                 return json.dumps({"error": "Created task has no ID"})
 
+            # Include the resolved category in the response so callers can confirm
+            # what project was matched or auto-created when a category was requested.
+            resolved_category = task.get("project_name") if task is not None else None
+
             result: dict[str, Any] = {
                 "id": f"task_{task_id}",
                 "title": task.get("title", title) if task is not None else title,
                 "status": "created",
+                "category": resolved_category,
                 "parent_id": f"task_{parent_id_int}" if parent_id_int else None,
                 "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
             }
@@ -550,6 +555,9 @@ def create_resource_server(
                 result_item: dict[str, Any] = {
                     "id": f"task_{task_id}" if task_id else None,
                     "title": task_data.get("title", ""),
+                    # Include the resolved category so callers can confirm what
+                    # project was matched or auto-created for each task.
+                    "category": task_data.get("project_name"),
                 }
                 if task_data.get("parent_id"):
                     result_item["parent_id"] = f"task_{task_data['parent_id']}"
