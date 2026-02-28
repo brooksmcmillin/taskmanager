@@ -188,6 +188,8 @@ services:
   loki:
     image: grafana/loki:3.0.0
     container_name: taskmanager-loki
+    ports:
+      - "127.0.0.1:3100:3100"
     restart: unless-stopped
     volumes:
       - ./services/monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
