@@ -92,7 +92,9 @@ app.include_router(wiki.todo_wiki_router)
 
 
 # Static files (self-hosted fonts)
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+app.mount(
+    "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
+)
 
 Instrumentator(
     should_group_status_codes=False,
