@@ -614,23 +614,98 @@ ACTION_PATTERNS: dict[ActionType, tuple[list[str], bool]] = {
     ),
 }
 
+# Tag-based inference patterns: tag keyword -> (action_type, agent_actionable)
+# Tags provide strong, explicit signals checked before title/description keywords.
+# Each entry maps a tag keyword (matched as a substring after normalization) to
+# a specific action_type and whether an agent can act on it autonomously.
+TAG_PATTERNS: list[tuple[str, ActionType, bool]] = [
+    # Code / engineering tags
+    ("security-review", ActionType.review, True),
+    ("security_review", ActionType.review, True),
+    ("code-review", ActionType.review, True),
+    ("code_review", ActionType.review, True),
+    ("pr-review", ActionType.review, True),
+    ("pr_review", ActionType.review, True),
+    ("code-fix", ActionType.code, True),
+    ("code_fix", ActionType.code, True),
+    ("bug-fix", ActionType.code, True),
+    ("bug_fix", ActionType.code, True),
+    ("refactor", ActionType.code, True),
+    ("implement", ActionType.code, True),
+    ("feature", ActionType.code, True),
+    # Documentation tags
+    ("doc-audit", ActionType.document, True),
+    ("doc_audit", ActionType.document, True),
+    ("documentation", ActionType.document, True),
+    ("doc-update", ActionType.document, True),
+    ("doc_update", ActionType.document, True),
+    ("docs", ActionType.document, True),
+    ("writing", ActionType.document, True),
+    # Research tags
+    ("research", ActionType.research, True),
+    ("investigate", ActionType.research, True),
+    ("analysis", ActionType.research, True),
+    ("explore", ActionType.research, True),
+    # Review / audit tags
+    ("audit", ActionType.review, True),
+    ("review", ActionType.review, True),
+    ("inspect", ActionType.review, True),
+    # Email / communication tags
+    ("email", ActionType.email, True),
+    ("follow-up", ActionType.email, True),
+    ("follow_up", ActionType.email, True),
+    # Data entry tags
+    ("data-entry", ActionType.data_entry, True),
+    ("data_entry", ActionType.data_entry, True),
+    ("data-import", ActionType.data_entry, True),
+    ("data_import", ActionType.data_entry, True),
+    # Scheduling tags
+    ("meeting", ActionType.schedule, False),
+    ("schedule", ActionType.schedule, False),
+    ("calendar", ActionType.schedule, False),
+    # Purchase tags
+    ("purchase", ActionType.purchase, False),
+    ("buy", ActionType.purchase, False),
+    ("order", ActionType.purchase, False),
+    # Errand / physical tags
+    ("errand", ActionType.errand, False),
+    ("physical", ActionType.manual, False),
+    ("in-person", ActionType.manual, False),
+    ("in_person", ActionType.manual, False),
+]
+
 
 def infer_action_type(
-    title: str, description: str | None
+    title: str,
+    description: str | None,
+    tags: list[str] | None = None,
 ) -> tuple[ActionType | None, bool | None, int | None]:
     """Infer action type, agent actionability, and autonomy tier from task.
 
-    Uses keyword matching to classify tasks. Returns (None, None, None) if no
-    pattern matches, allowing the agent to classify later via LLM.
+    Tags are checked first as they provide explicit, unambiguous signals.
+    Falls back to keyword matching against title and description text.
+    Returns (None, None, None) if no pattern matches, allowing the agent
+    to classify later via LLM.
 
     Args:
         title: Task title
         description: Optional task description
+        tags: Optional list of task tags
 
     Returns:
         Tuple of (action_type, agent_actionable, autonomy_tier) or
         (None, None, None) if unknown.
     """
+    # Check tags first — they are explicit signals with higher confidence
+    if tags:
+        normalized_tags = [t.lower().strip() for t in tags]
+        for tag_keyword, action_type, actionable in TAG_PATTERNS:
+            if any(tag_keyword in tag for tag in normalized_tags):
+                default_tier = ACTION_TYPE_DEFAULT_TIER.get(action_type)
+                tier_value = default_tier.value if default_tier else None
+                return action_type, actionable, tier_value
+
+    # Fall back to title/description keyword matching
     text = f"{title} {description or ''}".lower()
 
     for action_type, (keywords, actionable) in ACTION_PATTERNS.items():
@@ -878,7 +953,7 @@ async def create_todo(
     autonomy_tier = request.autonomy_tier
     if agent_actionable is None or action_type is None or autonomy_tier is None:
         inferred_type, inferred_actionable, inferred_tier = infer_action_type(
-            request.title, request.description
+            request.title, request.description, request.tags
         )
         if action_type is None:
             action_type = inferred_type
@@ -1099,7 +1174,7 @@ async def batch_create_todos(
         autonomy_tier = item.autonomy_tier
         if agent_actionable is None or action_type is None or autonomy_tier is None:
             inferred_type, inferred_actionable, inferred_tier = infer_action_type(
-                item.title, item.description
+                item.title, item.description, item.tags
             )
             if action_type is None:
                 action_type = inferred_type

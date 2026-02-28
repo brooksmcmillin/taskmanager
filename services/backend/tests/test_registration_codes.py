@@ -65,9 +65,9 @@ async def test_registration_code_race_condition_prevention(
         )
 
         # Verify exactly 1 registration succeeded (matching max_uses=1)
-        assert (
-            success_count == 1
-        ), f"Expected 1 successful registration, got {success_count}"
+        assert success_count == 1, (
+            f"Expected 1 successful registration, got {success_count}"
+        )
 
         # Verify the registration code usage was incremented correctly
         result = await db_session.execute(
@@ -76,9 +76,9 @@ async def test_registration_code_race_condition_prevention(
             )
         )
         updated_code = result.scalar_one()
-        assert (
-            updated_code.current_uses == 1
-        ), f"Expected current_uses=1, got {updated_code.current_uses}"
+        assert updated_code.current_uses == 1, (
+            f"Expected current_uses=1, got {updated_code.current_uses}"
+        )
 
         # Verify only 1 user was created
         result = await db_session.execute(select(User))

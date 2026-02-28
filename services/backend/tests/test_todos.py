@@ -687,6 +687,182 @@ async def test_create_todo_explicit_autonomy_tier_overrides_inference(
 
 
 @pytest.mark.asyncio
+async def test_create_todo_infers_review_from_security_review_tag(
+    authenticated_client: AsyncClient,
+):
+    """Test that tag 'security-review' infers action_type='review', autonomy_tier=1."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Q3 security audit",
+            "tags": ["security-review"],
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["action_type"] == "review"
+    assert data["autonomy_tier"] == 1
+    assert data["agent_actionable"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_todo_infers_document_from_doc_audit_tag(
+    authenticated_client: AsyncClient,
+):
+    """Test that tag 'doc-audit' infers action_type='document', autonomy_tier=2."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "API documentation pass",
+            "tags": ["doc-audit"],
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["action_type"] == "document"
+    assert data["autonomy_tier"] == 2
+    assert data["agent_actionable"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_todo_tag_signals_take_priority_over_title_keywords(
+    authenticated_client: AsyncClient,
+):
+    """Test that tag-based inference takes priority over title keyword matching."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            # Title contains 'research' (would infer research/tier 1),
+            # but tag 'purchase' should win as tags are checked first.
+            "title": "Research budget for office supplies",
+            "tags": ["purchase"],
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["action_type"] == "purchase"
+    assert data["autonomy_tier"] == 4
+    assert data["agent_actionable"] is False
+
+
+@pytest.mark.asyncio
+async def test_create_todo_infers_code_from_bug_fix_tag(
+    authenticated_client: AsyncClient,
+):
+    """Test that tag 'bug-fix' infers action_type='code', autonomy_tier=3."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Address reported issue",
+            "tags": ["bug-fix"],
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["action_type"] == "code"
+    assert data["autonomy_tier"] == 3
+    assert data["agent_actionable"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_todo_no_classification_for_ambiguous_tags(
+    authenticated_client: AsyncClient,
+):
+    """Test that tasks with tags containing no known signals remain unclassified."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Miscellaneous task",
+            "tags": ["project-x", "q3-2026", "team-alpha"],
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["action_type"] is None
+    assert data["autonomy_tier"] is None
+    assert data["agent_actionable"] is None
+
+
+@pytest.mark.asyncio
+async def test_batch_create_infers_action_type_from_tags(
+    authenticated_client: AsyncClient,
+):
+    """Test that batch creation auto-classifies tasks using tags."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {
+                    "title": "Security pass on auth module",
+                    "tags": ["security-review"],
+                },
+                {
+                    "title": "Update API reference",
+                    "tags": ["doc-audit"],
+                },
+                {
+                    "title": "Ambiguous task with no signals",
+                    "tags": ["project-y"],
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert len(data) == 3
+
+    # First task: security-review tag → review / tier 1
+    assert data[0]["action_type"] == "review"
+    assert data[0]["autonomy_tier"] == 1
+    assert data[0]["agent_actionable"] is True
+
+    # Second task: doc-audit tag → document / tier 2
+    assert data[1]["action_type"] == "document"
+    assert data[1]["autonomy_tier"] == 2
+    assert data[1]["agent_actionable"] is True
+
+    # Third task: no recognizable signal → unclassified
+    assert data[2]["action_type"] is None
+    assert data[2]["autonomy_tier"] is None
+    assert data[2]["agent_actionable"] is None
+
+
+@pytest.mark.asyncio
+async def test_batch_create_explicit_fields_override_tag_inference(
+    authenticated_client: AsyncClient,
+):
+    """Test that explicit agent fields are not overridden by tag inference."""
+    response = await authenticated_client.post(
+        "/api/todos/batch",
+        json={
+            "todos": [
+                {
+                    "title": "Tagged but manually classified",
+                    "tags": ["security-review"],
+                    "action_type": "code",
+                    "autonomy_tier": 2,
+                    "agent_actionable": False,
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert len(data) == 1
+    # Explicit values should be preserved, not overridden by tag inference
+    assert data[0]["action_type"] == "code"
+    assert data[0]["autonomy_tier"] == 2
+    assert data[0]["agent_actionable"] is False
+
+
+@pytest.mark.asyncio
 async def test_update_todo_autonomy_tier(authenticated_client: AsyncClient):
     """Test updating autonomy_tier on an existing todo."""
     # Create a todo

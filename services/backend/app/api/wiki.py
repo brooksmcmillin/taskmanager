@@ -420,9 +420,7 @@ async def list_wiki_pages(
             WikiPage.title.ilike(f"%{q}%") | WikiPage.content.ilike(f"%{q}%")
         )
     if tag:
-        query = query.where(
-            WikiPage.tags.op("@>")(sa_func.jsonb_build_array(tag))
-        )
+        query = query.where(WikiPage.tags.op("@>")(sa_func.jsonb_build_array(tag)))
     if parent_id is not None:
         if parent_id == 0:
             query = query.where(WikiPage.parent_id.is_(None))

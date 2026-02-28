@@ -225,9 +225,7 @@ async def test_inactive_service_account_rejected(
     creds = service_account_credentials
 
     # Deactivate the service account
-    deactivate_resp = await admin_client.delete(
-        f"{SA_BASE_URL}/{creds['account_id']}"
-    )
+    deactivate_resp = await admin_client.delete(f"{SA_BASE_URL}/{creds['account_id']}")
     assert deactivate_resp.status_code == 200
 
     # Attempt to get a token — should fail
@@ -446,9 +444,7 @@ async def test_existing_token_rejected_after_deactivation(
     assert task_resp.status_code == 201
 
     # Deactivate the service account (sets is_active=False on user + client)
-    deact_resp = await admin_client.delete(
-        f"{SA_BASE_URL}/{creds['account_id']}"
-    )
+    deact_resp = await admin_client.delete(f"{SA_BASE_URL}/{creds['account_id']}")
     assert deact_resp.status_code == 200
 
     # The previously-issued token should now be rejected
