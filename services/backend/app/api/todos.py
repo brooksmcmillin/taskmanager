@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import errors
@@ -750,6 +750,7 @@ def _apply_todo_filters(
     parent_id: int | None,
     deadline_type: str | None,
     order_by: str | None,
+    exclude_no_calendar: bool = False,
 ):
     """Apply filtering and ordering to a todo list query."""
     # Filter by parent_id - if not specified, only show root-level todos
@@ -771,6 +772,10 @@ def _apply_todo_filters(
 
     if project_id:
         query = query.where(Todo.project_id == project_id)
+    elif exclude_no_calendar:
+        query = query.where(
+            or_(Todo.project_id.is_(None), Project.show_on_calendar.is_(True))
+        )
 
     if category:
         query = query.where(Project.name == category)
@@ -846,6 +851,10 @@ async def list_todos(
     order_by: Literal["position", "due_date", "deadline_type"] | None = Query(
         None, description="Sort order"
     ),
+    exclude_no_calendar: bool = Query(
+        False,
+        description="Exclude tasks from projects with show_on_calendar=false",
+    ),
 ) -> ListResponse[TodoResponse]:
     """List todos with optional filters.
 
@@ -853,6 +862,7 @@ async def list_todos(
     Use parent_id to get subtasks of a specific todo.
     Use include_subtasks=true to include subtasks in the response.
     Use order_by='position' to sort by manual position instead of due date.
+    Use exclude_no_calendar=true to hide tasks from non-calendar projects.
     """
     query = (
         select(
@@ -876,6 +886,7 @@ async def list_todos(
         parent_id=parent_id,
         deadline_type=deadline_type,
         order_by=order_by,
+        exclude_no_calendar=exclude_no_calendar,
     )
 
     result = await db.execute(query)

@@ -112,6 +112,7 @@ export interface Project {
 	color: string;
 	position: number;
 	is_active: boolean;
+	show_on_calendar: boolean;
 	archived_at: string | null;
 	created_at: string;
 	updated_at: string;
@@ -128,6 +129,7 @@ export interface TodoFilters {
 	no_due_date?: boolean;
 	include_subtasks?: boolean;
 	order_by?: string;
+	exclude_no_calendar?: boolean;
 }
 
 export interface TodoCreate {
@@ -163,6 +165,7 @@ export interface ProjectCreate {
 	description?: string;
 	color: string;
 	position?: number;
+	show_on_calendar?: boolean;
 }
 
 export interface ProjectUpdate extends Partial<ProjectCreate> {

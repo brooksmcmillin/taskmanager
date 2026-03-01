@@ -57,12 +57,24 @@
 	async function loadSummaryStats() {
 		try {
 			const [overdueRes, todayRes, weekRes] = await Promise.all([
-				api.get<ApiResponse<Todo[]>>('/api/todos', { params: { status: 'overdue' } }),
 				api.get<ApiResponse<Todo[]>>('/api/todos', {
-					params: { start_date: todayStr(), end_date: todayStr(), status: 'pending' }
+					params: { status: 'overdue', exclude_no_calendar: 'true' }
 				}),
 				api.get<ApiResponse<Todo[]>>('/api/todos', {
-					params: { start_date: todayStr(), end_date: endOfWeekStr(), status: 'pending' }
+					params: {
+						start_date: todayStr(),
+						end_date: todayStr(),
+						status: 'pending',
+						exclude_no_calendar: 'true'
+					}
+				}),
+				api.get<ApiResponse<Todo[]>>('/api/todos', {
+					params: {
+						start_date: todayStr(),
+						end_date: endOfWeekStr(),
+						status: 'pending',
+						exclude_no_calendar: 'true'
+					}
 				})
 			]);
 			overdueCount = overdueRes.meta?.count ?? (overdueRes.data?.length || 0);
@@ -81,6 +93,15 @@
 	$: selectedDueDate = ($page.url.searchParams.get('due_date') as DueDateOption) || 'all';
 
 	$: selectedDeadlineType = ($page.url.searchParams.get('deadline_type') as DeadlineType) || null;
+
+	function buildFilters() {
+		return {
+			status: 'pending' as const,
+			...(selectedProjectId ? { project_id: selectedProjectId } : { exclude_no_calendar: true }),
+			...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
+			...computeDueDateFilters(selectedDueDate)
+		};
+	}
 
 	function getProjectId(projectName: string): string {
 		return `project-${projectName.replace(/\s+/g, '-').toLowerCase()}`;
@@ -118,12 +139,7 @@
 		}
 
 		// Load todos with filters if present
-		await todos.load({
-			status: 'pending',
-			...(selectedProjectId && { project_id: selectedProjectId }),
-			...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
-			...computeDueDateFilters(selectedDueDate)
-		});
+		await todos.load(buildFilters());
 
 		// Load summary stats in background
 		loadSummaryStats();
@@ -203,24 +219,14 @@
 		try {
 			await todos.complete(todoId);
 			// Reload todos after completion with current filters
-			await todos.load({
-				status: 'pending',
-				...(selectedProjectId && { project_id: selectedProjectId }),
-				...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
-				...computeDueDateFilters(selectedDueDate)
-			});
+			await todos.load(buildFilters());
 			loadSummaryStats();
 			toasts.success('Task completed', 5000, {
 				label: 'Undo',
 				callback: async () => {
 					try {
 						await todos.updateTodo(todoId, { status: 'pending' });
-						await todos.load({
-							status: 'pending',
-							...(selectedProjectId && { project_id: selectedProjectId }),
-							...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
-							...computeDueDateFilters(selectedDueDate)
-						});
+						await todos.load(buildFilters());
 						loadSummaryStats();
 					} catch {
 						toasts.error('Failed to undo completion');
@@ -234,24 +240,20 @@
 	}
 
 	async function handleFormSuccess() {
-		await todos.load({
-			status: 'pending',
-			...(selectedProjectId && { project_id: selectedProjectId }),
-			...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
-			...computeDueDateFilters(selectedDueDate)
-		});
+		await todos.load(buildFilters());
 	}
 
 	// Reload todos when filters change (only in browser, after initial load)
 	// selectedProjectId, selectedDueDate, and selectedDeadlineType are reactive via URL params
+	// NOTE: This duplicates buildFilters() because Svelte reactive blocks need
+	// local snapshots of reactive values to correctly track dependencies.
 	$: if (browser && initialLoadComplete) {
-		// Reference all reactive values to establish dependencies
 		const _projectId = selectedProjectId;
 		const _dueDate = selectedDueDate;
 		const _deadlineType = selectedDeadlineType;
 		todos.load({
 			status: 'pending',
-			...(_projectId ? { project_id: _projectId } : {}),
+			...(_projectId ? { project_id: _projectId } : { exclude_no_calendar: true }),
 			...(_deadlineType ? { deadline_type: _deadlineType } : {}),
 			...computeDueDateFilters(_dueDate)
 		});
@@ -508,7 +510,9 @@
 		<div id="calendar-view">
 			<DragDropCalendar
 				filters={{
-					...(selectedProjectId ? { project_id: selectedProjectId } : {}),
+					...(selectedProjectId
+						? { project_id: selectedProjectId }
+						: { exclude_no_calendar: true }),
 					...computeDueDateFilters(selectedDueDate)
 				}}
 				on:editTodo={(e) => openTaskDetail(e.detail)}

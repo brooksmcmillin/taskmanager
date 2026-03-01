@@ -32,6 +32,54 @@ async def test_create_project(authenticated_client: AsyncClient):
     assert data["name"] == "Test Project"
     assert data["color"] == "#ff5733"
     assert data["is_active"] is True
+    assert data["show_on_calendar"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_project_show_on_calendar_false(authenticated_client: AsyncClient):
+    """Test creating a project with show_on_calendar=false."""
+    response = await authenticated_client.post(
+        "/api/projects",
+        json={
+            "name": "Hidden Project",
+            "show_on_calendar": False,
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["name"] == "Hidden Project"
+    assert data["show_on_calendar"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_project_show_on_calendar(authenticated_client: AsyncClient):
+    """Test updating show_on_calendar on a project."""
+    # Create project (defaults to show_on_calendar=true)
+    create_response = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "Toggle Calendar"},
+    )
+    project_id = create_response.json()["data"]["id"]
+    assert create_response.json()["data"]["show_on_calendar"] is True
+
+    # Update to hide from calendar
+    response = await authenticated_client.put(
+        f"/api/projects/{project_id}",
+        json={"show_on_calendar": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["show_on_calendar"] is False
+
+    # Update back to show on calendar
+    response = await authenticated_client.put(
+        f"/api/projects/{project_id}",
+        json={"show_on_calendar": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["show_on_calendar"] is True
 
 
 @pytest.mark.asyncio

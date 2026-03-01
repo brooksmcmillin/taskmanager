@@ -733,6 +733,7 @@ def create_resource_server(
         name: str,
         description: str | None = None,
         color: str | None = None,
+        show_on_calendar: bool | None = None,
     ) -> str:
         """
         Create a new project for organizing tasks.
@@ -744,6 +745,9 @@ def create_resource_server(
             name: Project name (required)
             description: Project description (optional)
             color: Project color in hex format, e.g., "#FF5733" (optional)
+            show_on_calendar: Whether to show this project's tasks on calendar
+                and home dashboard. Set to false for agent-only or background
+                projects. (optional, default: true)
 
         Returns:
             JSON object with id, name, and status fields confirming project creation
@@ -757,6 +761,7 @@ def create_resource_server(
                 name=name,
                 description=description,
                 color=color,
+                show_on_calendar=show_on_calendar,
             )
             logger.info(
                 f"create_project response: success={response.success}, status={response.status_code}"

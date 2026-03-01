@@ -2538,3 +2538,107 @@ async def test_batch_create_skip_duplicates_all_skipped(
     data = response.json()
     assert data["meta"]["count"] == 0
     assert data["meta"]["skipped_duplicates"] == 1
+
+
+# --- exclude_no_calendar filter tests ---
+
+
+@pytest.mark.asyncio
+async def test_exclude_no_calendar_hides_hidden_project_tasks(
+    authenticated_client: AsyncClient,
+):
+    """Tasks from show_on_calendar=false projects are excluded."""
+    # Create a hidden project
+    proj = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "Hidden Proj", "show_on_calendar": False},
+    )
+    proj_id = proj.json()["data"]["id"]
+
+    # Add a task to the hidden project
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Hidden Task", "project_id": proj_id},
+    )
+
+    # Without filter, task appears
+    resp = await authenticated_client.get("/api/todos")
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["data"]]
+    assert "Hidden Task" in titles
+
+    # With exclude_no_calendar, task is hidden
+    resp = await authenticated_client.get(
+        "/api/todos", params={"exclude_no_calendar": "true"}
+    )
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["data"]]
+    assert "Hidden Task" not in titles
+
+
+@pytest.mark.asyncio
+async def test_exclude_no_calendar_keeps_no_project_tasks(
+    authenticated_client: AsyncClient,
+):
+    """Tasks with no project still appear with exclude_no_calendar=true."""
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Inbox Task"},
+    )
+
+    resp = await authenticated_client.get(
+        "/api/todos", params={"exclude_no_calendar": "true"}
+    )
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["data"]]
+    assert "Inbox Task" in titles
+
+
+@pytest.mark.asyncio
+async def test_exclude_no_calendar_keeps_visible_project_tasks(
+    authenticated_client: AsyncClient,
+):
+    """Tasks from show_on_calendar=true projects still appear."""
+    proj = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "Visible Proj", "show_on_calendar": True},
+    )
+    proj_id = proj.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Visible Task", "project_id": proj_id},
+    )
+
+    resp = await authenticated_client.get(
+        "/api/todos", params={"exclude_no_calendar": "true"}
+    )
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["data"]]
+    assert "Visible Task" in titles
+
+
+@pytest.mark.asyncio
+async def test_exclude_no_calendar_ignored_when_project_id_set(
+    authenticated_client: AsyncClient,
+):
+    """exclude_no_calendar is bypassed when a specific project_id is selected."""
+    proj = await authenticated_client.post(
+        "/api/projects",
+        json={"name": "Filtered Proj", "show_on_calendar": False},
+    )
+    proj_id = proj.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Filtered Task", "project_id": proj_id},
+    )
+
+    # When filtering by project_id, exclude_no_calendar should not apply
+    resp = await authenticated_client.get(
+        "/api/todos",
+        params={"project_id": proj_id, "exclude_no_calendar": "true"},
+    )
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["data"]]
+    assert "Filtered Task" in titles

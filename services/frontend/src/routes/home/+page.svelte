@@ -150,9 +150,11 @@
 
 		Promise.all([
 			api.get<ApiResponse<Todo[]>>('/api/todos', {
-				params: { start_date: today, end_date: today }
+				params: { start_date: today, end_date: today, exclude_no_calendar: 'true' }
 			}),
-			api.get<ApiResponse<Todo[]>>('/api/todos', { params: { status: 'overdue' } })
+			api.get<ApiResponse<Todo[]>>('/api/todos', {
+				params: { status: 'overdue', exclude_no_calendar: 'true' }
+			})
 		])
 			.then(([todayResult, overdueResult]) => {
 				if (!mounted) return;
