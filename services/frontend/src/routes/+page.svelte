@@ -97,9 +97,7 @@
 	function buildFilters() {
 		return {
 			status: 'pending' as const,
-			...(selectedProjectId
-				? { project_id: selectedProjectId }
-				: { exclude_no_calendar: true }),
+			...(selectedProjectId ? { project_id: selectedProjectId } : { exclude_no_calendar: true }),
 			...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
 			...computeDueDateFilters(selectedDueDate)
 		};
@@ -247,8 +245,9 @@
 
 	// Reload todos when filters change (only in browser, after initial load)
 	// selectedProjectId, selectedDueDate, and selectedDeadlineType are reactive via URL params
+	// NOTE: This duplicates buildFilters() because Svelte reactive blocks need
+	// local snapshots of reactive values to correctly track dependencies.
 	$: if (browser && initialLoadComplete) {
-		// Reference all reactive values to establish dependencies
 		const _projectId = selectedProjectId;
 		const _dueDate = selectedDueDate;
 		const _deadlineType = selectedDeadlineType;

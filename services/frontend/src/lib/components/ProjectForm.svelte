@@ -131,15 +131,12 @@
 
 		<div class="form-group">
 			<label class="checkbox-label">
-				<input
-					type="checkbox"
-					bind:checked={formData.show_on_calendar}
-				/>
+				<input type="checkbox" bind:checked={formData.show_on_calendar} />
 				<span>Show on calendar and home dashboard</span>
 			</label>
 			<p class="form-help-text">
-				Uncheck to hide this project's tasks from the calendar and home views.
-				Tasks will still be visible when filtering by this project.
+				Uncheck to hide this project's tasks from the calendar and home views. Tasks will still be
+				visible when filtering by this project.
 			</p>
 		</div>
 
