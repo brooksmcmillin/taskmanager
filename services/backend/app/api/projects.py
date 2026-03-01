@@ -28,6 +28,7 @@ class ProjectCreate(BaseModel):
     description: str | None = None
     color: str = "#3b82f6"
     position: int | None = None
+    show_on_calendar: bool = True
 
 
 class ProjectUpdate(BaseModel):
@@ -41,6 +42,7 @@ class ProjectUpdate(BaseModel):
     color: str | None = None
     position: int | None = None
     is_active: bool | None = None
+    show_on_calendar: bool | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -54,6 +56,7 @@ class ProjectResponse(BaseModel):
     color: str
     position: int
     is_active: bool
+    show_on_calendar: bool
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime | None
@@ -229,6 +232,7 @@ async def create_project(
         description=request.description,
         color=request.color,
         position=position,
+        show_on_calendar=request.show_on_calendar,
     )
     db.add(project)
     await db.flush()

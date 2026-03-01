@@ -11,7 +11,8 @@
 	let formData = {
 		name: '',
 		description: '',
-		color: '#3b82f6'
+		color: '#3b82f6',
+		show_on_calendar: true
 	};
 
 	$: isEditing = editingProject !== null;
@@ -21,7 +22,8 @@
 		formData = {
 			name: editingProject.name,
 			description: editingProject.description || '',
-			color: editingProject.color || '#3b82f6'
+			color: editingProject.color || '#3b82f6',
+			show_on_calendar: editingProject.show_on_calendar ?? true
 		};
 	}
 
@@ -32,7 +34,8 @@
 		formData = {
 			name: '',
 			description: '',
-			color: '#3b82f6'
+			color: '#3b82f6',
+			show_on_calendar: true
 		};
 		editingProject = null;
 	}
@@ -45,7 +48,8 @@
 			const projectData = {
 				name: formData.name,
 				description: formData.description || undefined,
-				color: formData.color
+				color: formData.color,
+				show_on_calendar: formData.show_on_calendar
 			};
 
 			if (isEditing && editingProject) {
@@ -123,6 +127,20 @@
 				class="form-input mt-1 h-10"
 				bind:value={formData.color}
 			/>
+		</div>
+
+		<div class="form-group">
+			<label class="checkbox-label">
+				<input
+					type="checkbox"
+					bind:checked={formData.show_on_calendar}
+				/>
+				<span>Show on calendar and home dashboard</span>
+			</label>
+			<p class="form-help-text">
+				Uncheck to hide this project's tasks from the calendar and home views.
+				Tasks will still be visible when filtering by this project.
+			</p>
 		</div>
 
 		<div class="form-submit">

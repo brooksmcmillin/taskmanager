@@ -250,7 +250,11 @@ class TaskManagerClient:
         return self._make_request("GET", "/projects")
 
     def create_project(
-        self, name: str, description: str | None = None, color: str | None = None
+        self,
+        name: str,
+        description: str | None = None,
+        color: str | None = None,
+        show_on_calendar: bool | None = None,
     ) -> ApiResponse:
         """
         Create a new project.
@@ -259,15 +263,19 @@ class TaskManagerClient:
             name: Project name
             description: Optional project description
             color: Optional project color (hex format: #RRGGBB)
+            show_on_calendar: Whether to show this project's tasks on
+                calendar and home dashboard (default: true)
 
         Returns:
             ApiResponse with created project data
         """
-        data: dict[str, str] = {"name": name}
+        data: dict[str, str | bool] = {"name": name}
         if description is not None:
             data["description"] = description
         if color is not None:
             data["color"] = color
+        if show_on_calendar is not None:
+            data["show_on_calendar"] = show_on_calendar
         return self._make_request("POST", "/projects", data)
 
     def get_project(self, project_id: int) -> ApiResponse:
