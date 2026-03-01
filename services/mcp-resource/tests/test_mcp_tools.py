@@ -2581,3 +2581,569 @@ class TestResourceDefinitions:
             assert parsed["pages"][0]["title"] == "Page One"
             # Ensure it calls list_wiki_pages without a query
             mock_client.list_wiki_pages.assert_called_once_with()
+
+
+class TestNewsFeedTools:
+    """Tests for news/RSS feed MCP tools."""
+
+    @pytest.fixture
+    def mock_api_client(self) -> MagicMock:
+        """Create a mock API client with news methods."""
+        client = MagicMock()
+        return client
+
+    def _create_server(self, mock_client: MagicMock) -> Any:
+        """Helper to create a patched MCP server and return tools dict."""
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            return server._tool_manager._tools
+
+    # --- list_articles ---
+
+    @pytest.mark.asyncio
+    async def test_list_articles_success(self, mock_api_client: MagicMock) -> None:
+        """Test list_articles returns article data."""
+        import json
+
+        mock_api_client.list_articles.return_value = ApiResponse(
+            success=True,
+            data=[
+                {
+                    "id": 1,
+                    "title": "New Python Release",
+                    "url": "https://example.com/python",
+                    "is_read": False,
+                },
+                {
+                    "id": 2,
+                    "title": "Rust Update",
+                    "url": "https://example.com/rust",
+                    "is_read": True,
+                },
+            ],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_articles"].fn()
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 2
+            assert len(parsed["articles"]) == 2
+            assert parsed["articles"][0]["title"] == "New Python Release"
+
+    @pytest.mark.asyncio
+    async def test_list_articles_empty(self, mock_api_client: MagicMock) -> None:
+        """Test list_articles with no articles."""
+        import json
+
+        mock_api_client.list_articles.return_value = ApiResponse(
+            success=True,
+            data=[],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_articles"].fn()
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 0
+            assert parsed["articles"] == []
+
+    @pytest.mark.asyncio
+    async def test_list_articles_api_error(self, mock_api_client: MagicMock) -> None:
+        """Test list_articles handles API errors."""
+        import json
+
+        mock_api_client.list_articles.return_value = ApiResponse(
+            success=False,
+            error="Authentication failed",
+            status_code=401,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_articles"].fn()
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert parsed["error"] == "Authentication failed"
+
+    @pytest.mark.asyncio
+    async def test_list_articles_with_filters(self, mock_api_client: MagicMock) -> None:
+        """Test list_articles passes filter parameters to SDK."""
+        import json
+
+        mock_api_client.list_articles.return_value = ApiResponse(
+            success=True,
+            data=[],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_articles"].fn(
+                unread_only=True, search="python", feed_type="article"
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            mock_api_client.list_articles.assert_called_once_with(
+                unread_only=True,
+                search="python",
+                feed_type="article",
+                featured=None,
+                limit=None,
+                offset=None,
+            )
+
+    # --- get_article ---
+
+    @pytest.mark.asyncio
+    async def test_get_article_success(self, mock_api_client: MagicMock) -> None:
+        """Test get_article returns article data."""
+        import json
+
+        mock_api_client.get_article.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 1,
+                "title": "New Python Release",
+                "url": "https://example.com/python",
+                "summary": "Python 3.14 released",
+                "is_read": False,
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_article"].fn(article_id=1)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["article"]["id"] == 1
+            assert parsed["article"]["title"] == "New Python Release"
+
+    @pytest.mark.asyncio
+    async def test_get_article_not_found(self, mock_api_client: MagicMock) -> None:
+        """Test get_article handles not found."""
+        import json
+
+        mock_api_client.get_article.return_value = ApiResponse(
+            success=False,
+            error="Article not found",
+            status_code=404,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_article"].fn(article_id=999)
+            parsed = json.loads(result)
+            assert "error" in parsed
+
+    # --- mark_article_read ---
+
+    @pytest.mark.asyncio
+    async def test_mark_article_read(self, mock_api_client: MagicMock) -> None:
+        """Test marking an article as read."""
+        import json
+
+        mock_api_client.mark_article_read.return_value = ApiResponse(
+            success=True,
+            data={"is_read": True, "read_at": "2026-03-01T10:00:00Z"},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["mark_article_read"].fn(article_id=1, is_read=True)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["article_id"] == 1
+            assert parsed["is_read"] is True
+            assert parsed["status"] == "updated"
+
+    @pytest.mark.asyncio
+    async def test_mark_article_unread(self, mock_api_client: MagicMock) -> None:
+        """Test marking an article as unread."""
+        import json
+
+        mock_api_client.mark_article_read.return_value = ApiResponse(
+            success=True,
+            data={"is_read": False, "read_at": None},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["mark_article_read"].fn(article_id=1, is_read=False)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["is_read"] is False
+
+    @pytest.mark.asyncio
+    async def test_mark_article_read_error(self, mock_api_client: MagicMock) -> None:
+        """Test mark_article_read handles errors."""
+        import json
+
+        mock_api_client.mark_article_read.return_value = ApiResponse(
+            success=False,
+            error="Article not found",
+            status_code=404,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["mark_article_read"].fn(article_id=999)
+            parsed = json.loads(result)
+            assert "error" in parsed
+
+    # --- rate_article ---
+
+    @pytest.mark.asyncio
+    async def test_rate_article_success(self, mock_api_client: MagicMock) -> None:
+        """Test rating an article."""
+        import json
+
+        mock_api_client.rate_article.return_value = ApiResponse(
+            success=True,
+            data={"rating": "good"},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["rate_article"].fn(article_id=1, rating="good")
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["article_id"] == 1
+            assert parsed["rating"] == "good"
+            assert parsed["status"] == "rated"
+
+    @pytest.mark.asyncio
+    async def test_rate_article_invalid_rating(self, mock_api_client: MagicMock) -> None:
+        """Test rate_article rejects invalid ratings."""
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["rate_article"].fn(article_id=1, rating="amazing")
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "Invalid rating" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_rate_article_all_valid_ratings(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test rate_article accepts all valid rating values."""
+        import json
+
+        for rating in ["good", "bad", "not_interested"]:
+            mock_api_client.rate_article.return_value = ApiResponse(
+                success=True,
+                data={"rating": rating},
+                status_code=200,
+            )
+
+            with patch(
+                "mcp_resource.server.get_api_client", return_value=mock_api_client
+            ):
+                tools = self._create_server(mock_api_client)
+                result = await tools["rate_article"].fn(article_id=1, rating=rating)
+                parsed = json.loads(result)
+                assert "error" not in parsed
+                assert parsed["rating"] == rating
+
+    # --- list_feed_sources ---
+
+    @pytest.mark.asyncio
+    async def test_list_feed_sources_success(self, mock_api_client: MagicMock) -> None:
+        """Test list_feed_sources returns source data."""
+        import json
+
+        mock_api_client.list_feed_sources.return_value = ApiResponse(
+            success=True,
+            data=[
+                {"id": 1, "name": "PythonNews", "is_active": True},
+                {"id": 2, "name": "RustBlog", "is_active": False},
+            ],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_feed_sources"].fn()
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["count"] == 2
+            assert len(parsed["sources"]) == 2
+            assert parsed["sources"][0]["name"] == "PythonNews"
+
+    @pytest.mark.asyncio
+    async def test_list_feed_sources_featured_filter(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test list_feed_sources passes featured filter."""
+        import json
+
+        mock_api_client.list_feed_sources.return_value = ApiResponse(
+            success=True,
+            data=[],
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_feed_sources"].fn(featured=True)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            mock_api_client.list_feed_sources.assert_called_once_with(featured=True)
+
+    # --- create_feed_source ---
+
+    @pytest.mark.asyncio
+    async def test_create_feed_source_success(self, mock_api_client: MagicMock) -> None:
+        """Test creating a feed source."""
+        import json
+
+        mock_api_client.create_feed_source.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 1,
+                "name": "PythonNews",
+                "url": "https://pythonnews.com/feed.xml",
+                "type": "article",
+                "is_active": True,
+            },
+            status_code=201,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["create_feed_source"].fn(
+                name="PythonNews", url="https://pythonnews.com/feed.xml"
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["source"]["name"] == "PythonNews"
+            assert parsed["status"] == "created"
+
+    @pytest.mark.asyncio
+    async def test_create_feed_source_error(self, mock_api_client: MagicMock) -> None:
+        """Test create_feed_source handles errors."""
+        import json
+
+        mock_api_client.create_feed_source.return_value = ApiResponse(
+            success=False,
+            error="Permission denied",
+            status_code=403,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["create_feed_source"].fn(
+                name="Test", url="https://example.com/feed.xml"
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed
+
+    # --- update_feed_source ---
+
+    @pytest.mark.asyncio
+    async def test_update_feed_source_success(self, mock_api_client: MagicMock) -> None:
+        """Test updating a feed source."""
+        import json
+
+        mock_api_client.update_feed_source.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 1,
+                "name": "Updated Feed",
+                "url": "https://example.com/feed.xml",
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["update_feed_source"].fn(
+                source_id=1, name="Updated Feed"
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["source"]["name"] == "Updated Feed"
+            assert parsed["status"] == "updated"
+
+    @pytest.mark.asyncio
+    async def test_update_feed_source_not_found(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test update_feed_source handles not found."""
+        import json
+
+        mock_api_client.update_feed_source.return_value = ApiResponse(
+            success=False,
+            error="Feed source not found",
+            status_code=404,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["update_feed_source"].fn(
+                source_id=999, name="Nope"
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed
+
+    # --- delete_feed_source ---
+
+    @pytest.mark.asyncio
+    async def test_delete_feed_source_success(self, mock_api_client: MagicMock) -> None:
+        """Test deleting a feed source."""
+        import json
+
+        mock_api_client.delete_feed_source.return_value = ApiResponse(
+            success=True,
+            data={"deleted": True},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["delete_feed_source"].fn(source_id=1)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["source_id"] == 1
+            assert parsed["status"] == "deleted"
+
+    @pytest.mark.asyncio
+    async def test_delete_feed_source_not_found(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test delete_feed_source handles not found."""
+        import json
+
+        mock_api_client.delete_feed_source.return_value = ApiResponse(
+            success=False,
+            error="Feed source not found",
+            status_code=404,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["delete_feed_source"].fn(source_id=999)
+            parsed = json.loads(result)
+            assert "error" in parsed
+
+    # --- toggle_feed_source ---
+
+    @pytest.mark.asyncio
+    async def test_toggle_feed_source_success(self, mock_api_client: MagicMock) -> None:
+        """Test toggling a feed source."""
+        import json
+
+        mock_api_client.toggle_feed_source.return_value = ApiResponse(
+            success=True,
+            data={"is_active": False},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["toggle_feed_source"].fn(
+                source_id=1, is_active=False
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["source_id"] == 1
+            assert parsed["is_active"] is False
+            assert parsed["status"] == "toggled"
+
+    @pytest.mark.asyncio
+    async def test_toggle_feed_source_error(self, mock_api_client: MagicMock) -> None:
+        """Test toggle_feed_source handles errors."""
+        import json
+
+        mock_api_client.toggle_feed_source.return_value = ApiResponse(
+            success=False,
+            error="Feed source not found",
+            status_code=404,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["toggle_feed_source"].fn(
+                source_id=999, is_active=True
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed
+
+    # --- force_fetch_feed ---
+
+    @pytest.mark.asyncio
+    async def test_force_fetch_feed_success(self, mock_api_client: MagicMock) -> None:
+        """Test force fetching a feed."""
+        import json
+
+        mock_api_client.force_fetch_feed.return_value = ApiResponse(
+            success=True,
+            data={"articles_fetched": 5, "source_id": 1},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["force_fetch_feed"].fn(source_id=1, hours=48)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["source_id"] == 1
+            assert parsed["hours"] == 48
+            assert parsed["status"] == "fetched"
+            assert parsed["result"]["articles_fetched"] == 5
+
+    @pytest.mark.asyncio
+    async def test_force_fetch_feed_default_hours(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test force_fetch_feed uses default hours."""
+        import json
+
+        mock_api_client.force_fetch_feed.return_value = ApiResponse(
+            success=True,
+            data={"articles_fetched": 10},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["force_fetch_feed"].fn(source_id=1)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["hours"] == 168
+            mock_api_client.force_fetch_feed.assert_called_once_with(1, 168)
+
+    @pytest.mark.asyncio
+    async def test_force_fetch_feed_error(self, mock_api_client: MagicMock) -> None:
+        """Test force_fetch_feed handles errors."""
+        import json
+
+        mock_api_client.force_fetch_feed.return_value = ApiResponse(
+            success=False,
+            error="Feed source not found",
+            status_code=404,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["force_fetch_feed"].fn(source_id=999)
+            parsed = json.loads(result)
+            assert "error" in parsed
