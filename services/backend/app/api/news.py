@@ -148,9 +148,9 @@ def _raise_duplicate_error(exc: IntegrityError) -> None:
     Only matches against known constraint names — never parses raw error text.
     """
     constraint = _get_constraint_name(exc)
-    if "name" in constraint:
+    if constraint == "ix_feed_sources_name":
         raise errors.validation("A feed source with this name already exists") from None
-    if "url" in constraint:
+    if constraint == "feed_sources_url_key":
         raise errors.validation("A feed source with this URL already exists") from None
     raise exc
 
