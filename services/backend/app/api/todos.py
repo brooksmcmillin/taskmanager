@@ -1621,7 +1621,7 @@ class DependencyCreate(BaseModel):
 
 
 async def _check_circular_dependency(
-    db: DbSession, dependent_id: int, dependency_id: int
+    db: DbSession, dependent_id: int, dependency_id: int, user_id: int
 ) -> bool:
     """Check if adding this dependency would create a circular dependency.
 
@@ -1629,19 +1629,32 @@ async def _check_circular_dependency(
     the dependent task is reachable from the dependency task (which would
     create a cycle).
 
-    This implementation fetches the entire dependency graph upfront in a single
-    query to avoid N+1 query performance issues.
+    This implementation fetches the user's dependency graph upfront in a single
+    query to avoid N+1 query performance issues. Only dependencies belonging to
+    the specified user are loaded, ensuring data isolation between users.
 
     Args:
         db: Database session
         dependent_id: The task that will depend on another
         dependency_id: The task being depended upon
+        user_id: The user whose dependency graph to traverse
 
     Returns:
         True if adding this dependency would create a cycle, False otherwise
     """
-    # Fetch entire dependency graph in a single query
-    result = await db.execute(select(task_dependencies))
+    # Fetch dependency graph scoped to this user in a single query.
+    # Join on Todo to filter rows where the dependent task belongs to user_id,
+    # preventing cross-user data leakage and reducing memory usage.
+    dependent_todo = Todo.__table__.alias("dependent_todo")
+    result = await db.execute(
+        select(task_dependencies).join(
+            dependent_todo,
+            and_(
+                task_dependencies.c.dependent_id == dependent_todo.c.id,
+                dependent_todo.c.user_id == user_id,
+            ),
+        )
+    )
     all_deps = result.all()
 
     # Build adjacency list: dependent_id -> [dependency_ids]
@@ -1736,7 +1749,7 @@ async def add_dependency(
     # Check for circular dependency before attempting insert
     # Note: There's still a small race window, but circular deps are caught
     # at query time and don't corrupt data (just create invalid state)
-    if await _check_circular_dependency(db, todo_id, request.dependency_id):
+    if await _check_circular_dependency(db, todo_id, request.dependency_id, user.id):
         raise errors.circular_dependency()
 
     # Try to add the dependency - rely on DB constraint for duplicate detection

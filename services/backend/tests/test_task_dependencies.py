@@ -1,7 +1,8 @@
 """Tests for task dependency endpoints."""
 
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -632,3 +633,183 @@ async def test_batch_create_mixed_depends_on_and_no_depends(
     deps_2 = await authenticated_client.get(f"/api/todos/{task_ids[2]}/dependencies")
     assert deps_2.json()["meta"]["count"] == 1
     assert deps_2.json()["data"][0]["id"] == task_ids[0]
+
+
+# =============================================================================
+# User isolation tests for circular dependency check
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_circular_dependency_check_scoped_to_user(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Test that circular dependency check only considers the current user's tasks.
+
+    User A has: task_a1 -> task_a2 (A1 depends on A2)
+    User B has: task_b1 and task_b2 with no dependency yet.
+    Adding task_b2 -> task_b1 should succeed (no cycle in user B's graph),
+    even though the raw numeric IDs might overlap with user A's chain.
+    This verifies the BFS is scoped by user_id and doesn't incorrectly
+    mix user A's edges into user B's cycle check.
+    """
+    from app.core.security import hash_password
+    from app.main import app
+    from app.models.user import User
+
+    user1 = User(
+        email="dep_scope_u1@example.com",
+        password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
+    )
+    user2 = User(
+        email="dep_scope_u2@example.com",
+        password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
+    )
+    db_session.add(user1)
+    db_session.add(user2)
+    await db_session.commit()
+
+    # Login as user1 and create a dependency chain: task_a1 depends on task_a2
+    await client.post(
+        "/api/auth/login",
+        json={  # pragma: allowlist secret
+            "email": "dep_scope_u1@example.com",
+            "password": "TestPass123!",
+        },
+    )
+    task_a1 = await client.post("/api/todos", json={"title": "User1 Task A1"})
+    task_a2 = await client.post("/api/todos", json={"title": "User1 Task A2"})
+    task_a1_id = task_a1.json()["data"]["id"]
+    task_a2_id = task_a2.json()["data"]["id"]
+    await client.post(
+        f"/api/todos/{task_a1_id}/dependencies",
+        json={"dependency_id": task_a2_id},
+    )
+    await client.post("/api/auth/logout")
+
+    # Login as user2 and create their own tasks
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as user2_client:
+        # Share the same db session via override (already in place from client fixture)
+        from app.dependencies import get_db
+
+        async def override_get_db():
+            yield db_session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        await user2_client.post(
+            "/api/auth/login",
+            json={  # pragma: allowlist secret
+                "email": "dep_scope_u2@example.com",
+                "password": "TestPass123!",
+            },
+        )
+        task_b1 = await user2_client.post("/api/todos", json={"title": "User2 Task B1"})
+        task_b2 = await user2_client.post("/api/todos", json={"title": "User2 Task B2"})
+        task_b1_id = task_b1.json()["data"]["id"]
+        task_b2_id = task_b2.json()["data"]["id"]
+
+        # Add dependency: B1 depends on B2
+        resp = await user2_client.post(
+            f"/api/todos/{task_b1_id}/dependencies",
+            json={"dependency_id": task_b2_id},
+        )
+        assert resp.status_code == 201
+
+        # Now try to add B2 depends on B1 — this IS a real cycle in user2's graph
+        resp_cycle = await user2_client.post(
+            f"/api/todos/{task_b2_id}/dependencies",
+            json={"dependency_id": task_b1_id},
+        )
+        assert resp_cycle.status_code == 400
+        assert resp_cycle.json()["detail"]["code"] == "CONFLICT_005"
+
+
+@pytest.mark.asyncio
+async def test_user_a_deps_do_not_affect_user_b_cycle_check(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Test that user A's dependency graph does not influence user B's cycle check.
+
+    Scenario: User A creates tasks X and Y with X depending on Y.
+    User B creates tasks P and Q.
+    User B should be able to add P->Q and Q->P... wait, that's a cycle.
+    More precisely: user B creates P and Q with no deps. Adding P->Q should work
+    since user A's X->Y chain should not pollute user B's BFS result.
+    """
+    from app.core.security import hash_password
+    from app.main import app
+    from app.models.user import User
+
+    user_a = User(
+        email="isolation_a@example.com",
+        password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
+    )
+    user_b = User(
+        email="isolation_b@example.com",
+        password_hash=hash_password("TestPass123!"),  # pragma: allowlist secret
+    )
+    db_session.add(user_a)
+    db_session.add(user_b)
+    await db_session.commit()
+
+    # User A: create chain X -> Y -> Z
+    await client.post(
+        "/api/auth/login",
+        json={  # pragma: allowlist secret
+            "email": "isolation_a@example.com",
+            "password": "TestPass123!",
+        },
+    )
+    x = await client.post("/api/todos", json={"title": "X"})
+    y = await client.post("/api/todos", json={"title": "Y"})
+    z = await client.post("/api/todos", json={"title": "Z"})
+    x_id = x.json()["data"]["id"]
+    y_id = y.json()["data"]["id"]
+    z_id = z.json()["data"]["id"]
+    await client.post(f"/api/todos/{x_id}/dependencies", json={"dependency_id": y_id})
+    await client.post(f"/api/todos/{y_id}/dependencies", json={"dependency_id": z_id})
+    await client.post("/api/auth/logout")
+
+    # User B: create two independent tasks and add a valid (non-circular) dependency
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as user_b_client:
+        from app.dependencies import get_db
+
+        async def override_get_db():
+            yield db_session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        await user_b_client.post(
+            "/api/auth/login",
+            json={  # pragma: allowlist secret
+                "email": "isolation_b@example.com",
+                "password": "TestPass123!",
+            },
+        )
+        p = await user_b_client.post("/api/todos", json={"title": "P"})
+        q = await user_b_client.post("/api/todos", json={"title": "Q"})
+        p_id = p.json()["data"]["id"]
+        q_id = q.json()["data"]["id"]
+
+        # P depends on Q — this is NOT a cycle for user B
+        resp = await user_b_client.post(
+            f"/api/todos/{p_id}/dependencies",
+            json={"dependency_id": q_id},
+        )
+        assert resp.status_code == 201, (
+            f"Expected 201, got {resp.status_code}: {resp.json()}"
+        )
+
+        # Verify no false positive: user A's X->Y->Z chain didn't affect result
+        deps = await user_b_client.get(f"/api/todos/{p_id}/dependencies")
+        assert deps.json()["meta"]["count"] == 1
+        assert deps.json()["data"][0]["id"] == q_id
