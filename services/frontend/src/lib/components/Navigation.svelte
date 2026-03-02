@@ -15,6 +15,7 @@
 
 	let newsDropdownOpen = $state(false);
 	let tasksDropdownOpen = $state(false);
+	let libraryDropdownOpen = $state(false);
 	let userDropdownOpen = $state(false);
 	let mobileMenuOpen = $state(false);
 	let closeTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -35,6 +36,8 @@
 			clearTimeout(closeTimeout);
 			closeTimeout = null;
 		}
+		tasksDropdownOpen = false;
+		libraryDropdownOpen = false;
 		newsDropdownOpen = true;
 	}
 
@@ -50,6 +53,8 @@
 			clearTimeout(closeTimeout);
 			closeTimeout = null;
 		}
+		newsDropdownOpen = false;
+		libraryDropdownOpen = false;
 		tasksDropdownOpen = true;
 	}
 
@@ -60,6 +65,30 @@
 		}, 200);
 	}
 
+	function openLibraryDropdown() {
+		if (closeTimeout) {
+			clearTimeout(closeTimeout);
+			closeTimeout = null;
+		}
+		newsDropdownOpen = false;
+		tasksDropdownOpen = false;
+		libraryDropdownOpen = true;
+	}
+
+	function scheduleCloseLibraryDropdown() {
+		closeTimeout = setTimeout(() => {
+			libraryDropdownOpen = false;
+			closeTimeout = null;
+		}, 200);
+	}
+
+	function handleDropdownKeydown(event: KeyboardEvent, toggle: () => void) {
+		if (event.key === ' ' || event.key === 'Enter') {
+			event.preventDefault();
+			toggle();
+		}
+	}
+
 	function toggleUserDropdown() {
 		userDropdownOpen = !userDropdownOpen;
 	}
@@ -67,6 +96,7 @@
 	function closeAllMenus() {
 		newsDropdownOpen = false;
 		tasksDropdownOpen = false;
+		libraryDropdownOpen = false;
 		userDropdownOpen = false;
 		mobileMenuOpen = false;
 		if (closeTimeout) {
@@ -78,6 +108,7 @@
 	function closeDropdowns() {
 		newsDropdownOpen = false;
 		tasksDropdownOpen = false;
+		libraryDropdownOpen = false;
 		userDropdownOpen = false;
 		if (closeTimeout) {
 			clearTimeout(closeTimeout);
@@ -173,6 +204,9 @@
 			currentPath.startsWith('/projects') ||
 			currentPath.startsWith('/recurring-tasks')
 	);
+	let isLibraryActive = $derived(
+		currentPath.startsWith('/wiki') || currentPath.startsWith('/snippets')
+	);
 </script>
 
 <nav class="nav-bar">
@@ -194,6 +228,7 @@
 								class="nav-link nav-dropdown-trigger"
 								class:active={isTasksActive}
 								onclick={() => (tasksDropdownOpen = !tasksDropdownOpen)}
+								onkeydown={(e) => handleDropdownKeydown(e, () => (tasksDropdownOpen = !tasksDropdownOpen))}
 								role="button"
 								tabindex="0"
 								aria-expanded={tasksDropdownOpen}
@@ -254,6 +289,7 @@
 								class="nav-link nav-dropdown-trigger"
 								class:active={isNewsActive}
 								onclick={() => (newsDropdownOpen = !newsDropdownOpen)}
+								onkeydown={(e) => handleDropdownKeydown(e, () => (newsDropdownOpen = !newsDropdownOpen))}
 								role="button"
 								tabindex="0"
 								aria-expanded={newsDropdownOpen}
@@ -296,11 +332,58 @@
 							{/if}
 						</div>
 
-						<a href="/wiki" class="nav-link" class:active={currentPath.startsWith('/wiki')}>Wiki</a>
-						<a href="/snippets" class="nav-link" class:active={currentPath.startsWith('/snippets')}
-							>Snippets</a
+						<!-- Library Dropdown -->
+						<div
+							class="nav-dropdown"
+							onmouseenter={openLibraryDropdown}
+							onmouseleave={scheduleCloseLibraryDropdown}
 						>
-						<a href="/trash" class="nav-link" class:active={currentPath === '/trash'}>Trash</a>
+							<span
+								class="nav-link nav-dropdown-trigger"
+								class:active={isLibraryActive}
+								onclick={() => (libraryDropdownOpen = !libraryDropdownOpen)}
+								onkeydown={(e) => handleDropdownKeydown(e, () => (libraryDropdownOpen = !libraryDropdownOpen))}
+								role="button"
+								tabindex="0"
+								aria-expanded={libraryDropdownOpen}
+								aria-haspopup="true"
+							>
+								Library
+								<svg
+									class="dropdown-arrow"
+									class:open={libraryDropdownOpen}
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</span>
+							{#if libraryDropdownOpen}
+								<div class="dropdown-menu">
+									<a
+										href="/wiki"
+										class="dropdown-item"
+										class:active={currentPath.startsWith('/wiki')}
+										onclick={closeDropdowns}
+									>
+										Wiki
+									</a>
+									<a
+										href="/snippets"
+										class="dropdown-item"
+										class:active={currentPath.startsWith('/snippets')}
+										onclick={closeDropdowns}
+									>
+										Snippets
+									</a>
+								</div>
+							{/if}
+						</div>
 					</div>
 				{/if}
 			</div>
@@ -358,6 +441,14 @@
 									onclick={closeDropdowns}
 								>
 									API Keys
+								</a>
+								<a
+									href="/trash"
+									class="dropdown-item"
+									class:active={currentPath === '/trash'}
+									onclick={closeDropdowns}
+								>
+									Trash
 								</a>
 								{#if user.is_admin}
 									<a
@@ -501,37 +592,22 @@
 			</div>
 
 			<div class="mobile-menu-section">
-				<div class="mobile-menu-label">Wiki</div>
+				<div class="mobile-menu-label">Library</div>
 				<a
 					href="/wiki"
 					class="mobile-menu-item"
 					class:active={currentPath.startsWith('/wiki')}
 					onclick={closeMobileMenu}
 				>
-					Wiki Pages
+					Wiki
 				</a>
-			</div>
-
-			<div class="mobile-menu-section">
-				<div class="mobile-menu-label">Snippets</div>
 				<a
 					href="/snippets"
 					class="mobile-menu-item"
 					class:active={currentPath.startsWith('/snippets')}
 					onclick={closeMobileMenu}
 				>
-					All Snippets
-				</a>
-			</div>
-
-			<div class="mobile-menu-section">
-				<a
-					href="/trash"
-					class="mobile-menu-item"
-					class:active={currentPath === '/trash'}
-					onclick={closeMobileMenu}
-				>
-					Trash
+					Snippets
 				</a>
 			</div>
 
@@ -563,6 +639,14 @@
 					onclick={closeMobileMenu}
 				>
 					API Keys
+				</a>
+				<a
+					href="/trash"
+					class="mobile-menu-item"
+					class:active={currentPath === '/trash'}
+					onclick={closeMobileMenu}
+				>
+					Trash
 				</a>
 				{#if user.is_admin}
 					<a
