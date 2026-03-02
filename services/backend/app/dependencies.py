@@ -334,7 +334,7 @@ async def get_admin_user(
     db: DbSession,
 ) -> User:
     """Get current authenticated admin user."""
-    user = await get_current_user(request, db)
+    user = await get_current_user_flexible(request, db)
     if not user.is_admin:
         raise errors.permission_denied()
     return user
