@@ -5,7 +5,15 @@
 	import { recurringTasks } from '$lib/stores/recurringTasks';
 	import { toasts } from '$lib/stores/ui';
 	import { formatDateForInput } from '$lib/utils/dates';
-	import type { Todo, Project, Frequency, DeadlineType } from '$lib/types';
+	import type {
+		Todo,
+		Project,
+		Frequency,
+		DeadlineType,
+		TimeHorizon,
+		ActionType,
+		AutonomyTier
+	} from '$lib/types';
 
 	export let editingTodo: Todo | null = null;
 	export let defaultProjectId: number | null = null;
@@ -20,7 +28,14 @@
 		priority: 'medium',
 		due_date: '',
 		deadline_type: 'preferred' as DeadlineType,
-		tags: ''
+		tags: '',
+		context: '',
+		estimated_hours: '',
+		actual_hours: '',
+		time_horizon: '' as TimeHorizon | '',
+		agent_actionable: '' as 'true' | 'false' | '',
+		action_type: '' as ActionType | '',
+		autonomy_tier: '' as '1' | '2' | '3' | '4' | ''
 	};
 
 	// Repeat/recurring task options
@@ -65,7 +80,19 @@
 			priority: editingTodo.priority,
 			due_date: editingTodo.due_date ? formatDateForInput(editingTodo.due_date) : '',
 			deadline_type: editingTodo.deadline_type || 'preferred',
-			tags: editingTodo.tags?.join(', ') || ''
+			tags: editingTodo.tags?.join(', ') || '',
+			context: editingTodo.context || '',
+			estimated_hours: editingTodo.estimated_hours?.toString() || '',
+			actual_hours: editingTodo.actual_hours?.toString() || '',
+			time_horizon: editingTodo.time_horizon || '',
+			agent_actionable:
+				editingTodo.agent_actionable === true
+					? 'true'
+					: editingTodo.agent_actionable === false
+						? 'false'
+						: '',
+			action_type: editingTodo.action_type || '',
+			autonomy_tier: (editingTodo.autonomy_tier?.toString() as '1' | '2' | '3' | '4' | '') || ''
 		};
 	}
 
@@ -80,7 +107,14 @@
 			priority: 'medium',
 			due_date: '',
 			deadline_type: 'preferred' as DeadlineType,
-			tags: ''
+			tags: '',
+			context: '',
+			estimated_hours: '',
+			actual_hours: '',
+			time_horizon: '' as TimeHorizon | '',
+			agent_actionable: '' as 'true' | 'false' | '',
+			action_type: '' as ActionType | '',
+			autonomy_tier: '' as '1' | '2' | '3' | '4' | ''
 		};
 		enableRepeat = false;
 		repeatData = {
@@ -112,7 +146,22 @@
 				priority: formData.priority,
 				deadline_type: formData.deadline_type,
 				tags: formData.tags ? formData.tags.split(',').map((t) => t.trim()) : undefined,
-				context: 'work'
+				context: formData.context || undefined,
+				estimated_hours: formData.estimated_hours
+					? parseFloat(formData.estimated_hours)
+					: undefined,
+				actual_hours: formData.actual_hours ? parseFloat(formData.actual_hours) : undefined,
+				time_horizon: formData.time_horizon || undefined,
+				agent_actionable:
+					formData.agent_actionable === 'true'
+						? true
+						: formData.agent_actionable === 'false'
+							? false
+							: undefined,
+				action_type: formData.action_type || undefined,
+				autonomy_tier: formData.autonomy_tier
+					? (parseInt(formData.autonomy_tier) as 1 | 2 | 3 | 4)
+					: undefined
 			};
 
 			if (isEditing && editingTodo) {
@@ -297,6 +346,132 @@
 			/>
 		</div>
 
+		<!-- Context -->
+		<div class="form-section">
+			<label for="context" class="form-label">Context</label>
+			<input
+				type="text"
+				id="context"
+				name="context"
+				maxlength="50"
+				placeholder="e.g. work, personal, side-project"
+				class="form-input"
+				bind:value={formData.context}
+			/>
+		</div>
+
+		<!-- Hours -->
+		<div class="form-section form-row">
+			<div class="form-col">
+				<label for="estimated_hours" class="form-label">Estimated Hours</label>
+				<input
+					type="number"
+					id="estimated_hours"
+					name="estimated_hours"
+					min="0"
+					step="0.25"
+					class="form-input"
+					bind:value={formData.estimated_hours}
+				/>
+			</div>
+			{#if isEditing}
+				<div class="form-col">
+					<label for="actual_hours" class="form-label">Actual Hours</label>
+					<input
+						type="number"
+						id="actual_hours"
+						name="actual_hours"
+						min="0"
+						step="0.25"
+						class="form-input"
+						bind:value={formData.actual_hours}
+					/>
+				</div>
+			{/if}
+		</div>
+
+		<!-- Time Horizon -->
+		<div class="form-section">
+			<label for="time_horizon" class="form-label">Time Horizon</label>
+			<select
+				id="time_horizon"
+				name="time_horizon"
+				class="form-select"
+				bind:value={formData.time_horizon}
+			>
+				<option value="">Not set</option>
+				<option value="today">Today</option>
+				<option value="this_week">This Week</option>
+				<option value="next_week">Next Week</option>
+				<option value="this_month">This Month</option>
+				<option value="next_month">Next Month</option>
+				<option value="this_quarter">This Quarter</option>
+				<option value="next_quarter">Next Quarter</option>
+				<option value="this_year">This Year</option>
+				<option value="next_year">Next Year</option>
+				<option value="someday">Someday</option>
+			</select>
+		</div>
+
+		<!-- Agent Settings -->
+		<div class="form-section agent-section">
+			<div class="section-header">Agent Settings</div>
+
+			<div class="form-section">
+				<label for="agent_actionable" class="form-label">Agent Actionable</label>
+				<select
+					id="agent_actionable"
+					name="agent_actionable"
+					class="form-select"
+					bind:value={formData.agent_actionable}
+				>
+					<option value="">Auto-detect</option>
+					<option value="true">Yes</option>
+					<option value="false">No</option>
+				</select>
+			</div>
+
+			<div class="form-section">
+				<label for="action_type" class="form-label">Action Type</label>
+				<select
+					id="action_type"
+					name="action_type"
+					class="form-select"
+					bind:value={formData.action_type}
+				>
+					<option value="">Auto-detect</option>
+					<option value="research">Research</option>
+					<option value="code">Code</option>
+					<option value="email">Email</option>
+					<option value="document">Document</option>
+					<option value="purchase">Purchase</option>
+					<option value="schedule">Schedule</option>
+					<option value="call">Call</option>
+					<option value="errand">Errand</option>
+					<option value="manual">Manual</option>
+					<option value="review">Review</option>
+					<option value="data_entry">Data Entry</option>
+					<option value="other">Other</option>
+				</select>
+			</div>
+
+			<div class="form-section">
+				<label for="autonomy_tier" class="form-label">Autonomy Tier</label>
+				<select
+					id="autonomy_tier"
+					name="autonomy_tier"
+					class="form-select"
+					bind:value={formData.autonomy_tier}
+				>
+					<option value="">Auto-detect</option>
+					<option value="1">Tier 1 - Fully Autonomous</option>
+					<option value="2">Tier 2 - Propose & Execute</option>
+					<option value="3">Tier 3 - Propose & Wait</option>
+					<option value="4">Tier 4 - Never Autonomous</option>
+				</select>
+			</div>
+		</div>
+
 		<!-- Repeat Options -->
 		{#if !isEditing}
 			<div class="form-section repeat-section">
@@ -470,6 +645,29 @@
 	.form-textarea {
 		resize: vertical;
 		min-height: 80px;
+	}
+
+	.agent-section {
+		padding-top: 1.5rem;
+		border-top: 1px solid var(--border-color);
+	}
+
+	.section-header {
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		margin-bottom: 1rem;
+	}
+
+	.form-row {
+		display: flex;
+		gap: 1rem;
+	}
+
+	.form-col {
+		flex: 1;
 	}
 
 	.repeat-section {

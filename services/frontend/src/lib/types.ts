@@ -76,6 +76,13 @@ export interface Todo {
 	actual_hours: number | null;
 	tags: string[];
 	context: string | null;
+	time_horizon: TimeHorizon | null;
+	agent_actionable: boolean | null;
+	action_type: ActionType | null;
+	autonomy_tier: AutonomyTier | null;
+	agent_status: AgentStatus | null;
+	agent_notes: string | null;
+	blocking_reason: string | null;
 	recurring_task_id: number | null;
 	parent_id: number | null;
 	parent_task?: ParentTask | null;
@@ -143,9 +150,13 @@ export interface TodoCreate {
 	estimated_hours?: number;
 	tags?: string[];
 	context?: string;
+	time_horizon?: TimeHorizon;
 	project_id?: number;
 	parent_id?: number;
 	position?: number;
+	agent_actionable?: boolean;
+	action_type?: ActionType;
+	autonomy_tier?: AutonomyTier;
 }
 
 export interface SubtaskCreate {
@@ -198,6 +209,41 @@ export interface RegistrationCode {
 }
 
 export type DeadlineType = 'flexible' | 'preferred' | 'firm' | 'hard';
+
+export type ActionType =
+	| 'research'
+	| 'code'
+	| 'email'
+	| 'document'
+	| 'purchase'
+	| 'schedule'
+	| 'call'
+	| 'errand'
+	| 'manual'
+	| 'review'
+	| 'data_entry'
+	| 'other';
+
+export type AgentStatus =
+	| 'pending_review'
+	| 'in_progress'
+	| 'completed'
+	| 'blocked'
+	| 'needs_human';
+
+export type AutonomyTier = 1 | 2 | 3 | 4;
+
+export type TimeHorizon =
+	| 'today'
+	| 'this_week'
+	| 'next_week'
+	| 'this_month'
+	| 'next_month'
+	| 'this_quarter'
+	| 'next_quarter'
+	| 'this_year'
+	| 'next_year'
+	| 'someday';
 
 export type ArticleRating = 'good' | 'bad' | 'not_interested';
 

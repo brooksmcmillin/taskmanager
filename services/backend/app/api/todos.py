@@ -25,6 +25,7 @@ from app.models.todo import (
     DeadlineType,
     Priority,
     Status,
+    TimeHorizon,
     Todo,
     task_dependencies,
 )
@@ -54,6 +55,7 @@ class TodoCreate(BaseModel):
     )
     tags: list[str] = Field(default_factory=list)
     context: str | None = None
+    time_horizon: TimeHorizon | None = None
     estimated_hours: float | None = None
     parent_id: int | None = None
     parent_index: int | None = Field(
@@ -97,6 +99,7 @@ class TodoUpdate(BaseModel):
     )
     tags: list[str] | None = None
     context: str | None = None
+    time_horizon: TimeHorizon | None = None
     estimated_hours: float | None = None
     actual_hours: float | None = None
     parent_id: int | None = None
@@ -244,6 +247,7 @@ class TodoResponse(BaseModel):
     project_color: str | None = None
     tags: list[str]
     context: str | None
+    time_horizon: TimeHorizon | None = None
     estimated_hours: float | None
     actual_hours: float | None
     position: int
@@ -389,6 +393,7 @@ def _build_todo_response(
         project_color=project_color,
         tags=todo.tags or [],
         context=todo.context,
+        time_horizon=todo.time_horizon,
         estimated_hours=float(todo.estimated_hours)
         if todo.estimated_hours is not None
         else None,
@@ -1013,6 +1018,7 @@ async def create_todo(
         project_id=request.project_id,
         tags=request.tags,
         context=request.context,
+        time_horizon=request.time_horizon,
         estimated_hours=request.estimated_hours,
         parent_id=request.parent_id,
         position=position,
