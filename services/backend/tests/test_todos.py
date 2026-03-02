@@ -2738,3 +2738,77 @@ async def test_exclude_no_calendar_ignored_when_project_id_set(
     assert resp.status_code == 200
     titles = [t["title"] for t in resp.json()["data"]]
     assert "Filtered Task" in titles
+
+
+@pytest.mark.asyncio
+async def test_filter_by_tag_returns_matching_tasks(
+    authenticated_client: AsyncClient,
+):
+    """Tasks with the matching tag are returned."""
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Tagged Task", "tags": ["backend", "urgent"]},
+    )
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Other Task", "tags": ["frontend"]},
+    )
+
+    resp = await authenticated_client.get(
+        "/api/todos", params={"tag": "backend"}
+    )
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["data"]]
+    assert "Tagged Task" in titles
+    assert "Other Task" not in titles
+
+
+@pytest.mark.asyncio
+async def test_filter_by_tag_excludes_untagged_tasks(
+    authenticated_client: AsyncClient,
+):
+    """Tasks without the tag are excluded."""
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "No Tags Task"},
+    )
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Has Tag", "tags": ["review"]},
+    )
+
+    resp = await authenticated_client.get(
+        "/api/todos", params={"tag": "review"}
+    )
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["data"]]
+    assert "Has Tag" in titles
+    assert "No Tags Task" not in titles
+
+
+@pytest.mark.asyncio
+async def test_filter_by_tag_composes_with_status(
+    authenticated_client: AsyncClient,
+):
+    """Tag filter works in combination with status filter."""
+    # Create a pending task with the tag
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Pending Tagged", "tags": ["deploy"]},
+    )
+    # Create a completed task with the same tag
+    resp = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Done Tagged", "tags": ["deploy"]},
+    )
+    done_id = resp.json()["data"]["id"]
+    await authenticated_client.post(f"/api/todos/{done_id}/complete")
+
+    # Filter by tag + status=pending
+    resp = await authenticated_client.get(
+        "/api/todos", params={"tag": "deploy", "status": "pending"}
+    )
+    assert resp.status_code == 200
+    titles = [t["title"] for t in resp.json()["data"]]
+    assert "Pending Tagged" in titles
+    assert "Done Tagged" not in titles

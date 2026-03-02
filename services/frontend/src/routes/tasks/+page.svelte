@@ -94,11 +94,14 @@
 
 	$: selectedDeadlineType = ($page.url.searchParams.get('deadline_type') as DeadlineType) || null;
 
+	$: selectedTag = $page.url.searchParams.get('tag') || null;
+
 	function buildFilters() {
 		return {
 			status: 'pending' as const,
 			...(selectedProjectId ? { project_id: selectedProjectId } : { exclude_no_calendar: true }),
 			...(selectedDeadlineType && { deadline_type: selectedDeadlineType }),
+			...(selectedTag && { tag: selectedTag }),
 			...computeDueDateFilters(selectedDueDate)
 		};
 	}
@@ -207,6 +210,12 @@
 		goto(url, { replaceState: true, keepFocus: true });
 	}
 
+	function clearTagFilter() {
+		const url = new URL($page.url);
+		url.searchParams.delete('tag');
+		goto(url, { replaceState: true, keepFocus: true });
+	}
+
 	function openTaskDetail(todo: Todo) {
 		taskDetailPanel.open(todo);
 	}
@@ -251,10 +260,12 @@
 		const _projectId = selectedProjectId;
 		const _dueDate = selectedDueDate;
 		const _deadlineType = selectedDeadlineType;
+		const _tag = selectedTag;
 		todos.load({
 			status: 'pending',
 			...(_projectId ? { project_id: _projectId } : { exclude_no_calendar: true }),
 			...(_deadlineType ? { deadline_type: _deadlineType } : {}),
+			...(_tag ? { tag: _tag } : {}),
 			...computeDueDateFilters(_dueDate)
 		});
 	}
@@ -360,6 +371,19 @@
 					<span class="summary-count">{dueThisWeekCount}</span> this week
 				</span>
 			{/if}
+		</div>
+	{/if}
+
+	<!-- Active Tag Filter -->
+	{#if selectedTag}
+		<div class="active-tag-filter mb-4">
+			<span class="active-tag-label">Filtered by tag:</span>
+			<span class="active-tag-chip">
+				{selectedTag}
+				<button class="active-tag-remove" on:click={clearTagFilter} aria-label="Clear tag filter">
+					&times;
+				</button>
+			</span>
 		</div>
 	{/if}
 
@@ -703,6 +727,53 @@
 	.subtask-status-pill.in_progress {
 		background-color: var(--primary-50);
 		color: var(--primary-600);
+	}
+
+	/* Active tag filter */
+	.active-tag-filter {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.active-tag-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--text-secondary, #6b7280);
+	}
+
+	.active-tag-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.25rem 0.625rem;
+		background-color: var(--primary-100, #dbeafe);
+		color: var(--primary-700, #1d4ed8);
+		font-size: 0.8125rem;
+		font-weight: 500;
+		border-radius: 9999px;
+	}
+
+	.active-tag-remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1rem;
+		height: 1rem;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--primary-500, #3b82f6);
+		font-size: 1rem;
+		line-height: 1;
+		cursor: pointer;
+		border-radius: 50%;
+		transition: all var(--transition-fast);
+	}
+
+	.active-tag-remove:hover {
+		background-color: var(--primary-200, #bfdbfe);
+		color: var(--primary-800, #1e40af);
 	}
 
 	@media (max-width: 768px) {
