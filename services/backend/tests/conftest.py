@@ -91,8 +91,8 @@ def _create_worker_database(worker_db_name: str):
     # CREATE/DROP DATABASE cannot run inside a transaction
     conn = psycopg.connect(conninfo, autocommit=True)
     try:
-        conn.execute(f"DROP DATABASE IF EXISTS {worker_db_name}")
-        conn.execute(f"CREATE DATABASE {worker_db_name}")
+        conn.execute(f"DROP DATABASE IF EXISTS {worker_db_name}")  # type: ignore[arg-type]
+        conn.execute(f"CREATE DATABASE {worker_db_name}")  # type: ignore[arg-type]
     finally:
         conn.close()
 
@@ -100,7 +100,7 @@ def _create_worker_database(worker_db_name: str):
 
     conn = psycopg.connect(conninfo, autocommit=True)
     try:
-        conn.execute(f"DROP DATABASE IF EXISTS {worker_db_name}")
+        conn.execute(f"DROP DATABASE IF EXISTS {worker_db_name}")  # type: ignore[arg-type]
     finally:
         conn.close()
 

@@ -11,6 +11,7 @@ and tags (JSONB) for categorization.
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 
 from alembic import op
 
@@ -37,7 +38,7 @@ def upgrade() -> None:
         "wiki_pages",
         sa.Column(
             "tags",
-            sa.dialects.postgresql.JSONB(),
+            JSONB(),
             server_default="[]",
             nullable=False,
         ),
