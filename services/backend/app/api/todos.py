@@ -1,5 +1,6 @@
 """Todo API routes."""
 
+from collections import deque
 from datetime import UTC, date, datetime
 from typing import Literal
 
@@ -1710,10 +1711,10 @@ async def _check_circular_dependency(
 
     # BFS to find if dependent_id is reachable from dependency_id
     visited: set[int] = set()
-    queue = [dependency_id]
+    queue: deque[int] = deque([dependency_id])
 
     while queue:
-        current_id = queue.pop(0)
+        current_id = queue.popleft()
         if current_id == dependent_id:
             return True  # Found a cycle
 
