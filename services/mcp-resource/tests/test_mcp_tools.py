@@ -2705,6 +2705,20 @@ class TestNewsFeedTools:
                 offset=None,
             )
 
+    @pytest.mark.asyncio
+    async def test_list_articles_invalid_feed_type(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test list_articles rejects invalid feed_type."""
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["list_articles"].fn(feed_type="blog")
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "Invalid feed_type" in parsed["error"]
+
     # --- get_article ---
 
     @pytest.mark.asyncio
@@ -2769,6 +2783,7 @@ class TestNewsFeedTools:
             assert "error" not in parsed
             assert parsed["article_id"] == 1
             assert parsed["is_read"] is True
+            assert parsed["read_at"] == "2026-03-01T10:00:00Z"
             assert parsed["status"] == "updated"
 
     @pytest.mark.asyncio
@@ -2788,6 +2803,7 @@ class TestNewsFeedTools:
             parsed = json.loads(result)
             assert "error" not in parsed
             assert parsed["is_read"] is False
+            assert parsed["read_at"] is None
 
     @pytest.mark.asyncio
     async def test_mark_article_read_error(self, mock_api_client: MagicMock) -> None:
@@ -3053,7 +3069,7 @@ class TestNewsFeedTools:
 
         mock_api_client.toggle_feed_source.return_value = ApiResponse(
             success=True,
-            data={"is_active": False},
+            data={"is_active": False, "id": 1},
             status_code=200,
         )
 

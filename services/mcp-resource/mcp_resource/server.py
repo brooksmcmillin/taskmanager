@@ -2463,6 +2463,16 @@ def create_resource_server(
             f"=== list_articles called: unread_only={unread_only}, "
             f"search={search}, feed_type={feed_type}, featured={featured} ==="
         )
+        valid_feed_types = {"paper", "article"}
+        if feed_type is not None and feed_type not in valid_feed_types:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Invalid feed_type '{feed_type}'. "
+                        f"Must be one of: article, paper"
+                    )
+                }
+            )
         try:
             api_client = get_api_client()
             response = api_client.list_articles(
@@ -2578,16 +2588,13 @@ def create_resource_server(
                 logger.error(f"Failed to mark article read: {response.error}")
                 return json.dumps({"error": response.error})
 
-            return json.dumps(
-                {
-                    "article_id": article_id,
-                    "is_read": is_read,
-                    "status": "updated",
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
-                }
-            )
+            result = response.data if isinstance(response.data, dict) else {}
+            result["article_id"] = article_id
+            result["status"] = "updated"
+            result["current_time"] = datetime.datetime.now(
+                tz=datetime.UTC
+            ).isoformat()
+            return json.dumps(result)
         except Exception as e:
             logger.error(
                 f"Exception in mark_article_read: {e}", exc_info=True
@@ -2726,6 +2733,16 @@ def create_resource_server(
             f"=== create_feed_source called: name='{name}', url='{url}', "
             f"feed_type={feed_type} ==="
         )
+        valid_feed_types = {"paper", "article"}
+        if feed_type not in valid_feed_types:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Invalid feed_type '{feed_type}'. "
+                        f"Must be one of: article, paper"
+                    )
+                }
+            )
         try:
             api_client = get_api_client()
             response = api_client.create_feed_source(
@@ -2802,6 +2819,16 @@ def create_resource_server(
             f"=== update_feed_source called: source_id={source_id}, "
             f"name={name}, url={url} ==="
         )
+        valid_feed_types = {"paper", "article"}
+        if feed_type is not None and feed_type not in valid_feed_types:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Invalid feed_type '{feed_type}'. "
+                        f"Must be one of: article, paper"
+                    )
+                }
+            )
         try:
             api_client = get_api_client()
             response = api_client.update_feed_source(
@@ -2923,16 +2950,13 @@ def create_resource_server(
                 )
                 return json.dumps({"error": response.error})
 
-            return json.dumps(
-                {
-                    "source_id": source_id,
-                    "is_active": is_active,
-                    "status": "toggled",
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
-                }
-            )
+            result = response.data if isinstance(response.data, dict) else {}
+            result["source_id"] = source_id
+            result["status"] = "toggled"
+            result["current_time"] = datetime.datetime.now(
+                tz=datetime.UTC
+            ).isoformat()
+            return json.dumps(result)
         except Exception as e:
             logger.error(
                 f"Exception in toggle_feed_source: {e}", exc_info=True
