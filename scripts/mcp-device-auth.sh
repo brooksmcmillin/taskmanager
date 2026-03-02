@@ -47,7 +47,7 @@ assert_integer() {
 # --- Find all MCP OAuth entries sharing this auth server ---
 mapfile -t MCP_KEYS < <(jq -r --arg auth_url "$AUTH_SERVER_URL" \
     '.mcpOAuth | to_entries[]
-     | select(.value.discoveryState.authorizationServerUrl == $auth_url)
+     | select((.value.discoveryState.authorizationServerUrl // "") | rtrimstr("/") == ($auth_url | rtrimstr("/")))
      | .key' "$CREDENTIALS_FILE")
 
 if [[ ${#MCP_KEYS[@]} -eq 0 ]]; then
