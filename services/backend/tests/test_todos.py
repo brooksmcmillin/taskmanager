@@ -2906,3 +2906,53 @@ async def test_filter_by_tag_composes_with_status(
     titles = [t["title"] for t in resp.json()["data"]]
     assert "Pending Tagged" in titles
     assert "Done Tagged" not in titles
+
+
+@pytest.mark.asyncio
+async def test_create_todo_with_time_horizon(authenticated_client: AsyncClient):
+    """Test creating a todo with a time_horizon value."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Horizon Task",
+            "time_horizon": "this_week",
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["time_horizon"] == "this_week"
+
+
+@pytest.mark.asyncio
+async def test_update_todo_time_horizon(authenticated_client: AsyncClient):
+    """Test updating time_horizon on an existing todo."""
+    # Create a todo without time_horizon
+    create_resp = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Update Horizon Task"},
+    )
+    todo_id = create_resp.json()["data"]["id"]
+    assert create_resp.json()["data"]["time_horizon"] is None
+
+    # Update to set time_horizon
+    update_resp = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"time_horizon": "next_quarter"},
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["data"]["time_horizon"] == "next_quarter"
+
+
+@pytest.mark.asyncio
+async def test_create_todo_invalid_time_horizon(authenticated_client: AsyncClient):
+    """Test that an invalid time_horizon value returns 422."""
+    response = await authenticated_client.post(
+        "/api/todos",
+        json={
+            "title": "Bad Horizon Task",
+            "time_horizon": "invalid_value",
+        },
+    )
+
+    assert response.status_code == 422

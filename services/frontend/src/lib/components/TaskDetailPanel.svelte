@@ -11,6 +11,21 @@
 		getDeadlineTypeBgColor,
 		getDeadlineTypeDescription
 	} from '$lib/utils/deadline';
+	import {
+		getTimeHorizonLabel,
+		getTimeHorizonColor,
+		getTimeHorizonBgColor,
+		getActionTypeLabel,
+		getActionTypeColor,
+		getActionTypeBgColor,
+		getAgentStatusLabel,
+		getAgentStatusColor,
+		getAgentStatusBgColor,
+		getAutonomyTierLabel,
+		getAutonomyTierColor,
+		getAutonomyTierBgColor,
+		getAutonomyTierDescription
+	} from '$lib/utils/agent';
 	import { formatDateDisplay } from '$lib/utils/dates';
 	import { todos } from '$lib/stores/todos';
 	import { toasts } from '$lib/stores/ui';
@@ -235,6 +250,21 @@
 						</span>
 					</div>
 
+					<!-- Time Horizon -->
+					{#if todo.time_horizon}
+						<div class="detail-section">
+							<label class="detail-label">Time Horizon</label>
+							<span
+								class="deadline-type-badge"
+								style="color: {getTimeHorizonColor(
+									todo.time_horizon
+								)}; background-color: {getTimeHorizonBgColor(todo.time_horizon)}"
+							>
+								{getTimeHorizonLabel(todo.time_horizon)}
+							</span>
+						</div>
+					{/if}
+
 					<!-- Tags -->
 					{#if todo.tags && todo.tags.length > 0}
 						<div class="detail-section">
@@ -268,6 +298,77 @@
 						<div class="detail-section">
 							<label class="detail-label">Context</label>
 							<p class="detail-text">{todo.context}</p>
+						</div>
+					{/if}
+
+					<!-- Agent Information -->
+					{#if todo.agent_actionable !== null || todo.action_type || todo.autonomy_tier || todo.agent_status || todo.agent_notes || todo.blocking_reason}
+						<div class="agent-info-section">
+							<label class="detail-label">Agent Information</label>
+
+							{#if todo.agent_actionable !== null}
+								<div class="detail-section">
+									<label class="detail-label">Agent Actionable</label>
+									<span class="detail-text">{todo.agent_actionable ? 'Yes' : 'No'}</span>
+								</div>
+							{/if}
+
+							{#if todo.action_type}
+								<div class="detail-section">
+									<label class="detail-label">Action Type</label>
+									<span
+										class="deadline-type-badge"
+										style="color: {getActionTypeColor(
+											todo.action_type
+										)}; background-color: {getActionTypeBgColor(todo.action_type)}"
+									>
+										{getActionTypeLabel(todo.action_type)}
+									</span>
+								</div>
+							{/if}
+
+							{#if todo.autonomy_tier}
+								<div class="detail-section">
+									<label class="detail-label">Autonomy Tier</label>
+									<span
+										class="deadline-type-badge"
+										style="color: {getAutonomyTierColor(
+											todo.autonomy_tier
+										)}; background-color: {getAutonomyTierBgColor(todo.autonomy_tier)}"
+										title={getAutonomyTierDescription(todo.autonomy_tier)}
+									>
+										{getAutonomyTierLabel(todo.autonomy_tier)}
+									</span>
+								</div>
+							{/if}
+
+							{#if todo.agent_status}
+								<div class="detail-section">
+									<label class="detail-label">Agent Status</label>
+									<span
+										class="deadline-type-badge"
+										style="color: {getAgentStatusColor(
+											todo.agent_status
+										)}; background-color: {getAgentStatusBgColor(todo.agent_status)}"
+									>
+										{getAgentStatusLabel(todo.agent_status)}
+									</span>
+								</div>
+							{/if}
+
+							{#if todo.blocking_reason}
+								<div class="blocking-reason">
+									<label class="detail-label">Blocking Reason</label>
+									<p class="detail-text">{todo.blocking_reason}</p>
+								</div>
+							{/if}
+
+							{#if todo.agent_notes}
+								<div class="detail-section">
+									<label class="detail-label">Agent Notes</label>
+									<div class="agent-notes">{todo.agent_notes}</div>
+								</div>
+							{/if}
 						</div>
 					{/if}
 
@@ -519,6 +620,31 @@
 	.tag:hover {
 		background-color: var(--primary-100);
 		color: var(--primary-700);
+	}
+
+	.agent-info-section {
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-light, var(--border-color));
+		margin-bottom: 1.5rem;
+	}
+
+	.agent-notes {
+		color: var(--text-primary);
+		font-size: 0.8125rem;
+		line-height: 1.6;
+		white-space: pre-wrap;
+		background: var(--bg-input);
+		border: 1px solid var(--border-color);
+		border-radius: 0.375rem;
+		padding: 0.75rem;
+		max-height: 200px;
+		overflow-y: auto;
+	}
+
+	.blocking-reason {
+		margin-bottom: 1.5rem;
+		padding-left: 0.75rem;
+		border-left: 3px solid #ef4444;
 	}
 
 	.panel-footer {
