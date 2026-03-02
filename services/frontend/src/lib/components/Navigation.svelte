@@ -36,6 +36,8 @@
 			clearTimeout(closeTimeout);
 			closeTimeout = null;
 		}
+		tasksDropdownOpen = false;
+		libraryDropdownOpen = false;
 		newsDropdownOpen = true;
 	}
 
@@ -51,6 +53,8 @@
 			clearTimeout(closeTimeout);
 			closeTimeout = null;
 		}
+		newsDropdownOpen = false;
+		libraryDropdownOpen = false;
 		tasksDropdownOpen = true;
 	}
 
@@ -66,6 +70,8 @@
 			clearTimeout(closeTimeout);
 			closeTimeout = null;
 		}
+		newsDropdownOpen = false;
+		tasksDropdownOpen = false;
 		libraryDropdownOpen = true;
 	}
 
@@ -74,6 +80,13 @@
 			libraryDropdownOpen = false;
 			closeTimeout = null;
 		}, 200);
+	}
+
+	function handleDropdownKeydown(event: KeyboardEvent, toggle: () => void) {
+		if (event.key === ' ' || event.key === 'Enter') {
+			event.preventDefault();
+			toggle();
+		}
 	}
 
 	function toggleUserDropdown() {
@@ -215,6 +228,7 @@
 								class="nav-link nav-dropdown-trigger"
 								class:active={isTasksActive}
 								onclick={() => (tasksDropdownOpen = !tasksDropdownOpen)}
+								onkeydown={(e) => handleDropdownKeydown(e, () => (tasksDropdownOpen = !tasksDropdownOpen))}
 								role="button"
 								tabindex="0"
 								aria-expanded={tasksDropdownOpen}
@@ -275,6 +289,7 @@
 								class="nav-link nav-dropdown-trigger"
 								class:active={isNewsActive}
 								onclick={() => (newsDropdownOpen = !newsDropdownOpen)}
+								onkeydown={(e) => handleDropdownKeydown(e, () => (newsDropdownOpen = !newsDropdownOpen))}
 								role="button"
 								tabindex="0"
 								aria-expanded={newsDropdownOpen}
@@ -327,6 +342,7 @@
 								class="nav-link nav-dropdown-trigger"
 								class:active={isLibraryActive}
 								onclick={() => (libraryDropdownOpen = !libraryDropdownOpen)}
+								onkeydown={(e) => handleDropdownKeydown(e, () => (libraryDropdownOpen = !libraryDropdownOpen))}
 								role="button"
 								tabindex="0"
 								aria-expanded={libraryDropdownOpen}
