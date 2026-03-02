@@ -14,9 +14,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.35",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
-    # Security
-    "passlib[bcrypt]>=1.7.4",
-    # Validation
+    # Security / Validation
     "pydantic>=2.10.0",
     "pydantic-settings>=2.6.0",
     "email-validator>=2.2.0",
