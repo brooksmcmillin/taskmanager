@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 import click
 from dotenv import load_dotenv
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp.server import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -40,6 +41,8 @@ MAX_CHANNEL_NAME_LENGTH = 64
 _CHANNEL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 DEFAULT_SCOPE = ["read"]
+DELETE_SCOPE = "delete"
+ALL_SCOPES = [*DEFAULT_SCOPE, DELETE_SCOPE]
 
 # OAuth client credentials
 MCP_AUTH_SERVER = os.environ.get("MCP_AUTH_SERVER", "http://localhost:9000")
@@ -269,7 +272,7 @@ def create_relay_server(
         app,
         server_url=server_url,
         auth_server_public_url=auth_server_public_url,
-        scopes=DEFAULT_SCOPE,
+        scopes=ALL_SCOPES,
     )
 
     @app.tool()
@@ -376,12 +379,24 @@ def create_relay_server(
         delete_channel fully removes the channel so it no longer appears in
         list_channels. Use this to clean up stale channels.
 
+        Requires the 'delete' OAuth scope in addition to the base 'read' scope.
+
         Args:
             channel: Channel name to delete
 
         Returns:
             JSON with deleted status
         """
+        # Enforce delete scope at the tool level — this operation is irreversible
+        # so it requires a higher-privilege scope than read-only tools.
+        token = get_access_token()
+        if token is None or DELETE_SCOPE not in token.scopes:
+            return json.dumps(
+                {
+                    "error": "insufficient_scope",
+                    "error_description": f"The '{DELETE_SCOPE}' scope is required to delete a channel.",
+                }
+            )
         try:
             validate_channel_name(channel)
             deleted = store.delete(channel)
