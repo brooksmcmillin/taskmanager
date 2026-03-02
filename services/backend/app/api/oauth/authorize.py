@@ -79,6 +79,12 @@ async def authorize_get(
         params = urlencode({"error": "unsupported_response_type", "state": state or ""})
         return RedirectResponse(f"{redirect_uri}?{params}")
 
+    # Validate requested scopes against client's registered scopes
+    requested_scopes = set(scope.split()) if scope else set()
+    allowed_scopes = set(json.loads(client.scopes))
+    if not requested_scopes.issubset(allowed_scopes):
+        raise errors.oauth_invalid_scope()
+
     # Render consent page with template
     scopes = scope.split()
     return templates.TemplateResponse(
@@ -128,6 +134,12 @@ async def authorize_post(
     redirect_uris_list = json.loads(client.redirect_uris)
     if redirect_uri not in redirect_uris_list:
         raise errors.oauth_invalid_redirect()
+
+    # Validate requested scopes against client's registered scopes
+    requested_scopes = set(scope.split()) if scope else set()
+    allowed_scopes = set(json.loads(client.scopes))
+    if not requested_scopes.issubset(allowed_scopes):
+        raise errors.oauth_invalid_scope()
 
     if action == "deny":
         params = urlencode({"error": "access_denied", "state": state})

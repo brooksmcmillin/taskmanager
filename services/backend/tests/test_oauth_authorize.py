@@ -911,3 +911,235 @@ async def test_authorize_post_no_open_redirect_on_allow(
         )
         assert response.status_code == 400, f"Expected 400 for URI: {evil_uri}"
         assert response.headers.get("location", "") != evil_uri
+
+
+# =============================================================================
+# Scope Validation Tests (task #460)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_authorize_get_valid_scope_subset_accepted(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that GET /authorize accepts scopes that are a subset of registered scopes.
+
+    The oauth_client fixture has scopes=["read", "write"].
+    Requesting only "read" is a valid subset.
+    """
+    response = await authenticated_client.get(
+        "/api/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read",
+        },
+    )
+    assert response.status_code == 200
+    assert "read" in response.text
+
+
+@pytest.mark.asyncio
+async def test_authorize_get_all_registered_scopes_accepted(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test GET /authorize accepts all registered scopes."""
+    response = await authenticated_client.get(
+        "/api/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read write",
+        },
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_authorize_get_invalid_scope_rejected(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that GET /authorize rejects scopes not registered for the client.
+
+    The oauth_client fixture has scopes=["read", "write"].
+    Requesting "admin" should be rejected with invalid_scope (OAUTH_003, 400).
+    """
+    response = await authenticated_client.get(
+        "/api/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "admin",
+        },
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert data["detail"]["code"] == "OAUTH_003"
+
+
+@pytest.mark.asyncio
+async def test_authorize_get_partial_invalid_scope_rejected(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that GET /authorize rejects if any requested scope is not registered.
+
+    Requesting "read admin" is invalid because "admin" is not registered.
+    """
+    response = await authenticated_client.get(
+        "/api/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read admin",
+        },
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert data["detail"]["code"] == "OAUTH_003"
+
+
+@pytest.mark.asyncio
+async def test_authorize_get_empty_scope_accepted(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that GET /authorize accepts empty scope (empty set is subset of any set)."""
+    response = await authenticated_client.get(
+        "/api/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "",
+        },
+    )
+    # Empty scope should be accepted (defaults apply); page renders
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_valid_scope_subset_accepted(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test POST /authorize accepts scope subset."""
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "code=" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_all_registered_scopes_accepted(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that POST /authorize accepts all registered scopes."""
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read write",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "code=" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_invalid_scope_rejected(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that POST /authorize rejects scopes not registered for the client.
+
+    Security: an attacker must not be able to request elevated scopes
+    (e.g., "admin") that were not granted to the client at registration time.
+    """
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "admin",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert data["detail"]["code"] == "OAUTH_003"
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_partial_invalid_scope_rejected(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test POST /authorize rejects unregistered scopes."""
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read admin",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert data["detail"]["code"] == "OAUTH_003"
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_empty_scope_accepted(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that POST /authorize accepts empty scope (empty set is a valid subset)."""
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "allow",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert "code=" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_invalid_scope_denied_action_also_rejected(
+    authenticated_client: AsyncClient, oauth_client
+):
+    """Test that POST /authorize with invalid scope is rejected even on deny action.
+
+    The scope validation must run before acting on the action field to prevent
+    scope escalation attempts disguised as deny actions.
+    """
+    response = await authenticated_client.post(
+        "/api/oauth/authorize",
+        data={
+            "action": "deny",
+            "client_id": oauth_client.client_id,
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "superadmin",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert data["detail"]["code"] == "OAUTH_003"
