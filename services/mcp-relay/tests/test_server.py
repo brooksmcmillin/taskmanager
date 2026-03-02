@@ -12,6 +12,7 @@ from mcp_relay.server import (
     MAX_READ_LIMIT,
     MessageStore,
     validate_channel_name,
+    validate_message_id,
 )
 
 
@@ -59,6 +60,36 @@ class TestValidateChannelName:
     def test_rejects_name_too_long(self) -> None:
         with pytest.raises(ValueError, match="too long"):
             validate_channel_name("a" * (MAX_CHANNEL_NAME_LENGTH + 1))
+
+
+class TestValidateMessageId:
+    """Tests for the validate_message_id helper."""
+
+    def test_valid_uuids(self) -> None:
+        valid = [
+            "550e8400-e29b-41d4-a716-446655440000",
+            "00000000-0000-0000-0000-000000000000",
+            "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        ]
+        for v in valid:
+            validate_message_id(v)  # must not raise
+
+    def test_rejects_non_uuid_string(self) -> None:
+        with pytest.raises(ValueError, match="Invalid message ID format"):
+            validate_message_id("not-a-uuid")
+
+    def test_rejects_empty_string(self) -> None:
+        with pytest.raises(ValueError, match="Invalid message ID format"):
+            validate_message_id("")
+
+    def test_rejects_uuid_with_trailing_newline(self) -> None:
+        with pytest.raises(ValueError, match="Invalid message ID format"):
+            validate_message_id("550e8400-e29b-41d4-a716-446655440000\n")
+
+    def test_rejects_injected_newlines(self) -> None:
+        with pytest.raises(ValueError, match="Invalid message ID format"):
+            validate_message_id("00000000-0000-0000-0000-000000000000\nfake log entry")
 
 
 class TestMessageStore:
@@ -240,6 +271,87 @@ class TestMessageStore:
 
         assert "test" not in store._channels
         assert "test" not in store._events
+
+    def test_delete_message_removes_by_id(self) -> None:
+        store = MessageStore()
+        msg1 = store.add("test", "first", "alice")
+        msg2 = store.add("test", "second", "alice")
+        msg3 = store.add("test", "third", "alice")
+
+        result = store.delete_message("test", msg2.id)
+        assert result is True
+
+        remaining = store.get("test")
+        assert len(remaining) == 2
+        ids = [m.id for m in remaining]
+        assert msg1.id in ids
+        assert msg2.id not in ids
+        assert msg3.id in ids
+
+    def test_delete_message_nonexistent_id(self) -> None:
+        store = MessageStore()
+        store.add("test", "msg")
+
+        result = store.delete_message("test", "00000000-0000-0000-0000-000000000000")
+        assert result is False
+        assert len(store.get("test")) == 1
+
+    def test_delete_message_nonexistent_channel(self) -> None:
+        store = MessageStore()
+        # Use a valid UUID; channel does not exist
+        result = store.delete_message("no-such-channel", "00000000-0000-0000-0000-000000000000")
+        assert result is False
+
+    def test_delete_message_preserves_order(self) -> None:
+        store = MessageStore()
+        msgs = [store.add("test", f"msg-{i}") for i in range(5)]
+
+        store.delete_message("test", msgs[2].id)
+
+        remaining = store.get("test")
+        assert [m.content for m in remaining] == ["msg-0", "msg-1", "msg-3", "msg-4"]
+
+    def test_delete_message_from_full_channel(self) -> None:
+        """Deleting from a full channel preserves maxlen behaviour."""
+        store = MessageStore(max_per_channel=5)
+        for i in range(5):
+            store.add("test", f"msg-{i}")
+
+        messages = store.get("test")
+        target_id = messages[2].id
+
+        result = store.delete_message("test", target_id)
+        assert result is True
+        remaining = store.get("test")
+        assert len(remaining) == 4
+        assert all(m.id != target_id for m in remaining)
+
+    def test_delete_message_sender_match_succeeds(self) -> None:
+        """delete_message with correct sender deletes the message."""
+        store = MessageStore()
+        msg = store.add("test", "content", "alice")
+
+        result = store.delete_message("test", msg.id, sender="alice")
+        assert result is True
+        assert store.get("test") == []
+
+    def test_delete_message_sender_mismatch_denied(self) -> None:
+        """delete_message with wrong sender does not delete the message."""
+        store = MessageStore()
+        msg = store.add("test", "content", "alice")
+
+        result = store.delete_message("test", msg.id, sender="bob")
+        assert result is False
+        assert len(store.get("test")) == 1
+
+    def test_delete_message_no_sender_deletes_any(self) -> None:
+        """delete_message without sender constraint removes regardless of sender."""
+        store = MessageStore()
+        msg = store.add("test", "content", "alice")
+
+        result = store.delete_message("test", msg.id)
+        assert result is True
+        assert store.get("test") == []
 
     def test_max_messages_eviction(self) -> None:
         store = MessageStore(max_per_channel=5)
