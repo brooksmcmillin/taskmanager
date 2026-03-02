@@ -648,6 +648,102 @@ async def test_create_todo_infers_autonomy_tier_from_code_action(
     assert data["autonomy_tier"] == 3
 
 
+# completed_date Tests
+
+
+@pytest.mark.asyncio
+async def test_put_status_to_completed_sets_completed_date(
+    authenticated_client: AsyncClient,
+):
+    """Test that PUT /{todo_id} sets completed_date when status changes to completed."""
+    # Create a pending todo
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to Complete"},
+    )
+    assert create_response.status_code == 201
+    todo_id = create_response.json()["data"]["id"]
+    assert create_response.json()["data"]["completed_date"] is None
+
+    # Update status to completed via PUT
+    response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"status": "completed"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["status"] == "completed"
+    assert data["completed_date"] is not None
+
+
+@pytest.mark.asyncio
+async def test_put_status_to_completed_does_not_overwrite_existing_completed_date(
+    authenticated_client: AsyncClient,
+):
+    """Test that PUT /{todo_id} does not overwrite completed_date if already set."""
+
+    # Create a todo
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task with Existing completed_date"},
+    )
+    assert create_response.status_code == 201
+    todo_id = create_response.json()["data"]["id"]
+
+    # Set status to completed (first time — sets completed_date)
+    first_response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"status": "completed"},
+    )
+    assert first_response.status_code == 200
+    first_completed_date = first_response.json()["data"]["completed_date"]
+    assert first_completed_date is not None
+
+    # Set status to completed again (should NOT overwrite completed_date)
+    second_response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"status": "completed"},
+    )
+    assert second_response.status_code == 200
+    second_completed_date = second_response.json()["data"]["completed_date"]
+
+    # completed_date should remain unchanged
+    assert second_completed_date == first_completed_date
+
+
+@pytest.mark.asyncio
+async def test_put_status_away_from_completed_clears_completed_date(
+    authenticated_client: AsyncClient,
+):
+    """Test that PUT /{todo_id} clears completed_date when status leaves completed."""
+    # Create a todo
+    create_response = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task to Reopen"},
+    )
+    assert create_response.status_code == 201
+    todo_id = create_response.json()["data"]["id"]
+
+    # Complete it first
+    complete_response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"status": "completed"},
+    )
+    assert complete_response.status_code == 200
+    assert complete_response.json()["data"]["completed_date"] is not None
+
+    # Change status back to pending
+    reopen_response = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"status": "pending"},
+    )
+    assert reopen_response.status_code == 200
+    data = reopen_response.json()["data"]
+    assert data["status"] == "pending"
+    assert data["completed_date"] is None
+
+
 @pytest.mark.asyncio
 async def test_create_todo_infers_autonomy_tier_from_purchase_action(
     authenticated_client: AsyncClient,

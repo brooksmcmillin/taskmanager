@@ -252,6 +252,7 @@ class TodoResponse(BaseModel):
     # Task dependencies
     dependencies: list[DependencyResponse] = Field(default_factory=list)
     dependents: list[DependencyResponse] = Field(default_factory=list)
+    completed_date: datetime | None = None
     created_at: datetime
     updated_at: datetime | None
     # Agent fields
@@ -407,6 +408,7 @@ def _build_todo_response(
         agent_status=todo.agent_status,
         agent_notes=todo.agent_notes,
         blocking_reason=todo.blocking_reason,
+        completed_date=todo.completed_date,
     )
 
 
@@ -1424,9 +1426,15 @@ async def update_todo(
     for field, value in update_data.items():
         setattr(todo, field, value)
 
-    # Clear completed_date when status changes away from completed
-    if "status" in update_data and update_data["status"] != Status.completed:
-        todo.completed_date = None
+    # Manage completed_date based on status changes
+    if "status" in update_data:
+        if update_data["status"] == Status.completed:
+            # Set completed_date when transitioning to completed (if not already set)
+            if todo.completed_date is None:
+                todo.completed_date = datetime.now(UTC)
+        else:
+            # Clear completed_date when status changes away from completed
+            todo.completed_date = None
 
     # Commit the changes
     await db.commit()
