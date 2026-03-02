@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 LAKERA_API_URL = os.environ.get("LAKERA_GUARD_API_URL", "https://api.lakera.ai/v2/guard")
 LAKERA_API_KEY = os.environ.get("LAKERA_GUARD_API_KEY", "")
 LAKERA_GUARD_ENABLED = os.environ.get("LAKERA_GUARD_ENABLED", "false").lower() == "true"
+LAKERA_PROJECT_ID = os.environ.get("LAKERA_GUARD_PROJECT_ID", "project-9146177048")
 
 # Type variables for generic decorator
 P = ParamSpec("P")
@@ -58,7 +59,7 @@ async def screen_content(text: str, role: str = "user") -> dict[str, Any]:
             json={
                 "messages": [{"role": role, "content": text}],
                 "breakdown": True,
-                "project_id": "project-9146177048",
+                "project_id": LAKERA_PROJECT_ID,
             },
             headers={
                 "Authorization": f"Bearer {LAKERA_API_KEY}",
