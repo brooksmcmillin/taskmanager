@@ -397,6 +397,104 @@ async def test_cannot_create_nested_subtasks_via_post(
     assert "nesting" in response.json()["detail"]["message"].lower()
 
 
+@pytest.mark.asyncio
+async def test_cannot_make_parent_with_children_a_subtask(
+    authenticated_client: AsyncClient,
+):
+    """Test that a task with existing subtasks cannot become a subtask itself."""
+    # Create a parent task and give it a subtask
+    parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Parent with children"},
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Child task", "parent_id": parent_id},
+    )
+
+    # Create another root task to be the new parent
+    new_parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Would-be grandparent"},
+    )
+    new_parent_id = new_parent.json()["data"]["id"]
+
+    # Try to make the parent (which has children) a subtask
+    response = await authenticated_client.put(
+        f"/api/todos/{parent_id}",
+        json={"parent_id": new_parent_id},
+    )
+
+    assert response.status_code == 400
+    assert "subtasks" in response.json()["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_task_without_children_can_become_subtask(
+    authenticated_client: AsyncClient,
+):
+    """Test that a task without subtasks CAN become a subtask."""
+    # Create two root tasks
+    task = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Task without children"},
+    )
+    task_id = task.json()["data"]["id"]
+
+    parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "New parent"},
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    # Should succeed
+    response = await authenticated_client.put(
+        f"/api/todos/{task_id}",
+        json={"parent_id": parent_id},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["parent_id"] == parent_id
+
+
+@pytest.mark.asyncio
+async def test_bulk_update_cannot_make_parent_with_children_a_subtask(
+    authenticated_client: AsyncClient,
+):
+    """Bulk update prevents tasks with children from becoming subtasks."""
+    # Create a parent task and give it a subtask
+    parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bulk parent with children"},
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bulk child task", "parent_id": parent_id},
+    )
+
+    # Create another root task to be the new parent
+    new_parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bulk would-be grandparent"},
+    )
+    new_parent_id = new_parent.json()["data"]["id"]
+
+    # Try bulk update to make the parent (which has children) a subtask
+    response = await authenticated_client.put(
+        "/api/todos",
+        json={
+            "ids": [parent_id],
+            "updates": {"parent_id": new_parent_id},
+        },
+    )
+
+    assert response.status_code == 400
+    assert "subtasks" in response.json()["detail"]["message"].lower()
+
+
 # Parent Task Link Tests
 
 
@@ -2754,9 +2852,7 @@ async def test_filter_by_tag_returns_matching_tasks(
         json={"title": "Other Task", "tags": ["frontend"]},
     )
 
-    resp = await authenticated_client.get(
-        "/api/todos", params={"tag": "backend"}
-    )
+    resp = await authenticated_client.get("/api/todos", params={"tag": "backend"})
     assert resp.status_code == 200
     titles = [t["title"] for t in resp.json()["data"]]
     assert "Tagged Task" in titles
@@ -2777,9 +2873,7 @@ async def test_filter_by_tag_excludes_untagged_tasks(
         json={"title": "Has Tag", "tags": ["review"]},
     )
 
-    resp = await authenticated_client.get(
-        "/api/todos", params={"tag": "review"}
-    )
+    resp = await authenticated_client.get("/api/todos", params={"tag": "review"})
     assert resp.status_code == 200
     titles = [t["title"] for t in resp.json()["data"]]
     assert "Has Tag" in titles
