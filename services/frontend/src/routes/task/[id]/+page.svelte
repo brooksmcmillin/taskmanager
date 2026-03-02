@@ -113,14 +113,14 @@
 <main class="container py-8">
 	<div class="task-page">
 		<!-- Back link -->
-		<a href="/" class="back-link">&larr; Back to tasks</a>
+		<a href="/tasks" class="back-link">&larr; Back to tasks</a>
 
 		{#if loading}
 			<div class="loading-state">Loading task...</div>
 		{:else if error}
 			<div class="error-state">
 				<p>{error}</p>
-				<a href="/" class="btn btn-secondary">Back to tasks</a>
+				<a href="/tasks" class="btn btn-secondary">Back to tasks</a>
 			</div>
 		{:else if todo}
 			<div class="task-page-header">

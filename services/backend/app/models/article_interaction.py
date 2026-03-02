@@ -41,6 +41,8 @@ class ArticleInteraction(Base):
     rating: Mapped[ArticleRating | None] = mapped_column(String(20))
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_bookmarked: Mapped[bool] = mapped_column(Boolean, default=False)
+    bookmarked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -15,7 +15,7 @@ test.describe('Deadline Type Feature', () => {
 
 	test.describe('Form UI', () => {
 		test('should display deadline_type select in create form', async ({ page }) => {
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Open create task panel
@@ -37,7 +37,7 @@ test.describe('Deadline Type Feature', () => {
 		});
 
 		test('should default to preferred deadline type', async ({ page }) => {
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Open create task panel
@@ -49,7 +49,7 @@ test.describe('Deadline Type Feature', () => {
 		});
 
 		test('should allow selecting each deadline type value', async ({ page }) => {
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Open create task panel
@@ -67,7 +67,7 @@ test.describe('Deadline Type Feature', () => {
 
 	test.describe('Create with deadline type', () => {
 		test('should create todo with default preferred deadline type', async ({ page }) => {
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Open create task panel
@@ -93,7 +93,7 @@ test.describe('Deadline Type Feature', () => {
 		});
 
 		test('should create todo with hard deadline type', async ({ page }) => {
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Open create task panel
@@ -119,7 +119,7 @@ test.describe('Deadline Type Feature', () => {
 		});
 
 		test('should create todo with flexible deadline type', async ({ page }) => {
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			await page.click('.add-todo-btn');
@@ -140,7 +140,7 @@ test.describe('Deadline Type Feature', () => {
 		});
 
 		test('should create todo with firm deadline type', async ({ page }) => {
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			await page.click('.add-todo-btn');
@@ -252,7 +252,7 @@ test.describe('Deadline Type Feature', () => {
 				dueDate: getFutureDate(5)
 			});
 
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Switch to list view
@@ -273,7 +273,7 @@ test.describe('Deadline Type Feature', () => {
 				dueDate: getFutureDate(5)
 			});
 
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Switch to list view
@@ -295,7 +295,7 @@ test.describe('Deadline Type Feature', () => {
 				dueDate: getFutureDate(3)
 			});
 
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Calendar is the default view — scope to the specific task card
@@ -314,7 +314,7 @@ test.describe('Deadline Type Feature', () => {
 				dueDate: getFutureDate(3)
 			});
 
-			await page.goto('/');
+			await page.goto('/tasks');
 			await page.waitForLoadState('networkidle');
 
 			// Find the calendar task card, verify no deadline label inside it
@@ -333,7 +333,7 @@ test.describe('Deadline Type Feature', () => {
 				dueDate: today
 			});
 
-			await page.goto('/home');
+			await page.goto('/');
 			await page.waitForLoadState('networkidle');
 
 			const taskItem = page.locator('.task-item', {

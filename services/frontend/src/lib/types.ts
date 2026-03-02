@@ -212,6 +212,16 @@ export interface Article {
 	is_read: boolean;
 	rating: ArticleRating | null;
 	read_at: string | null;
+	is_bookmarked: boolean;
+	bookmarked_at: string | null;
+}
+
+export interface ReadingStats {
+	streak_days: number;
+	articles_read_today: number;
+	articles_read_this_week: number;
+	total_articles_read: number;
+	total_bookmarked: number;
 }
 
 export type FeedType = 'paper' | 'article';

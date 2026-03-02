@@ -22,6 +22,9 @@ test.describe('Calendar Drag and Drop', () => {
 		// Register and login with test user
 		await registerAndLogin(page);
 
+		// Navigate to tasks page where the calendar lives
+		await page.goto('/tasks');
+
 		// Wait for calendar to load
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 10000 });
 	});

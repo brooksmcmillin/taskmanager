@@ -200,7 +200,7 @@
 	let currentPath = $derived($page.url.pathname);
 	let isNewsActive = $derived(currentPath.startsWith('/news'));
 	let isTasksActive = $derived(
-		currentPath === '/' ||
+		currentPath.startsWith('/tasks') ||
 			currentPath.startsWith('/projects') ||
 			currentPath.startsWith('/recurring-tasks')
 	);
@@ -213,7 +213,7 @@
 	<div class="container">
 		<div class="flex items-center justify-between h-16">
 			<div class="flex items-center space-x-8">
-				<h1 class="text-xl font-bold text-gray-900">Task Manager</h1>
+				<a href="/" class="nav-brand">Task Manager</a>
 
 				<!-- Desktop Navigation -->
 				{#if user}
@@ -228,7 +228,8 @@
 								class="nav-link nav-dropdown-trigger"
 								class:active={isTasksActive}
 								onclick={() => (tasksDropdownOpen = !tasksDropdownOpen)}
-								onkeydown={(e) => handleDropdownKeydown(e, () => (tasksDropdownOpen = !tasksDropdownOpen))}
+								onkeydown={(e) =>
+									handleDropdownKeydown(e, () => (tasksDropdownOpen = !tasksDropdownOpen))}
 								role="button"
 								tabindex="0"
 								aria-expanded={tasksDropdownOpen}
@@ -252,9 +253,9 @@
 							{#if tasksDropdownOpen}
 								<div class="dropdown-menu">
 									<a
-										href="/"
+										href="/tasks"
 										class="dropdown-item"
-										class:active={currentPath === '/'}
+										class:active={currentPath === '/tasks'}
 										onclick={closeDropdowns}
 									>
 										Todos
@@ -289,7 +290,8 @@
 								class="nav-link nav-dropdown-trigger"
 								class:active={isNewsActive}
 								onclick={() => (newsDropdownOpen = !newsDropdownOpen)}
-								onkeydown={(e) => handleDropdownKeydown(e, () => (newsDropdownOpen = !newsDropdownOpen))}
+								onkeydown={(e) =>
+									handleDropdownKeydown(e, () => (newsDropdownOpen = !newsDropdownOpen))}
 								role="button"
 								tabindex="0"
 								aria-expanded={newsDropdownOpen}
@@ -342,7 +344,8 @@
 								class="nav-link nav-dropdown-trigger"
 								class:active={isLibraryActive}
 								onclick={() => (libraryDropdownOpen = !libraryDropdownOpen)}
-								onkeydown={(e) => handleDropdownKeydown(e, () => (libraryDropdownOpen = !libraryDropdownOpen))}
+								onkeydown={(e) =>
+									handleDropdownKeydown(e, () => (libraryDropdownOpen = !libraryDropdownOpen))}
 								role="button"
 								tabindex="0"
 								aria-expanded={libraryDropdownOpen}
@@ -546,9 +549,9 @@
 			<div class="mobile-menu-section">
 				<div class="mobile-menu-label">Tasks</div>
 				<a
-					href="/"
+					href="/tasks"
 					class="mobile-menu-item"
-					class:active={currentPath === '/'}
+					class:active={currentPath === '/tasks'}
 					onclick={closeMobileMenu}
 				>
 					Todos
@@ -682,6 +685,13 @@
 </nav>
 
 <style>
+	.nav-brand {
+		font-size: 1.25rem;
+		font-weight: 700;
+		color: inherit;
+		text-decoration: none;
+	}
+
 	.nav-dropdown {
 		position: relative;
 		display: inline-block;

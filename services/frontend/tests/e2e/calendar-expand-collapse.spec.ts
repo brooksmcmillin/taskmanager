@@ -17,7 +17,7 @@ test.describe('Calendar Expand/Collapse All', () => {
 	});
 
 	test('expand all button is hidden when no days overflow', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 		await expect(page.locator('.expand-all-btn')).not.toBeVisible();
 	});
@@ -28,7 +28,7 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Overflow Task ${i}`, { dueDate });
 		}
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		// Wait for at least one task to render on the calendar, confirming data has loaded
@@ -46,7 +46,7 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Toggle Task ${i}`, { dueDate });
 		}
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		// Wait for overflow indicator to appear (confirms tasks are loaded and overflowing)
@@ -71,7 +71,7 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Collapse Task ${i}`, { dueDate });
 		}
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		// Wait for tasks to load and expand button to appear
@@ -94,7 +94,7 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Sync Task ${i}`, { dueDate });
 		}
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		// Wait for expand button
@@ -114,7 +114,7 @@ test.describe('Calendar Expand/Collapse All', () => {
 			await createTodoViaAPI(page, `Nav Task ${i}`, { dueDate });
 		}
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		// Wait for expand button and expand all
