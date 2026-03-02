@@ -193,6 +193,85 @@ class TestMessageStore:
         store = MessageStore()
         assert store.clear("nope") is False
 
+    def test_clear_channel_persists_in_list(self) -> None:
+        """Clearing a channel keeps it in list_channels with message_count=0."""
+        store = MessageStore()
+        store.add("test", "msg1")
+        store.clear("test")
+
+        channels = store.list_channels()
+        assert len(channels) == 1
+        assert channels[0].name == "test"
+        assert channels[0].message_count == 0
+
+    def test_delete_channel_removes_from_store(self) -> None:
+        store = MessageStore()
+        store.add("test", "msg1")
+        store.add("test", "msg2")
+
+        result = store.delete("test")
+        assert result is True
+        assert store.get("test") == []
+        assert store.list_channels() == []
+
+    def test_delete_channel_nonexistent(self) -> None:
+        store = MessageStore()
+        assert store.delete("nope") is False
+
+    def test_delete_channel_removes_from_list(self) -> None:
+        """delete() removes the channel from list_channels entirely."""
+        store = MessageStore()
+        store.add("alpha", "a1")
+        store.add("beta", "b1")
+
+        store.delete("alpha")
+
+        channels = store.list_channels()
+        assert len(channels) == 1
+        assert channels[0].name == "beta"
+
+    def test_delete_channel_frees_slot_for_new_channel(self) -> None:
+        """After deleting a channel, its slot can be reused within max_channels."""
+        store = MessageStore(max_channels=2)
+        store.add("ch1", "msg")
+        store.add("ch2", "msg")
+
+        # At capacity — adding a third channel should fail
+        with pytest.raises(ValueError, match="Channel limit reached"):
+            store.add("ch3", "msg")
+
+        # Delete one and the slot becomes available
+        store.delete("ch1")
+        store.add("ch3", "msg")  # should not raise
+
+        channels = {c.name for c in store.list_channels()}
+        assert channels == {"ch2", "ch3"}
+
+    def test_delete_cleared_channel_removes_it(self) -> None:
+        """A channel that was cleared (message_count=0) can still be deleted."""
+        store = MessageStore()
+        store.add("test", "msg")
+        store.clear("test")
+
+        # Channel still visible after clear
+        assert len(store.list_channels()) == 1
+
+        result = store.delete("test")
+        assert result is True
+        assert store.list_channels() == []
+
+    def test_delete_channel_removes_event(self) -> None:
+        """delete() removes the asyncio event so the channel is fully gone."""
+        store = MessageStore()
+        store.add("test", "msg")
+
+        assert "test" in store._events
+
+        store.delete("test")
+
+        assert "test" not in store._channels
+        assert "test" not in store._events
+
     def test_delete_message_removes_by_id(self) -> None:
         store = MessageStore()
         msg1 = store.add("test", "first", "alice")
@@ -317,6 +396,77 @@ class TestMessageStore:
         with pytest.raises(ValueError, match="Message too large"):
             store.add("test", "x" * 11)
 
+    def test_sort_order_desc_default(self) -> None:
+        """Default sort_order='desc' returns the newest N messages."""
+        store = MessageStore()
+        for i in range(5):
+            store.add("test", f"msg-{i}")
+
+        messages = store.get("test", limit=3)
+        assert len(messages) == 3
+        assert messages[0].content == "msg-2"
+        assert messages[1].content == "msg-3"
+        assert messages[2].content == "msg-4"
+
+    def test_sort_order_desc_explicit(self) -> None:
+        """Explicit sort_order='desc' returns the newest N messages."""
+        store = MessageStore()
+        for i in range(5):
+            store.add("test", f"msg-{i}")
+
+        messages = store.get("test", limit=3, sort_order="desc")
+        assert len(messages) == 3
+        assert messages[0].content == "msg-2"
+        assert messages[2].content == "msg-4"
+
+    def test_sort_order_asc_returns_oldest_first(self) -> None:
+        """sort_order='asc' returns the oldest N messages."""
+        store = MessageStore()
+        for i in range(5):
+            store.add("test", f"msg-{i}")
+
+        messages = store.get("test", limit=3, sort_order="asc")
+        assert len(messages) == 3
+        assert messages[0].content == "msg-0"
+        assert messages[1].content == "msg-1"
+        assert messages[2].content == "msg-2"
+
+    def test_sort_order_asc_with_since(self) -> None:
+        """sort_order='asc' combined with since filters correctly."""
+        store = MessageStore()
+        msg0 = store.add("test", "msg-0")
+        store.add("test", "msg-1")
+        store.add("test", "msg-2")
+        store.add("test", "msg-3")
+
+        # Filter since msg0, get oldest first
+        messages = store.get("test", since=msg0.timestamp, limit=2, sort_order="asc")
+        assert len(messages) == 2
+        assert messages[0].content == "msg-1"
+        assert messages[1].content == "msg-2"
+
+    def test_sort_order_desc_with_since(self) -> None:
+        """sort_order='desc' combined with since returns newest of filtered messages."""
+        store = MessageStore()
+        msg0 = store.add("test", "msg-0")
+        store.add("test", "msg-1")
+        store.add("test", "msg-2")
+        store.add("test", "msg-3")
+
+        # Filter since msg0, get newest first (last 2 of filtered)
+        messages = store.get("test", since=msg0.timestamp, limit=2, sort_order="desc")
+        assert len(messages) == 2
+        assert messages[0].content == "msg-2"
+        assert messages[1].content == "msg-3"
+
+    def test_sort_order_invalid_raises(self) -> None:
+        """Invalid sort_order raises ValueError."""
+        store = MessageStore()
+        store.add("test", "msg")
+
+        with pytest.raises(ValueError, match="Invalid sort_order"):
+            store.get("test", sort_order="random")
+
     @pytest.mark.asyncio
     async def test_wait_for_message_immediate(self) -> None:
         """wait_for_new returns immediately if messages exist since the given timestamp."""
@@ -389,3 +539,25 @@ class TestStoreIntegration:
 
         messages = store.get("big", limit=MAX_READ_LIMIT + 100)
         assert len(messages) == MAX_READ_LIMIT
+
+    def test_delete_channel_integration(self) -> None:
+        """delete_channel fully removes a channel; clear_channel keeps the entry."""
+        store = MessageStore()
+        store.add("keep", "msg1")
+        store.add("remove", "msg2")
+
+        channels = store.list_channels()
+        assert len(channels) == 2
+
+        # clear_channel keeps the channel in the listing
+        store.clear("keep")
+        channels = store.list_channels()
+        assert len(channels) == 2
+        by_name = {c.name: c for c in channels}
+        assert by_name["keep"].message_count == 0
+
+        # delete_channel removes it entirely
+        store.delete("remove")
+        channels = store.list_channels()
+        assert len(channels) == 1
+        assert channels[0].name == "keep"
