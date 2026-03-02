@@ -73,17 +73,18 @@ class TestMessageStore:
         assert msg.sender == "alice"
         assert msg.id  # UUID assigned
 
-        messages = store.get("test")
+        messages, has_more = store.get("test")
         assert len(messages) == 1
         assert messages[0].id == msg.id
+        assert has_more is False
 
     def test_channel_isolation(self) -> None:
         store = MessageStore()
         store.add("ch-a", "message A")
         store.add("ch-b", "message B")
 
-        a_msgs = store.get("ch-a")
-        b_msgs = store.get("ch-b")
+        a_msgs, _ = store.get("ch-a")
+        b_msgs, _ = store.get("ch-b")
 
         assert len(a_msgs) == 1
         assert a_msgs[0].content == "message A"
@@ -92,7 +93,9 @@ class TestMessageStore:
 
     def test_read_nonexistent_channel(self) -> None:
         store = MessageStore()
-        assert store.get("nope") == []
+        messages, has_more = store.get("nope")
+        assert messages == []
+        assert has_more is False
 
     def test_since_timestamp_filtering(self) -> None:
         store = MessageStore()
@@ -100,7 +103,7 @@ class TestMessageStore:
         msg2 = store.add("test", "second")
 
         # Filter since the first message's timestamp — should only get second
-        filtered = store.get("test", since=msg1.timestamp)
+        filtered, _ = store.get("test", since=msg1.timestamp)
         assert len(filtered) == 1
         assert filtered[0].id == msg2.id
 
@@ -116,19 +119,21 @@ class TestMessageStore:
         for i in range(10):
             store.add("test", f"msg-{i}")
 
-        messages = store.get("test", limit=3)
+        messages, has_more = store.get("test", limit=3)
         assert len(messages) == 3
-        # Should return the last 3
+        # Should return the most recent 3 (no cursor preserves original behavior)
         assert messages[0].content == "msg-7"
         assert messages[2].content == "msg-9"
+        assert has_more is True
 
     def test_limit_capped_at_max(self) -> None:
         store = MessageStore()
         store.add("test", "msg")
 
         # Requesting more than MAX_READ_LIMIT should be capped
-        messages = store.get("test", limit=99999)
+        messages, has_more = store.get("test", limit=99999)
         assert len(messages) == 1  # only 1 message exists, but limit was capped
+        assert has_more is False
 
     def test_list_channels(self) -> None:
         store = MessageStore()
@@ -152,11 +157,13 @@ class TestMessageStore:
         store = MessageStore()
         store.add("test", "msg1")
         store.add("test", "msg2")
-        assert len(store.get("test")) == 2
+        messages, _ = store.get("test")
+        assert len(messages) == 2
 
         result = store.clear("test")
         assert result is True
-        assert store.get("test") == []
+        messages, _ = store.get("test")
+        assert messages == []
 
     def test_clear_nonexistent_channel(self) -> None:
         store = MessageStore()
@@ -180,7 +187,8 @@ class TestMessageStore:
 
         result = store.delete("test")
         assert result is True
-        assert store.get("test") == []
+        messages, _ = store.get("test")
+        assert messages == []
         assert store.list_channels() == []
 
     def test_delete_channel_nonexistent(self) -> None:
@@ -246,7 +254,7 @@ class TestMessageStore:
         for i in range(10):
             store.add("test", f"msg-{i}")
 
-        messages = store.get("test")
+        messages, _ = store.get("test")
         assert len(messages) == 5
         # Oldest messages should be evicted
         assert messages[0].content == "msg-5"
@@ -290,7 +298,7 @@ class TestMessageStore:
         for i in range(5):
             store.add("test", f"msg-{i}")
 
-        messages = store.get("test", limit=3)
+        messages, _ = store.get("test", limit=3)
         assert len(messages) == 3
         assert messages[0].content == "msg-2"
         assert messages[1].content == "msg-3"
@@ -302,7 +310,7 @@ class TestMessageStore:
         for i in range(5):
             store.add("test", f"msg-{i}")
 
-        messages = store.get("test", limit=3, sort_order="desc")
+        messages, _ = store.get("test", limit=3, sort_order="desc")
         assert len(messages) == 3
         assert messages[0].content == "msg-2"
         assert messages[2].content == "msg-4"
@@ -313,7 +321,7 @@ class TestMessageStore:
         for i in range(5):
             store.add("test", f"msg-{i}")
 
-        messages = store.get("test", limit=3, sort_order="asc")
+        messages, _ = store.get("test", limit=3, sort_order="asc")
         assert len(messages) == 3
         assert messages[0].content == "msg-0"
         assert messages[1].content == "msg-1"
@@ -327,8 +335,7 @@ class TestMessageStore:
         store.add("test", "msg-2")
         store.add("test", "msg-3")
 
-        # Filter since msg0, get oldest first
-        messages = store.get("test", since=msg0.timestamp, limit=2, sort_order="asc")
+        messages, _ = store.get("test", since=msg0.timestamp, limit=2, sort_order="asc")
         assert len(messages) == 2
         assert messages[0].content == "msg-1"
         assert messages[1].content == "msg-2"
@@ -341,8 +348,7 @@ class TestMessageStore:
         store.add("test", "msg-2")
         store.add("test", "msg-3")
 
-        # Filter since msg0, get newest first (last 2 of filtered)
-        messages = store.get("test", since=msg0.timestamp, limit=2, sort_order="desc")
+        messages, _ = store.get("test", since=msg0.timestamp, limit=2, sort_order="desc")
         assert len(messages) == 2
         assert messages[0].content == "msg-2"
         assert messages[1].content == "msg-3"
@@ -393,6 +399,220 @@ class TestMessageStore:
         assert timed_out is False
 
 
+class TestCursorPagination:
+    """Tests for cursor-based pagination (after/before message ID)."""
+
+    def _add_messages(self, store: MessageStore, channel: str, count: int) -> list[str]:
+        """Add ``count`` messages and return their IDs in order."""
+        ids = []
+        for i in range(count):
+            msg = store.add(channel, f"msg-{i}")
+            ids.append(msg.id)
+        return ids
+
+    # ------------------------------------------------------------------ after
+
+    def test_after_returns_messages_after_cursor(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 5)
+
+        # after the 2nd message → should get msg-2, msg-3, msg-4
+        messages, _ = store.get("test", after=ids[1])
+        assert len(messages) == 3
+        assert messages[0].content == "msg-2"
+        assert messages[2].content == "msg-4"
+
+    def test_after_last_message_returns_empty(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 3)
+
+        messages, has_more = store.get("test", after=ids[-1])
+        assert messages == []
+        assert has_more is False
+
+    def test_after_first_message_returns_rest(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 4)
+
+        messages, _ = store.get("test", after=ids[0])
+        assert len(messages) == 3
+        assert messages[0].content == "msg-1"
+
+    def test_after_invalid_id_raises(self) -> None:
+        store = MessageStore()
+        self._add_messages(store, "test", 3)
+
+        with pytest.raises(ValueError, match="Cursor ID not found"):
+            store.get("test", after="nonexistent-id")
+
+    # ----------------------------------------------------------------- before
+
+    def test_before_returns_messages_before_cursor(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 5)
+
+        # before the 4th message (index 3) → should get msg-0, msg-1, msg-2
+        messages, _ = store.get("test", before=ids[3])
+        assert len(messages) == 3
+        assert messages[0].content == "msg-0"
+        assert messages[2].content == "msg-2"
+
+    def test_before_first_message_returns_empty(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 3)
+
+        messages, has_more = store.get("test", before=ids[0])
+        assert messages == []
+        assert has_more is False
+
+    def test_before_last_message_returns_rest(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 4)
+
+        messages, _ = store.get("test", before=ids[-1])
+        assert len(messages) == 3
+        assert messages[-1].content == "msg-2"
+
+    def test_before_invalid_id_raises(self) -> None:
+        store = MessageStore()
+        self._add_messages(store, "test", 3)
+
+        with pytest.raises(ValueError, match="Cursor ID not found"):
+            store.get("test", before="nonexistent-id")
+
+    # --------------------------------------------------------------- has_more
+
+    def test_has_more_true_when_results_exceed_limit(self) -> None:
+        store = MessageStore()
+        self._add_messages(store, "test", 10)
+
+        messages, has_more = store.get("test", limit=5)
+        assert len(messages) == 5
+        assert has_more is True
+
+    def test_has_more_false_when_results_fit_in_limit(self) -> None:
+        store = MessageStore()
+        self._add_messages(store, "test", 3)
+
+        messages, has_more = store.get("test", limit=10)
+        assert len(messages) == 3
+        assert has_more is False
+
+    def test_has_more_false_when_exactly_limit(self) -> None:
+        store = MessageStore()
+        self._add_messages(store, "test", 5)
+
+        messages, has_more = store.get("test", limit=5)
+        assert len(messages) == 5
+        assert has_more is False
+
+    def test_has_more_with_after_cursor(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 10)
+
+        # after first message → 9 remaining; with limit=5 → has_more=True
+        messages, has_more = store.get("test", after=ids[0], limit=5)
+        assert len(messages) == 5
+        assert has_more is True
+
+    def test_has_more_with_before_cursor(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 10)
+
+        # before last message (msg-9) → 9 remaining (msg-0..msg-8); with limit=5 →
+        # backward paging returns the most recent 5: msg-4, msg-5, msg-6, msg-7, msg-8
+        messages, has_more = store.get("test", before=ids[-1], limit=5)
+        assert len(messages) == 5
+        assert has_more is True
+        assert messages[0].content == "msg-4"
+        assert messages[4].content == "msg-8"
+
+    def test_before_returns_most_recent_within_limit(self) -> None:
+        """before cursor with limit returns the most recent N messages before the cursor."""
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 10)
+
+        # 10 messages: msg-0..msg-9
+        # before msg-9 → 9 messages [msg-0..msg-8]; limit=3 → msg-6, msg-7, msg-8
+        messages, has_more = store.get("test", before=ids[9], limit=3)
+        assert len(messages) == 3
+        assert has_more is True
+        assert messages[0].content == "msg-6"
+        assert messages[1].content == "msg-7"
+        assert messages[2].content == "msg-8"
+
+    # ----------------------------------------------------- combined filters
+
+    def test_after_combined_with_since(self) -> None:
+        store = MessageStore()
+        msg0 = store.add("test", "msg-0")
+        store.add("test", "msg-1")
+        msg2 = store.add("test", "msg-2")
+        store.add("test", "msg-3")
+
+        # since filters to msg-1, msg-2, msg-3; after=msg2.id → msg-3 only
+        messages, _ = store.get("test", since=msg0.timestamp, after=msg2.id)
+        assert len(messages) == 1
+        assert messages[0].content == "msg-3"
+
+    def test_after_combined_with_limit_has_more(self) -> None:
+        store = MessageStore()
+        ids = self._add_messages(store, "test", 20)
+
+        # after the 5th → 15 remaining; limit=5 → has_more=True
+        messages, has_more = store.get("test", after=ids[4], limit=5)
+        assert len(messages) == 5
+        assert has_more is True
+
+    def test_sequential_pagination_forward(self) -> None:
+        """Paginating forward with `after` covers all messages exactly once.
+
+        Forward pagination starts from a known starting point (the first message ID)
+        and uses `after=<id>` to advance through subsequent pages.
+        """
+        store = MessageStore()
+        all_ids = self._add_messages(store, "test", 10)
+
+        # Use the sentinel approach: start before the first message.
+        # First page: messages after the first ID (ids[0])
+        seen_contents: list[str] = []
+
+        # Get the first page starting after msg-0
+        cursor = all_ids[0]  # start after the first message
+        seen_contents.append("msg-0")  # msg-0 is the starting cursor message
+
+        while True:
+            messages, has_more = store.get("test", after=cursor, limit=3)
+            if not messages:
+                break
+            seen_contents.extend(m.content for m in messages)
+            cursor = messages[-1].id
+            if not has_more:
+                break
+
+        assert seen_contents == [f"msg-{i}" for i in range(10)]
+
+    def test_sequential_pagination_all_ids_match(self) -> None:
+        """IDs returned during `after` pagination match insertion order."""
+        store = MessageStore()
+        all_ids = self._add_messages(store, "test", 9)
+
+        # Paginate starting after the very first message
+        collected_ids: list[str] = [all_ids[0]]
+        cursor = all_ids[0]
+
+        while True:
+            messages, has_more = store.get("test", after=cursor, limit=3)
+            if not messages:
+                break
+            collected_ids.extend(m.id for m in messages)
+            cursor = messages[-1].id
+            if not has_more:
+                break
+
+        assert collected_ids == all_ids
+
+
 class TestStoreIntegration:
     """Integration tests exercising the store the way tools would."""
 
@@ -400,7 +620,7 @@ class TestStoreIntegration:
         store = MessageStore()
         msg = store.add("e2e", "test message", "sender-a")
 
-        messages = store.get("e2e")
+        messages, _ = store.get("e2e")
         assert len(messages) == 1
         d = messages[0].to_dict()
         assert d["channel"] == "e2e"
@@ -417,15 +637,17 @@ class TestStoreIntegration:
         assert len(channels) == 2
 
         store.clear("ch1")
-        assert store.get("ch1") == []
-        assert len(store.get("ch2")) == 1
+        msgs, _ = store.get("ch1")
+        assert msgs == []
+        msgs2, _ = store.get("ch2")
+        assert len(msgs2) == 1
 
     def test_limit_respected(self) -> None:
         store = MessageStore()
         for i in range(MAX_READ_LIMIT + 50):
             store.add("big", f"msg-{i}")
 
-        messages = store.get("big", limit=MAX_READ_LIMIT + 100)
+        messages, _ = store.get("big", limit=MAX_READ_LIMIT + 100)
         assert len(messages) == MAX_READ_LIMIT
 
     def test_delete_channel_integration(self) -> None:

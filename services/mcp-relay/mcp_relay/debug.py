@@ -69,7 +69,7 @@ async def messages_handler(request: Request) -> JSONResponse:
         limit = 100
 
     try:
-        messages = store.get(channel, since=since, limit=limit)
+        messages, _ = store.get(channel, since=since, limit=limit)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
