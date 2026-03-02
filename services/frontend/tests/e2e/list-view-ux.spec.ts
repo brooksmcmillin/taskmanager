@@ -16,7 +16,7 @@ test.describe('Priority Color Legend', () => {
 	test('should display priority legend in list view', async ({ page }) => {
 		await createTodoViaAPI(page, 'Legend Test Task');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Switch to list view
@@ -40,7 +40,7 @@ test.describe('Priority Color Legend', () => {
 	test('should not display priority legend in calendar view', async ({ page }) => {
 		await createTodoViaAPI(page, 'Calendar Legend Test');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Default is calendar view — legend should not be visible
@@ -56,7 +56,7 @@ test.describe('CSS Tooltips on Action Buttons', () => {
 	test('should have data-tooltip and aria-label on action buttons', async ({ page }) => {
 		await createTodoViaAPI(page, 'Tooltip Test Task');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
@@ -84,7 +84,7 @@ test.describe('Task Card Info Density', () => {
 	test('should show "No date" for tasks without a due date', async ({ page }) => {
 		await createTodoViaAPI(page, 'Undated Task Check');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
@@ -100,7 +100,7 @@ test.describe('Task Card Info Density', () => {
 		const dueDate = getFutureDate(3);
 		await createTodoViaAPI(page, 'Dated Task', { dueDate });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
@@ -116,7 +116,7 @@ test.describe('Task Card Info Density', () => {
 	test('should always show priority label', async ({ page }) => {
 		await createTodoViaAPI(page, 'Priority Label Task', { priority: 'high' });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
@@ -137,7 +137,7 @@ test.describe('Masonry Layout', () => {
 	test('should use CSS columns layout for project cards', async ({ page }) => {
 		await createTodoViaAPI(page, 'Layout Test Task');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
@@ -160,7 +160,7 @@ test.describe('Inbox Label', () => {
 		// Create task without a project
 		await createTodoViaAPI(page, 'Unassigned Task');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
@@ -190,7 +190,7 @@ test.describe('Inbox Label', () => {
 		// Create task without a project
 		await createTodoViaAPI(page, 'Inbox Task No Project');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');

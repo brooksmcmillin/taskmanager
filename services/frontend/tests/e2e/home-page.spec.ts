@@ -12,7 +12,7 @@ test.describe('Home Page', () => {
 	});
 
 	test('should display greeting and date', async ({ page }) => {
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		const greeting = page.locator('.greeting');
@@ -25,7 +25,7 @@ test.describe('Home Page', () => {
 	});
 
 	test('should display both panels', async ({ page }) => {
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		// Both panel titles should be visible
@@ -34,7 +34,7 @@ test.describe('Home Page', () => {
 	});
 
 	test('should show empty state when no tasks due today', async ({ page }) => {
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		// New user should have no tasks, so empty state should show
@@ -45,7 +45,7 @@ test.describe('Home Page', () => {
 		const today = getTodayDate();
 		await createTodoViaAPI(page, 'Home Page Test Task', { dueDate: today });
 
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		await expect(page.locator('.task-title', { hasText: 'Home Page Test Task' })).toBeVisible();
@@ -56,7 +56,7 @@ test.describe('Home Page', () => {
 		const yesterday = getPastDate(1);
 		await createTodoViaAPI(page, 'Overdue Home Task', { dueDate: yesterday });
 
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		await expect(page.locator('.section-label.overdue', { hasText: 'Overdue' })).toBeVisible();
@@ -67,7 +67,7 @@ test.describe('Home Page', () => {
 		const today = getTodayDate();
 		await createTodoViaAPI(page, 'Linked Task', { dueDate: today });
 
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		const taskLink = page.locator('.task-item', { hasText: 'Linked Task' });
@@ -76,7 +76,7 @@ test.describe('Home Page', () => {
 	});
 
 	test('should show feed panel with empty or populated state', async ({ page }) => {
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		// Feed panel should resolve to either articles or empty state
@@ -88,7 +88,7 @@ test.describe('Home Page', () => {
 
 	test('should redirect to login when not authenticated', async ({ page }) => {
 		await page.context().clearCookies();
-		await page.goto('/home');
+		await page.goto('/');
 
 		await expect(page).toHaveURL(/\/login/);
 	});

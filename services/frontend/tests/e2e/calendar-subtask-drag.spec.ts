@@ -85,7 +85,7 @@ test.describe('Calendar Subtask Dragging', () => {
 		const parentId = getParentId(parentResp);
 		await createSubtaskViaAPI(page, parentId, 'Child Subtask', { dueDate });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		const dayCell = page.locator(`.calendar-day[data-date="${dueDate}"]`);
@@ -105,7 +105,7 @@ test.describe('Calendar Subtask Dragging', () => {
 		const parentId = getParentId(parentResp);
 		await createSubtaskViaAPI(page, parentId, 'Grabbable Subtask', { dueDate });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		const dayCell = page.locator(`.calendar-day[data-date="${dueDate}"]`);
@@ -128,7 +128,7 @@ test.describe('Calendar Subtask Dragging', () => {
 		const parentId = getParentId(parentResp);
 		await createSubtaskViaAPI(page, parentId, 'My Subtask', { dueDate });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		const dayCell = page.locator(`.calendar-day[data-date="${dueDate}"]`);
@@ -151,7 +151,7 @@ test.describe('Calendar Subtask Dragging', () => {
 		await createSubtaskViaAPI(page, parent1Id, 'Subtask 1', { dueDate });
 		await createSubtaskViaAPI(page, parent1Id, 'Subtask 2', { dueDate });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		const dayCell = page.locator(`.calendar-day[data-date="${dueDate}"]`);
@@ -173,7 +173,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 		// Create just one task so there's plenty of empty space in the day cell
 		await createTodoViaAPI(page, 'Small Task', { dueDate });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		const dayCell = page.locator(`.calendar-day[data-date="${dueDate}"]`);
@@ -195,7 +195,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 	});
 
 	test('empty day cells have a tall drop target', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		// Find a day cell that has no tasks (use a future date unlikely to have tasks)
@@ -228,7 +228,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 
 		await createTodoViaAPI(page, 'Drag Target Test', { dueDate: sourceDate });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		const sourceDayCell = page.locator(`.calendar-day[data-date="${sourceDate}"]`);
@@ -271,7 +271,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 		});
 		const subtaskId = subtaskResp.data.id;
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		const sourceDayCell = page.locator(`.calendar-day[data-date="${sourceDate}"]`);
@@ -286,7 +286,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 		expect(updateResp.ok()).toBeTruthy();
 
 		// Reload to pick up the change
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		// Subtask should now appear on the target date
@@ -315,7 +315,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 		});
 		const subtaskId = subtaskResp.data.id;
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		const sourceDayCell = page.locator(`.calendar-day[data-date="${sourceDate}"]`);
@@ -330,7 +330,7 @@ test.describe('Calendar Drop Target Coverage', () => {
 		expect(updateResp.ok()).toBeTruthy();
 
 		// Reload the page to pick up the change
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForSelector('#drag-drop-calendar', { timeout: 15000 });
 
 		// Parent task should still be on the source date

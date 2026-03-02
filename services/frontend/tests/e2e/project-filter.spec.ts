@@ -51,7 +51,7 @@ test.describe('Auto-set project on new tasks (#223)', () => {
 		await createTodoViaAPI(page, 'Existing Task');
 
 		// Navigate to tasks page with project filter in URL
-		await page.goto(`/?project_id=${project.id}`);
+		await page.goto(`/tasks?project_id=${project.id}`);
 		await page.waitForLoadState('networkidle');
 
 		// Open the create task panel
@@ -67,7 +67,7 @@ test.describe('Auto-set project on new tasks (#223)', () => {
 	test('should not pre-fill project when no filter is active', async ({ page }) => {
 		await createProjectViaAPI(page, `Unfiltered Project ${Date.now()}`);
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Open the create task panel
@@ -90,16 +90,16 @@ test.describe('Persist project filter across views (#224)', () => {
 		const project = await createProjectViaAPI(page, `Persist Project ${Date.now()}`);
 
 		// Navigate to tasks page and select the project filter
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 		await selectProjectFilter(page, project.id);
 
 		// Navigate away to another page
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		// Navigate back to tasks page (without project_id in URL)
-		await page.goto('/');
+		await page.goto('/tasks');
 		// Wait for the onMount redirect to restore the filter from localStorage
 		await page.waitForURL(/project_id/, { timeout: 5000 });
 
@@ -111,12 +111,12 @@ test.describe('Persist project filter across views (#224)', () => {
 		const project = await createProjectViaAPI(page, `Refresh Project ${Date.now()}`);
 
 		// Navigate and select the project filter to save to localStorage
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 		await selectProjectFilter(page, project.id);
 
 		// Navigate to / without the query parameter (simulates refresh losing query params)
-		await page.goto('/');
+		await page.goto('/tasks');
 		// Wait for the onMount redirect to restore the filter
 		await page.waitForURL(/project_id/, { timeout: 5000 });
 
@@ -128,7 +128,7 @@ test.describe('Persist project filter across views (#224)', () => {
 		const project = await createProjectViaAPI(page, `Stale Project ${Date.now()}`);
 
 		// Set a project filter and persist it
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 		await selectProjectFilter(page, project.id);
 
@@ -137,9 +137,9 @@ test.describe('Persist project filter across views (#224)', () => {
 		expect(deleteRes.ok()).toBeTruthy();
 
 		// Navigate away and back — stale filter should be cleared
-		await page.goto('/home');
-		await page.waitForLoadState('networkidle');
 		await page.goto('/');
+		await page.waitForLoadState('networkidle');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Filter should have been cleared since the project no longer exists
@@ -150,7 +150,7 @@ test.describe('Persist project filter across views (#224)', () => {
 		const project = await createProjectViaAPI(page, `Clear Project ${Date.now()}`);
 
 		// Set a project filter and persist it
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 		await selectProjectFilter(page, project.id);
 
@@ -160,9 +160,9 @@ test.describe('Persist project filter across views (#224)', () => {
 		await page.waitForURL((url) => !url.searchParams.has('project_id'), { timeout: 5000 });
 
 		// Navigate away and back
-		await page.goto('/home');
-		await page.waitForLoadState('networkidle');
 		await page.goto('/');
+		await page.waitForLoadState('networkidle');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Filter should NOT be restored (was cleared)

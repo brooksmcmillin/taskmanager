@@ -21,7 +21,7 @@ test.describe('Search Modal', () => {
 	});
 
 	test('should open search modal with Ctrl+K and close with Escape', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Modal should not be visible initially
@@ -38,7 +38,7 @@ test.describe('Search Modal', () => {
 	});
 
 	test('should open search modal via toolbar button', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('.search-trigger');
@@ -49,7 +49,7 @@ test.describe('Search Modal', () => {
 		// Create a task to search for
 		await createTodoViaAPI(page, 'Searchable Unique Task XYZ');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Open search and type
@@ -64,7 +64,7 @@ test.describe('Search Modal', () => {
 	});
 
 	test('should show no results message', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.keyboard.press('Control+k');
@@ -79,7 +79,7 @@ test.describe('Search Modal', () => {
 	test('should navigate to task on result click', async ({ page }) => {
 		await createTodoViaAPI(page, 'Navigate Test Task');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.keyboard.press('Control+k');
@@ -93,7 +93,7 @@ test.describe('Search Modal', () => {
 	});
 
 	test('should close search modal on backdrop click', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.keyboard.press('Control+k');
@@ -114,7 +114,7 @@ test.describe('Toast Notifications and Undo', () => {
 		const today = getTodayDate();
 		await createTodoViaAPI(page, 'Complete Me For Undo', { dueDate: today });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Switch to list view to access the complete button
@@ -138,7 +138,7 @@ test.describe('Toast Notifications and Undo', () => {
 		const today = getTodayDate();
 		await createTodoViaAPI(page, 'Undo This Task', { dueDate: today });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Switch to list view
@@ -166,7 +166,7 @@ test.describe('Toast Notifications and Undo', () => {
 		const today = getTodayDate();
 		await createTodoViaAPI(page, 'Home Undo Task', { dueDate: today });
 
-		await page.goto('/home');
+		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
 		await expect(page.locator('.task-title', { hasText: 'Home Undo Task' })).toBeVisible({
@@ -187,7 +187,7 @@ test.describe('Toast Notifications and Undo', () => {
 		const today = getTodayDate();
 		await createTodoViaAPI(page, 'Dismiss Toast Task', { dueDate: today });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('button:has-text("List View")');
@@ -213,7 +213,7 @@ test.describe('Task Summary Stats Bar', () => {
 		await createTodoViaAPI(page, 'Stats Task 1');
 		await createTodoViaAPI(page, 'Stats Task 2');
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await expect(page.locator('.summary-bar')).toBeVisible({ timeout: 5000 });
@@ -225,7 +225,7 @@ test.describe('Task Summary Stats Bar', () => {
 		const yesterday = getPastDate(1);
 		await createTodoViaAPI(page, 'Overdue Stats Task', { dueDate: yesterday });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await expect(page.locator('.summary-overdue')).toBeVisible({ timeout: 5000 });
@@ -235,7 +235,7 @@ test.describe('Task Summary Stats Bar', () => {
 		const today = getTodayDate();
 		await createTodoViaAPI(page, 'Today Stats Task', { dueDate: today });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await expect(page.locator('.summary-today')).toBeVisible({ timeout: 5000 });
@@ -248,7 +248,7 @@ test.describe('Calendar Improvements', () => {
 	});
 
 	test('should have Today button in calendar navigation', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Default view is calendar
@@ -258,7 +258,7 @@ test.describe('Calendar Improvements', () => {
 	});
 
 	test('should navigate to current week with Today button', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Navigate away from current week
@@ -276,7 +276,7 @@ test.describe('Calendar Improvements', () => {
 		const tomorrow = getFutureDate(1);
 		await createTodoViaAPI(page, 'Calendar Click Task', { dueDate: tomorrow });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Wait for task to appear in calendar
@@ -299,7 +299,7 @@ test.describe('Calendar Improvements', () => {
 		await createTodoViaAPI(page, 'Overflow Task 4', { dueDate: tomorrow });
 		await createTodoViaAPI(page, 'Overflow Task 5', { dueDate: tomorrow });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Wait for at least one visible calendar task to confirm data loaded
@@ -320,7 +320,7 @@ test.describe('Calendar Improvements', () => {
 		await createTodoViaAPI(page, 'Expand Task 3', { dueDate: tomorrow });
 		await createTodoViaAPI(page, 'Expand Task 4', { dueDate: tomorrow });
 
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Wait for at least one visible calendar task to confirm data loaded
@@ -355,7 +355,7 @@ test.describe('User Dropdown Menu', () => {
 	});
 
 	test('should open user dropdown on click', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Dropdown should be closed
@@ -367,7 +367,7 @@ test.describe('User Dropdown Menu', () => {
 	});
 
 	test('should close user dropdown on outside click', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Open dropdown
@@ -380,7 +380,7 @@ test.describe('User Dropdown Menu', () => {
 	});
 
 	test('should toggle user dropdown on repeated clicks', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		// Open
@@ -393,7 +393,7 @@ test.describe('User Dropdown Menu', () => {
 	});
 
 	test('should show settings link in dropdown', async ({ page }) => {
-		await page.goto('/');
+		await page.goto('/tasks');
 		await page.waitForLoadState('networkidle');
 
 		await page.click('.user-dropdown-trigger');
