@@ -145,7 +145,7 @@ class TestDebugMessagesAPI:
         resp = client.get("/api/channels/debug/messages?limit=3")
         data = resp.json()
         assert data["count"] == 3
-        # Should return the last 3 messages
+        # Should return the most recent 3 messages (no-cursor preserves original behavior)
         assert data["messages"][0]["content"] == "msg-7"
         assert data["messages"][2]["content"] == "msg-9"
 
@@ -194,7 +194,7 @@ class TestDebugSendAPI:
         assert "timestamp" in data
 
         # Verify it's in the store
-        messages = store.get("test")
+        messages, _ = store.get("test")
         assert len(messages) == 1
         assert messages[0].content == "hello from debug"
 
@@ -272,7 +272,8 @@ class TestDebugClearAPI:
         assert data["cleared"] is True
 
         # Verify the store is empty
-        assert store.get("test") == []
+        messages, _ = store.get("test")
+        assert messages == []
 
     def test_clear_nonexistent(self, client: TestClient) -> None:
         resp = client.post("/api/channels/nonexistent/clear")

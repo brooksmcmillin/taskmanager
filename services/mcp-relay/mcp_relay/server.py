@@ -151,9 +151,34 @@ class MessageStore:
         since: str | None = None,
         limit: int = 50,
         sort_order: str = "desc",
-    ) -> list[Message]:
+        after: str | None = None,
+        before: str | None = None,
+    ) -> tuple[list[Message], bool]:
+        """Retrieve messages from a channel with optional filtering.
+
+        Args:
+            channel: Channel name to read from.
+            since: ISO timestamp — only return messages after this time (optional).
+            limit: Max messages to return (capped at MAX_READ_LIMIT).
+            sort_order: ``'desc'`` returns the newest N messages (default);
+                ``'asc'`` returns the oldest N. Ignored when ``after`` or
+                ``before`` is provided.
+            after: Message ID cursor — return messages strictly after this ID (optional).
+                Enables forward pagination; ``sort_order`` is ignored.
+            before: Message ID cursor — return messages strictly before this ID (optional).
+                Enables backward pagination; ``sort_order`` is ignored.
+
+        Returns:
+            A tuple of (messages, has_more) where has_more indicates that additional
+            messages exist beyond the returned page.
+
+        Raises:
+            ValueError: If ``since`` is not a valid ISO timestamp, if ``sort_order``
+                is not ``'asc'`` or ``'desc'``, or if ``after``/``before`` reference
+                an ID that does not exist in the channel.
+        """
         if channel not in self._channels:
-            return []
+            return [], False
 
         if sort_order not in ("asc", "desc"):
             raise ValueError(f"Invalid sort_order: '{sort_order}'. Must be 'asc' or 'desc'.")
@@ -168,9 +193,29 @@ class MessageStore:
                 raise ValueError(f"Invalid ISO timestamp for 'since': {since}") from None
             messages = [m for m in messages if datetime.fromisoformat(m.timestamp) > since_dt]
 
+        if after:
+            after_idx = next((i for i, m in enumerate(messages) if m.id == after), None)
+            if after_idx is None:
+                raise ValueError(f"Cursor ID not found: {after}")
+            messages = messages[after_idx + 1 :]
+            # Forward pagination: return the oldest N after the cursor
+            has_more = len(messages) > limit
+            return messages[:limit], has_more
+
+        if before:
+            before_idx = next((i for i, m in enumerate(messages) if m.id == before), None)
+            if before_idx is None:
+                raise ValueError(f"Cursor ID not found: {before}")
+            messages = messages[:before_idx]
+            # Backward pagination: return the most recent N before the cursor
+            has_more = len(messages) > limit
+            return messages[-limit:], has_more
+
+        # No cursor: sort_order controls which N messages to return
+        has_more = len(messages) > limit
         if sort_order == "asc":
-            return messages[:limit]
-        return messages[-limit:]
+            return messages[:limit], has_more
+        return messages[-limit:], has_more
 
     def list_channels(self) -> list[ChannelInfo]:
         result: list[ChannelInfo] = []
@@ -218,7 +263,7 @@ class MessageStore:
     ) -> tuple[list[Message], bool]:
         """Wait for new messages. Returns (messages, timed_out)."""
         # Check for existing messages first
-        existing = self.get(channel, since=since)
+        existing, _ = self.get(channel, since=since)
         if existing:
             return existing, False
 
@@ -234,7 +279,8 @@ class MessageStore:
             timed_out = True
             return [], True
 
-        return self.get(channel, since=since), timed_out
+        messages, _ = self.get(channel, since=since)
+        return messages, timed_out
 
 
 # Global store instance
@@ -311,6 +357,8 @@ def create_relay_server(
         since: str | None = None,
         limit: int = 50,
         sort_order: str = "desc",
+        after: str | None = None,
+        before: str | None = None,
     ) -> str:
         """Read messages from a channel.
 
@@ -318,14 +366,26 @@ def create_relay_server(
             channel: Channel name to read from
             since: ISO timestamp — only return messages after this time (optional)
             limit: Max messages to return (default 50, max 200)
-            sort_order: 'desc' returns the newest N messages (default), 'asc' returns the oldest N
+            sort_order: 'desc' returns the newest N messages (default), 'asc' returns
+                the oldest N. Ignored when after or before cursor is provided.
+            after: Message ID cursor — return messages strictly after this ID (optional).
+                Use the last message ID from a previous response to page forward.
+            before: Message ID cursor — return messages strictly before this ID (optional).
+                Use the first message ID from a previous response to page backward.
 
         Returns:
-            JSON with messages array and count
+            JSON with messages array, count, and has_more flag
         """
         try:
             validate_channel_name(channel)
-            messages = store.get(channel, since=since, limit=limit, sort_order=sort_order)
+            messages, has_more = store.get(
+                channel,
+                since=since,
+                limit=limit,
+                sort_order=sort_order,
+                after=after,
+                before=before,
+            )
         except ValueError as e:
             return json.dumps({"error": str(e)})
         return json.dumps(
@@ -333,6 +393,7 @@ def create_relay_server(
                 "channel": channel,
                 "messages": [m.to_dict() for m in messages],
                 "count": len(messages),
+                "has_more": has_more,
             }
         )
 
