@@ -68,7 +68,7 @@ def validate_channel_name(channel: str) -> None:
         )
     if not _CHANNEL_NAME_RE.match(channel):
         raise ValueError(
-            f"Invalid channel name {channel!r}. "
+            "Invalid channel name. "
             "Only alphanumeric characters, hyphens (-), and underscores (_) are allowed."
         )
 
@@ -339,9 +339,9 @@ def create_relay_server(
         """
         try:
             validate_channel_name(channel)
+            cleared = store.clear(channel)
         except ValueError as e:
             return json.dumps({"error": str(e)})
-        cleared = store.clear(channel)
         return json.dumps(
             {
                 "channel": channel,
