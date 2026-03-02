@@ -1,5 +1,18 @@
-import { marked } from 'marked';
+import { marked, type Renderer } from 'marked';
 import DOMPurify from 'dompurify';
+
+// Custom renderer: open external links in new tab
+const renderer: Partial<Renderer> = {
+	link({ href, title, text }) {
+		const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+		if (href && /^https?:\/\//.test(href)) {
+			return `<a href="${escapeHtml(href)}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+		}
+		return `<a href="${escapeHtml(href ?? '')}"${titleAttr}>${text}</a>`;
+	}
+};
+
+marked.use({ renderer });
 
 /**
  * Strip HTML tags and decode entities, returning plain text.
@@ -54,7 +67,53 @@ export function renderMarkdown(
 
 	const html = marked.parse(withLinks, { async: false }) as string;
 	return DOMPurify.sanitize(html, {
-		ADD_ATTR: ['class'],
+		ADD_ATTR: ['class', 'target', 'rel'],
+		ADD_TAGS: ['a']
+	});
+}
+
+/**
+ * Render plain text with auto-linked URLs and [[Wiki Links]].
+ *
+ * Unlike renderMarkdown, this does NOT parse markdown syntax — it only
+ * linkifies bare URLs and wiki-link references, preserving the rest as
+ * escaped plain text. Suitable for task descriptions and other non-markdown fields.
+ *
+ * @param text - Raw plain text
+ * @param resolvedSlugs - Map of page title → slug (null = page doesn't exist)
+ * @returns Sanitized HTML string
+ */
+export function renderRichText(
+	text: string,
+	resolvedSlugs: Record<string, string | null> = {}
+): string {
+	const escaped = escapeHtml(text);
+	// Single-pass regex matching [[Wiki Link]] and bare URLs
+	const html = escaped.replace(
+		/\[\[([^\]]+)\]\]|https?:\/\/[^\s<>&"]+/g,
+		(match) => {
+			// Wiki link: [[Page Title]]
+			if (match.startsWith('[[') && match.endsWith(']]')) {
+				const title = match.slice(2, -2).trim();
+				// title is already HTML-escaped from the outer escapeHtml call
+				const slug = resolvedSlugs[title];
+				if (slug) {
+					return `<a href="/wiki/${encodeURIComponent(slug)}" class="wiki-link">${title}</a>`;
+				}
+				return `<a href="/wiki/new?title=${encodeURIComponent(title)}" class="wiki-link wiki-link-missing">${title}</a>`;
+			}
+			// Bare URL — unescape the HTML entities back to get the real URL for href
+			const url = match
+				.replace(/&amp;/g, '&')
+				.replace(/&lt;/g, '<')
+				.replace(/&gt;/g, '>')
+				.replace(/&quot;/g, '"');
+			return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${match}</a>`;
+		}
+	);
+
+	return DOMPurify.sanitize(html, {
+		ADD_ATTR: ['class', 'target', 'rel'],
 		ADD_TAGS: ['a']
 	});
 }
