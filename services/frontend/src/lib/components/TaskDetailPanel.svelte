@@ -241,7 +241,7 @@
 							<label class="detail-label">Tags</label>
 							<div class="flex flex-wrap gap-2">
 								{#each todo.tags as tag}
-									<span class="tag">{tag}</span>
+									<a href="/tasks?tag={encodeURIComponent(tag)}" class="tag">{tag}</a>
 								{/each}
 							</div>
 						</div>
@@ -512,6 +512,13 @@
 		font-size: 0.75rem;
 		border-radius: 9999px;
 		font-weight: 500;
+		text-decoration: none;
+		transition: all var(--transition-fast);
+	}
+
+	.tag:hover {
+		background-color: var(--primary-100);
+		color: var(--primary-700);
 	}
 
 	.panel-footer {

@@ -130,6 +130,7 @@ export interface TodoFilters {
 	include_subtasks?: boolean;
 	order_by?: string;
 	exclude_no_calendar?: boolean;
+	tag?: string;
 }
 
 export interface TodoCreate {

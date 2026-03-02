@@ -751,6 +751,7 @@ def _apply_todo_filters(
     deadline_type: str | None,
     order_by: str | None,
     exclude_no_calendar: bool = False,
+    tag: str | None = None,
 ):
     """Apply filtering and ordering to a todo list query."""
     # Filter by parent_id - if not specified, only show root-level todos
@@ -790,6 +791,9 @@ def _apply_todo_filters(
 
     if deadline_type:
         query = query.where(Todo.deadline_type == deadline_type)
+
+    if tag:
+        query = query.where(Todo.tags.op("@>")(func.jsonb_build_array(tag)))
 
     # Deadline type strictness ordering: flexible < preferred < firm < hard
     _deadline_type_order = {"flexible": 0, "preferred": 1, "firm": 2, "hard": 3}
@@ -855,6 +859,7 @@ async def list_todos(
         False,
         description="Exclude tasks from projects with show_on_calendar=false",
     ),
+    tag: str | None = Query(None, description="Filter by tag"),
 ) -> ListResponse[TodoResponse]:
     """List todos with optional filters.
 
@@ -887,6 +892,7 @@ async def list_todos(
         deadline_type=deadline_type,
         order_by=order_by,
         exclude_no_calendar=exclude_no_calendar,
+        tag=tag,
     )
 
     result = await db.execute(query)
