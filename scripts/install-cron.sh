@@ -53,8 +53,8 @@ touch "$LOG_FILE"
 chmod 600 "$LOG_FILE"
 
 # Append to existing crontab
-CRON_LINE="*/45 * * * * set -a; . \"$ENV_FILE\"; set +a; \"$REFRESH_SCRIPT\" >> \"$LOG_FILE\" 2>&1"
-(crontab -l 2>/dev/null; echo ""; echo "# MCP OAuth token refresh (every 45 min)"; echo "$CRON_LINE") | crontab -
+CRON_LINE="*/30 * * * * set -a; . \"$ENV_FILE\"; set +a; \"$REFRESH_SCRIPT\" >> \"$LOG_FILE\" 2>&1"
+(crontab -l 2>/dev/null; echo ""; echo "# MCP OAuth token refresh (every 30 min)"; echo "$CRON_LINE") | crontab -
 
 echo "Cron job installed:"
 echo "  $CRON_LINE"
