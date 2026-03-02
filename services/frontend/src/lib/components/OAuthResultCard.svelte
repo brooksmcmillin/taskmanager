@@ -35,9 +35,9 @@
 	}
 
 	.card {
-		max-width: 480px;
+		max-width: 600px;
 		width: 100%;
-		padding: 3rem 2rem;
+		padding: 3rem;
 		background: var(--bg-card, #ffffff);
 		border-radius: var(--radius-xl, 1.25rem);
 		box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(28 25 23 / 0.07));
@@ -77,9 +77,9 @@
 
 	.btn-primary {
 		display: inline-block;
-		padding: 0.625rem 1.5rem;
+		padding: 0.75rem 2rem;
 		border-radius: var(--radius-md, 0.625rem);
-		font-size: 0.9375rem;
+		font-size: 1rem;
 		font-weight: 600;
 		border: none;
 		cursor: pointer;
