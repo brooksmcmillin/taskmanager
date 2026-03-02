@@ -2432,6 +2432,594 @@ def create_resource_server(
             logger.error(f"Exception in delete_snippet: {e}", exc_info=True)
             return json.dumps({"error": str(e)})
 
+    # News / RSS feed tools
+
+    @app.tool()
+    @guard_tool(
+        input_params=["unread_only", "search", "feed_type", "featured"],
+        screen_output=True,
+    )
+    async def list_articles(
+        unread_only: bool = False,
+        search: str | None = None,
+        feed_type: str | None = None,
+        featured: bool | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> str:
+        """
+        List news articles with optional filters.
+
+        Browse curated articles from RSS/Atom feeds. Supports filtering by
+        read status, keyword search, feed type, and featured sources.
+
+        Args:
+            unread_only: Only show unread articles (default False)
+            search: Search in title and summary
+            feed_type: Filter by "paper" or "article"
+            featured: Filter by featured feed sources
+            limit: Results per page (1-200, default 50)
+            offset: Pagination offset (default 0)
+
+        Returns:
+            JSON object with "articles" array and pagination metadata
+        """
+        logger.info(
+            f"=== list_articles called: unread_only={unread_only}, "
+            f"search={search}, feed_type={feed_type}, featured={featured} ==="
+        )
+        valid_feed_types = {"paper", "article"}
+        if feed_type is not None and feed_type not in valid_feed_types:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Invalid feed_type '{feed_type}'. "
+                        f"Must be one of: article, paper"
+                    )
+                }
+            )
+        try:
+            api_client = get_api_client()
+            response = api_client.list_articles(
+                unread_only=unread_only,
+                search=search,
+                feed_type=feed_type,
+                featured=featured,
+                limit=limit,
+                offset=offset,
+            )
+            logger.info(
+                f"list_articles response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            articles, articles_error = validate_list_response(
+                response, "articles", key="data"
+            )
+            if articles_error:
+                logger.error(f"Failed to list articles: {articles_error}")
+                return json.dumps({"error": articles_error})
+
+            # Extract pagination meta if present
+            meta = {}
+            if isinstance(response.data, dict):
+                meta = response.data.get("meta", {})
+
+            logger.info(f"Returning {len(articles)} articles")
+            return json.dumps(
+                {
+                    "articles": articles,
+                    "count": len(articles),
+                    "meta": meta,
+                    "current_time": datetime.datetime.now(
+                        tz=datetime.UTC
+                    ).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in list_articles: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def get_article(article_id: int) -> str:
+        """
+        Get a single article by ID.
+
+        Args:
+            article_id: Article ID
+
+        Returns:
+            JSON object with full article data including title, url, summary,
+            author, published_at, keywords, feed_source_name, is_read, rating
+        """
+        logger.info(f"=== get_article called: article_id={article_id} ===")
+        try:
+            api_client = get_api_client()
+            response = api_client.get_article(article_id)
+            logger.info(
+                f"get_article response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            article, article_error = validate_dict_response(response, "article")
+            if article_error:
+                logger.error(f"Failed to get article: {article_error}")
+                return json.dumps({"error": article_error})
+
+            logger.info(
+                f"Retrieved article: id={article.get('id') if article else None}"
+            )
+            return json.dumps(
+                {
+                    "article": article,
+                    "current_time": datetime.datetime.now(
+                        tz=datetime.UTC
+                    ).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in get_article: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["is_read"], screen_output=True)
+    async def mark_article_read(
+        article_id: int, is_read: bool = True
+    ) -> str:
+        """
+        Mark an article as read or unread.
+
+        Args:
+            article_id: Article ID
+            is_read: True to mark read, False for unread (default True)
+
+        Returns:
+            JSON object confirming read status change
+        """
+        logger.info(
+            f"=== mark_article_read called: article_id={article_id}, "
+            f"is_read={is_read} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.mark_article_read(article_id, is_read)
+            logger.info(
+                f"mark_article_read response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to mark article read: {response.error}")
+                return json.dumps({"error": response.error})
+
+            result = response.data if isinstance(response.data, dict) else {}
+            result["article_id"] = article_id
+            result["status"] = "updated"
+            result["current_time"] = datetime.datetime.now(
+                tz=datetime.UTC
+            ).isoformat()
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(
+                f"Exception in mark_article_read: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["rating"], screen_output=True)
+    async def rate_article(article_id: int, rating: str) -> str:
+        """
+        Rate an article.
+
+        Args:
+            article_id: Article ID
+            rating: One of "good", "bad", "not_interested"
+
+        Returns:
+            JSON object confirming rating
+        """
+        logger.info(
+            f"=== rate_article called: article_id={article_id}, "
+            f"rating={rating} ==="
+        )
+        valid_ratings = {"good", "bad", "not_interested"}
+        if rating not in valid_ratings:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Invalid rating '{rating}'. "
+                        f"Must be one of: {', '.join(sorted(valid_ratings))}"
+                    )
+                }
+            )
+        try:
+            api_client = get_api_client()
+            response = api_client.rate_article(article_id, rating)
+            logger.info(
+                f"rate_article response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to rate article: {response.error}")
+                return json.dumps({"error": response.error})
+
+            return json.dumps(
+                {
+                    "article_id": article_id,
+                    "rating": rating,
+                    "status": "rated",
+                    "current_time": datetime.datetime.now(
+                        tz=datetime.UTC
+                    ).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Exception in rate_article: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["featured"], screen_output=True)
+    async def list_feed_sources(featured: bool | None = None) -> str:
+        """
+        List RSS/Atom feed sources.
+
+        Args:
+            featured: Filter by featured status (optional)
+
+        Returns:
+            JSON object with "sources" array of feed sources
+        """
+        logger.info(
+            f"=== list_feed_sources called: featured={featured} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.list_feed_sources(featured=featured)
+            logger.info(
+                f"list_feed_sources response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            sources, sources_error = validate_list_response(
+                response, "sources", key="data"
+            )
+            if sources_error:
+                logger.error(f"Failed to list feed sources: {sources_error}")
+                return json.dumps({"error": sources_error})
+
+            logger.info(f"Returning {len(sources)} feed sources")
+            return json.dumps(
+                {
+                    "sources": sources,
+                    "count": len(sources),
+                    "current_time": datetime.datetime.now(
+                        tz=datetime.UTC
+                    ).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Exception in list_feed_sources: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(
+        input_params=["name", "url", "description", "feed_type"],
+        screen_output=True,
+    )
+    async def create_feed_source(
+        name: str,
+        url: str,
+        description: str | None = None,
+        feed_type: str = "article",
+        is_active: bool = True,
+        is_featured: bool = False,
+        fetch_interval_hours: int = 6,
+    ) -> str:
+        """
+        Create a new RSS/Atom feed source (admin only).
+
+        Args:
+            name: Feed name (1-255 chars)
+            url: Feed URL (1-500 chars)
+            description: Feed description (optional)
+            feed_type: "paper" or "article" (default "article")
+            is_active: Whether feed is active (default True)
+            is_featured: Whether feed is featured (default False)
+            fetch_interval_hours: Fetch interval in hours, 1-168 (default 6)
+
+        Returns:
+            JSON object with created feed source data
+        """
+        logger.info(
+            f"=== create_feed_source called: name='{name}', url='{url}', "
+            f"feed_type={feed_type} ==="
+        )
+        valid_feed_types = {"paper", "article"}
+        if feed_type not in valid_feed_types:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Invalid feed_type '{feed_type}'. "
+                        f"Must be one of: article, paper"
+                    )
+                }
+            )
+        try:
+            api_client = get_api_client()
+            response = api_client.create_feed_source(
+                name=name,
+                url=url,
+                description=description,
+                feed_type=feed_type,
+                is_active=is_active,
+                is_featured=is_featured,
+                fetch_interval_hours=fetch_interval_hours,
+            )
+            logger.info(
+                f"create_feed_source response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            source, source_error = validate_dict_response(
+                response, "feed source"
+            )
+            if source_error:
+                logger.error(f"Failed to create feed source: {source_error}")
+                return json.dumps({"error": source_error})
+
+            logger.info(
+                f"Created feed source: id={source.get('id') if source else None}"
+            )
+            return json.dumps(
+                {
+                    "source": source,
+                    "status": "created",
+                    "current_time": datetime.datetime.now(
+                        tz=datetime.UTC
+                    ).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Exception in create_feed_source: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(
+        input_params=["name", "url", "description", "feed_type"],
+        screen_output=True,
+    )
+    async def update_feed_source(
+        source_id: int,
+        name: str | None = None,
+        url: str | None = None,
+        description: str | None = None,
+        feed_type: str | None = None,
+        is_active: bool | None = None,
+        is_featured: bool | None = None,
+        fetch_interval_hours: int | None = None,
+    ) -> str:
+        """
+        Update a feed source (admin only, partial update).
+
+        Args:
+            source_id: Feed source ID
+            name: New name (optional)
+            url: New URL (optional)
+            description: New description (optional)
+            feed_type: "paper" or "article" (optional)
+            is_active: New active status (optional)
+            is_featured: New featured status (optional)
+            fetch_interval_hours: New fetch interval (optional)
+
+        Returns:
+            JSON object with updated feed source data
+        """
+        logger.info(
+            f"=== update_feed_source called: source_id={source_id}, "
+            f"name={name}, url={url} ==="
+        )
+        valid_feed_types = {"paper", "article"}
+        if feed_type is not None and feed_type not in valid_feed_types:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Invalid feed_type '{feed_type}'. "
+                        f"Must be one of: article, paper"
+                    )
+                }
+            )
+        try:
+            api_client = get_api_client()
+            response = api_client.update_feed_source(
+                source_id=source_id,
+                name=name,
+                url=url,
+                description=description,
+                feed_type=feed_type,
+                is_active=is_active,
+                is_featured=is_featured,
+                fetch_interval_hours=fetch_interval_hours,
+            )
+            logger.info(
+                f"update_feed_source response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            source, source_error = validate_dict_response(
+                response, "updated feed source"
+            )
+            if source_error:
+                logger.error(f"Failed to update feed source: {source_error}")
+                return json.dumps({"error": source_error})
+
+            logger.info(
+                f"Updated feed source: id={source.get('id') if source else None}"
+            )
+            return json.dumps(
+                {
+                    "source": source,
+                    "status": "updated",
+                    "current_time": datetime.datetime.now(
+                        tz=datetime.UTC
+                    ).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Exception in update_feed_source: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=[], screen_output=True)
+    async def delete_feed_source(source_id: int) -> str:
+        """
+        Delete a feed source and its articles (admin only).
+
+        This permanently removes the feed source and cascade-deletes all
+        articles from that source.
+
+        Args:
+            source_id: Feed source ID to delete
+
+        Returns:
+            JSON object confirming deletion with deleted status
+        """
+        logger.info(
+            f"=== delete_feed_source called: source_id={source_id} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.delete_feed_source(source_id)
+            logger.info(
+                f"delete_feed_source response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to delete feed source: {response.error}")
+                return json.dumps({"error": response.error})
+
+            logger.info(f"Deleted feed source {source_id}")
+            return json.dumps(
+                {
+                    "source_id": source_id,
+                    "status": "deleted",
+                    "current_time": datetime.datetime.now(
+                        tz=datetime.UTC
+                    ).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Exception in delete_feed_source: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["is_active"], screen_output=True)
+    async def toggle_feed_source(
+        source_id: int, is_active: bool
+    ) -> str:
+        """
+        Toggle a feed source's active status (admin only).
+
+        Args:
+            source_id: Feed source ID
+            is_active: New active status
+
+        Returns:
+            JSON object confirming toggle
+        """
+        logger.info(
+            f"=== toggle_feed_source called: source_id={source_id}, "
+            f"is_active={is_active} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.toggle_feed_source(source_id, is_active)
+            logger.info(
+                f"toggle_feed_source response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(
+                    f"Failed to toggle feed source: {response.error}"
+                )
+                return json.dumps({"error": response.error})
+
+            result = response.data if isinstance(response.data, dict) else {}
+            result["source_id"] = source_id
+            result["status"] = "toggled"
+            result["current_time"] = datetime.datetime.now(
+                tz=datetime.UTC
+            ).isoformat()
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(
+                f"Exception in toggle_feed_source: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
+    @guard_tool(input_params=["hours"], screen_output=True)
+    async def force_fetch_feed(
+        source_id: int, hours: int = 168
+    ) -> str:
+        """
+        Force-fetch articles from a feed source (admin only).
+
+        Triggers an immediate fetch of articles from the specified feed source,
+        looking back the specified number of hours.
+
+        Args:
+            source_id: Feed source ID
+            hours: Hours back to fetch, 1-720 (default 168 = 1 week)
+
+        Returns:
+            JSON object with fetch result
+        """
+        logger.info(
+            f"=== force_fetch_feed called: source_id={source_id}, "
+            f"hours={hours} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.force_fetch_feed(source_id, hours)
+            logger.info(
+                f"force_fetch_feed response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to force fetch feed: {response.error}")
+                return json.dumps({"error": response.error})
+
+            result = response.data if isinstance(response.data, dict) else {}
+            return json.dumps(
+                {
+                    "source_id": source_id,
+                    "hours": hours,
+                    "result": result,
+                    "status": "fetched",
+                    "current_time": datetime.datetime.now(
+                        tz=datetime.UTC
+                    ).isoformat(),
+                }
+            )
+        except Exception as e:
+            logger.error(
+                f"Exception in force_fetch_feed: {e}", exc_info=True
+            )
+            return json.dumps({"error": str(e)})
+
     return app
 
 

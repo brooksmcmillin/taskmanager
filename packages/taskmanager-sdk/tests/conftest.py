@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 import requests
+
 from taskmanager_sdk import TaskManagerClient
 
 
@@ -92,6 +93,42 @@ def sample_snippet() -> dict[str, str | int | list[str] | None]:
         "tags": ["dev", "daily"],
         "created_at": "2026-02-28T10:00:00Z",
         "updated_at": None,
+    }
+
+
+@pytest.fixture
+def sample_article() -> dict[str, str | int | bool | list[str] | None]:
+    """Sample news article data."""
+    return {
+        "id": 1,
+        "title": "New Python Release",
+        "url": "https://example.com/python-release",
+        "summary": "Python 3.14 has been released.",
+        "author": "Guido",
+        "published_at": "2026-02-28T10:30:00+00:00",
+        "keywords": ["python", "release"],
+        "feed_source_name": "PythonNews",
+        "is_read": False,
+        "rating": None,
+        "read_at": None,
+    }
+
+
+@pytest.fixture
+def sample_feed_source() -> dict[str, str | int | float | bool | None]:
+    """Sample feed source data."""
+    return {
+        "id": 1,
+        "name": "PythonNews",
+        "url": "https://pythonnews.com/feed.xml",
+        "description": "Latest Python news",
+        "type": "article",
+        "is_active": True,
+        "is_featured": False,
+        "fetch_interval_hours": 6,
+        "last_fetched_at": None,
+        "quality_score": 1.0,
+        "created_at": "2026-02-15T08:00:00+00:00",
     }
 
 
