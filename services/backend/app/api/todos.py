@@ -1496,6 +1496,21 @@ async def bulk_update_todos(
                 "Only one level of nesting is allowed."
             )
 
+        # Prevent tasks with existing children from becoming subtasks
+        for todo in todos:
+            children_count = await db.scalar(
+                select(func.count(Todo.id)).where(
+                    Todo.parent_id == todo.id,
+                    Todo.user_id == user.id,
+                    Todo.deleted_at.is_(None),
+                )
+            )
+            if children_count:
+                raise errors.validation(
+                    "Cannot make a task with subtasks into a subtask. "
+                    "Remove or reassign its subtasks first."
+                )
+
     for todo in todos:
         for field, value in update_data.items():
             setattr(todo, field, value)

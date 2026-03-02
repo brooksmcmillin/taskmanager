@@ -458,6 +458,43 @@ async def test_task_without_children_can_become_subtask(
     assert response.json()["data"]["parent_id"] == parent_id
 
 
+@pytest.mark.asyncio
+async def test_bulk_update_cannot_make_parent_with_children_a_subtask(
+    authenticated_client: AsyncClient,
+):
+    """Bulk update prevents tasks with children from becoming subtasks."""
+    # Create a parent task and give it a subtask
+    parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bulk parent with children"},
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bulk child task", "parent_id": parent_id},
+    )
+
+    # Create another root task to be the new parent
+    new_parent = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Bulk would-be grandparent"},
+    )
+    new_parent_id = new_parent.json()["data"]["id"]
+
+    # Try bulk update to make the parent (which has children) a subtask
+    response = await authenticated_client.put(
+        "/api/todos",
+        json={
+            "ids": [parent_id],
+            "updates": {"parent_id": new_parent_id},
+        },
+    )
+
+    assert response.status_code == 400
+    assert "subtasks" in response.json()["detail"]["message"].lower()
+
+
 # Parent Task Link Tests
 
 
