@@ -32,7 +32,9 @@ AUTH_SERVER="https://mcp-auth.brooksmcmillin.com"
 AUTH_SERVER_URL="$AUTH_SERVER/"
 TOKEN_ENDPOINT="$AUTH_SERVER/token"
 NTFY_URL="${NTFY_URL:-https://ntfy.brooksmcmillin.com/mcp-alerts}"
-HOSTNAME="$(hostname)"
+# hostname(1) is POSIX and works on both Debian and Arch — do not replace
+# with a distro-specific alternative.
+THIS_HOST="$(hostname)"
 : "${NTFY_TOKEN:?Error: NTFY_TOKEN environment variable is not set}"
 
 # --- Alert helper: send push notification on failure ---
@@ -100,7 +102,7 @@ fi
 
 if [[ -z "$REFRESH_TOKEN" || "$REFRESH_TOKEN" == "null" ]]; then
     echo "$(date -Iseconds) Error: No refresh_token found. Run mcp-device-auth.sh first." >&2
-    send_alert "MCP Token: No Refresh Token [$HOSTNAME]" "No refresh_token in credentials on $HOSTNAME. Run mcp-device-auth.sh to re-authenticate."
+    send_alert "MCP Token: No Refresh Token [$THIS_HOST]" "No refresh_token in credentials on $THIS_HOST. Run mcp-device-auth.sh to re-authenticate."
     exit 1
 fi
 
@@ -132,7 +134,7 @@ TOKEN_RESPONSE=$(echo "$TOKEN_RESPONSE" | sed '$d')
 if [[ -z "$TOKEN_RESPONSE" ]] || ! echo "$TOKEN_RESPONSE" | jq empty 2>/dev/null; then
     echo "$(date -Iseconds) Error: Auth server returned non-JSON response (HTTP $HTTP_CODE)" >&2
     echo "$(date -Iseconds) Response body: ${TOKEN_RESPONSE:-(empty)}" >&2
-    send_alert "MCP Token: Auth Server Error [$HOSTNAME]" "Auth server returned HTTP $HTTP_CODE with non-JSON response on $HOSTNAME. Check server health."
+    send_alert "MCP Token: Auth Server Error [$THIS_HOST]" "Auth server returned HTTP $HTTP_CODE with non-JSON response on $THIS_HOST. Check server health."
     exit 1
 fi
 
@@ -143,9 +145,9 @@ if [[ -n "$ERROR" ]]; then
     echo "$(date -Iseconds) Error: $ERROR - $DESC" >&2
     if [[ "$ERROR" == "invalid_grant" ]]; then
         echo "$(date -Iseconds) Refresh token is invalid or expired. Run mcp-device-auth.sh to re-authenticate." >&2
-        send_alert "MCP Token: Refresh Token Expired [$HOSTNAME]" "Refresh token is invalid or expired on $HOSTNAME. Run mcp-device-auth.sh to re-authenticate." "urgent"
+        send_alert "MCP Token: Refresh Token Expired [$THIS_HOST]" "Refresh token is invalid or expired on $THIS_HOST. Run mcp-device-auth.sh to re-authenticate." "urgent"
     else
-        send_alert "MCP Token: Refresh Failed [$HOSTNAME]" "Token refresh failed on $HOSTNAME: $ERROR - $DESC"
+        send_alert "MCP Token: Refresh Failed [$THIS_HOST]" "Token refresh failed on $THIS_HOST: $ERROR - $DESC"
     fi
     exit 1
 fi
@@ -154,7 +156,7 @@ fi
 ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
 if [[ -z "$ACCESS_TOKEN" ]]; then
     echo "$(date -Iseconds) Error: No access_token in response." >&2
-    send_alert "MCP Token: Unexpected Response [$HOSTNAME]" "Token endpoint returned no access_token on $HOSTNAME. Check auth server health."
+    send_alert "MCP Token: Unexpected Response [$THIS_HOST]" "Token endpoint returned no access_token on $THIS_HOST. Check auth server health."
     exit 1
 fi
 
