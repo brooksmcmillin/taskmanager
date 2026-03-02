@@ -34,7 +34,7 @@ TOKEN_ENDPOINT="$AUTH_SERVER/token"
 NTFY_URL="${NTFY_URL:-https://ntfy.brooksmcmillin.com/mcp-alerts}"
 # hostname(1) is POSIX and works on both Debian and Arch — do not replace
 # with a distro-specific alternative.
-THIS_HOST="$(hostname)"
+THIS_HOST="$(hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || echo 'unknown')"
 : "${NTFY_TOKEN:?Error: NTFY_TOKEN environment variable is not set}"
 
 # --- Alert helper: send push notification on failure ---
