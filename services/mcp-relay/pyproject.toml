@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "click>=8.1.0",
+    "httpx>=0.27.0",
     "mcp>=1.24.0",
     "mcp-resource-framework",
     "pydantic>=2.0.0",
@@ -16,6 +17,7 @@ dependencies = [
 
 [project.scripts]
 mcp-relay = "mcp_relay.server:main"
+mcp-relay-cli = "mcp_relay.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
