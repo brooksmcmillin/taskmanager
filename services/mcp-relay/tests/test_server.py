@@ -7,7 +7,58 @@ from datetime import UTC, datetime
 
 import pytest
 
-from mcp_relay.server import MAX_READ_LIMIT, MessageStore
+from mcp_relay.server import (
+    MAX_CHANNEL_NAME_LENGTH,
+    MAX_READ_LIMIT,
+    MessageStore,
+    validate_channel_name,
+)
+
+
+class TestValidateChannelName:
+    """Tests for the validate_channel_name helper."""
+
+    def test_valid_names(self) -> None:
+        valid = [
+            "test",
+            "my-channel",
+            "my_channel",
+            "Channel123",
+            "a",
+            "A-b_C-1",
+            "a" * MAX_CHANNEL_NAME_LENGTH,  # exactly max length
+        ]
+        for name in valid:
+            validate_channel_name(name)  # must not raise
+
+    def test_rejects_empty_string(self) -> None:
+        with pytest.raises(ValueError, match="must not be empty"):
+            validate_channel_name("")
+
+    def test_rejects_path_traversal(self) -> None:
+        with pytest.raises(ValueError, match="Invalid channel name"):
+            validate_channel_name("../../etc/passwd")
+
+    def test_rejects_dot_segments(self) -> None:
+        with pytest.raises(ValueError, match="Invalid channel name"):
+            validate_channel_name("../secret")
+
+    def test_rejects_slash(self) -> None:
+        with pytest.raises(ValueError, match="Invalid channel name"):
+            validate_channel_name("a/b")
+
+    def test_rejects_spaces(self) -> None:
+        with pytest.raises(ValueError, match="Invalid channel name"):
+            validate_channel_name("my channel")
+
+    def test_rejects_special_chars(self) -> None:
+        for bad in ["@channel", "chan!el", "ch#1", "ch*", "ch&name", "ch=a", "ch.a"]:
+            with pytest.raises(ValueError, match="Invalid channel name"):
+                validate_channel_name(bad)
+
+    def test_rejects_name_too_long(self) -> None:
+        with pytest.raises(ValueError, match="too long"):
+            validate_channel_name("a" * (MAX_CHANNEL_NAME_LENGTH + 1))
 
 
 class TestMessageStore:
