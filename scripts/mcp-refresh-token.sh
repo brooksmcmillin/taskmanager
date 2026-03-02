@@ -15,8 +15,8 @@
 # Usage:
 #   NTFY_TOKEN=tk_... ./scripts/mcp-refresh-token.sh
 #
-# Cron example (every 45 minutes):
-#   */45 * * * * set -a; . /path/to/.env; set +a; /path/to/scripts/mcp-refresh-token.sh >> ~/.local/log/mcp-refresh.log 2>&1
+# Cron example (every 30 minutes):
+#   */30 * * * * set -a; . /path/to/.env; set +a; /path/to/scripts/mcp-refresh-token.sh >> ~/.local/log/mcp-refresh.log 2>&1
 #
 # Environment variables:
 #   NTFY_TOKEN  - (required) ntfy bearer token for push notifications
@@ -104,17 +104,6 @@ if [[ -z "$REFRESH_TOKEN" || "$REFRESH_TOKEN" == "null" ]]; then
     echo "$(date -Iseconds) Error: No refresh_token found. Run mcp-device-auth.sh first." >&2
     send_alert "MCP Token: No Refresh Token [$THIS_HOST]" "No refresh_token in credentials on $THIS_HOST. Run mcp-device-auth.sh to re-authenticate."
     exit 1
-fi
-
-# --- Check if access token is still valid (skip refresh if not expiring soon) ---
-EXPIRES_AT=$(jq -r --arg key "$PRIMARY_KEY" '.mcpOAuth[$key].expiresAt // 0' "$CREDENTIALS_FILE")
-NOW_MS=$(( $(date +%s) * 1000 ))
-# Refresh if token expires within 10 minutes (600000ms)
-BUFFER_MS=600000
-if [[ "$EXPIRES_AT" =~ ^[0-9]+$ ]] && (( EXPIRES_AT - NOW_MS > BUFFER_MS )); then
-    REMAINING_MIN=$(( (EXPIRES_AT - NOW_MS) / 60000 ))
-    echo "$(date -Iseconds) Token still valid for ~${REMAINING_MIN} minutes, skipping refresh. (${#MCP_KEYS[@]} server(s) covered)"
-    exit 0
 fi
 
 echo "$(date -Iseconds) Refreshing access token for ${#MCP_KEYS[@]} server(s)..."
