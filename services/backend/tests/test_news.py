@@ -7,9 +7,36 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.news import _escape_ilike
 from app.core.security import hash_password
 from app.models.feed_source import FeedSource, FeedType
 from app.models.user import User
+
+
+class TestEscapeIlike:
+    """Tests for the _escape_ilike helper."""
+
+    def test_no_special_chars(self):
+        assert _escape_ilike("hello world") == "hello world"
+
+    def test_escape_percent(self):
+        assert _escape_ilike("100%") == "100\\%"
+
+    def test_escape_underscore(self):
+        assert _escape_ilike("my_var") == "my\\_var"
+
+    def test_escape_backslash(self):
+        assert _escape_ilike("path\\to") == "path\\\\to"
+
+    def test_escape_all_special_chars(self):
+        assert _escape_ilike("%_\\") == "\\%\\_\\\\"
+
+    def test_multiple_wildcards(self):
+        assert _escape_ilike("%%%") == "\\%\\%\\%"
+
+    def test_empty_string(self):
+        assert _escape_ilike("") == ""
+
 
 ADMIN_PASSWORD = "AdminPass123!"  # pragma: allowlist secret
 
