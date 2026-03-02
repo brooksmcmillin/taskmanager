@@ -179,11 +179,7 @@
 	<div class="container">
 		<div class="flex items-center justify-between h-16">
 			<div class="flex items-center space-x-8">
-				<a
-					href="/"
-					class="text-xl font-bold text-gray-900"
-					style="text-decoration: none; color: inherit;">Task Manager</a
-				>
+				<a href="/" class="nav-brand">Task Manager</a>
 
 				<!-- Desktop Navigation -->
 				{#if user}
@@ -602,6 +598,13 @@
 </nav>
 
 <style>
+	.nav-brand {
+		font-size: 1.25rem;
+		font-weight: 700;
+		color: inherit;
+		text-decoration: none;
+	}
+
 	.nav-dropdown {
 		position: relative;
 		display: inline-block;
