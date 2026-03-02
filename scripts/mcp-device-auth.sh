@@ -3,6 +3,10 @@
 # mcp-device-auth.sh - Authenticate against the MCP server using the OAuth 2.0
 # device authorization flow (RFC 8628) and update Claude Code's credentials.
 #
+# Finds ALL MCP server entries that share the same auth backend and writes the
+# token to each, so a single auth flow covers multiple servers (e.g.
+# mcp-resource and mcp-relay).
+#
 # Usage:
 #   ./scripts/mcp-device-auth.sh
 #
@@ -13,6 +17,7 @@ set -euo pipefail
 # --- Configuration ---
 CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
 AUTH_SERVER="https://mcp-auth.brooksmcmillin.com"
+AUTH_SERVER_URL="$AUTH_SERVER/"
 DEVICE_CODE_ENDPOINT="$AUTH_SERVER/device/code"
 TOKEN_ENDPOINT="$AUTH_SERVER/token"
 SCOPE="read"
@@ -39,16 +44,29 @@ assert_integer() {
     fi
 }
 
-# --- Extract client credentials from Claude Code's stored config ---
-# Find the mcpOAuth key that matches the taskmanager server (take first match)
-MCP_KEY=$(jq -r '.mcpOAuth | keys[] | select(startswith("taskmanager|"))' "$CREDENTIALS_FILE" | head -n1)
-if [[ -z "$MCP_KEY" ]]; then
-    echo "Error: No taskmanager MCP OAuth entry found in credentials file." >&2
+# --- Find all MCP OAuth entries sharing this auth server ---
+mapfile -t MCP_KEYS < <(jq -r --arg auth_url "$AUTH_SERVER_URL" \
+    '.mcpOAuth | to_entries[]
+     | select((.value.discoveryState.authorizationServerUrl // "") | rtrimstr("/") == ($auth_url | rtrimstr("/")))
+     | .key' "$CREDENTIALS_FILE")
+
+if [[ ${#MCP_KEYS[@]} -eq 0 ]]; then
+    echo "Error: No MCP OAuth entries found using auth server $AUTH_SERVER_URL" >&2
+    echo "Register at least one MCP server in Claude Code first." >&2
     exit 1
 fi
 
-CLIENT_ID=$(jq -r --arg key "$MCP_KEY" '.mcpOAuth[$key].clientId' "$CREDENTIALS_FILE")
-CLIENT_SECRET=$(jq -r --arg key "$MCP_KEY" '.mcpOAuth[$key].clientSecret' "$CREDENTIALS_FILE")
+echo "Found ${#MCP_KEYS[@]} MCP server(s) sharing auth backend:"
+for key in "${MCP_KEYS[@]}"; do
+    SERVER_NAME=$(jq -r --arg key "$key" '.mcpOAuth[$key].serverName // "unknown"' "$CREDENTIALS_FILE")
+    SERVER_URL=$(jq -r --arg key "$key" '.mcpOAuth[$key].serverUrl // "unknown"' "$CREDENTIALS_FILE")
+    echo "  - $SERVER_NAME ($SERVER_URL)"
+done
+
+# --- Use the first entry's client credentials for the device flow ---
+PRIMARY_KEY="${MCP_KEYS[0]}"
+CLIENT_ID=$(jq -r --arg key "$PRIMARY_KEY" '.mcpOAuth[$key].clientId' "$CREDENTIALS_FILE")
+CLIENT_SECRET=$(jq -r --arg key "$PRIMARY_KEY" '.mcpOAuth[$key].clientSecret' "$CREDENTIALS_FILE")
 
 if [[ -z "$CLIENT_ID" || "$CLIENT_ID" == "null" ]]; then
     echo "Error: No client_id found. Register the MCP server in Claude Code first." >&2
@@ -60,6 +78,7 @@ if [[ -z "$CLIENT_SECRET" || "$CLIENT_SECRET" == "null" ]]; then
     exit 1
 fi
 
+echo ""
 echo "Using client_id: $CLIENT_ID"
 
 # --- Step 1: Request device code ---
@@ -127,22 +146,23 @@ while [[ $SECONDS -lt $DEADLINE ]]; do
         echo "Authorization successful!"
         echo ""
 
-        # --- Step 3: Update Claude Code credentials ---
-        # Back up the credentials file
+        # --- Step 3: Update ALL matching entries in Claude Code credentials ---
         cp "$CREDENTIALS_FILE" "$CREDENTIALS_FILE.bak"
         chmod 600 "$CREDENTIALS_FILE.bak"
         trap 'rm -f "$CREDENTIALS_FILE.bak"' EXIT
 
-        # Update the access token, expiry, and refresh token
-        JQ_FILTER='.mcpOAuth[$key].accessToken = $token | .mcpOAuth[$key].expiresAt = $expires'
-        JQ_ARGS=(--arg key "$MCP_KEY" --arg token "$ACCESS_TOKEN" --argjson expires "$EXPIRES_AT")
+        UPDATED=$(cat "$CREDENTIALS_FILE")
+        for key in "${MCP_KEYS[@]}"; do
+            JQ_FILTER='.mcpOAuth[$key].accessToken = $token | .mcpOAuth[$key].expiresAt = $expires'
+            JQ_ARGS=(--arg key "$key" --arg token "$ACCESS_TOKEN" --argjson expires "$EXPIRES_AT")
 
-        if [[ -n "$REFRESH_TOKEN" ]]; then
-            JQ_FILTER="$JQ_FILTER | .mcpOAuth[\$key].refreshToken = \$refresh"
-            JQ_ARGS+=(--arg refresh "$REFRESH_TOKEN")
-        fi
+            if [[ -n "$REFRESH_TOKEN" ]]; then
+                JQ_FILTER="$JQ_FILTER | .mcpOAuth[\$key].refreshToken = \$refresh"
+                JQ_ARGS+=(--arg refresh "$REFRESH_TOKEN")
+            fi
 
-        UPDATED=$(jq "${JQ_ARGS[@]}" "$JQ_FILTER" "$CREDENTIALS_FILE")
+            UPDATED=$(echo "$UPDATED" | jq "${JQ_ARGS[@]}" "$JQ_FILTER")
+        done
 
         # Write atomically via temp file
         TMPFILE=$(mktemp "${CREDENTIALS_FILE}.tmp.XXXXXX")
@@ -150,9 +170,15 @@ while [[ $SECONDS -lt $DEADLINE ]]; do
         echo "$UPDATED" > "$TMPFILE"
         mv "$TMPFILE" "$CREDENTIALS_FILE"
 
-        echo "Updated Claude Code credentials:"
+        EXPIRY_DATE=$(date -d @$((EXPIRES_AT / 1000)) 2>/dev/null || date -r $((EXPIRES_AT / 1000)) 2>/dev/null || echo "${EXPIRES_AT}ms")
+        echo "Updated ${#MCP_KEYS[@]} credential entry/entries:"
+        for key in "${MCP_KEYS[@]}"; do
+            SERVER_NAME=$(jq -r --arg key "$key" '.mcpOAuth[$key].serverName // "unknown"' "$CREDENTIALS_FILE")
+            echo "  - $SERVER_NAME ($key)"
+        done
+        echo ""
         echo "  Access token: ${ACCESS_TOKEN:0:20}..."
-        echo "  Expires at: $(date -d @$((EXPIRES_AT / 1000)) 2>/dev/null || date -r $((EXPIRES_AT / 1000)) 2>/dev/null || echo "${EXPIRES_AT}ms")"
+        echo "  Expires at: $EXPIRY_DATE"
         if [[ -n "$REFRESH_TOKEN" ]]; then
             echo "  Refresh token: ${REFRESH_TOKEN:0:20}..."
         fi
