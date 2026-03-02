@@ -150,9 +150,13 @@ class MessageStore:
         channel: str,
         since: str | None = None,
         limit: int = 50,
+        sort_order: str = "desc",
     ) -> list[Message]:
         if channel not in self._channels:
             return []
+
+        if sort_order not in ("asc", "desc"):
+            raise ValueError(f"Invalid sort_order: '{sort_order}'. Must be 'asc' or 'desc'.")
 
         limit = min(limit, MAX_READ_LIMIT)
         messages = list(self._channels[channel])
@@ -164,6 +168,8 @@ class MessageStore:
                 raise ValueError(f"Invalid ISO timestamp for 'since': {since}") from None
             messages = [m for m in messages if datetime.fromisoformat(m.timestamp) > since_dt]
 
+        if sort_order == "asc":
+            return messages[:limit]
         return messages[-limit:]
 
     def list_channels(self) -> list[ChannelInfo]:
@@ -304,6 +310,7 @@ def create_relay_server(
         channel: str,
         since: str | None = None,
         limit: int = 50,
+        sort_order: str = "desc",
     ) -> str:
         """Read messages from a channel.
 
@@ -311,13 +318,14 @@ def create_relay_server(
             channel: Channel name to read from
             since: ISO timestamp — only return messages after this time (optional)
             limit: Max messages to return (default 50, max 200)
+            sort_order: 'desc' returns the newest N messages (default), 'asc' returns the oldest N
 
         Returns:
             JSON with messages array and count
         """
         try:
             validate_channel_name(channel)
-            messages = store.get(channel, since=since, limit=limit)
+            messages = store.get(channel, since=since, limit=limit, sort_order=sort_order)
         except ValueError as e:
             return json.dumps({"error": str(e)})
         return json.dumps(

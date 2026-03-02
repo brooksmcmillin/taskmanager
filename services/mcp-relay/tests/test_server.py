@@ -284,6 +284,77 @@ class TestMessageStore:
         with pytest.raises(ValueError, match="Message too large"):
             store.add("test", "x" * 11)
 
+    def test_sort_order_desc_default(self) -> None:
+        """Default sort_order='desc' returns the newest N messages."""
+        store = MessageStore()
+        for i in range(5):
+            store.add("test", f"msg-{i}")
+
+        messages = store.get("test", limit=3)
+        assert len(messages) == 3
+        assert messages[0].content == "msg-2"
+        assert messages[1].content == "msg-3"
+        assert messages[2].content == "msg-4"
+
+    def test_sort_order_desc_explicit(self) -> None:
+        """Explicit sort_order='desc' returns the newest N messages."""
+        store = MessageStore()
+        for i in range(5):
+            store.add("test", f"msg-{i}")
+
+        messages = store.get("test", limit=3, sort_order="desc")
+        assert len(messages) == 3
+        assert messages[0].content == "msg-2"
+        assert messages[2].content == "msg-4"
+
+    def test_sort_order_asc_returns_oldest_first(self) -> None:
+        """sort_order='asc' returns the oldest N messages."""
+        store = MessageStore()
+        for i in range(5):
+            store.add("test", f"msg-{i}")
+
+        messages = store.get("test", limit=3, sort_order="asc")
+        assert len(messages) == 3
+        assert messages[0].content == "msg-0"
+        assert messages[1].content == "msg-1"
+        assert messages[2].content == "msg-2"
+
+    def test_sort_order_asc_with_since(self) -> None:
+        """sort_order='asc' combined with since filters correctly."""
+        store = MessageStore()
+        msg0 = store.add("test", "msg-0")
+        store.add("test", "msg-1")
+        store.add("test", "msg-2")
+        store.add("test", "msg-3")
+
+        # Filter since msg0, get oldest first
+        messages = store.get("test", since=msg0.timestamp, limit=2, sort_order="asc")
+        assert len(messages) == 2
+        assert messages[0].content == "msg-1"
+        assert messages[1].content == "msg-2"
+
+    def test_sort_order_desc_with_since(self) -> None:
+        """sort_order='desc' combined with since returns newest of filtered messages."""
+        store = MessageStore()
+        msg0 = store.add("test", "msg-0")
+        store.add("test", "msg-1")
+        store.add("test", "msg-2")
+        store.add("test", "msg-3")
+
+        # Filter since msg0, get newest first (last 2 of filtered)
+        messages = store.get("test", since=msg0.timestamp, limit=2, sort_order="desc")
+        assert len(messages) == 2
+        assert messages[0].content == "msg-2"
+        assert messages[1].content == "msg-3"
+
+    def test_sort_order_invalid_raises(self) -> None:
+        """Invalid sort_order raises ValueError."""
+        store = MessageStore()
+        store.add("test", "msg")
+
+        with pytest.raises(ValueError, match="Invalid sort_order"):
+            store.get("test", sort_order="random")
+
     @pytest.mark.asyncio
     async def test_wait_for_message_immediate(self) -> None:
         """wait_for_new returns immediately if messages exist since the given timestamp."""
