@@ -37,7 +37,14 @@ MAX_CHANNEL_NAME_LENGTH = 64
 # Allowlist: alphanumeric, hyphens, and underscores only.
 # This prevents path traversal (e.g. '../../etc/passwd') and keeps
 # the channel namespace clean for future file-backed storage.
-_CHANNEL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+# Use \Z (not $) to avoid matching trailing newlines.
+_CHANNEL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+\Z")
+
+# UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z",
+    re.IGNORECASE,
+)
 
 DEFAULT_SCOPE = ["read"]
 
@@ -71,6 +78,23 @@ def validate_channel_name(channel: str) -> None:
             "Invalid channel name. "
             "Only alphanumeric characters, hyphens (-), and underscores (_) are allowed."
         )
+
+
+def validate_message_id(message_id: str) -> None:
+    """Validate that a message ID is a well-formed UUID.
+
+    Message IDs are UUIDs assigned at send time. Validating the format before
+    logging prevents log-injection attacks via a crafted message_id containing
+    embedded newlines or other control characters.
+
+    Args:
+        message_id: The message ID string to validate.
+
+    Raises:
+        ValueError: If the message_id is not a valid UUID string.
+    """
+    if not _UUID_RE.match(message_id):
+        raise ValueError("Invalid message ID format: must be a UUID.")
 
 
 @dataclass
@@ -182,28 +206,47 @@ class MessageStore:
             return True
         return False
 
-    def delete_message(self, channel: str, message_id: str) -> bool:
+    def delete_message(
+        self,
+        channel: str,
+        message_id: str,
+        sender: str | None = None,
+    ) -> bool:
         """Delete a single message by ID from a channel.
 
         Since deques don't support efficient random deletion, the deque is
         rebuilt without the target message.
 
+        When `sender` is provided the message is only deleted if its stored
+        sender matches, preventing one caller from deleting another caller's
+        messages.
+
         Args:
             channel: The channel containing the message.
             message_id: The UUID string of the message to delete.
+            sender: If given, only delete the message when its sender field
+                matches this value exactly.
 
         Returns:
-            True if the message was found and deleted, False otherwise.
+            True if the message was found (and, if sender was specified,
+            matched) and deleted, False otherwise.
         """
         if channel not in self._channels:
             return False
         original = self._channels[channel]
+
+        def _should_keep(m: Message) -> bool:
+            if m.id != message_id:
+                return True
+            # Same ID — only remove if sender check passes
+            return bool(sender is not None and m.sender != sender)
+
         new_deque: deque[Message] = deque(
-            (m for m in original if m.id != message_id),
+            (m for m in original if _should_keep(m)),
             maxlen=original.maxlen,
         )
         if len(new_deque) == len(original):
-            # No message was removed — ID not found in this channel
+            # No message was removed — ID not found or sender mismatch
             return False
         self._channels[channel] = new_deque
         return True
@@ -376,26 +419,40 @@ def create_relay_server(
         )
 
     @app.tool()
-    async def delete_message(channel: str, message_id: str) -> str:
+    async def delete_message(
+        channel: str,
+        message_id: str,
+        sender: str = "anonymous",
+    ) -> str:
         """Delete a single message by ID from a channel.
 
         Use this to correct mistakes or remove sensitive content without
-        clearing the entire channel.
+        clearing the entire channel. Only the original sender of a message
+        can delete it — the `sender` value must match the one used when the
+        message was posted.
 
         Args:
             channel: Channel name containing the message
             message_id: UUID of the message to delete
+            sender: Sender identifier — must match the message's original
+                sender (default 'anonymous')
 
         Returns:
             JSON with channel, message_id, and deleted status
         """
         try:
             validate_channel_name(channel)
-            deleted = store.delete_message(channel, message_id)
+            validate_message_id(message_id)
+            deleted = store.delete_message(channel, message_id, sender=sender)
         except ValueError as e:
             return json.dumps({"error": str(e)})
         if deleted:
-            logger.info(f"Message {message_id} deleted from #{channel}")
+            logger.info(f"Message {message_id} deleted from #{channel} by {sender}")
+        else:
+            logger.debug(
+                f"delete_message: no message removed "
+                f"(channel={channel!r}, id={message_id!r}, sender={sender!r})"
+            )
         return json.dumps(
             {
                 "channel": channel,
