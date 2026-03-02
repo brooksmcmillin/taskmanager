@@ -8,17 +8,19 @@
 	} from '$lib/utils/deadline';
 	import { stripHtml } from '$lib/utils/markdown';
 	import { toasts } from '$lib/stores/ui';
-	import type { Todo, Article, ApiResponse } from '$lib/types';
+	import type { Todo, Article, ReadingStats, ApiResponse } from '$lib/types';
 
-	let tasks: Todo[] = [];
-	let overdueTasks: Todo[] = [];
-	let articles: Article[] = [];
-	let tasksLoading = true;
-	let articlesLoading = true;
-	let tasksError = false;
-	let articlesError = false;
-	let showFeaturedOnly = true;
-	let completingTasks = new Set<number>();
+	let tasks: Todo[] = $state([]);
+	let overdueTasks: Todo[] = $state([]);
+	let articles: Article[] = $state([]);
+	let highlight: Article | null = $state(null);
+	let stats: ReadingStats | null = $state(null);
+	let tasksLoading = $state(true);
+	let articlesLoading = $state(true);
+	let tasksError = $state(false);
+	let articlesError = $state(false);
+	let showFeaturedOnly = $state(true);
+	let completingTasks = $state(new Set<number>());
 
 	function getGreeting(): string {
 		const hour = new Date().getHours();
@@ -100,6 +102,20 @@
 		fetchArticles(featured);
 	}
 
+	async function toggleBookmark(event: MouseEvent, article: Article) {
+		event.preventDefault();
+		event.stopPropagation();
+		const newState = !article.is_bookmarked;
+		article.is_bookmarked = newState;
+		articles = articles;
+		try {
+			await api.post(`/api/news/${article.id}/bookmark`, { is_bookmarked: newState });
+		} catch {
+			article.is_bookmarked = !newState;
+			articles = articles;
+		}
+	}
+
 	async function completeTask(event: MouseEvent, taskId: number, source: 'today' | 'overdue') {
 		event.preventDefault();
 		event.stopPropagation();
@@ -170,12 +186,26 @@
 
 		fetchArticles(showFeaturedOnly);
 
+		api
+			.get<{ data: ReadingStats }>('/api/news/stats')
+			.then((result) => {
+				if (mounted) stats = result.data || null;
+			})
+			.catch(() => {});
+
+		api
+			.get<{ data: Article | null }>('/api/news/highlight')
+			.then((result) => {
+				if (mounted) highlight = result.data || null;
+			})
+			.catch(() => {});
+
 		return () => {
 			mounted = false;
 		};
 	});
 
-	$: totalTasks = tasks.length + overdueTasks.length;
+	let totalTasks = $derived(tasks.length + overdueTasks.length);
 </script>
 
 <svelte:head>
@@ -189,6 +219,32 @@
 		<h1 class="greeting">{getGreeting()}</h1>
 		<time class="date">{getDateString()}</time>
 	</header>
+
+	{#if stats}
+		<div class="stats-bar">
+			<div class="stat-item">
+				<span class="stat-value" class:streak-active={stats.streak_days > 0}
+					>{stats.streak_days}d</span
+				>
+				<span class="stat-label">streak</span>
+			</div>
+			<div class="stat-divider"></div>
+			<div class="stat-item">
+				<span class="stat-value">{stats.articles_read_today}</span>
+				<span class="stat-label">today</span>
+			</div>
+			<div class="stat-divider"></div>
+			<div class="stat-item">
+				<span class="stat-value">{stats.articles_read_this_week}</span>
+				<span class="stat-label">this week</span>
+			</div>
+			<div class="stat-divider"></div>
+			<div class="stat-item">
+				<span class="stat-value">{stats.total_bookmarked}</span>
+				<span class="stat-label">saved</span>
+			</div>
+		</div>
+	{/if}
 
 	<div class="home-grid">
 		<section class="panel">
@@ -318,6 +374,32 @@
 				</div>
 			</div>
 
+			{#if highlight}
+				<div class="highlight-card">
+					<div class="highlight-label">Start here</div>
+					<a
+						class="highlight-link"
+						href={highlight.url}
+						target="_blank"
+						rel="noopener noreferrer"
+						onclick={() => {
+							if (highlight && !highlight.is_read) {
+								highlight.is_read = true;
+								api.post(`/api/news/${highlight.id}/read`, { is_read: true }).catch(() => {
+									if (highlight) highlight.is_read = false;
+								});
+							}
+						}}
+					>
+						{highlight.title}
+					</a>
+					<div class="highlight-meta">
+						<span class="article-source">{highlight.feed_source_name}</span>
+						<span>{timeAgo(highlight.published_at)}</span>
+					</div>
+				</div>
+			{/if}
+
 			{#if articlesLoading}
 				<div class="skeleton-loader">
 					<div class="skeleton-line"></div>
@@ -331,30 +413,69 @@
 			{:else}
 				<div class="article-list">
 					{#each articles as article}
-						<a
-							class="article-item"
-							class:read={article.is_read}
-							href={article.url}
-							target="_blank"
-							rel="noopener noreferrer"
-							onclick={() => {
-								if (!article.is_read) {
-									article.is_read = true;
-									api.post(`/api/news/${article.id}/read`, { is_read: true }).catch(() => {
-										article.is_read = false;
-									});
-								}
-							}}
-						>
-							<div class="article-title">{article.title}</div>
-							{#if article.summary}
-								<div class="article-summary">{stripHtml(article.summary)}</div>
-							{/if}
-							<div class="article-meta">
-								<span class="article-source">{article.feed_source_name}</span>
-								<span>{timeAgo(article.published_at)}</span>
-							</div>
-						</a>
+						<div class="article-row" class:read={article.is_read}>
+							<a
+								class="article-item"
+								href={article.url}
+								target="_blank"
+								rel="noopener noreferrer"
+								onclick={() => {
+									if (!article.is_read) {
+										article.is_read = true;
+										api.post(`/api/news/${article.id}/read`, { is_read: true }).catch(() => {
+											article.is_read = false;
+										});
+									}
+								}}
+							>
+								<div class="article-title">{article.title}</div>
+								{#if article.summary}
+									<div class="article-summary">{stripHtml(article.summary)}</div>
+								{/if}
+								<div class="article-meta">
+									<span class="article-source">{article.feed_source_name}</span>
+									<span>{timeAgo(article.published_at)}</span>
+								</div>
+							</a>
+							<button
+								class="bookmark-btn"
+								class:bookmarked={article.is_bookmarked}
+								title={article.is_bookmarked ? 'Remove bookmark' : 'Save for later'}
+								onclick={(e) => toggleBookmark(e, article)}
+							>
+								{#if article.is_bookmarked}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 20 20"
+										fill="currentColor"
+										width="16"
+										height="16"
+									>
+										<path
+											fill-rule="evenodd"
+											d="M10 2c-1.716 0-3.408.106-5.07.31C3.806 2.45 3 3.414 3 4.517V17.25a.75.75 0 001.075.676L10 15.082l5.925 2.844A.75.75 0 0017 17.25V4.517c0-1.103-.806-2.068-1.93-2.207A41.403 41.403 0 0010 2z"
+											clip-rule="evenodd"
+										/>
+									</svg>
+								{:else}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke-width="1.5"
+										stroke="currentColor"
+										width="16"
+										height="16"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"
+										/>
+									</svg>
+								{/if}
+							</button>
+						</div>
 					{/each}
 				</div>
 			{/if}
@@ -382,7 +503,7 @@
 	}
 
 	.home-header {
-		margin-bottom: var(--space-8);
+		margin-bottom: var(--space-4);
 	}
 
 	.greeting {
@@ -400,6 +521,89 @@
 		color: var(--text-muted);
 		font-weight: 400;
 		letter-spacing: 0.02em;
+	}
+
+	/* Reading Stats Bar */
+
+	.stats-bar {
+		display: flex;
+		align-items: center;
+		gap: var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		margin-bottom: var(--space-6);
+		background: var(--bg-card);
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.stat-item {
+		display: flex;
+		align-items: baseline;
+		gap: 0.375rem;
+	}
+
+	.stat-value {
+		font-size: 1.25rem;
+		font-weight: 700;
+		color: var(--text-primary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.stat-value.streak-active {
+		color: var(--warning-500);
+	}
+
+	.stat-label {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		font-weight: 500;
+	}
+
+	.stat-divider {
+		width: 1px;
+		height: 1.25rem;
+		background: var(--border-color);
+	}
+
+	/* Highlight Card */
+
+	.highlight-card {
+		padding: var(--space-3) var(--space-4);
+		margin-bottom: var(--space-4);
+		background: var(--primary-50);
+		border: 1px solid var(--primary-200);
+		border-radius: var(--radius);
+	}
+
+	.highlight-label {
+		font-size: 0.625rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--primary-600);
+		margin-bottom: 0.25rem;
+	}
+
+	.highlight-link {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--primary-700);
+		text-decoration: none;
+		line-height: 1.4;
+	}
+
+	.highlight-link:hover {
+		text-decoration: underline;
+	}
+
+	.highlight-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 0.25rem;
+		font-size: 0.6875rem;
+		color: var(--primary-400);
 	}
 
 	.home-grid {
@@ -666,28 +870,34 @@
 		gap: var(--space-1);
 	}
 
+	.article-row {
+		display: flex;
+		align-items: flex-start;
+		border-radius: var(--radius);
+		transition: background var(--transition-fast);
+	}
+
+	.article-row:hover {
+		background: var(--bg-hover);
+	}
+
+	.article-row.read {
+		opacity: 0.75;
+	}
+
+	.article-row.read .article-title {
+		color: var(--gray-400);
+	}
+
 	.article-item {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
 		padding: 0.625rem 0.5rem;
-		border-radius: var(--radius);
-		transition: background var(--transition-fast);
+		flex: 1;
+		min-width: 0;
 		text-decoration: none;
 		color: inherit;
-	}
-
-	.article-item:hover {
-		background: var(--bg-hover);
-	}
-
-	.article-item.read {
-		background-color: var(--bg-page);
-		opacity: 0.75;
-	}
-
-	.article-item.read .article-title {
-		color: var(--gray-400);
 	}
 
 	.article-title {
@@ -718,6 +928,34 @@
 	.article-source {
 		font-weight: 500;
 		color: var(--text-secondary);
+	}
+
+	/* Bookmark Button */
+
+	.bookmark-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		margin-top: 0.625rem;
+		margin-right: 0.25rem;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+		border-radius: var(--radius);
+		color: var(--gray-300);
+		flex-shrink: 0;
+		transition: all 0.15s ease;
+	}
+
+	.bookmark-btn:hover {
+		color: var(--primary-500);
+		background: var(--primary-50);
+	}
+
+	.bookmark-btn.bookmarked {
+		color: var(--primary-600);
 	}
 
 	/* Shared states */
@@ -788,6 +1026,11 @@
 	@media (max-width: 768px) {
 		.home-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.stats-bar {
+			flex-wrap: wrap;
+			gap: var(--space-3);
 		}
 	}
 </style>

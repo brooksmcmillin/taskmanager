@@ -9,6 +9,7 @@
 	let loading = $state(true);
 	let showFeaturedOnly = $state(true);
 	let showUnreadOnly = $state(false);
+	let showBookmarkedOnly = $state(false);
 	let feedTypeFilter = $state<'all' | 'paper' | 'article'>('all');
 	let searchQuery = $state('');
 	let total = $state(0);
@@ -42,6 +43,10 @@
 
 			if (showUnreadOnly) {
 				params.unread_only = 'true';
+			}
+
+			if (showBookmarkedOnly) {
+				params.bookmarked_only = 'true';
 			}
 
 			if (feedTypeFilter !== 'all') {
@@ -113,6 +118,39 @@
 		}
 	}
 
+	async function toggleBookmark(articleId: number) {
+		const article = articles.find((a) => a.id === articleId);
+		if (!article) return;
+
+		const newState = !article.is_bookmarked;
+		articles = articles.map((a) =>
+			a.id === articleId
+				? {
+						...a,
+						is_bookmarked: newState,
+						bookmarked_at: newState ? new Date().toISOString() : null
+					}
+				: a
+		);
+
+		try {
+			await api.post(`/api/news/${articleId}/bookmark`, { is_bookmarked: newState });
+			toasts.show(newState ? 'Saved for later' : 'Bookmark removed', 'success');
+		} catch (error) {
+			// Revert
+			articles = articles.map((a) =>
+				a.id === articleId
+					? {
+							...a,
+							is_bookmarked: !newState,
+							bookmarked_at: !newState ? new Date().toISOString() : null
+						}
+					: a
+			);
+			toasts.show('Failed to update bookmark: ' + (error as Error).message, 'error');
+		}
+	}
+
 	function formatDate(dateStr: string | null): string {
 		if (!dateStr) return 'Unknown date';
 		const date = new Date(dateStr);
@@ -175,6 +213,16 @@
 			<span>Show unread only</span>
 		</label>
 
+		<label class="flex items-center gap-2 cursor-pointer">
+			<input
+				type="checkbox"
+				bind:checked={showBookmarkedOnly}
+				onchange={handleFilterChange}
+				class="checkbox"
+			/>
+			<span>Saved only</span>
+		</label>
+
 		<div class="flex items-center gap-2">
 			<label for="feed-type-filter" class="text-sm font-medium">Type:</label>
 			<select
@@ -184,8 +232,8 @@
 				class="select select-sm"
 			>
 				<option value="all">All</option>
-				<option value="article">📰 Articles</option>
-				<option value="paper">📄 Papers</option>
+				<option value="article">Articles</option>
+				<option value="paper">Papers</option>
 			</select>
 		</div>
 
@@ -241,12 +289,13 @@
 	{:else if articles.length === 0}
 		<div class="empty-state">
 			<p>No articles found.</p>
-			{#if searchQuery || showUnreadOnly || showFeaturedOnly}
+			{#if searchQuery || showUnreadOnly || showFeaturedOnly || showBookmarkedOnly}
 				<button
 					onclick={() => {
 						searchQuery = '';
 						showUnreadOnly = false;
 						showFeaturedOnly = false;
+						showBookmarkedOnly = false;
 						loadArticles(true);
 					}}
 					class="btn btn-outline mt-4"
@@ -294,9 +343,9 @@
 							<div class="article-meta">
 								<span class="font-medium">{article.feed_source_name}</span>
 								{#if article.author}
-									<span> • {article.author}</span>
+									<span> &bull; {article.author}</span>
 								{/if}
-								<span> • {formatDate(article.published_at)}</span>
+								<span> &bull; {formatDate(article.published_at)}</span>
 							</div>
 
 							{#if article.summary}
@@ -314,6 +363,50 @@
 
 						<div class="flex flex-col gap-2">
 							<button
+								onclick={() => toggleBookmark(article.id)}
+								class="btn btn-sm"
+								class:btn-primary={article.is_bookmarked}
+								class:btn-outline={!article.is_bookmarked}
+								title={article.is_bookmarked ? 'Remove bookmark' : 'Save for later'}
+							>
+								{#if article.is_bookmarked}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 20 20"
+										fill="currentColor"
+										width="14"
+										height="14"
+										style="display: inline; vertical-align: -2px; margin-right: 4px;"
+									>
+										<path
+											fill-rule="evenodd"
+											d="M10 2c-1.716 0-3.408.106-5.07.31C3.806 2.45 3 3.414 3 4.517V17.25a.75.75 0 001.075.676L10 15.082l5.925 2.844A.75.75 0 0017 17.25V4.517c0-1.103-.806-2.068-1.93-2.207A41.403 41.403 0 0010 2z"
+											clip-rule="evenodd"
+										/>
+									</svg>
+									Saved
+								{:else}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke-width="1.5"
+										stroke="currentColor"
+										width="14"
+										height="14"
+										style="display: inline; vertical-align: -2px; margin-right: 4px;"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"
+										/>
+									</svg>
+									Save
+								{/if}
+							</button>
+
+							<button
 								onclick={() => markAsRead(article.id, !article.is_read)}
 								class="btn btn-sm btn-outline"
 								title={article.is_read ? 'Mark as unread' : 'Mark as read'}
@@ -329,7 +422,7 @@
 									class:btn-outline={article.rating !== 'good'}
 									title="Good quality"
 								>
-									👍 Good
+									Good
 								</button>
 								<button
 									onclick={() => rateArticle(article.id, 'bad')}
@@ -338,7 +431,7 @@
 									class:btn-outline={article.rating !== 'bad'}
 									title="Poor quality"
 								>
-									👎 Bad
+									Bad
 								</button>
 								<button
 									onclick={() => rateArticle(article.id, 'not_interested')}
@@ -347,7 +440,7 @@
 									class:btn-outline={article.rating !== 'not_interested'}
 									title="Not relevant to your interests"
 								>
-									🚫 Skip
+									Skip
 								</button>
 							</div>
 						</div>

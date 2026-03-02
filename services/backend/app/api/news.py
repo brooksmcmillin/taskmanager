@@ -1,11 +1,12 @@
 """News feed API routes."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.types import Date
 
 from app.core.errors import errors
 from app.dependencies import AdminUser, CurrentUser, DbSession
@@ -35,6 +36,8 @@ class ArticleResponse(BaseModel):
     is_read: bool = False
     rating: ArticleRating | None = None
     read_at: datetime | None = None
+    is_bookmarked: bool = False
+    bookmarked_at: datetime | None = None
 
 
 class MarkReadRequest(BaseModel):
@@ -47,6 +50,22 @@ class RateArticleRequest(BaseModel):
     """Rate article request."""
 
     rating: ArticleRating
+
+
+class BookmarkArticleRequest(BaseModel):
+    """Bookmark article request."""
+
+    is_bookmarked: bool = True
+
+
+class ReadingStatsResponse(BaseModel):
+    """Reading stats for engagement tracking."""
+
+    streak_days: int
+    articles_read_today: int
+    articles_read_this_week: int
+    total_articles_read: int
+    total_bookmarked: int
 
 
 class FeedSourceResponse(BaseModel):
@@ -276,11 +295,183 @@ async def delete_feed_source(
 # Article endpoints
 
 
+@router.get("/stats")
+async def get_reading_stats(
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Get reading engagement stats (streak, read counts)."""
+    now = datetime.now(UTC)
+    today = now.date()
+    week_start = today - timedelta(days=today.weekday())
+
+    # Articles read today
+    read_today = (
+        await db.scalar(
+            select(func.count(ArticleInteraction.id)).where(
+                ArticleInteraction.user_id == user.id,
+                ArticleInteraction.is_read == True,  # noqa: E712
+                cast(ArticleInteraction.read_at, Date) == today,
+            )
+        )
+        or 0
+    )
+
+    # Articles read this week (Monday–Sunday)
+    read_this_week = (
+        await db.scalar(
+            select(func.count(ArticleInteraction.id)).where(
+                ArticleInteraction.user_id == user.id,
+                ArticleInteraction.is_read == True,  # noqa: E712
+                cast(ArticleInteraction.read_at, Date) >= week_start,
+            )
+        )
+        or 0
+    )
+
+    # Total articles read
+    total_read = (
+        await db.scalar(
+            select(func.count(ArticleInteraction.id)).where(
+                ArticleInteraction.user_id == user.id,
+                ArticleInteraction.is_read == True,  # noqa: E712
+            )
+        )
+        or 0
+    )
+
+    # Total bookmarked
+    total_bookmarked = (
+        await db.scalar(
+            select(func.count(ArticleInteraction.id)).where(
+                ArticleInteraction.user_id == user.id,
+                ArticleInteraction.is_bookmarked == True,  # noqa: E712
+            )
+        )
+        or 0
+    )
+
+    # Calculate reading streak (consecutive days with at least 1 read)
+    # Get distinct dates the user read articles, ordered descending
+    distinct_dates_query = (
+        select(cast(ArticleInteraction.read_at, Date).label("read_date"))
+        .where(
+            ArticleInteraction.user_id == user.id,
+            ArticleInteraction.is_read == True,  # noqa: E712
+            ArticleInteraction.read_at.is_not(None),
+        )
+        .group_by(cast(ArticleInteraction.read_at, Date))
+        .order_by(cast(ArticleInteraction.read_at, Date).desc())
+    )
+    result = await db.execute(distinct_dates_query)
+    read_dates: list[date] = [row[0] for row in result.all()]
+
+    streak = 0
+    if read_dates:
+        # Streak must include today or yesterday to be active
+        expected = today
+        if read_dates[0] == today:
+            expected = today
+        elif read_dates[0] == today - timedelta(days=1):
+            # Yesterday counts — streak is still alive
+            expected = today - timedelta(days=1)
+        else:
+            # Last read was more than 1 day ago — streak is 0
+            expected = None
+
+        if expected is not None:
+            for read_date in read_dates:
+                if read_date == expected:
+                    streak += 1
+                    expected -= timedelta(days=1)
+                else:
+                    break
+
+    return {
+        "data": ReadingStatsResponse(
+            streak_days=streak,
+            articles_read_today=read_today,
+            articles_read_this_week=read_this_week,
+            total_articles_read=total_read,
+            total_bookmarked=total_bookmarked,
+        )
+    }
+
+
+@router.get("/highlight")
+async def get_daily_highlight(
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Get a single top unread article as a daily reading highlight.
+
+    Picks the highest-quality-source unread article from the last 7 days.
+    """
+    week_ago = datetime.now(UTC) - timedelta(days=7)
+
+    query = (
+        select(
+            Article,
+            FeedSource.name.label("feed_source_name"),
+            ArticleInteraction.is_read,
+            ArticleInteraction.rating,
+            ArticleInteraction.read_at,
+            ArticleInteraction.is_bookmarked,
+            ArticleInteraction.bookmarked_at,
+        )
+        .join(FeedSource, Article.feed_source_id == FeedSource.id)
+        .outerjoin(
+            ArticleInteraction,
+            and_(
+                ArticleInteraction.article_id == Article.id,
+                ArticleInteraction.user_id == user.id,
+            ),
+        )
+        .where(
+            FeedSource.is_featured == True,  # noqa: E712
+            FeedSource.is_active == True,  # noqa: E712
+            Article.published_at >= week_ago,
+            or_(
+                ArticleInteraction.is_read.is_(None),
+                ArticleInteraction.is_read == False,  # noqa: E712
+            ),
+        )
+        .order_by(FeedSource.quality_score.desc(), Article.published_at.desc())
+        .limit(1)
+    )
+
+    result = await db.execute(query)
+    row = result.one_or_none()
+
+    if not row:
+        return {"data": None}
+
+    article = row[0]
+    return {
+        "data": ArticleResponse(
+            id=article.id,
+            title=article.title,
+            url=article.url,
+            summary=article.summary,
+            author=article.author,
+            published_at=article.published_at,
+            keywords=article.keywords,
+            feed_source_name=row.feed_source_name,
+            is_read=row.is_read or False,
+            rating=row.rating,
+            read_at=row.read_at,
+            is_bookmarked=row.is_bookmarked or False,
+            bookmarked_at=row.bookmarked_at,
+        )
+    }
+
+
 @router.get("")
 async def list_articles(
     user: CurrentUser,
     db: DbSession,
     unread_only: bool = Query(False),
+    bookmarked_only: bool = Query(False),
     search: str | None = Query(None),
     feed_type: str | None = Query(None),
     featured: bool | None = Query(None),
@@ -296,6 +487,8 @@ async def list_articles(
             ArticleInteraction.is_read,
             ArticleInteraction.rating,
             ArticleInteraction.read_at,
+            ArticleInteraction.is_bookmarked,
+            ArticleInteraction.bookmarked_at,
         )
         .join(FeedSource, Article.feed_source_id == FeedSource.id)
         .outerjoin(
@@ -322,6 +515,12 @@ async def list_articles(
                 ArticleInteraction.is_read.is_(None),
                 ArticleInteraction.is_read == False,  # noqa: E712
             )
+        )
+
+    # Filter by bookmarked
+    if bookmarked_only:
+        query = query.where(
+            ArticleInteraction.is_bookmarked == True,  # noqa: E712
         )
 
     # Filter by search
@@ -363,6 +562,8 @@ async def list_articles(
                 is_read=row.is_read or False,
                 rating=row.rating,
                 read_at=row.read_at,
+                is_bookmarked=row.is_bookmarked or False,
+                bookmarked_at=row.bookmarked_at,
             )
         )
 
@@ -386,6 +587,8 @@ async def get_article(
             ArticleInteraction.is_read,
             ArticleInteraction.rating,
             ArticleInteraction.read_at,
+            ArticleInteraction.is_bookmarked,
+            ArticleInteraction.bookmarked_at,
         )
         .join(FeedSource, Article.feed_source_id == FeedSource.id)
         .outerjoin(
@@ -418,6 +621,8 @@ async def get_article(
             is_read=row.is_read or False,
             rating=row.rating,
             read_at=row.read_at,
+            is_bookmarked=row.is_bookmarked or False,
+            bookmarked_at=row.bookmarked_at,
         )
     }
 
@@ -512,3 +717,44 @@ async def rate_article(
         await db.commit()
 
     return {"data": {"rating": request.rating, "article_id": article_id}}
+
+
+@router.post("/{article_id}/bookmark")
+async def bookmark_article(
+    article_id: int,
+    request: BookmarkArticleRequest,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Bookmark or unbookmark an article."""
+    article = await db.get(Article, article_id)
+    if not article:
+        raise errors.not_found("Article")
+
+    stmt = select(ArticleInteraction).where(
+        ArticleInteraction.user_id == user.id,
+        ArticleInteraction.article_id == article_id,
+    )
+    result = await db.execute(stmt)
+    interaction = result.scalar_one_or_none()
+
+    if interaction:
+        interaction.is_bookmarked = request.is_bookmarked
+        interaction.bookmarked_at = datetime.now(UTC) if request.is_bookmarked else None
+    else:
+        interaction = ArticleInteraction(
+            user_id=user.id,
+            article_id=article_id,
+            is_bookmarked=request.is_bookmarked,
+            bookmarked_at=datetime.now(UTC) if request.is_bookmarked else None,
+        )
+        db.add(interaction)
+
+    await db.commit()
+
+    return {
+        "data": {
+            "is_bookmarked": request.is_bookmarked,
+            "article_id": article_id,
+        }
+    }
