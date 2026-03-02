@@ -19,6 +19,11 @@ from app.services.news_fetcher import fetch_feed_since, validate_feed_url
 router = APIRouter(prefix="/api/news", tags=["news"])
 
 
+def _escape_ilike(value: str) -> str:
+    """Escape ILIKE special characters (\\, %, _) in user input."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 # Schemas
 class ArticleResponse(BaseModel):
     """Article response."""
@@ -525,11 +530,12 @@ async def list_articles(
 
     # Filter by search
     if search:
-        search_pattern = f"%{search}%"
+        escaped = _escape_ilike(search)
+        search_pattern = f"%{escaped}%"
         query = query.where(
             or_(
-                Article.title.ilike(search_pattern),
-                Article.summary.ilike(search_pattern),
+                Article.title.ilike(search_pattern, escape="\\"),
+                Article.summary.ilike(search_pattern, escape="\\"),
             )
         )
 
