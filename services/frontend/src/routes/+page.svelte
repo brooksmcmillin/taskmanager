@@ -154,6 +154,8 @@
 					}
 				}
 			});
+		} catch {
+			toasts.error('Failed to complete task');
 		} finally {
 			completingTasks.delete(taskId);
 			completingTasks = completingTasks;
@@ -166,7 +168,12 @@
 
 		Promise.all([
 			api.get<ApiResponse<Todo[]>>('/api/todos', {
-				params: { start_date: today, end_date: today, exclude_no_calendar: 'true' }
+				params: {
+					start_date: today,
+					end_date: today,
+					exclude_no_calendar: 'true',
+					status: 'pending'
+				}
 			}),
 			api.get<ApiResponse<Todo[]>>('/api/todos', {
 				params: { status: 'overdue', exclude_no_calendar: 'true' }

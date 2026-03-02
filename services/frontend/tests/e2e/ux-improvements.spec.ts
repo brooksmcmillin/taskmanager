@@ -374,8 +374,8 @@ test.describe('User Dropdown Menu', () => {
 		await page.click('.user-dropdown-trigger');
 		await expect(page.locator('[data-testid=logout-button]')).toBeVisible({ timeout: 3000 });
 
-		// Click outside
-		await page.click('h1:has-text("Task Manager")');
+		// Click outside (click the main content area to dismiss dropdown)
+		await page.click('main');
 		await expect(page.locator('[data-testid=logout-button]')).not.toBeVisible();
 	});
 
