@@ -162,6 +162,59 @@ class TestMessageStore:
         store = MessageStore()
         assert store.clear("nope") is False
 
+    def test_delete_message_removes_by_id(self) -> None:
+        store = MessageStore()
+        msg1 = store.add("test", "first")
+        msg2 = store.add("test", "second")
+        msg3 = store.add("test", "third")
+
+        result = store.delete_message("test", msg2.id)
+        assert result is True
+
+        remaining = store.get("test")
+        assert len(remaining) == 2
+        ids = [m.id for m in remaining]
+        assert msg1.id in ids
+        assert msg2.id not in ids
+        assert msg3.id in ids
+
+    def test_delete_message_nonexistent_id(self) -> None:
+        store = MessageStore()
+        store.add("test", "msg")
+
+        result = store.delete_message("test", "00000000-0000-0000-0000-000000000000")
+        assert result is False
+        assert len(store.get("test")) == 1
+
+    def test_delete_message_nonexistent_channel(self) -> None:
+        store = MessageStore()
+        result = store.delete_message("no-such-channel", "some-id")
+        assert result is False
+
+    def test_delete_message_preserves_order(self) -> None:
+        store = MessageStore()
+        msgs = [store.add("test", f"msg-{i}") for i in range(5)]
+
+        store.delete_message("test", msgs[2].id)
+
+        remaining = store.get("test")
+        assert [m.content for m in remaining] == ["msg-0", "msg-1", "msg-3", "msg-4"]
+
+    def test_delete_message_from_full_channel(self) -> None:
+        """Deleting from a full channel preserves maxlen behaviour."""
+        store = MessageStore(max_per_channel=5)
+        for i in range(5):
+            store.add("test", f"msg-{i}")
+
+        messages = store.get("test")
+        target_id = messages[2].id
+
+        result = store.delete_message("test", target_id)
+        assert result is True
+        remaining = store.get("test")
+        assert len(remaining) == 4
+        assert all(m.id != target_id for m in remaining)
+
     def test_max_messages_eviction(self) -> None:
         store = MessageStore(max_per_channel=5)
         for i in range(10):

@@ -182,6 +182,32 @@ class MessageStore:
             return True
         return False
 
+    def delete_message(self, channel: str, message_id: str) -> bool:
+        """Delete a single message by ID from a channel.
+
+        Since deques don't support efficient random deletion, the deque is
+        rebuilt without the target message.
+
+        Args:
+            channel: The channel containing the message.
+            message_id: The UUID string of the message to delete.
+
+        Returns:
+            True if the message was found and deleted, False otherwise.
+        """
+        if channel not in self._channels:
+            return False
+        original = self._channels[channel]
+        new_deque: deque[Message] = deque(
+            (m for m in original if m.id != message_id),
+            maxlen=original.maxlen,
+        )
+        if len(new_deque) == len(original):
+            # No message was removed — ID not found in this channel
+            return False
+        self._channels[channel] = new_deque
+        return True
+
     async def wait_for_new(
         self,
         channel: str,
@@ -346,6 +372,35 @@ def create_relay_server(
             {
                 "channel": channel,
                 "cleared": cleared,
+            }
+        )
+
+    @app.tool()
+    async def delete_message(channel: str, message_id: str) -> str:
+        """Delete a single message by ID from a channel.
+
+        Use this to correct mistakes or remove sensitive content without
+        clearing the entire channel.
+
+        Args:
+            channel: Channel name containing the message
+            message_id: UUID of the message to delete
+
+        Returns:
+            JSON with channel, message_id, and deleted status
+        """
+        try:
+            validate_channel_name(channel)
+            deleted = store.delete_message(channel, message_id)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+        if deleted:
+            logger.info(f"Message {message_id} deleted from #{channel}")
+        return json.dumps(
+            {
+                "channel": channel,
+                "message_id": message_id,
+                "deleted": deleted,
             }
         )
 
