@@ -182,6 +182,25 @@ class MessageStore:
             return True
         return False
 
+    def delete(self, channel: str) -> bool:
+        """Fully remove a channel and its event from the store.
+
+        Unlike clear(), which empties the message queue but keeps the channel
+        entry, delete() removes the channel entirely so it no longer appears
+        in list_channels().
+
+        Args:
+            channel: The channel name to remove.
+
+        Returns:
+            True if the channel existed and was deleted, False otherwise.
+        """
+        if channel not in self._channels:
+            return False
+        del self._channels[channel]
+        self._events.pop(channel, None)
+        return True
+
     async def wait_for_new(
         self,
         channel: str,
@@ -346,6 +365,32 @@ def create_relay_server(
             {
                 "channel": channel,
                 "cleared": cleared,
+            }
+        )
+
+    @app.tool()
+    async def delete_channel(channel: str) -> str:
+        """Delete a channel and all its messages, removing it from the channel list.
+
+        Unlike clear_channel (which empties messages but keeps the channel entry),
+        delete_channel fully removes the channel so it no longer appears in
+        list_channels. Use this to clean up stale channels.
+
+        Args:
+            channel: Channel name to delete
+
+        Returns:
+            JSON with deleted status
+        """
+        try:
+            validate_channel_name(channel)
+            deleted = store.delete(channel)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+        return json.dumps(
+            {
+                "channel": channel,
+                "deleted": deleted,
             }
         )
 
