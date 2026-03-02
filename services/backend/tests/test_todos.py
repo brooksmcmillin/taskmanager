@@ -2956,3 +2956,23 @@ async def test_create_todo_invalid_time_horizon(authenticated_client: AsyncClien
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_clear_time_horizon(authenticated_client: AsyncClient):
+    """Test clearing time_horizon back to null."""
+    # Create with a time_horizon
+    create_resp = await authenticated_client.post(
+        "/api/todos",
+        json={"title": "Clear Horizon Task", "time_horizon": "this_week"},
+    )
+    todo_id = create_resp.json()["data"]["id"]
+    assert create_resp.json()["data"]["time_horizon"] == "this_week"
+
+    # Clear it by setting to null
+    update_resp = await authenticated_client.put(
+        f"/api/todos/{todo_id}",
+        json={"time_horizon": None},
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["data"]["time_horizon"] is None

@@ -148,7 +148,6 @@ export interface TodoCreate {
 	due_date?: string;
 	deadline_type?: DeadlineType;
 	estimated_hours?: number;
-	actual_hours?: number;
 	tags?: string[];
 	context?: string;
 	time_horizon?: TimeHorizon;
@@ -169,6 +168,7 @@ export interface SubtaskCreate {
 }
 
 export interface TodoUpdate extends Partial<TodoCreate> {
+	actual_hours?: number;
 	completed_date?: string;
 }
 

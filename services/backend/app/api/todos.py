@@ -247,7 +247,7 @@ class TodoResponse(BaseModel):
     project_color: str | None = None
     tags: list[str]
     context: str | None
-    time_horizon: str | None = None
+    time_horizon: TimeHorizon | None = None
     estimated_hours: float | None
     actual_hours: float | None
     position: int
