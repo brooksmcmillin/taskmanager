@@ -2045,8 +2045,122 @@ class TestWikiTools:
             assert "error" not in parsed
             assert parsed["status"] == "updated"
             mock_api_client.update_wiki_page.assert_called_with(
-                page_id=3, title=None, content="New content", slug=None, append=True
+                page_id=3, title=None, content="New content", slug=None, append=True,
+                parent_id=None, remove_parent=False,
             )
+
+    @pytest.mark.asyncio
+    async def test_create_wiki_page_with_parent_id(self, mock_api_client: MagicMock) -> None:
+        """Test creating a wiki page with parent_id."""
+        import json
+
+        mock_api_client.create_wiki_page.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 10,
+                "title": "Child Page",
+                "slug": "child-page",
+                "content": "# Child",
+                "parent_id": 5,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+            },
+            status_code=201,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["create_wiki_page"].fn(
+                title="Child Page", content="# Child", parent_id=5
+            )
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "created"
+            assert parsed["page"]["parent_id"] == 5
+            mock_api_client.create_wiki_page.assert_called_with(
+                title="Child Page", content="# Child", slug=None, parent_id=5
+            )
+
+    @pytest.mark.asyncio
+    async def test_update_wiki_page_with_parent_id(self, mock_api_client: MagicMock) -> None:
+        """Test moving a wiki page under a new parent."""
+        import json
+
+        mock_api_client.update_wiki_page.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 3,
+                "title": "Moved Page",
+                "slug": "moved-page",
+                "content": "content",
+                "parent_id": 7,
+                "revision_number": 2,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["update_wiki_page"].fn(page_id=3, parent_id=7)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "updated"
+            assert parsed["page"]["parent_id"] == 7
+            mock_api_client.update_wiki_page.assert_called_with(
+                page_id=3, title=None, content=None, slug=None, append=False,
+                parent_id=7, remove_parent=False,
+            )
+
+    @pytest.mark.asyncio
+    async def test_update_wiki_page_remove_parent(self, mock_api_client: MagicMock) -> None:
+        """Test removing a wiki page's parent to make it a root page."""
+        import json
+
+        mock_api_client.update_wiki_page.return_value = ApiResponse(
+            success=True,
+            data={
+                "id": 3,
+                "title": "Now Root",
+                "slug": "now-root",
+                "content": "content",
+                "parent_id": None,
+                "revision_number": 3,
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-03T00:00:00Z",
+            },
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["update_wiki_page"].fn(page_id=3, remove_parent=True)
+            parsed = json.loads(result)
+            assert "error" not in parsed
+            assert parsed["status"] == "updated"
+            assert parsed["page"]["parent_id"] is None
+            mock_api_client.update_wiki_page.assert_called_with(
+                page_id=3, title=None, content=None, slug=None, append=False,
+                parent_id=None, remove_parent=True,
+            )
+
+    @pytest.mark.asyncio
+    async def test_update_wiki_page_parent_id_and_remove_parent_conflict(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test that passing both parent_id and remove_parent returns an error."""
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["update_wiki_page"].fn(
+                page_id=3, parent_id=7, remove_parent=True
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "mutually exclusive" in parsed["error"]
+            mock_api_client.update_wiki_page.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_batch_link_wiki_page_to_tasks_success(self, mock_api_client: MagicMock) -> None:
