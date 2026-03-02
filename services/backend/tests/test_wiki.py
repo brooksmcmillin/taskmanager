@@ -1195,6 +1195,167 @@ async def test_list_filter_by_parent_root(authenticated_client: AsyncClient) -> 
 
 
 # ---------------------------------------------------------------------------
+# Move endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_move_page_to_new_parent(authenticated_client: AsyncClient) -> None:
+    """Move a page to a different parent via PATCH move endpoint."""
+    p1 = await authenticated_client.post("/api/wiki", json={"title": "Move Parent A"})
+    p1_id = p1.json()["data"]["id"]
+
+    p2 = await authenticated_client.post("/api/wiki", json={"title": "Move Parent B"})
+    p2_id = p2.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Child", "parent_id": p1_id}
+    )
+    child_id = child.json()["data"]["id"]
+
+    # Move child from p1 to p2
+    response = await authenticated_client.patch(
+        f"/api/wiki/{child_id}/move", json={"parent_id": p2_id}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["parent_id"] == p2_id
+    assert data["ancestors"][0]["title"] == "Move Parent B"
+
+
+@pytest.mark.asyncio
+async def test_move_page_to_root(authenticated_client: AsyncClient) -> None:
+    """Move a child page to root via PATCH move endpoint."""
+    parent = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Root Parent"}
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move To Root", "parent_id": parent_id}
+    )
+    child_id = child.json()["data"]["id"]
+
+    # Move to root by setting parent_id to null
+    response = await authenticated_client.patch(
+        f"/api/wiki/{child_id}/move", json={"parent_id": None}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["parent_id"] is None
+    assert data["ancestors"] == []
+
+
+@pytest.mark.asyncio
+async def test_move_page_depth_violation(authenticated_client: AsyncClient) -> None:
+    """Move endpoint rejects moves that exceed max depth."""
+    root = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Depth Root"}
+    )
+    root_id = root.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Depth Child", "parent_id": root_id}
+    )
+    child_id = child.json()["data"]["id"]
+
+    await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Depth Grand", "parent_id": child_id}
+    )
+
+    # Build another deep chain
+    other_root = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Other Root"}
+    )
+    other_root_id = other_root.json()["data"]["id"]
+    other_child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Other Child", "parent_id": other_root_id}
+    )
+    other_child_id = other_child.json()["data"]["id"]
+
+    # Moving root (with 2 descendants) under other_child would exceed depth
+    response = await authenticated_client.patch(
+        f"/api/wiki/{root_id}/move", json={"parent_id": other_child_id}
+    )
+    assert response.status_code == 400
+    assert "depth" in response.json()["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_move_page_circular_reference(authenticated_client: AsyncClient) -> None:
+    """Move endpoint rejects circular parent references."""
+    parent = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Circ Parent"}
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    child = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move Circ Child", "parent_id": parent_id}
+    )
+    child_id = child.json()["data"]["id"]
+
+    # Try to move parent under its own child
+    response = await authenticated_client.patch(
+        f"/api/wiki/{parent_id}/move", json={"parent_id": child_id}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_move_page_self_parent(authenticated_client: AsyncClient) -> None:
+    """Move endpoint rejects setting a page as its own parent."""
+    page = await authenticated_client.post("/api/wiki", json={"title": "Move Self"})
+    page_id = page.json()["data"]["id"]
+
+    response = await authenticated_client.patch(
+        f"/api/wiki/{page_id}/move", json={"parent_id": page_id}
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_move_page_not_found(authenticated_client: AsyncClient) -> None:
+    """Move endpoint returns 404 for non-existent page."""
+    response = await authenticated_client.patch(
+        "/api/wiki/99999/move", json={"parent_id": None}
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_move_page_requires_auth(client: AsyncClient) -> None:
+    """Move endpoint requires authentication."""
+    response = await client.patch("/api/wiki/1/move", json={"parent_id": None})
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_move_does_not_create_revision(authenticated_client: AsyncClient) -> None:
+    """Move endpoint does not create a revision (unlike PUT update)."""
+    page = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move No Rev", "content": "some content"}
+    )
+    page_id = page.json()["data"]["id"]
+    original_rev = page.json()["data"]["revision_number"]
+
+    parent = await authenticated_client.post(
+        "/api/wiki", json={"title": "Move No Rev Parent"}
+    )
+    parent_id = parent.json()["data"]["id"]
+
+    # Move the page
+    response = await authenticated_client.patch(
+        f"/api/wiki/{page_id}/move", json={"parent_id": parent_id}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["revision_number"] == original_rev
+
+    # Verify no revisions were created
+    revisions = await authenticated_client.get(f"/api/wiki/{page_id}/revisions")
+    assert revisions.json()["meta"]["count"] == 0
+
+
+# ---------------------------------------------------------------------------
 # Tag tests
 # ---------------------------------------------------------------------------
 

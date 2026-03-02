@@ -5,6 +5,7 @@
 	import { wiki } from '$lib/stores/wiki';
 	import { toasts } from '$lib/stores/ui';
 	import { renderMarkdown, extractWikiLinks } from '$lib/utils/markdown';
+	import WikiMoveModal from '$lib/components/WikiMoveModal.svelte';
 	import type { WikiPage, WikiLinkedTodo } from '$lib/types';
 
 	let wikiPage: WikiPage | null = $state(null);
@@ -13,6 +14,7 @@
 	let error = $state('');
 	let renderedHtml = $state('');
 	let confirmDelete = $state(false);
+	let moveModal: WikiMoveModal;
 
 	let slug = $derived($page.params.slug ?? '');
 
@@ -102,6 +104,9 @@
 				<h1>{wikiPage.title}</h1>
 				<div class="page-actions">
 					<a href="/wiki/{wikiPage.slug}/edit" class="btn btn-secondary btn-med">Edit</a>
+					<button class="btn btn-secondary btn-med" onclick={() => moveModal.open(wikiPage!)}
+						>Move</button
+					>
 					{#if confirmDelete}
 						<button class="btn btn-danger btn-med" onclick={handleDelete}>Confirm Delete</button>
 						<button class="btn btn-secondary btn-med" onclick={() => (confirmDelete = false)}
@@ -186,6 +191,7 @@
 			{/if}
 		{/if}
 	</div>
+	<WikiMoveModal bind:this={moveModal} />
 </main>
 
 <style>

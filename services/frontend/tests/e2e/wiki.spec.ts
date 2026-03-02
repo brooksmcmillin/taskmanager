@@ -196,6 +196,62 @@ test.describe('Wiki Pages', () => {
 		await expect(page.locator('.tag-chip', { hasText: 'ux' })).toBeVisible();
 	});
 
+	test('move page to new parent via move modal', async ({ page }) => {
+		const parentA = await createWikiPageViaAPI(page, 'Move Target Parent');
+		const childPage = await createWikiPageViaAPI(page, 'Page To Move');
+
+		// View the child page
+		await page.goto(`/wiki/${childPage.slug}`);
+		await waitForNetworkIdle(page);
+
+		// Click Move button
+		await page.click('button:has-text("Move")');
+
+		// Wait for the modal and tree to load
+		await expect(page.locator('.modal')).toBeVisible();
+		await expect(page.locator('#move-parent')).toBeVisible();
+
+		// Select the target parent
+		await page.selectOption('#move-parent', { label: 'Move Target Parent' });
+
+		// Click Move in modal
+		await page.click('.modal button:has-text("Move")');
+
+		// Page should reload and show breadcrumbs with new parent
+		await waitForNetworkIdle(page);
+		await expect(page.locator('.breadcrumb-link', { hasText: 'Move Target Parent' })).toBeVisible();
+	});
+
+	test('move page to root via move modal', async ({ page }) => {
+		const parentPage = await createWikiPageViaAPI(page, 'Root Move Parent');
+		const childResponse = await page.request.post('/api/wiki', {
+			data: { title: 'Root Move Child', parent_id: parentPage.id }
+		});
+		const childPage = (await childResponse.json()).data;
+
+		await page.goto(`/wiki/${childPage.slug}`);
+		await waitForNetworkIdle(page);
+
+		// Should have breadcrumb to parent
+		await expect(page.locator('.breadcrumb-link', { hasText: 'Root Move Parent' })).toBeVisible();
+
+		// Click Move button
+		await page.click('button:has-text("Move")');
+		await expect(page.locator('.modal')).toBeVisible();
+
+		// Select "None (root page)"
+		await page.selectOption('#move-parent', { label: 'None (root page)' });
+
+		// Click Move
+		await page.click('.modal button:has-text("Move")');
+
+		// Page should reload without parent breadcrumb
+		await waitForNetworkIdle(page);
+		await expect(
+			page.locator('.breadcrumb-link', { hasText: 'Root Move Parent' })
+		).not.toBeVisible();
+	});
+
 	test('tag filter chips on list page', async ({ page }) => {
 		await page.request.post('/api/wiki', {
 			data: { title: 'Tag Filter A', tags: ['python'] }

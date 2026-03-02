@@ -110,6 +110,33 @@ function createWikiStore() {
 			}
 		},
 
+		movePage: async (id: number, parentId: number | null): Promise<WikiPage> => {
+			try {
+				const response = await api.patch<{ data: WikiPage }>(`/api/wiki/${id}/move`, {
+					parent_id: parentId
+				});
+				update((pages) =>
+					pages.map((p) =>
+						p.id === id
+							? {
+									id: response.data.id,
+									title: response.data.title,
+									slug: response.data.slug,
+									parent_id: response.data.parent_id,
+									tags: response.data.tags,
+									created_at: response.data.created_at,
+									updated_at: response.data.updated_at
+								}
+							: p
+					)
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to move wiki page:', error);
+				throw error;
+			}
+		},
+
 		remove: async (id: number): Promise<void> => {
 			try {
 				await api.delete(`/api/wiki/${id}`);

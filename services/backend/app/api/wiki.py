@@ -135,6 +135,10 @@ class BatchLinkTasksResponse(BaseModel):
     not_found: list[int]
 
 
+class WikiPageMove(BaseModel):
+    parent_id: int | None = None
+
+
 class WikiPageRevisionSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -703,6 +707,45 @@ async def delete_wiki_page(
     await _soft_delete_descendants(db, page.id)
     await db.flush()
     return {"data": {"deleted": True, "id": page_id}}
+
+
+@router.patch("/{page_id}/move")
+async def move_wiki_page(
+    page_id: int,
+    body: WikiPageMove,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> DataResponse[WikiPageResponse]:
+    """Move a wiki page to a new parent (or make it a root page)."""
+    page = await get_resource_for_user(
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
+    )
+
+    if body.parent_id is not None:
+        await _validate_parent(db, user.id, body.parent_id, exclude_id=page.id)
+
+    page.parent_id = body.parent_id
+    await db.flush()
+    await db.refresh(page)
+
+    ancestors = await _get_ancestors(db, page)
+    children = await _get_children_with_counts(db, page.id, user.id)
+
+    return DataResponse(
+        data=WikiPageResponse(
+            id=page.id,
+            title=page.title,
+            slug=page.slug,
+            content=page.content,
+            parent_id=page.parent_id,
+            tags=page.tags or [],
+            revision_number=page.revision_number,
+            created_at=page.created_at,
+            updated_at=page.updated_at,
+            ancestors=ancestors,
+            children=children,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
