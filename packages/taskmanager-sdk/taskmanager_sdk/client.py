@@ -1027,6 +1027,243 @@ class TaskManagerClient:
         """
         return self._make_request("GET", "/snippets/categories")
 
+    # News / RSS feed methods
+    def list_articles(
+        self,
+        unread_only: bool = False,
+        search: str | None = None,
+        feed_type: str | None = None,
+        featured: bool | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> ApiResponse:
+        """
+        List news articles with optional filters.
+
+        Args:
+            unread_only: Only show unread articles (default False)
+            search: Search in title and summary
+            feed_type: Filter by "paper" or "article"
+            featured: Filter by featured feed sources
+            limit: Results per page (1-200, default 50)
+            offset: Pagination offset (default 0)
+
+        Returns:
+            ApiResponse with list of articles and pagination meta
+        """
+        params: dict[str, str | int | bool] = {}
+        if unread_only:
+            params["unread_only"] = True
+        if search is not None:
+            params["search"] = search
+        if feed_type is not None:
+            params["feed_type"] = feed_type
+        if featured is not None:
+            params["featured"] = featured
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+        return self._make_request("GET", "/news", params=params or None)
+
+    def get_article(self, article_id: int) -> ApiResponse:
+        """
+        Get a single article by ID.
+
+        Args:
+            article_id: Article ID
+
+        Returns:
+            ApiResponse with article data
+        """
+        return self._make_request("GET", f"/news/{article_id}")
+
+    def mark_article_read(
+        self, article_id: int, is_read: bool = True
+    ) -> ApiResponse:
+        """
+        Mark an article as read or unread.
+
+        Args:
+            article_id: Article ID
+            is_read: True to mark read, False for unread (default True)
+
+        Returns:
+            ApiResponse with read status
+        """
+        return self._make_request(
+            "POST", f"/news/{article_id}/read", {"is_read": is_read}
+        )
+
+    def rate_article(self, article_id: int, rating: str) -> ApiResponse:
+        """
+        Rate an article.
+
+        Args:
+            article_id: Article ID
+            rating: One of "good", "bad", "not_interested"
+
+        Returns:
+            ApiResponse with rating data
+        """
+        return self._make_request(
+            "POST", f"/news/{article_id}/rate", {"rating": rating}
+        )
+
+    def list_feed_sources(
+        self, featured: bool | None = None
+    ) -> ApiResponse:
+        """
+        List RSS/Atom feed sources.
+
+        Args:
+            featured: Filter by featured status (optional)
+
+        Returns:
+            ApiResponse with list of feed sources
+        """
+        params: dict[str, bool] = {}
+        if featured is not None:
+            params["featured"] = featured
+        return self._make_request(
+            "GET", "/news/sources", params=params or None
+        )
+
+    def create_feed_source(
+        self,
+        name: str,
+        url: str,
+        description: str | None = None,
+        feed_type: str = "article",
+        is_active: bool = True,
+        is_featured: bool = False,
+        fetch_interval_hours: int = 6,
+    ) -> ApiResponse:
+        """
+        Create a new RSS/Atom feed source (admin only).
+
+        Args:
+            name: Feed name (1-255 chars)
+            url: Feed URL (1-500 chars)
+            description: Feed description (optional)
+            feed_type: "paper" or "article" (default "article")
+            is_active: Whether feed is active (default True)
+            is_featured: Whether feed is featured (default False)
+            fetch_interval_hours: Fetch interval, 1-168 (default 6)
+
+        Returns:
+            ApiResponse with created feed source data
+        """
+        data: dict[str, Any] = {
+            "name": name,
+            "url": url,
+            "type": feed_type,
+            "is_active": is_active,
+            "is_featured": is_featured,
+            "fetch_interval_hours": fetch_interval_hours,
+        }
+        if description is not None:
+            data["description"] = description
+        return self._make_request("POST", "/news/sources", data)
+
+    def update_feed_source(
+        self,
+        source_id: int,
+        name: str | None = None,
+        url: str | None = None,
+        description: str | None = None,
+        feed_type: str | None = None,
+        is_active: bool | None = None,
+        is_featured: bool | None = None,
+        fetch_interval_hours: int | None = None,
+    ) -> ApiResponse:
+        """
+        Update a feed source (admin only, partial update).
+
+        Args:
+            source_id: Feed source ID
+            name: New name (optional)
+            url: New URL (optional)
+            description: New description (optional)
+            feed_type: "paper" or "article" (optional)
+            is_active: New active status (optional)
+            is_featured: New featured status (optional)
+            fetch_interval_hours: New fetch interval (optional)
+
+        Returns:
+            ApiResponse with updated feed source data
+        """
+        data: dict[str, Any] = {}
+        if name is not None:
+            data["name"] = name
+        if url is not None:
+            data["url"] = url
+        if description is not None:
+            data["description"] = description
+        if feed_type is not None:
+            data["type"] = feed_type
+        if is_active is not None:
+            data["is_active"] = is_active
+        if is_featured is not None:
+            data["is_featured"] = is_featured
+        if fetch_interval_hours is not None:
+            data["fetch_interval_hours"] = fetch_interval_hours
+        return self._make_request(
+            "PUT", f"/news/sources/{source_id}", data
+        )
+
+    def delete_feed_source(self, source_id: int) -> ApiResponse:
+        """
+        Delete a feed source and its articles (admin only).
+
+        Args:
+            source_id: Feed source ID
+
+        Returns:
+            ApiResponse with deletion result
+        """
+        return self._make_request(
+            "DELETE", f"/news/sources/{source_id}"
+        )
+
+    def toggle_feed_source(
+        self, source_id: int, is_active: bool
+    ) -> ApiResponse:
+        """
+        Toggle a feed source's active status (admin only).
+
+        Args:
+            source_id: Feed source ID
+            is_active: New active status
+
+        Returns:
+            ApiResponse with toggle result
+        """
+        return self._make_request(
+            "POST",
+            f"/news/sources/{source_id}/toggle",
+            {"is_active": is_active},
+        )
+
+    def force_fetch_feed(
+        self, source_id: int, hours: int = 168
+    ) -> ApiResponse:
+        """
+        Force-fetch articles from a feed source (admin only).
+
+        Args:
+            source_id: Feed source ID
+            hours: Hours back to fetch, 1-720 (default 168)
+
+        Returns:
+            ApiResponse with fetch result
+        """
+        return self._make_request(
+            "POST",
+            f"/news/sources/{source_id}/fetch",
+            {"hours": hours},
+        )
+
     # Dependency methods
     def get_dependencies(self, todo_id: int) -> ApiResponse:
         """

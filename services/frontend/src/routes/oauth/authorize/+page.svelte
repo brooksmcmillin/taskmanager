@@ -216,9 +216,9 @@
 	}
 
 	.card {
-		max-width: 480px;
+		max-width: 600px;
 		width: 100%;
-		padding: 2rem;
+		padding: 2.5rem 3rem;
 		background: var(--bg-card, #ffffff);
 		border-radius: var(--radius-xl, 1.25rem);
 		box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(28 25 23 / 0.07));
@@ -269,7 +269,7 @@
 	}
 
 	.permissions {
-		padding: 1rem;
+		padding: 1.25rem 1.5rem;
 		background-color: var(--bg-secondary, #f7f4f0);
 		border-radius: var(--radius-md, 0.625rem);
 		border: 1px solid var(--border-light, #f3f0ec);
@@ -301,7 +301,7 @@
 	}
 
 	.user-info {
-		padding: 0.875rem 1rem;
+		padding: 1rem 1.5rem;
 		background-color: var(--primary-50, #fff5ee);
 		border-radius: var(--radius-md, 0.625rem);
 		text-align: center;
@@ -327,14 +327,15 @@
 	}
 
 	.btn {
-		padding: 0.625rem 1.5rem;
+		padding: 0.75rem 2rem;
 		border-radius: var(--radius-md, 0.625rem);
-		font-size: 0.9375rem;
+		font-size: 1rem;
 		font-weight: 600;
 		border: none;
 		cursor: pointer;
 		transition: all 0.2s ease;
 		font-family: inherit;
+		min-width: 120px;
 	}
 
 	.btn-primary {

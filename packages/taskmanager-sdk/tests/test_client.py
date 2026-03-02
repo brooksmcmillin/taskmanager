@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 import requests
+
 from taskmanager_sdk import TaskManagerClient, create_authenticated_client
 from taskmanager_sdk.exceptions import (
     AuthenticationError,
@@ -1176,3 +1177,331 @@ class TestSnippets:
         assert len(result.data) == 2
         assert result.data[0]["category"] == "standup"
         assert result.data[0]["count"] == 5
+
+
+class TestNewsMethods:
+    """Test news/RSS feed methods."""
+
+    def test_list_articles(
+        self,
+        client: TaskManagerClient,
+        mock_session: Mock,
+        sample_article: dict[str, str | int | bool | list[str] | None],
+    ) -> None:
+        """Test listing articles with no filters."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [sample_article],
+            "meta": {"total": 1, "limit": 50, "offset": 0},
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.list_articles()
+
+        assert result.success is True
+        assert result.data is not None
+        mock_session.get.assert_called_once()
+
+    def test_list_articles_with_filters(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test listing articles with all filter params."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [],
+            "meta": {"total": 0},
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.list_articles(
+            unread_only=True,
+            search="python",
+            feed_type="article",
+            featured=True,
+            limit=10,
+            offset=5,
+        )
+
+        assert result.success is True
+        call_args = mock_session.get.call_args
+        params = call_args.kwargs["params"]
+        assert params["unread_only"] is True
+        assert params["search"] == "python"
+        assert params["feed_type"] == "article"
+        assert params["featured"] is True
+        assert params["limit"] == 10
+        assert params["offset"] == 5
+
+    def test_get_article(
+        self,
+        client: TaskManagerClient,
+        mock_session: Mock,
+        sample_article: dict[str, str | int | bool | list[str] | None],
+    ) -> None:
+        """Test getting a single article by ID."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {"data": sample_article}
+        mock_session.get.return_value = mock_response
+
+        result = client.get_article(1)
+
+        assert result.success is True
+        mock_session.get.assert_called_once()
+        call_args = mock_session.get.call_args
+        assert "/news/1" in call_args.args[0]
+
+    def test_mark_article_read(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test marking an article as read."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"is_read": True, "article_id": 1},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.mark_article_read(1, is_read=True)
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert "/news/1/read" in call_args.args[0]
+        assert call_args.kwargs["json"]["is_read"] is True
+
+    def test_mark_article_unread(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test marking an article as unread."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"is_read": False, "article_id": 1},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.mark_article_read(1, is_read=False)
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert call_args.kwargs["json"]["is_read"] is False
+
+    def test_rate_article(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test rating an article."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"rating": "good", "article_id": 1},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.rate_article(1, "good")
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert "/news/1/rate" in call_args.args[0]
+        assert call_args.kwargs["json"]["rating"] == "good"
+
+    def test_list_feed_sources(
+        self,
+        client: TaskManagerClient,
+        mock_session: Mock,
+        sample_feed_source: dict[str, str | int | float | bool | None],
+    ) -> None:
+        """Test listing feed sources."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": [sample_feed_source],
+            "meta": {},
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.list_feed_sources()
+
+        assert result.success is True
+        assert result.data is not None
+        mock_session.get.assert_called_once()
+
+    def test_list_feed_sources_featured(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test listing feed sources filtered by featured."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {"data": [], "meta": {}}
+        mock_session.get.return_value = mock_response
+
+        result = client.list_feed_sources(featured=True)
+
+        assert result.success is True
+        call_args = mock_session.get.call_args
+        assert call_args.kwargs["params"]["featured"] is True
+
+    def test_create_feed_source(
+        self,
+        client: TaskManagerClient,
+        mock_session: Mock,
+        sample_feed_source: dict[str, str | int | float | bool | None],
+    ) -> None:
+        """Test creating a feed source with all fields."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {"data": sample_feed_source}
+        mock_session.post.return_value = mock_response
+
+        result = client.create_feed_source(
+            name="PythonNews",
+            url="https://pythonnews.com/feed.xml",
+            description="Latest Python news",
+            feed_type="article",
+            is_active=True,
+            is_featured=False,
+            fetch_interval_hours=6,
+        )
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        body = call_args.kwargs["json"]
+        assert body["name"] == "PythonNews"
+        assert body["url"] == "https://pythonnews.com/feed.xml"
+        assert body["description"] == "Latest Python news"
+        assert body["type"] == "article"
+        assert body["is_active"] is True
+        assert body["fetch_interval_hours"] == 6
+
+    def test_create_feed_source_minimal(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test creating a feed source with only required fields."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 2, "name": "Feed"},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.create_feed_source(
+            name="Feed", url="https://example.com/feed"
+        )
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        body = call_args.kwargs["json"]
+        assert body["name"] == "Feed"
+        assert body["url"] == "https://example.com/feed"
+        assert "description" not in body
+
+    def test_update_feed_source(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test updating a feed source with partial fields."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 1, "name": "Updated Feed"},
+        }
+        mock_session.put.return_value = mock_response
+
+        result = client.update_feed_source(
+            1, name="Updated Feed", is_featured=True
+        )
+
+        assert result.success is True
+        call_args = mock_session.put.call_args
+        assert "/news/sources/1" in call_args.args[0]
+        body = call_args.kwargs["json"]
+        assert body["name"] == "Updated Feed"
+        assert body["is_featured"] is True
+        assert "url" not in body
+
+    def test_delete_feed_source(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test deleting a feed source."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"deleted": True, "id": 1},
+            "meta": {"articles_deleted": 42},
+        }
+        mock_session.delete.return_value = mock_response
+
+        result = client.delete_feed_source(1)
+
+        assert result.success is True
+        mock_session.delete.assert_called_once()
+        call_args = mock_session.delete.call_args
+        assert "/news/sources/1" in call_args.args[0]
+
+    def test_toggle_feed_source(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test toggling a feed source active status."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 1, "is_active": False},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.toggle_feed_source(1, is_active=False)
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert "/news/sources/1/toggle" in call_args.args[0]
+        assert call_args.kwargs["json"]["is_active"] is False
+
+    def test_force_fetch_feed(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test force-fetching a feed source."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"source_id": 1, "articles_added": 15},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.force_fetch_feed(1, hours=48)
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert "/news/sources/1/fetch" in call_args.args[0]
+        assert call_args.kwargs["json"]["hours"] == 48
+
+    def test_force_fetch_feed_default_hours(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test force-fetching with default hours."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"source_id": 1, "articles_added": 5},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.force_fetch_feed(1)
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert call_args.kwargs["json"]["hours"] == 168
