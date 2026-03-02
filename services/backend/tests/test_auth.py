@@ -205,7 +205,7 @@ async def test_login_form_data_with_return_to(client: AsyncClient, test_user):
         data={
             "email": "test@example.com",
             "password": TEST_PASSWORD_LOGIN,
-            "return_to": "http://localhost:3000/oauth/callback?code=abc123",
+            "return_to": "/oauth/callback?code=abc123",
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         follow_redirects=False,
@@ -213,10 +213,7 @@ async def test_login_form_data_with_return_to(client: AsyncClient, test_user):
 
     # Should redirect, not return JSON
     assert response.status_code == 302
-    assert (
-        response.headers["location"]
-        == "http://localhost:3000/oauth/callback?code=abc123"
-    )
+    assert response.headers["location"] == "/oauth/callback?code=abc123"
 
     # Verify session cookie is set in redirect response
     assert "session" in response.cookies
@@ -244,10 +241,10 @@ async def test_login_form_data_return_to_prevents_open_redirect(
 
 
 @pytest.mark.asyncio
-async def test_login_form_data_return_to_allows_subdomain(
+async def test_login_form_data_return_to_rejects_absolute_url(
     client: AsyncClient, test_user
 ):
-    """Test that return_to allows same-origin redirects."""
+    """Test that return_to rejects absolute URLs even for same origin."""
     response = await client.post(
         "/api/auth/login",
         data={
@@ -256,16 +253,16 @@ async def test_login_form_data_return_to_allows_subdomain(
             "return_to": "http://localhost:3000/dashboard",
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
-        follow_redirects=False,
     )
 
-    assert response.status_code == 302
-    assert response.headers["location"] == "http://localhost:3000/dashboard"
+    # Absolute URLs (even same-origin) are rejected; only relative paths allowed
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "VALIDATION_009"
 
 
 @pytest.mark.asyncio
 async def test_login_form_data_return_to_relative_path(client: AsyncClient, test_user):
-    """Test that return_to allows relative paths (no scheme)."""
+    """Test that return_to allows relative paths starting with /."""
     response = await client.post(
         "/api/auth/login",
         data={
@@ -277,9 +274,128 @@ async def test_login_form_data_return_to_relative_path(client: AsyncClient, test
         follow_redirects=False,
     )
 
-    # Relative paths (no scheme) should be allowed
+    # Relative paths starting with / should be allowed
     assert response.status_code == 302
     assert response.headers["location"] == "/oauth/callback"
+
+
+@pytest.mark.asyncio
+async def test_login_form_data_return_to_protocol_relative_rejected(
+    client: AsyncClient, test_user
+):
+    """Test that return_to rejects protocol-relative URLs (//evil.com bypass)."""
+    response = await client.post(
+        "/api/auth/login",
+        data={
+            "email": "test@example.com",
+            "password": TEST_PASSWORD_LOGIN,
+            "return_to": "//evil.com/phishing",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    # Protocol-relative URLs must be rejected to prevent open redirect
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "VALIDATION_009"
+    assert "redirect" in response.json()["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_login_form_data_return_to_root_path_allowed(
+    client: AsyncClient, test_user
+):
+    """Test that return_to allows the root path /."""
+    response = await client.post(
+        "/api/auth/login",
+        data={
+            "email": "test@example.com",
+            "password": TEST_PASSWORD_LOGIN,
+            "return_to": "/",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/"
+
+
+@pytest.mark.asyncio
+async def test_login_form_data_return_to_dashboard_allowed(
+    client: AsyncClient, test_user
+):
+    """Test that return_to allows a normal dashboard path."""
+    response = await client.post(
+        "/api/auth/login",
+        data={
+            "email": "test@example.com",
+            "password": TEST_PASSWORD_LOGIN,
+            "return_to": "/dashboard",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/dashboard"
+
+
+@pytest.mark.asyncio
+async def test_login_form_data_return_to_tasks_path_allowed(
+    client: AsyncClient, test_user
+):
+    """Test that return_to allows a nested task path."""
+    response = await client.post(
+        "/api/auth/login",
+        data={
+            "email": "test@example.com",
+            "password": TEST_PASSWORD_LOGIN,
+            "return_to": "/tasks/123",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/tasks/123"
+
+
+@pytest.mark.asyncio
+async def test_login_form_data_return_to_empty_string(client: AsyncClient, test_user):
+    """Test that an empty return_to is treated as absent (no redirect)."""
+    response = await client.post(
+        "/api/auth/login",
+        data={
+            "email": "test@example.com",
+            "password": TEST_PASSWORD_LOGIN,
+            "return_to": "",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    # Empty return_to is falsy, so no redirect — returns JSON login response
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Login successful"
+
+
+@pytest.mark.asyncio
+async def test_login_form_data_return_to_no_leading_slash_rejected(
+    client: AsyncClient, test_user
+):
+    """Test that return_to without a leading / is rejected."""
+    response = await client.post(
+        "/api/auth/login",
+        data={
+            "email": "test@example.com",
+            "password": TEST_PASSWORD_LOGIN,
+            "return_to": "dashboard",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "VALIDATION_009"
 
 
 @pytest.mark.asyncio
