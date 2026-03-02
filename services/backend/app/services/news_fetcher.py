@@ -1,5 +1,6 @@
 """RSS news fetching service."""
 
+import asyncio
 import ipaddress
 import logging
 import socket
@@ -57,8 +58,12 @@ class SSRFProtectionTransport(httpx.AsyncHTTPTransport):
             raise ValueError("Request URL has no hostname")
 
         try:
-            addrinfo = socket.getaddrinfo(
-                hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+            addrinfo = await asyncio.to_thread(
+                socket.getaddrinfo,
+                hostname,
+                None,
+                socket.AF_UNSPEC,
+                socket.SOCK_STREAM,
             )
         except socket.gaierror as e:
             raise ValueError(f"Cannot resolve hostname {hostname}: {e}") from e
