@@ -184,9 +184,14 @@ async def login(
 
     # For form submissions with return_to, redirect
     if return_to:
-        # Validate return_to to prevent open redirect vulnerability
+        # Validate return_to to prevent open redirect vulnerability.
+        # Only allow relative paths starting with / (no scheme, netloc, or //).
+        # Protocol-relative URLs like //evil.com have an empty scheme but a
+        # non-empty netloc, and also start with //, so we reject them explicitly.
         parsed = urlparse(return_to)
-        if parsed.scheme and not return_to.startswith(settings.frontend_url):
+        if parsed.scheme or parsed.netloc or return_to.startswith("//"):
+            raise errors.validation("Invalid redirect URL")
+        if not return_to.startswith("/"):
             raise errors.validation("Invalid redirect URL")
 
         redirect_response = RedirectResponse(url=return_to, status_code=302)
