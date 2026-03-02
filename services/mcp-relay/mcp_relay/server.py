@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import uuid
 from collections import deque
@@ -31,11 +32,45 @@ MAX_MESSAGES_PER_CHANNEL = int(os.environ.get("MAX_MESSAGES_PER_CHANNEL", "1000"
 MAX_CHANNELS = int(os.environ.get("MAX_CHANNELS", "100"))
 MAX_MESSAGE_SIZE = int(os.environ.get("MAX_MESSAGE_SIZE", "65536"))  # 64 KB
 MAX_READ_LIMIT = 200
+MAX_CHANNEL_NAME_LENGTH = 64
+
+# Allowlist: alphanumeric, hyphens, and underscores only.
+# This prevents path traversal (e.g. '../../etc/passwd') and keeps
+# the channel namespace clean for future file-backed storage.
+_CHANNEL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 DEFAULT_SCOPE = ["read"]
 
 # OAuth client credentials
 MCP_AUTH_SERVER = os.environ.get("MCP_AUTH_SERVER", "http://localhost:9000")
+
+
+def validate_channel_name(channel: str) -> None:
+    """Validate that a channel name meets naming requirements.
+
+    Channel names must consist solely of alphanumeric characters, hyphens, and
+    underscores, and must be between 1 and MAX_CHANNEL_NAME_LENGTH characters long.
+    This prevents path traversal attacks (e.g. '../../etc/passwd') and keeps the
+    channel namespace clean for future file-backed storage implementations.
+
+    Args:
+        channel: The channel name to validate.
+
+    Raises:
+        ValueError: If the channel name is empty, too long, or contains
+            disallowed characters.
+    """
+    if not channel:
+        raise ValueError("Channel name must not be empty.")
+    if len(channel) > MAX_CHANNEL_NAME_LENGTH:
+        raise ValueError(
+            f"Channel name too long: {len(channel)} chars (max {MAX_CHANNEL_NAME_LENGTH})."
+        )
+    if not _CHANNEL_NAME_RE.match(channel):
+        raise ValueError(
+            f"Invalid channel name {channel!r}. "
+            "Only alphanumeric characters, hyphens (-), and underscores (_) are allowed."
+        )
 
 
 @dataclass
@@ -235,6 +270,7 @@ def create_relay_server(
             JSON with the sent message details
         """
         try:
+            validate_channel_name(channel)
             msg = store.add(channel, content, sender)
         except ValueError as e:
             return json.dumps({"error": str(e)})
@@ -258,6 +294,7 @@ def create_relay_server(
             JSON with messages array and count
         """
         try:
+            validate_channel_name(channel)
             messages = store.get(channel, since=since, limit=limit)
         except ValueError as e:
             return json.dumps({"error": str(e)})
@@ -300,6 +337,10 @@ def create_relay_server(
         Returns:
             JSON with cleared status
         """
+        try:
+            validate_channel_name(channel)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
         cleared = store.clear(channel)
         return json.dumps(
             {
@@ -326,6 +367,7 @@ def create_relay_server(
         """
         timeout = min(timeout, 120)
         try:
+            validate_channel_name(channel)
             messages, timed_out = await store.wait_for_new(channel, since=since, timeout=timeout)
         except ValueError as e:
             return json.dumps({"error": str(e)})
