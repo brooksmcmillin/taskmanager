@@ -6,6 +6,7 @@ from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.attachment import Attachment
 from app.models.comment import Comment
 from app.models.feed_source import FeedSource, FeedType
+from app.models.notification import Notification, NotificationType, WikiPageSubscription
 from app.models.oauth import AccessToken, AuthorizationCode, DeviceCode, OAuthClient
 from app.models.oauth_provider import UserOAuthProvider
 from app.models.project import Project
@@ -47,4 +48,7 @@ __all__ = [
     "WikiPage",
     "WikiPageRevision",
     "todo_wiki_links",
+    "Notification",
+    "NotificationType",
+    "WikiPageSubscription",
 ]

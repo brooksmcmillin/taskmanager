@@ -6,12 +6,16 @@
 	import ThemeToggle from './ThemeToggle.svelte';
 	import { api } from '$lib/api/client';
 	import { toasts } from '$lib/stores/ui';
+	import { notifications } from '$lib/stores/notifications';
 	import type { User } from '$lib/types';
 
 	// Must match $breakpoint-md in app.scss
 	const MOBILE_BREAKPOINT = 768;
 
 	let { user = null }: { user: User | null } = $props();
+
+	let unreadCount = $state(0);
+	const unsubNotif = notifications.unreadCount.subscribe((c) => (unreadCount = c));
 
 	let newsDropdownOpen = $state(false);
 	let tasksDropdownOpen = $state(false);
@@ -186,12 +190,23 @@
 		}
 	}
 
+	let pollInterval: ReturnType<typeof setInterval> | null = null;
+
 	onMount(() => {
 		window.addEventListener('resize', handleResize);
 		document.addEventListener('click', handleDocumentClick);
+
+		// Poll for unread notification count
+		if (user) {
+			notifications.loadUnreadCount();
+			pollInterval = setInterval(() => notifications.loadUnreadCount(), 60000);
+		}
+
 		return () => {
 			window.removeEventListener('resize', handleResize);
 			document.removeEventListener('click', handleDocumentClick);
+			unsubNotif();
+			if (pollInterval) clearInterval(pollInterval);
 			// Ensure scroll is restored on unmount
 			document.body.style.overflow = '';
 		};
@@ -393,6 +408,30 @@
 
 			<div class="flex items-center space-x-4">
 				{#if user}
+					<!-- Notification Bell -->
+					<a
+						href="/notifications"
+						class="notification-bell desktop-nav"
+						title="Notifications"
+						aria-label="Notifications{unreadCount > 0
+							? `, ${unreadCount} unread`
+							: ''}"
+					>
+						<svg
+							width="20"
+							height="20"
+							viewBox="0 0 16 16"
+							fill="currentColor"
+						>
+							<path
+								d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zm.995-14.901a1 1 0 1 0-1.99 0A5.002 5.002 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"
+							/>
+						</svg>
+						{#if unreadCount > 0}
+							<span class="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+						{/if}
+					</a>
+
 					<!-- Desktop User Dropdown -->
 					<div class="nav-dropdown user-dropdown desktop-nav">
 						<button
@@ -614,6 +653,20 @@
 				</a>
 			</div>
 
+			<div class="mobile-menu-section">
+				<a
+					href="/notifications"
+					class="mobile-menu-item"
+					class:active={currentPath === '/notifications'}
+					onclick={closeMobileMenu}
+				>
+					Notifications
+					{#if unreadCount > 0}
+						<span class="mobile-badge">{unreadCount}</span>
+					{/if}
+				</a>
+			</div>
+
 			<div class="mobile-menu-divider"></div>
 
 			<div class="mobile-menu-section">
@@ -787,6 +840,54 @@
 		height: 1px;
 		margin: 0.25rem 0;
 		background-color: var(--border-color);
+	}
+
+	.notification-bell {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.5rem;
+		border-radius: 9999px;
+		color: var(--text-muted);
+		text-decoration: none;
+		transition: all var(--transition-fast);
+	}
+
+	.notification-bell:hover {
+		background-color: var(--bg-hover);
+		color: var(--text-primary);
+	}
+
+	.notification-badge {
+		position: absolute;
+		top: 0.125rem;
+		right: 0.125rem;
+		min-width: 1rem;
+		height: 1rem;
+		padding: 0 0.25rem;
+		font-size: 0.625rem;
+		font-weight: 700;
+		line-height: 1rem;
+		text-align: center;
+		color: white;
+		background: var(--error-600, #dc2626);
+		border-radius: 9999px;
+	}
+
+	.mobile-badge {
+		display: inline-block;
+		min-width: 1.25rem;
+		height: 1.25rem;
+		padding: 0 0.375rem;
+		font-size: 0.6875rem;
+		font-weight: 700;
+		line-height: 1.25rem;
+		text-align: center;
+		color: white;
+		background: var(--error-600, #dc2626);
+		border-radius: 9999px;
+		margin-left: 0.5rem;
 	}
 
 	.user-dropdown {

@@ -5,7 +5,9 @@ import type {
 	WikiPageCreate,
 	WikiPageUpdate,
 	WikiLinkedTodo,
-	WikiTreeNode
+	WikiTreeNode,
+	WikiSubscriptionStatus,
+	WikiSubscription
 } from '$lib/types';
 import { api } from '$lib/api/client';
 import { logger } from '$lib/utils/logger';
@@ -176,6 +178,43 @@ function createWikiStore() {
 			} catch (error) {
 				logger.error('Failed to resolve wiki links:', error);
 				return {};
+			}
+		},
+
+		getSubscriptionStatus: async (pageId: number): Promise<WikiSubscriptionStatus> => {
+			try {
+				const response = await api.get<{ data: WikiSubscriptionStatus }>(
+					`/api/wiki/${pageId}/subscription`
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to get subscription status:', error);
+				return { subscribed: false, subscription: null };
+			}
+		},
+
+		subscribePage: async (
+			pageId: number,
+			includeChildren: boolean = true
+		): Promise<WikiSubscription> => {
+			try {
+				const response = await api.post<{ data: WikiSubscription }>(
+					`/api/wiki/${pageId}/subscription`,
+					{ include_children: includeChildren }
+				);
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to subscribe:', error);
+				throw error;
+			}
+		},
+
+		unsubscribePage: async (pageId: number): Promise<void> => {
+			try {
+				await api.delete(`/api/wiki/${pageId}/subscription`);
+			} catch (error) {
+				logger.error('Failed to unsubscribe:', error);
+				throw error;
 			}
 		}
 	};

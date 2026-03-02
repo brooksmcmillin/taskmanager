@@ -44,6 +44,7 @@ async def init_db() -> None:
     async with _engine.begin() as conn:
         # Import all models to ensure they're registered
         from app.models import (  # noqa: F401
+            notification,
             oauth,
             project,
             recurring_task,

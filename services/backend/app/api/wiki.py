@@ -12,6 +12,7 @@ from sqlalchemy import func as sa_func
 from app.core.errors import errors
 from app.db.queries import get_resource_for_user
 from app.dependencies import CurrentUserFlexible, DbSession
+from app.models.notification import Notification, NotificationType, WikiPageSubscription
 from app.models.todo import Todo
 from app.models.wiki_page import WikiPage, WikiPageRevision, todo_wiki_links
 from app.schemas import DataResponse, ListResponse
@@ -152,6 +153,24 @@ class WikiPageRevisionSummary(BaseModel):
 
 class WikiPageRevisionResponse(WikiPageRevisionSummary):
     content: str
+
+
+class WikiSubscriptionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    wiki_page_id: int
+    include_children: bool
+    created_at: datetime
+
+
+class WikiSubscriptionCreate(BaseModel):
+    include_children: bool = True
+
+
+class WikiSubscriptionStatus(BaseModel):
+    subscribed: bool
+    subscription: WikiSubscriptionResponse | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +512,10 @@ async def create_wiki_page(
     if was_modified:
         resp.slug_modified = True
         resp.requested_slug = requested_slug or slug
+
+    # Notify subscribers of parent pages (new child page created)
+    await _notify_subscribers(db, page, NotificationType.WIKI_PAGE_CREATED, user.id)
+
     return DataResponse(data=resp)
 
 
@@ -690,6 +713,10 @@ async def update_wiki_page(
     if slug_modified:
         resp.slug_modified = True
         resp.requested_slug = requested_slug
+
+    # Notify subscribers
+    await _notify_subscribers(db, page, NotificationType.WIKI_PAGE_UPDATED, user.id)
+
     return DataResponse(data=resp)
 
 
@@ -703,6 +730,10 @@ async def delete_wiki_page(
     page = await get_resource_for_user(
         db, WikiPage, page_id, user.id, errors.wiki_page_not_found
     )
+
+    # Notify subscribers before soft-deleting (need parent chain intact)
+    await _notify_subscribers(db, page, NotificationType.WIKI_PAGE_DELETED, user.id)
+
     page.deleted_at = datetime.now(UTC)
     await _soft_delete_descendants(db, page.id)
     await db.flush()
@@ -980,8 +1011,188 @@ async def get_todo_wiki_pages(
 
 
 # ---------------------------------------------------------------------------
+# Subscription endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{page_id}/subscription")
+async def get_subscription_status(
+    page_id: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> DataResponse[WikiSubscriptionStatus]:
+    """Check if the current user is subscribed to a wiki page."""
+    await get_resource_for_user(
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
+    )
+    result = await db.execute(
+        select(WikiPageSubscription).where(
+            WikiPageSubscription.user_id == user.id,
+            WikiPageSubscription.wiki_page_id == page_id,
+        )
+    )
+    sub = result.scalar_one_or_none()
+    if sub:
+        return DataResponse(
+            data=WikiSubscriptionStatus(
+                subscribed=True,
+                subscription=WikiSubscriptionResponse.model_validate(sub),
+            )
+        )
+    return DataResponse(data=WikiSubscriptionStatus(subscribed=False))
+
+
+@router.post("/{page_id}/subscription", status_code=201)
+async def subscribe_to_page(
+    page_id: int,
+    body: WikiSubscriptionCreate,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> DataResponse[WikiSubscriptionResponse]:
+    """Subscribe to notifications for a wiki page (and optionally its children)."""
+    await get_resource_for_user(
+        db, WikiPage, page_id, user.id, errors.wiki_page_not_found
+    )
+
+    # Check for existing subscription
+    result = await db.execute(
+        select(WikiPageSubscription).where(
+            WikiPageSubscription.user_id == user.id,
+            WikiPageSubscription.wiki_page_id == page_id,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        # Update include_children if changed
+        existing.include_children = body.include_children
+        await db.flush()
+        await db.refresh(existing)
+        return DataResponse(data=WikiSubscriptionResponse.model_validate(existing))
+
+    sub = WikiPageSubscription(
+        user_id=user.id,
+        wiki_page_id=page_id,
+        include_children=body.include_children,
+    )
+    db.add(sub)
+    await db.flush()
+    await db.refresh(sub)
+    return DataResponse(data=WikiSubscriptionResponse.model_validate(sub))
+
+
+@router.delete("/{page_id}/subscription")
+async def unsubscribe_from_page(
+    page_id: int,
+    user: CurrentUserFlexible,
+    db: DbSession,
+) -> dict:
+    """Unsubscribe from notifications for a wiki page."""
+    result = await db.execute(
+        select(WikiPageSubscription).where(
+            WikiPageSubscription.user_id == user.id,
+            WikiPageSubscription.wiki_page_id == page_id,
+        )
+    )
+    sub = result.scalar_one_or_none()
+    if not sub:
+        raise errors.not_found("Subscription")
+
+    await db.execute(
+        delete(WikiPageSubscription).where(WikiPageSubscription.id == sub.id)
+    )
+    return {"data": {"deleted": True, "page_id": page_id}}
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+async def _notify_subscribers(
+    db: DbSession,
+    page: WikiPage,
+    notification_type: NotificationType,
+    actor_user_id: int,
+) -> None:
+    """Create notifications for all subscribers of a wiki page.
+
+    Finds direct subscribers plus subscribers of ancestor pages with
+    include_children=True. Skips the actor (the user who made the change).
+    """
+    page_ids_to_check = [page.id]
+
+    # Walk up the parent chain to collect ancestor IDs
+    current = page
+    seen: set[int] = {page.id}
+    while current.parent_id is not None:
+        if current.parent_id in seen:
+            break
+        seen.add(current.parent_id)
+        result = await db.execute(
+            select(WikiPage).where(
+                WikiPage.id == current.parent_id,
+                WikiPage.deleted_at.is_(None),
+            )
+        )
+        parent = result.scalar_one_or_none()
+        if parent is None:
+            break
+        page_ids_to_check.append(parent.id)
+        current = parent
+
+    # Find all subscriptions: direct subscriptions to this page,
+    # OR subscriptions to ancestor pages with include_children=True
+    direct_page_id = page.id
+    ancestor_ids = page_ids_to_check[1:]  # exclude the page itself
+
+    conditions = [
+        (WikiPageSubscription.wiki_page_id == direct_page_id),
+    ]
+    if ancestor_ids:
+        conditions.append(
+            (WikiPageSubscription.wiki_page_id.in_(ancestor_ids))
+            & (WikiPageSubscription.include_children.is_(True))
+        )
+
+    from sqlalchemy import or_
+
+    query = select(WikiPageSubscription).where(
+        or_(*conditions),
+        WikiPageSubscription.user_id != actor_user_id,
+    )
+
+    result = await db.execute(query)
+    subscriptions = result.scalars().all()
+
+    if not subscriptions:
+        return
+
+    # Deduplicate by user_id (a user might subscribe to both the page and a parent)
+    notified_users: set[int] = set()
+
+    type_labels = {
+        NotificationType.WIKI_PAGE_UPDATED: "updated",
+        NotificationType.WIKI_PAGE_CREATED: "created",
+        NotificationType.WIKI_PAGE_DELETED: "deleted",
+    }
+    action = type_labels.get(notification_type, "changed")
+
+    for sub in subscriptions:
+        if sub.user_id in notified_users:
+            continue
+        notified_users.add(sub.user_id)
+
+        is_delete = (
+            notification_type == NotificationType.WIKI_PAGE_DELETED
+        )
+        notification = Notification(
+            user_id=sub.user_id,
+            notification_type=notification_type,
+            title=f"Wiki page {action}: {page.title}",
+            message=f'The wiki page "{page.title}" was {action}.',
+            wiki_page_id=None if is_delete else page.id,
+        )
+        db.add(notification)
 
 
 async def _resolve_page(db: DbSession, user_id: int, slug_or_id: str) -> WikiPage:
