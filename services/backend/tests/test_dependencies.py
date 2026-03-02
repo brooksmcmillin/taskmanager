@@ -9,7 +9,7 @@ from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ApiError
-from app.core.security import generate_token, hash_password
+from app.core.security import generate_api_key, generate_token, hash_password
 from app.dependencies import (
     get_admin_user,
     get_current_user,
@@ -18,6 +18,7 @@ from app.dependencies import (
     get_optional_user,
     validate_client_credentials_token,
 )
+from app.models.api_key import ApiKey
 from app.models.oauth import AccessToken, OAuthClient
 from app.models.session import Session
 from app.models.user import User
@@ -672,6 +673,106 @@ async def test_get_admin_user_non_admin(
         }
     )
     request._cookies = {"session": test_session.id}
+
+    with pytest.raises(ApiError) as exc_info:
+        await get_admin_user(request, db_session)
+
+    assert exc_info.value.status_code == 403
+    assert "AUTHZ_001" in str(exc_info.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_get_admin_user_bearer_token(
+    db_session: AsyncSession, admin_user: User, oauth_client: OAuthClient
+):
+    """Test admin user authentication via OAuth Bearer token."""
+    token = AccessToken(
+        token=generate_token(),
+        client_id=oauth_client.client_id,
+        user_id=admin_user.id,
+        scopes=json.dumps(["read", "write"]),
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    db_session.add(token)
+    await db_session.commit()
+
+    request = Request(
+        scope={
+            "type": "http",
+            "headers": [
+                (b"authorization", f"Bearer {token.token}".encode())
+            ],
+            "query_string": b"",
+            "root_path": "",
+            "path": "/",
+            "method": "GET",
+            "scheme": "http",
+        }
+    )
+    request._cookies = {}
+
+    user = await get_admin_user(request, db_session)
+
+    assert user.id == admin_user.id
+    assert user.is_admin is True
+
+
+@pytest.mark.asyncio
+async def test_get_admin_user_api_key(
+    db_session: AsyncSession, admin_user: User
+):
+    """Test admin user authentication via API key."""
+    raw_key = generate_api_key()
+    api_key = ApiKey(
+        user_id=admin_user.id,
+        name="Admin Test Key",
+        key_hash=hash_password(raw_key),
+        key_prefix=raw_key[:11],
+        is_active=True,
+    )
+    db_session.add(api_key)
+    await db_session.commit()
+
+    request = Request(
+        scope={
+            "type": "http",
+            "headers": [
+                (b"authorization", f"Bearer {raw_key}".encode())
+            ],
+            "query_string": b"",
+            "root_path": "",
+            "path": "/",
+            "method": "GET",
+            "scheme": "http",
+        }
+    )
+    request._cookies = {}
+
+    user = await get_admin_user(request, db_session)
+
+    assert user.id == admin_user.id
+    assert user.is_admin is True
+
+
+@pytest.mark.asyncio
+async def test_get_admin_user_bearer_token_non_admin(
+    db_session: AsyncSession, test_user: User, user_access_token: AccessToken
+):
+    """Test admin authentication fails for non-admin user with Bearer token."""
+    request = Request(
+        scope={
+            "type": "http",
+            "headers": [
+                (b"authorization", f"Bearer {user_access_token.token}".encode())
+            ],
+            "query_string": b"",
+            "root_path": "",
+            "path": "/",
+            "method": "GET",
+            "scheme": "http",
+        }
+    )
+    request._cookies = {}
 
     with pytest.raises(ApiError) as exc_info:
         await get_admin_user(request, db_session)
