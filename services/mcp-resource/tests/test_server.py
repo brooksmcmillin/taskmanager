@@ -228,6 +228,28 @@ class TestTransportSecurityConfiguration:
 
     @patch("mcp_resource.server.IntrospectionTokenVerifier")
     @patch("mcp_resource.server.FastMCP")
+    def test_create_resource_server_enables_stateless_http(
+        self, mock_fastmcp: MagicMock, mock_verifier: MagicMock
+    ) -> None:
+        """Test that create_resource_server enables stateless HTTP to survive restarts."""
+        from mcp_resource.server import create_resource_server
+
+        mock_fastmcp_instance = MagicMock()
+        mock_fastmcp.return_value = mock_fastmcp_instance
+
+        create_resource_server(
+            port=8001,
+            server_url="https://mcp.example.com",
+            auth_server_url="http://auth-server:9000",
+            auth_server_public_url="https://auth.example.com",
+            oauth_strict=False,
+        )
+
+        call_kwargs = mock_fastmcp.call_args[1]
+        assert call_kwargs.get("stateless_http") is True
+
+    @patch("mcp_resource.server.IntrospectionTokenVerifier")
+    @patch("mcp_resource.server.FastMCP")
     def test_create_resource_server_with_port_in_url(
         self, mock_fastmcp: MagicMock, mock_verifier: MagicMock
     ) -> None:
