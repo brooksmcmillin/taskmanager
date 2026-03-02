@@ -777,6 +777,8 @@ class TaskManagerClient:
         Returns:
             ApiResponse with updated wiki page data
         """
+        if parent_id is not None and remove_parent:
+            raise ValueError("parent_id and remove_parent are mutually exclusive")
         data: dict[str, Any] = {}
         if title is not None:
             data["title"] = title

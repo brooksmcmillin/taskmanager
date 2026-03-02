@@ -2146,6 +2146,23 @@ class TestWikiTools:
             )
 
     @pytest.mark.asyncio
+    async def test_update_wiki_page_parent_id_and_remove_parent_conflict(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        """Test that passing both parent_id and remove_parent returns an error."""
+        import json
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["update_wiki_page"].fn(
+                page_id=3, parent_id=7, remove_parent=True
+            )
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "mutually exclusive" in parsed["error"]
+            mock_api_client.update_wiki_page.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_batch_link_wiki_page_to_tasks_success(self, mock_api_client: MagicMock) -> None:
         """Test batch linking tasks to a wiki page."""
         import json

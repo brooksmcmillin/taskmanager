@@ -1065,6 +1065,13 @@ class TestWikiPageParentId:
         call_args = mock_session.put.call_args
         assert call_args.kwargs["json"]["remove_parent"] is True
 
+    def test_update_wiki_page_parent_id_and_remove_parent_conflict(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test update_wiki_page raises ValueError when both parent_id and remove_parent are set."""
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            client.update_wiki_page(page_id=3, parent_id=7, remove_parent=True)
+
     def test_update_wiki_page_without_parent_id(
         self, client: TaskManagerClient, mock_session: Mock
     ) -> None:

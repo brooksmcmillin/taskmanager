@@ -1908,8 +1908,10 @@ def create_resource_server(
             revision_number, created_at, and updated_at
         """
         logger.info(
-            f"=== update_wiki_page called: page_id={page_id}, title={title}, slug={slug}, append={append}, parent_id={parent_id} ==="
+            f"=== update_wiki_page called: page_id={page_id}, title={title}, slug={slug}, append={append}, parent_id={parent_id}, remove_parent={remove_parent} ==="
         )
+        if parent_id is not None and remove_parent:
+            return json.dumps({"error": "parent_id and remove_parent are mutually exclusive"})
         try:
             api_client = get_api_client()
             response = api_client.update_wiki_page(
