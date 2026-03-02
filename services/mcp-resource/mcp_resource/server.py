@@ -1796,6 +1796,7 @@ def create_resource_server(
         title: str,
         content: str = "",
         slug: str | None = None,
+        parent_id: int | None = None,
     ) -> str:
         """
         Create a new wiki page.
@@ -1805,15 +1806,17 @@ def create_resource_server(
             content: Page content in markdown format (optional, default: "")
             slug: URL-friendly slug (optional, auto-generated from title if not provided).
                   Must be lowercase letters, numbers, and hyphens only.
+            parent_id: Parent page ID to nest this page under (optional).
+                       Creates a hierarchical page structure. Max depth is 3 levels.
 
         Returns:
             JSON object with created page data including id, title, slug, content,
             created_at, and updated_at
         """
-        logger.info(f"=== create_wiki_page called: title='{title}', slug={slug} ===")
+        logger.info(f"=== create_wiki_page called: title='{title}', slug={slug}, parent_id={parent_id} ===")
         try:
             api_client = get_api_client()
-            response = api_client.create_wiki_page(title=title, content=content, slug=slug)
+            response = api_client.create_wiki_page(title=title, content=content, slug=slug, parent_id=parent_id)
             logger.info(
                 f"create_wiki_page response: success={response.success}, status={response.status_code}"
             )
@@ -1880,6 +1883,8 @@ def create_resource_server(
         content: str | None = None,
         slug: str | None = None,
         append: bool = False,
+        parent_id: int | None = None,
+        remove_parent: bool = False,
     ) -> str:
         """
         Update an existing wiki page.
@@ -1893,18 +1898,23 @@ def create_resource_server(
             append: If True, append content to the existing page content instead
                     of replacing it. Useful for adding notes or log entries to a
                     page without overwriting existing content. Default: False.
+            parent_id: New parent page ID to move this page under (optional).
+                       Max depth is 3 levels.
+            remove_parent: If True, remove the parent and make this a root page.
+                           Mutually exclusive with parent_id. Default: False.
 
         Returns:
             JSON object with updated page data including id, title, slug, content,
             revision_number, created_at, and updated_at
         """
         logger.info(
-            f"=== update_wiki_page called: page_id={page_id}, title={title}, slug={slug}, append={append} ==="
+            f"=== update_wiki_page called: page_id={page_id}, title={title}, slug={slug}, append={append}, parent_id={parent_id} ==="
         )
         try:
             api_client = get_api_client()
             response = api_client.update_wiki_page(
-                page_id=page_id, title=title, content=content, slug=slug, append=append
+                page_id=page_id, title=title, content=content, slug=slug, append=append,
+                parent_id=parent_id, remove_parent=remove_parent,
             )
             logger.info(
                 f"update_wiki_page response: success={response.success}, status={response.status_code}"

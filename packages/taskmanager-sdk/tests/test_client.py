@@ -990,6 +990,101 @@ class TestBatchCreateWithWikiPageId:
         assert "wiki_page_id" not in call_args.kwargs["json"]
 
 
+class TestWikiPageParentId:
+    """Test wiki page parent_id support."""
+
+    def test_create_wiki_page_with_parent_id(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test create_wiki_page sends parent_id when provided."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 10, "title": "Child", "slug": "child", "parent_id": 5},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.create_wiki_page(title="Child", parent_id=5)
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert call_args.kwargs["json"]["parent_id"] == 5
+
+    def test_create_wiki_page_without_parent_id(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test create_wiki_page omits parent_id when not provided."""
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 11, "title": "Root", "slug": "root"},
+        }
+        mock_session.post.return_value = mock_response
+
+        result = client.create_wiki_page(title="Root")
+
+        assert result.success is True
+        call_args = mock_session.post.call_args
+        assert "parent_id" not in call_args.kwargs["json"]
+
+    def test_update_wiki_page_with_parent_id(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test update_wiki_page sends parent_id when provided."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 3, "title": "Moved", "parent_id": 7},
+        }
+        mock_session.put.return_value = mock_response
+
+        result = client.update_wiki_page(page_id=3, parent_id=7)
+
+        assert result.success is True
+        call_args = mock_session.put.call_args
+        assert call_args.kwargs["json"]["parent_id"] == 7
+
+    def test_update_wiki_page_remove_parent(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test update_wiki_page sends remove_parent when True."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 3, "title": "Now Root", "parent_id": None},
+        }
+        mock_session.put.return_value = mock_response
+
+        result = client.update_wiki_page(page_id=3, remove_parent=True)
+
+        assert result.success is True
+        call_args = mock_session.put.call_args
+        assert call_args.kwargs["json"]["remove_parent"] is True
+
+    def test_update_wiki_page_without_parent_id(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test update_wiki_page omits parent_id and remove_parent when not provided."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"id": 3, "title": "Same", "slug": "same"},
+        }
+        mock_session.put.return_value = mock_response
+
+        result = client.update_wiki_page(page_id=3, title="Same")
+
+        assert result.success is True
+        call_args = mock_session.put.call_args
+        assert "parent_id" not in call_args.kwargs["json"]
+        assert "remove_parent" not in call_args.kwargs["json"]
+
+
 class TestSnippets:
     """Test snippet methods."""
 

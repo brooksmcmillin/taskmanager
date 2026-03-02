@@ -719,6 +719,7 @@ class TaskManagerClient:
         title: str,
         content: str = "",
         slug: str | None = None,
+        parent_id: int | None = None,
     ) -> ApiResponse:
         """
         Create a new wiki page.
@@ -727,6 +728,7 @@ class TaskManagerClient:
             title: Page title (required, 1-500 chars)
             content: Page content in markdown (default: "")
             slug: Optional URL slug (auto-generated from title if not provided)
+            parent_id: Optional parent page ID for nesting under another page
 
         Returns:
             ApiResponse with created wiki page data
@@ -734,6 +736,8 @@ class TaskManagerClient:
         data: dict[str, Any] = {"title": title, "content": content}
         if slug is not None:
             data["slug"] = slug
+        if parent_id is not None:
+            data["parent_id"] = parent_id
         return self._make_request("POST", "/wiki", data)
 
     def get_wiki_page(self, slug_or_id: str | int) -> ApiResponse:
@@ -755,6 +759,8 @@ class TaskManagerClient:
         content: str | None = None,
         slug: str | None = None,
         append: bool = False,
+        parent_id: int | None = None,
+        remove_parent: bool = False,
     ) -> ApiResponse:
         """
         Update a wiki page.
@@ -765,6 +771,8 @@ class TaskManagerClient:
             content: New content (optional)
             slug: New slug (optional)
             append: If True, append content instead of replacing (default False)
+            parent_id: New parent page ID to move page under (optional)
+            remove_parent: If True, remove the parent (make page a root page)
 
         Returns:
             ApiResponse with updated wiki page data
@@ -778,6 +786,10 @@ class TaskManagerClient:
             data["slug"] = slug
         if append:
             data["append"] = True
+        if parent_id is not None:
+            data["parent_id"] = parent_id
+        if remove_parent:
+            data["remove_parent"] = True
         return self._make_request("PUT", f"/wiki/{page_id}", data)
 
     def delete_wiki_page(self, page_id: int) -> ApiResponse:
