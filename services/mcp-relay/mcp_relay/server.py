@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 import click
 from dotenv import load_dotenv
+from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp.server import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -40,7 +41,9 @@ MAX_CHANNEL_NAME_LENGTH = 64
 # Use \Z (not $) to avoid matching trailing newlines.
 _CHANNEL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+\Z")
 
-# UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+# Standard UUID format (any version): xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+# Used to validate message_id before logging, preventing log injection via
+# embedded newlines or other control characters.
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z",
     re.IGNORECASE,
@@ -419,23 +422,17 @@ def create_relay_server(
         )
 
     @app.tool()
-    async def delete_message(
-        channel: str,
-        message_id: str,
-        sender: str = "anonymous",
-    ) -> str:
+    async def delete_message(channel: str, message_id: str) -> str:
         """Delete a single message by ID from a channel.
 
         Use this to correct mistakes or remove sensitive content without
-        clearing the entire channel. Only the original sender of a message
-        can delete it — the `sender` value must match the one used when the
-        message was posted.
+        clearing the entire channel. Only the authenticated caller who
+        originally sent the message can delete it — the caller's OAuth
+        client_id must match the message's sender field.
 
         Args:
             channel: Channel name containing the message
             message_id: UUID of the message to delete
-            sender: Sender identifier — must match the message's original
-                sender (default 'anonymous')
 
         Returns:
             JSON with channel, message_id, and deleted status
@@ -443,15 +440,22 @@ def create_relay_server(
         try:
             validate_channel_name(channel)
             validate_message_id(message_id)
-            deleted = store.delete_message(channel, message_id, sender=sender)
         except ValueError as e:
             return json.dumps({"error": str(e)})
+
+        # Use the verified OAuth client_id as the authoritative caller identity.
+        # This prevents one client from deleting another client's messages by
+        # supplying an arbitrary sender string.
+        token = get_access_token()
+        caller_id = token.client_id if token else None
+
+        deleted = store.delete_message(channel, message_id, sender=caller_id)
         if deleted:
-            logger.info(f"Message {message_id} deleted from #{channel} by {sender}")
+            logger.info(f"Message {message_id} deleted from #{channel} by {caller_id!r}")
         else:
             logger.debug(
                 f"delete_message: no message removed "
-                f"(channel={channel!r}, id={message_id!r}, sender={sender!r})"
+                f"(channel={channel!r}, id={message_id!r}, caller={caller_id!r})"
             )
         return json.dumps(
             {
