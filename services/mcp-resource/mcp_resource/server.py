@@ -127,6 +127,7 @@ def create_resource_server(
         instructions="TaskManager MCP Server with OAuth-protected tools and resources",
         port=port,
         debug=debug_mode,
+        stateless_http=True,
         token_verifier=token_verifier,
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(auth_server_public_url),
