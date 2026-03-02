@@ -219,6 +219,7 @@ class TestMessageStore:
 
     def test_delete_message_nonexistent_channel(self) -> None:
         store = MessageStore()
+        # Use a valid UUID; channel does not exist
         result = store.delete_message("no-such-channel", "00000000-0000-0000-0000-000000000000")
         assert result is False
 

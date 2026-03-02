@@ -329,24 +329,30 @@ def create_relay_server(
     async def send_message(
         channel: str,
         content: str,
-        sender: str = "anonymous",
     ) -> str:
         """Send a message to a named channel.
+
+        The sender is automatically set to the authenticated caller's OAuth
+        client_id, ensuring consistent identity across send and delete
+        operations.
 
         Args:
             channel: Channel name (e.g. 'client-to-server', 'debug')
             content: Message content (max 64 KB)
-            sender: Sender identifier (e.g. 'client-session', 'server-session')
 
         Returns:
             JSON with the sent message details
         """
+        token = get_access_token()
+        if token is None:
+            return json.dumps({"error": "Authentication required."})
+        sender = token.client_id
         try:
             validate_channel_name(channel)
             msg = store.add(channel, content, sender)
         except ValueError as e:
             return json.dumps({"error": str(e)})
-        logger.info(f"Message sent to #{channel} by {sender} ({len(content)} bytes)")
+        logger.info(f"Message sent to #{channel} by {sender!r} ({len(content)} bytes)")
         return json.dumps(msg.to_dict())
 
     @app.tool()
@@ -444,10 +450,12 @@ def create_relay_server(
             return json.dumps({"error": str(e)})
 
         # Use the verified OAuth client_id as the authoritative caller identity.
-        # This prevents one client from deleting another client's messages by
-        # supplying an arbitrary sender string.
+        # This prevents one client from deleting another client's messages.
+        # Treat a missing token as an auth failure rather than a permission bypass.
         token = get_access_token()
-        caller_id = token.client_id if token else None
+        if token is None:
+            return json.dumps({"error": "Authentication required."})
+        caller_id = token.client_id
 
         deleted = store.delete_message(channel, message_id, sender=caller_id)
         if deleted:
