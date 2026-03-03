@@ -56,7 +56,7 @@ npm install
 
 # Start development server
 npm run dev
-# Frontend runs on http://localhost:5173 in dev mode (Vite default)
+# Frontend runs on http://localhost:3000 in dev mode
 ```
 
 ## 📁 Project Structure
@@ -211,7 +211,7 @@ TASKMANAGER_CLIENT_ID=your-client-id
 TASKMANAGER_CLIENT_SECRET=your-client-secret
 
 # CORS (optional)
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+ALLOWED_ORIGINS=http://localhost:3000
 ```
 
 ## 📊 What's Implemented
