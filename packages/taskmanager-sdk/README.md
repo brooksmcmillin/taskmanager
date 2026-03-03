@@ -87,7 +87,7 @@ new_todo = client.create_todo(
     description="Write comprehensive docs for the new feature",
     priority="high",
     estimated_hours=4.0,
-    due_date="2025-12-25",
+    due_date="2026-12-25",
     tags=["documentation", "high-priority"]
 )
 
