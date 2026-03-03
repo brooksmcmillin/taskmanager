@@ -6,6 +6,37 @@ import { logger } from '$lib/utils/logger';
 const BACKEND_URL = env.BACKEND_URL || env.VITE_API_URL || 'http://backend:8000';
 logger.info(`[Hooks] BACKEND_URL configured as: ${BACKEND_URL}`);
 
+const IS_PRODUCTION = env.NODE_ENV === 'production';
+
+/**
+ * Security headers applied to all non-proxied SvelteKit responses.
+ *
+ * Content-Security-Policy is managed by SvelteKit's built-in CSP configuration
+ * in svelte.config.js (nonce mode), which automatically injects per-request
+ * nonces into inline scripts without needing 'unsafe-inline' in script-src.
+ * We do not set it here to avoid conflicts with SvelteKit's CSP header.
+ *
+ * Strict-Transport-Security is only sent in production to avoid pinning
+ * browsers to HTTPS during local HTTP development.
+ */
+function buildSecurityHeaders(): Record<string, string> {
+	const headers: Record<string, string> = {
+		'X-Content-Type-Options': 'nosniff',
+		'X-Frame-Options': 'DENY',
+		'Referrer-Policy': 'strict-origin-when-cross-origin',
+		'Permissions-Policy':
+			'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
+	};
+
+	if (IS_PRODUCTION) {
+		headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
+	}
+
+	return headers;
+}
+
+const SECURITY_HEADERS = buildSecurityHeaders();
+
 export const handle: Handle = async ({ event, resolve }) => {
 	// Proxy API requests to backend
 	if (event.url.pathname.startsWith('/api/')) {
@@ -60,5 +91,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+
+	// Apply security headers to all non-proxied responses
+	for (const [header, value] of Object.entries(SECURITY_HEADERS)) {
+		response.headers.set(header, value);
+	}
+
+	return response;
 };

@@ -38,6 +38,7 @@ from app.api import (
 from app.api.oauth import authorize, clients, device, github, token
 from app.config import settings
 from app.core.csrf import CSRFMiddleware
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.database import init_db
 from app.dependencies import get_db
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -63,6 +64,13 @@ app = FastAPI(
 
 # CSRF middleware (must be added before CORS so it runs after CORS in the chain)
 app.add_middleware(CSRFMiddleware, allowed_origins=settings.cors_origins)
+
+# Security headers middleware — registered last so it is the outermost wrapper.
+# In Starlette, each add_middleware() call wraps the existing stack, so the
+# last-registered middleware is the first to process requests and the last to
+# process responses. This ensures security headers are added to ALL responses,
+# including CSRF 403s and CORS rejections.
+app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
 
 # CORS middleware
 app.add_middleware(
@@ -114,7 +122,7 @@ Instrumentator(
 
 
 @app.get("/health")
-async def health_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
+async def health_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:  # noqa: B008
     """Health check endpoint with per-subsystem status."""
     from app.models.project import Project
     from app.models.snippet import Snippet
