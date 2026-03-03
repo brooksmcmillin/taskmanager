@@ -30,13 +30,16 @@
 		getAutonomyTierDescription
 	} from '$lib/utils/agent';
 	import { formatDateDisplay } from '$lib/utils/dates';
+	import { renderRichText, extractWikiLinks } from '$lib/utils/markdown';
 	import { todos } from '$lib/stores/todos';
 	import { projects } from '$lib/stores/projects';
+	import { wiki } from '$lib/stores/wiki';
 	import { toasts } from '$lib/stores/ui';
 	import { api } from '$lib/api/client';
 	import type { Todo, WikiPageSummary } from '$lib/types';
 
 	let todo: Todo | null = $state(null);
+	let renderedDescription = $state('');
 	let loading = $state(true);
 	let error = $state('');
 	let mode: 'view' | 'edit' = $state('view');
@@ -61,11 +64,25 @@
 		try {
 			todo = await todos.getById(todoId);
 			loadWikiPages(todoId);
+			renderDescription();
 		} catch (e) {
 			error = 'Task not found';
 		} finally {
 			loading = false;
 		}
+	}
+
+	async function renderDescription() {
+		if (!todo?.description) {
+			renderedDescription = '';
+			return;
+		}
+		const titles = extractWikiLinks(todo.description);
+		let resolved: Record<string, string | null> = {};
+		if (titles.length > 0) {
+			resolved = await wiki.resolveLinks(titles);
+		}
+		renderedDescription = renderRichText(todo.description, resolved);
 	}
 
 	async function loadWikiPages(id: number) {
@@ -180,7 +197,7 @@
 						{#if todo.description}
 							<div class="detail-section">
 								<label class="detail-label">Description</label>
-								<p class="detail-text">{todo.description}</p>
+								<div class="detail-text rich-text">{@html renderedDescription}</div>
 							</div>
 						{/if}
 
@@ -535,6 +552,28 @@
 		font-size: 0.875rem;
 		line-height: 1.5;
 		white-space: pre-wrap;
+	}
+
+	.rich-text :global(a) {
+		color: var(--primary-600);
+		text-decoration: underline;
+		text-decoration-color: var(--primary-300);
+		text-underline-offset: 2px;
+	}
+
+	.rich-text :global(a:hover) {
+		color: var(--primary-700);
+		text-decoration-color: var(--primary-600);
+	}
+
+	.rich-text :global(.wiki-link) {
+		text-decoration: none;
+		font-weight: 500;
+	}
+
+	.rich-text :global(.wiki-link-missing) {
+		color: var(--text-muted);
+		border-bottom: 1px dashed var(--text-muted);
 	}
 
 	.metadata-grid {

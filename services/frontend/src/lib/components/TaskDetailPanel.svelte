@@ -27,19 +27,35 @@
 		getAutonomyTierDescription
 	} from '$lib/utils/agent';
 	import { formatDateDisplay } from '$lib/utils/dates';
+	import { renderRichText, extractWikiLinks } from '$lib/utils/markdown';
 	import { todos } from '$lib/stores/todos';
+	import { wiki } from '$lib/stores/wiki';
 	import { toasts } from '$lib/stores/ui';
 	import { logger } from '$lib/utils/logger';
 	import type { Todo } from '$lib/types';
 
 	export let show = false;
 	export let todo: Todo | null = null;
+	let renderedDescription = '';
 	export let defaultProjectId: number | null = null;
 
 	let mode: 'view' | 'edit' | 'create' = 'view';
 	let todoForm: TodoForm;
 
 	const dispatch = createEventDispatcher();
+
+	async function renderDescription() {
+		if (!todo?.description) {
+			renderedDescription = '';
+			return;
+		}
+		const titles = extractWikiLinks(todo.description);
+		let resolved: Record<string, string | null> = {};
+		if (titles.length > 0) {
+			resolved = await wiki.resolveLinks(titles);
+		}
+		renderedDescription = renderRichText(todo.description, resolved);
+	}
 
 	export async function open(selectedTodo: Todo) {
 		todo = selectedTodo;
@@ -51,6 +67,7 @@
 			logger.error('Failed to load full task details:', error);
 			toasts.show('Could not load full task details', 'warning');
 		}
+		await renderDescription();
 	}
 
 	export async function openEdit(selectedTodo: Todo) {
@@ -194,7 +211,7 @@
 					{#if todo.description}
 						<div class="detail-section">
 							<label class="detail-label">Description</label>
-							<p class="detail-text">{todo.description}</p>
+							<div class="detail-text rich-text">{@html renderedDescription}</div>
 						</div>
 					{/if}
 
@@ -557,6 +574,28 @@
 		font-size: 0.875rem;
 		line-height: 1.5;
 		white-space: pre-wrap;
+	}
+
+	.rich-text :global(a) {
+		color: var(--primary-600);
+		text-decoration: underline;
+		text-decoration-color: var(--primary-300);
+		text-underline-offset: 2px;
+	}
+
+	.rich-text :global(a:hover) {
+		color: var(--primary-700);
+		text-decoration-color: var(--primary-600);
+	}
+
+	.rich-text :global(.wiki-link) {
+		text-decoration: none;
+		font-weight: 500;
+	}
+
+	.rich-text :global(.wiki-link-missing) {
+		color: var(--text-muted);
+		border-bottom: 1px dashed var(--text-muted);
 	}
 
 	.task-id-link {
