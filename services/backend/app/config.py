@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Project root is three levels up from this file
@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     # Rate limiting
     login_max_attempts: int = 5
     login_window_ms: int = 15 * 60 * 1000  # 15 minutes
+    # Number of trusted reverse proxies in front of this application.
+    # Used to correctly extract the real client IP from X-Forwarded-For.
+    # Set to 0 if running without a reverse proxy (use request.client.host directly).
+    # Set to 1 (default) for a single reverse proxy (e.g. nginx or a load balancer).
+    # Set to N for N chained trusted proxies.
+    #
+    # IMPORTANT: configure your upstream proxy to OVERWRITE (not append to) the
+    # X-Forwarded-For header so that clients cannot inject spoofed IPs into the
+    # leftmost position of the chain.
+    trusted_proxy_count: int = Field(default=1, ge=0)
 
     # OAuth
     access_token_expiry: int = 86400  # 24 hours in seconds

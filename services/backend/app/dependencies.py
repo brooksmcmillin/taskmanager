@@ -1,5 +1,6 @@
 """FastAPI dependency injection."""
 
+import ipaddress
 import secrets
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
@@ -9,6 +10,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.errors import errors
 from app.core.rate_limit import api_key_rate_limiter
 from app.core.security import hash_password, is_api_key, verify_password
@@ -256,12 +258,56 @@ async def _validate_api_key(
     raise errors.invalid_token()
 
 
+def _parse_ip(value: str) -> str | None:
+    """Return value if it is a valid IPv4/IPv6 address string, else None."""
+    try:
+        ipaddress.ip_address(value)
+        return value
+    except ValueError:
+        return None
+
+
 def _get_client_ip(request: Request) -> str | None:
-    """Extract client IP from request, checking X-Forwarded-For header."""
-    forwarded = request.headers.get("X-Forwarded-For")
+    """Extract client IP from request, validating X-Forwarded-For.
+
+    To prevent IP spoofing, we do not blindly trust the leftmost entry in the
+    X-Forwarded-For header.  Instead we count how many proxies are trusted
+    (TRUSTED_PROXY_COUNT) and pick the IP that many positions from the right of
+    the header list.
+
+    Example with trusted_proxy_count=1 and header "1.2.3.4, 10.0.0.1":
+      - The rightmost entry (10.0.0.1) was added by our single trusted proxy.
+      - The entry just to the left of it (1.2.3.4) is the real client IP.
+
+    If the X-Forwarded-For chain is shorter than expected, or if the selected
+    entry is not a valid IP address (e.g. a hostname or "unknown"), we fall back
+    to request.client.host, which is the TCP-layer address that cannot be
+    spoofed by the client.
+    """
+    trusted_proxy_count = settings.trusted_proxy_count
+
+    # When no proxies are trusted, always use the direct TCP connection address.
+    if trusted_proxy_count <= 0:
+        if request.client:
+            return request.client.host
+        return None
+
+    forwarded = request.headers.get("X-Forwarded-For", "").strip()
     if forwarded:
-        # Take the first IP in the chain (original client)
-        return forwarded.split(",")[0].strip()
+        # Split the comma-separated IP list and strip whitespace.
+        ips = [ip.strip() for ip in forwarded.split(",") if ip.strip()]
+        # We expect at least trusted_proxy_count entries appended by our proxies.
+        # The real client IP sits one position before those proxy entries.
+        # Required minimum list length: trusted_proxy_count + 1 (the actual client).
+        if len(ips) > trusted_proxy_count:
+            candidate = ips[-(trusted_proxy_count + 1)]
+            parsed = _parse_ip(candidate)
+            if parsed is not None:
+                return parsed
+        # The header chain is shorter than expected or contains non-IP values —
+        # fall through to the direct host address.
+
+    # Fall back to the direct TCP-layer peer address.
     if request.client:
         return request.client.host
     return None
