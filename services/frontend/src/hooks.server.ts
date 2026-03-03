@@ -6,6 +6,35 @@ import { logger } from '$lib/utils/logger';
 const BACKEND_URL = env.BACKEND_URL || env.VITE_API_URL || 'http://backend:8000';
 logger.info(`[Hooks] BACKEND_URL configured as: ${BACKEND_URL}`);
 
+/**
+ * Security headers applied to all SvelteKit responses.
+ *
+ * CSP allows:
+ * - 'self': same-origin scripts, styles, images, fonts, etc.
+ * - 'unsafe-inline' for style-src: SvelteKit injects inline styles for SSR.
+ * - data: for img-src: some icons/assets use data URIs.
+ * - connect-src 'self': XHR/fetch to same origin (API proxy).
+ */
+const SECURITY_HEADERS: Record<string, string> = {
+	'X-Content-Type-Options': 'nosniff',
+	'X-Frame-Options': 'DENY',
+	'Referrer-Policy': 'strict-origin-when-cross-origin',
+	'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+	'Content-Security-Policy': [
+		"default-src 'self'",
+		"script-src 'self' 'unsafe-inline'",
+		"style-src 'self' 'unsafe-inline'",
+		"img-src 'self' data:",
+		"font-src 'self'",
+		"connect-src 'self'",
+		"frame-ancestors 'none'",
+		"base-uri 'self'",
+		"form-action 'self'"
+	].join('; '),
+	'Permissions-Policy':
+		'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
+};
+
 export const handle: Handle = async ({ event, resolve }) => {
 	// Proxy API requests to backend
 	if (event.url.pathname.startsWith('/api/')) {
@@ -60,5 +89,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+
+	// Apply security headers to all non-proxied responses
+	for (const [header, value] of Object.entries(SECURITY_HEADERS)) {
+		response.headers.set(header, value);
+	}
+
+	return response;
 };

@@ -38,6 +38,7 @@ from app.api import (
 from app.api.oauth import authorize, clients, device, github, token
 from app.config import settings
 from app.core.csrf import CSRFMiddleware
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.db.database import init_db
 from app.dependencies import get_db
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -60,6 +61,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Security headers middleware (outermost, runs last so headers are always set)
+app.add_middleware(SecurityHeadersMiddleware, is_production=settings.is_production)
 
 # CSRF middleware (must be added before CORS so it runs after CORS in the chain)
 app.add_middleware(CSRFMiddleware, allowed_origins=settings.cors_origins)
@@ -114,7 +118,7 @@ Instrumentator(
 
 
 @app.get("/health")
-async def health_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:
+async def health_check(db: AsyncSession = Depends(get_db)) -> JSONResponse:  # noqa: B008
     """Health check endpoint with per-subsystem status."""
     from app.models.project import Project
     from app.models.snippet import Snippet
