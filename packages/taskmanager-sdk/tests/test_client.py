@@ -529,6 +529,86 @@ class TestTodos:
         assert call_args.kwargs["params"]["category"] == "Work"
 
 
+class TestUnifiedSearch:
+    """Test unified search method."""
+
+    def test_search(self, client: TaskManagerClient, mock_session: Mock) -> None:
+        """Test unified search across all types."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {
+                "results": {
+                    "task": [{"type": "task", "id": 1, "title": "Test", "url": "/task/1"}],
+                },
+                "meta": {"total": 1, "query": "test"},
+            }
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.search("test")
+
+        assert result.success is True
+        assert result.data is not None
+        assert result.data["meta"]["total"] == 1
+
+    def test_search_with_types(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test unified search with type filter."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"results": {}, "meta": {"total": 0}}
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.search("test", types="task,wiki")
+
+        assert result.success is True
+        call_args = mock_session.get.call_args
+        assert call_args.kwargs["params"]["q"] == "test"
+        assert call_args.kwargs["params"]["types"] == "task,wiki"
+
+    def test_search_with_limit(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test unified search with limit."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"results": {}, "meta": {"total": 0}}
+        }
+        mock_session.get.return_value = mock_response
+
+        result = client.search("test", limit=10)
+
+        assert result.success is True
+        call_args = mock_session.get.call_args
+        assert call_args.kwargs["params"]["limit"] == 10
+
+    def test_search_omits_none_params(
+        self, client: TaskManagerClient, mock_session: Mock
+    ) -> None:
+        """Test that None optional params are not sent."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "data": {"results": {}, "meta": {"total": 0}}
+        }
+        mock_session.get.return_value = mock_response
+
+        client.search("test")
+
+        call_args = mock_session.get.call_args
+        assert "types" not in call_args.kwargs["params"]
+        assert "limit" not in call_args.kwargs["params"]
+
+
 class TestDependencies:
     """Test dependency management methods."""
 

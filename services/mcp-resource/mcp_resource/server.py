@@ -898,6 +898,54 @@ def create_resource_server(
             return json.dumps({"error": str(e)})
 
     @app.tool()
+    @guard_tool(input_params=["query"], screen_output=True)
+    async def unified_search(
+        query: str,
+        types: str | None = None,
+        limit: int = 5,
+    ) -> str:
+        """
+        Search across tasks, wiki pages, snippets, and articles.
+
+        Returns results grouped by content type. Use this for cross-content
+        search when the user wants to find something but doesn't know which
+        type it is.
+
+        Args:
+            query: Search query string (required)
+            types: Comma-separated content types to search (optional).
+                   Valid types: task, wiki, snippet, article.
+                   Defaults to all types.
+            limit: Max results per type, 1-20 (default 5)
+
+        Returns:
+            JSON object with results grouped by type and total count
+        """
+        logger.info(
+            f"=== unified_search called: query='{query}', types={types}, limit={limit} ==="
+        )
+        try:
+            api_client = get_api_client()
+            response = api_client.search(query=query, types=types, limit=limit)
+            logger.info(
+                f"unified_search response: success={response.success}, "
+                f"status={response.status_code}"
+            )
+
+            if not response.success:
+                logger.error(f"Failed to search: {response.error}")
+                return json.dumps({"error": response.error})
+
+            data = response.data
+            if data is None:
+                return json.dumps({"results": {}, "meta": {"total": 0}})
+
+            return json.dumps(data)
+        except Exception as e:
+            logger.error(f"Exception in unified_search: {e}", exc_info=True)
+            return json.dumps({"error": str(e)})
+
+    @app.tool()
     @guard_tool(input_params=[], screen_output=True)
     async def list_task_attachments(task_id: str) -> str:
         """

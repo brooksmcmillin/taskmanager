@@ -12,7 +12,6 @@
 	import ProjectFilter from '$lib/components/ProjectFilter.svelte';
 	import DueDateFilter from '$lib/components/DueDateFilter.svelte';
 	import DeadlineTypeFilter from '$lib/components/DeadlineTypeFilter.svelte';
-	import SearchModal from '$lib/components/SearchModal.svelte';
 	import { computeDueDateFilters } from '$lib/utils/dueDateFilter';
 	import type { DueDateOption, DueDateFilterValue } from '$lib/utils/dueDateFilter';
 	import { getPriorityColor } from '$lib/utils/priority';
@@ -30,17 +29,9 @@
 	let minimizedProjects: Record<string, boolean> = {};
 	let taskDetailPanel: TaskDetailPanel;
 	let initialLoadComplete = false;
-	let searchOpen = false;
 	let overdueCount = 0;
 	let dueTodayCount = 0;
 	let dueThisWeekCount = 0;
-
-	function handleGlobalKeydown(event: KeyboardEvent) {
-		if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-			event.preventDefault();
-			searchOpen = true;
-		}
-	}
 
 	function endOfWeekStr(): string {
 		const d = new Date();
@@ -296,10 +287,6 @@
 	<title>Todo Manager</title>
 </svelte:head>
 
-<svelte:window on:keydown={handleGlobalKeydown} />
-
-<SearchModal bind:open={searchOpen} />
-
 <main class="container py-8">
 	<!-- View Toggle and Project Filter -->
 	<div class="toolbar mb-6">
@@ -321,7 +308,7 @@
 
 		<!-- Filters (Right) -->
 		<div class="toolbar-filters">
-			<button class="btn btn-secondary btn-med search-trigger" on:click={() => (searchOpen = true)}>
+			<button class="btn btn-secondary btn-med search-trigger" on:click={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
