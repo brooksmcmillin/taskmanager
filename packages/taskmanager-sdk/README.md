@@ -87,7 +87,7 @@ new_todo = client.create_todo(
     description="Write comprehensive docs for the new feature",
     priority="high",
     estimated_hours=4.0,
-    due_date="2024-12-31T23:59:59Z",
+    due_date="2025-12-25",
     tags=["documentation", "high-priority"]
 )
 
@@ -212,7 +212,7 @@ uv run pytest
 ### Type Checking
 
 ```bash
-uv run mypy taskmanager_sdk
+uv run pyright taskmanager_sdk
 ```
 
 ## License
