@@ -29,6 +29,7 @@ class Article(Base):
     url: Mapped[str] = mapped_column(String(1000), unique=True, index=True)
     summary: Mapped[str | None] = mapped_column(Text)
     content: Mapped[str | None] = mapped_column(Text)
+    ai_summary: Mapped[str | None] = mapped_column(Text)
     author: Mapped[str | None] = mapped_column(String(1000))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     keywords: Mapped[list] = mapped_column(JSONB, default=list)

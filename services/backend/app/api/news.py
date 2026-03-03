@@ -14,6 +14,7 @@ from app.models.article import Article
 from app.models.article_interaction import ArticleInteraction, ArticleRating
 from app.models.feed_source import FeedSource, FeedType
 from app.schemas import ListResponse
+from app.services.article_summarizer import generate_single_summary
 from app.services.news_fetcher import fetch_feed_since, validate_feed_url
 
 router = APIRouter(prefix="/api/news", tags=["news"])
@@ -34,6 +35,7 @@ class ArticleResponse(BaseModel):
     title: str
     url: str
     summary: str | None
+    ai_summary: str | None = None
     author: str | None
     published_at: datetime | None
     keywords: list[str]
@@ -458,6 +460,7 @@ async def get_daily_highlight(
             title=article.title,
             url=article.url,
             summary=article.summary,
+            ai_summary=article.ai_summary,
             author=article.author,
             published_at=article.published_at,
             keywords=article.keywords,
@@ -561,6 +564,7 @@ async def list_articles(
                 title=article.title,
                 url=article.url,
                 summary=article.summary,
+                ai_summary=article.ai_summary,
                 author=article.author,
                 published_at=article.published_at,
                 keywords=article.keywords,
@@ -620,6 +624,7 @@ async def get_article(
             title=article.title,
             url=article.url,
             summary=article.summary,
+            ai_summary=article.ai_summary,
             author=article.author,
             published_at=article.published_at,
             keywords=article.keywords,
@@ -764,3 +769,24 @@ async def bookmark_article(
             "article_id": article_id,
         }
     }
+
+
+@router.post("/{article_id}/summarize")
+async def summarize_article(
+    article_id: int,
+    user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Generate an AI summary for a single article on demand."""
+    article = await db.get(Article, article_id)
+    if not article:
+        raise errors.not_found("Article")
+
+    if article.ai_summary:
+        return {"data": {"article_id": article_id, "ai_summary": article.ai_summary}}
+
+    summary = await generate_single_summary(db, article)
+    if summary is None:
+        raise errors.validation("AI summarization is not configured")
+
+    return {"data": {"article_id": article_id, "ai_summary": summary}}

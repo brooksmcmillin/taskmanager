@@ -252,6 +252,7 @@ export interface Article {
 	title: string;
 	url: string;
 	summary: string | null;
+	ai_summary: string | null;
 	author: string | null;
 	published_at: string | null;
 	keywords: string[];

@@ -15,8 +15,43 @@
 	let total = $state(0);
 	let hasMore = $state(true);
 	let loadingMore = $state(false);
+	let expandedSummaries = $state(new Set<number>());
+	let summarizingArticles = $state(new Set<number>());
 	let limit = 50;
 	let offset = 0;
+
+	async function requestSummary(articleId: number) {
+		if (summarizingArticles.has(articleId)) return;
+		summarizingArticles = new Set([...summarizingArticles, articleId]);
+		try {
+			const result = await api.post<{ data: { ai_summary: string } }>(
+				`/api/news/${articleId}/summarize`,
+				{}
+			);
+			const summary = result.data.ai_summary;
+			articles = articles.map((a) =>
+				a.id === articleId ? { ...a, ai_summary: summary } : a
+			);
+			// Auto-expand the newly generated summary
+			expandedSummaries = new Set([...expandedSummaries, articleId]);
+		} catch (error) {
+			toasts.show('Failed to generate summary: ' + (error as Error).message, 'error');
+		} finally {
+			const next = new Set(summarizingArticles);
+			next.delete(articleId);
+			summarizingArticles = next;
+		}
+	}
+
+	function toggleAiSummary(articleId: number) {
+		const next = new Set(expandedSummaries);
+		if (next.has(articleId)) {
+			next.delete(articleId);
+		} else {
+			next.add(articleId);
+		}
+		expandedSummaries = next;
+	}
 
 	onMount(async () => {
 		await loadArticles();
@@ -359,6 +394,47 @@
 									{/each}
 								</div>
 							{/if}
+
+							{#if article.ai_summary}
+								<button
+									class="ai-summary-toggle"
+									onclick={() => toggleAiSummary(article.id)}
+								>
+									<svg
+										class="ai-summary-chevron"
+										class:expanded={expandedSummaries.has(article.id)}
+										xmlns="http://www.w3.org/2000/svg"
+										viewBox="0 0 20 20"
+										fill="currentColor"
+										width="14"
+										height="14"
+									>
+										<path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+									</svg>
+									AI Summary
+								</button>
+								{#if expandedSummaries.has(article.id)}
+									<div class="ai-summary-box">
+										{article.ai_summary}
+									</div>
+								{/if}
+							{:else}
+								<button
+									class="ai-summary-generate"
+									onclick={() => requestSummary(article.id)}
+									disabled={summarizingArticles.has(article.id)}
+								>
+									{#if summarizingArticles.has(article.id)}
+										<span class="generate-spinner"></span>
+										Generating...
+									{:else}
+										<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+											<path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15zM10 7a3 3 0 100 6 3 3 0 000-6zM15.657 5.404a.75.75 0 10-1.06-1.06l-1.061 1.06a.75.75 0 001.06 1.06l1.06-1.06zM6.464 14.596a.75.75 0 10-1.06-1.06l-1.06 1.06a.75.75 0 001.06 1.06l1.06-1.06zM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0118 10zM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10zM14.596 15.657a.75.75 0 001.06-1.06l-1.06-1.061a.75.75 0 10-1.06 1.06l1.06 1.06zM5.404 6.464a.75.75 0 001.06-1.06l-1.06-1.06a.75.75 0 10-1.06 1.06l1.06 1.06z" />
+										</svg>
+										Summarize
+									{/if}
+								</button>
+							{/if}
 						</div>
 
 						<div class="flex flex-col gap-2">
@@ -635,7 +711,96 @@
 
 	.article-card.article-read {
 		background-color: var(--bg-page);
-		opacity: 0.75;
+		opacity: 0.5;
+		border-color: transparent;
+	}
+
+	.article-card.article-read:hover {
+		opacity: 0.7;
+	}
+
+	.article-card.article-read :global(a) {
+		color: var(--text-muted);
+	}
+
+	.article-card.article-read .article-summary,
+	.article-card.article-read .article-meta {
+		color: var(--text-muted);
+	}
+
+	/* AI Summary */
+	.ai-summary-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--primary-600);
+		padding: 0.25rem 0;
+		margin-bottom: 0.5rem;
+	}
+
+	.ai-summary-toggle:hover {
+		color: var(--primary-700);
+	}
+
+	.ai-summary-chevron {
+		transition: transform 0.15s ease;
+	}
+
+	.ai-summary-chevron.expanded {
+		transform: rotate(90deg);
+	}
+
+	.ai-summary-box {
+		background: var(--primary-50);
+		border-left: 3px solid var(--primary-300);
+		border-radius: 0 var(--radius) var(--radius) 0;
+		padding: 0.75rem 1rem;
+		margin-bottom: 0.75rem;
+		font-size: 0.875rem;
+		line-height: 1.6;
+		color: var(--text-secondary);
+	}
+
+	.ai-summary-generate {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		background: none;
+		border: 1px solid var(--border-color);
+		border-radius: var(--radius);
+		cursor: pointer;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--text-muted);
+		padding: 0.25rem 0.625rem;
+		margin-bottom: 0.5rem;
+		transition: all 0.15s ease;
+	}
+
+	.ai-summary-generate:hover:not(:disabled) {
+		color: var(--primary-600);
+		border-color: var(--primary-300);
+		background: var(--primary-50);
+	}
+
+	.ai-summary-generate:disabled {
+		opacity: 0.7;
+		cursor: default;
+	}
+
+	.generate-spinner {
+		display: inline-block;
+		width: 12px;
+		height: 12px;
+		border: 2px solid var(--border-color);
+		border-top-color: var(--primary-500);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
 	}
 
 	.badge {

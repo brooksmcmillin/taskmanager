@@ -1,6 +1,6 @@
 """Tests for news feed API endpoints."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.news import _escape_ilike
 from app.core.security import hash_password
+from app.models.article import Article
 from app.models.feed_source import FeedSource, FeedType
 from app.models.user import User
 
@@ -503,3 +504,192 @@ class TestForceFetchFeed:
             json={"hours": 0},
         )
         assert response.status_code == 422
+
+
+# =============================================================================
+# Article AI summary field in responses
+# =============================================================================
+
+
+class TestArticleAiSummary:
+    @pytest.mark.asyncio
+    async def test_ai_summary_in_list_response(
+        self,
+        authenticated_client: AsyncClient,
+        sample_source: FeedSource,
+        db_session: AsyncSession,
+    ):
+        """ai_summary field should appear in article list responses."""
+        article = Article(
+            feed_source_id=sample_source.id,
+            title="Article With AI Summary",
+            url="https://example.com/article/ai-test",
+            summary="RSS summary",
+            ai_summary="This is an AI-generated summary.",
+            keywords=[],
+        )
+        db_session.add(article)
+        await db_session.commit()
+
+        response = await authenticated_client.get("/api/news")
+        assert response.status_code == 200
+        articles = response.json()["data"]
+        assert len(articles) == 1
+        assert articles[0]["ai_summary"] == "This is an AI-generated summary."
+
+    @pytest.mark.asyncio
+    async def test_ai_summary_null_when_missing(
+        self,
+        authenticated_client: AsyncClient,
+        sample_source: FeedSource,
+        db_session: AsyncSession,
+    ):
+        """ai_summary should be null when not generated yet."""
+        article = Article(
+            feed_source_id=sample_source.id,
+            title="Article Without AI Summary",
+            url="https://example.com/article/no-ai",
+            summary="RSS summary",
+            keywords=[],
+        )
+        db_session.add(article)
+        await db_session.commit()
+
+        response = await authenticated_client.get("/api/news")
+        assert response.status_code == 200
+        articles = response.json()["data"]
+        assert len(articles) == 1
+        assert articles[0]["ai_summary"] is None
+
+    @pytest.mark.asyncio
+    async def test_ai_summary_in_get_response(
+        self,
+        authenticated_client: AsyncClient,
+        sample_source: FeedSource,
+        db_session: AsyncSession,
+    ):
+        """ai_summary field should appear in single article response."""
+        article = Article(
+            feed_source_id=sample_source.id,
+            title="Single Article Test",
+            url="https://example.com/article/single",
+            summary="RSS summary",
+            ai_summary="AI summary for single article.",
+            keywords=[],
+        )
+        db_session.add(article)
+        await db_session.commit()
+        await db_session.refresh(article)
+
+        response = await authenticated_client.get(f"/api/news/{article.id}")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["ai_summary"] == "AI summary for single article."
+
+
+# =============================================================================
+# POST /api/news/{article_id}/summarize - Generate AI summary on demand
+# =============================================================================
+
+
+class TestSummarizeArticle:
+    @pytest.mark.asyncio
+    async def test_summarize_unauthenticated(
+        self, client: AsyncClient, sample_source: FeedSource, db_session: AsyncSession
+    ):
+        article = Article(
+            feed_source_id=sample_source.id,
+            title="Test",
+            url="https://example.com/article/summ-unauth",
+            keywords=[],
+        )
+        db_session.add(article)
+        await db_session.commit()
+        await db_session.refresh(article)
+
+        response = await client.post(f"/api/news/{article.id}/summarize")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_summarize_not_found(self, authenticated_client: AsyncClient):
+        response = await authenticated_client.post("/api/news/99999/summarize")
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_summarize_returns_existing(
+        self,
+        authenticated_client: AsyncClient,
+        sample_source: FeedSource,
+        db_session: AsyncSession,
+    ):
+        """If article already has a summary, return it without calling API."""
+        article = Article(
+            feed_source_id=sample_source.id,
+            title="Already Summarized",
+            url="https://example.com/article/summ-existing",
+            summary="RSS summary",
+            ai_summary="Existing summary.",
+            keywords=[],
+        )
+        db_session.add(article)
+        await db_session.commit()
+        await db_session.refresh(article)
+
+        response = await authenticated_client.post(f"/api/news/{article.id}/summarize")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["ai_summary"] == "Existing summary."
+
+    @pytest.mark.asyncio
+    @patch("app.api.news.generate_single_summary", new_callable=AsyncMock)
+    async def test_summarize_generates_new(
+        self,
+        mock_gen: AsyncMock,
+        authenticated_client: AsyncClient,
+        sample_source: FeedSource,
+        db_session: AsyncSession,
+    ):
+        article = Article(
+            feed_source_id=sample_source.id,
+            title="Needs Summary",
+            url="https://example.com/article/summ-new",
+            summary="RSS summary",
+            keywords=[],
+        )
+        db_session.add(article)
+        await db_session.commit()
+        await db_session.refresh(article)
+
+        mock_gen.return_value = "Newly generated summary."
+
+        response = await authenticated_client.post(f"/api/news/{article.id}/summarize")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["ai_summary"] == "Newly generated summary."
+        mock_gen.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.api.news.generate_single_summary", new_callable=AsyncMock)
+    async def test_summarize_no_api_key(
+        self,
+        mock_gen: AsyncMock,
+        authenticated_client: AsyncClient,
+        sample_source: FeedSource,
+        db_session: AsyncSession,
+    ):
+        """When API key is not set, generate_single_summary returns None."""
+        article = Article(
+            feed_source_id=sample_source.id,
+            title="No Key",
+            url="https://example.com/article/summ-nokey",
+            summary="RSS summary",
+            keywords=[],
+        )
+        db_session.add(article)
+        await db_session.commit()
+        await db_session.refresh(article)
+
+        mock_gen.return_value = None
+
+        response = await authenticated_client.post(f"/api/news/{article.id}/summarize")
+        assert response.status_code == 400
