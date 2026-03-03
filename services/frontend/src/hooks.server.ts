@@ -6,34 +6,36 @@ import { logger } from '$lib/utils/logger';
 const BACKEND_URL = env.BACKEND_URL || env.VITE_API_URL || 'http://backend:8000';
 logger.info(`[Hooks] BACKEND_URL configured as: ${BACKEND_URL}`);
 
+const IS_PRODUCTION = env.NODE_ENV === 'production';
+
 /**
- * Security headers applied to all SvelteKit responses.
+ * Security headers applied to all non-proxied SvelteKit responses.
  *
- * CSP allows:
- * - 'self': same-origin scripts, styles, images, fonts, etc.
- * - 'unsafe-inline' for style-src: SvelteKit injects inline styles for SSR.
- * - data: for img-src: some icons/assets use data URIs.
- * - connect-src 'self': XHR/fetch to same origin (API proxy).
+ * Content-Security-Policy is managed by SvelteKit's built-in CSP configuration
+ * in svelte.config.js (nonce mode), which automatically injects per-request
+ * nonces into inline scripts without needing 'unsafe-inline' in script-src.
+ * We do not set it here to avoid conflicts with SvelteKit's CSP header.
+ *
+ * Strict-Transport-Security is only sent in production to avoid pinning
+ * browsers to HTTPS during local HTTP development.
  */
-const SECURITY_HEADERS: Record<string, string> = {
-	'X-Content-Type-Options': 'nosniff',
-	'X-Frame-Options': 'DENY',
-	'Referrer-Policy': 'strict-origin-when-cross-origin',
-	'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-	'Content-Security-Policy': [
-		"default-src 'self'",
-		"script-src 'self' 'unsafe-inline'",
-		"style-src 'self' 'unsafe-inline'",
-		"img-src 'self' data:",
-		"font-src 'self'",
-		"connect-src 'self'",
-		"frame-ancestors 'none'",
-		"base-uri 'self'",
-		"form-action 'self'"
-	].join('; '),
-	'Permissions-Policy':
-		'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
-};
+function buildSecurityHeaders(): Record<string, string> {
+	const headers: Record<string, string> = {
+		'X-Content-Type-Options': 'nosniff',
+		'X-Frame-Options': 'DENY',
+		'Referrer-Policy': 'strict-origin-when-cross-origin',
+		'Permissions-Policy':
+			'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
+	};
+
+	if (IS_PRODUCTION) {
+		headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
+	}
+
+	return headers;
+}
+
+const SECURITY_HEADERS = buildSecurityHeaders();
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Proxy API requests to backend

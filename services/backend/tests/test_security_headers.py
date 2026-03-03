@@ -1,7 +1,10 @@
 """Tests for HTTP security headers middleware."""
 
 import pytest
-from httpx import AsyncClient
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+from app.core.security_headers import SecurityHeadersMiddleware
 
 EXPECTED_HEADERS = {
     "x-content-type-options": "nosniff",
@@ -67,27 +70,48 @@ async def test_hsts_not_set_in_development(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_hsts_set_in_production(client: AsyncClient) -> None:
-    """Strict-Transport-Security IS set when is_production=True."""
+async def test_hsts_set_in_production() -> None:
+    """Strict-Transport-Security IS set when is_production=True.
 
-    from httpx import ASGITransport
-    from httpx import AsyncClient as HxClient
+    Uses a minimal standalone FastAPI app so there is no double-wrapping
+    and no database dependency.
+    """
+    mini_app = FastAPI()
 
-    from app.core.security_headers import SecurityHeadersMiddleware
-    from app.main import app
+    @mini_app.get("/ping")
+    async def ping() -> dict[str, str]:
+        return {"status": "ok"}
 
-    # Build a one-off ASGI app with the middleware set to production mode
-    # by directly instantiating a middleware-wrapped version of the app.
-    prod_middleware = SecurityHeadersMiddleware(app, is_production=True)
+    mini_app.add_middleware(SecurityHeadersMiddleware, is_production=True)
 
-    async with HxClient(
-        transport=ASGITransport(app=prod_middleware),
+    async with AsyncClient(
+        transport=ASGITransport(app=mini_app),
         base_url="http://test",
     ) as prod_client:
-        # Use the health endpoint but provide the DB override so it won't fail
-        # (the outer `client` fixture already overrides get_db on the app object)
-        response = await prod_client.get("/health")
+        response = await prod_client.get("/ping")
 
     assert response.headers.get("strict-transport-security") == (
         "max-age=31536000; includeSubDomains"
     )
+
+
+@pytest.mark.asyncio
+async def test_hsts_absent_in_development() -> None:
+    """Strict-Transport-Security is absent when is_production=False."""
+    mini_app = FastAPI()
+
+    @mini_app.get("/ping")
+    async def ping() -> dict[str, str]:
+        return {"status": "ok"}
+
+    mini_app.add_middleware(SecurityHeadersMiddleware, is_production=False)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=mini_app),
+        base_url="http://test",
+    ) as dev_client:
+        response = await dev_client.get("/ping")
+
+    assert "strict-transport-security" not in response.headers
+    # Other headers should still be present
+    assert response.headers.get("x-content-type-options") == "nosniff"
