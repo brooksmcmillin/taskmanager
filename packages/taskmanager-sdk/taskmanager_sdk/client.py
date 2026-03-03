@@ -81,6 +81,9 @@ class TaskManagerClient:
         fallback_error_key: str | None = None,
         raise_on_401: bool = True,
         raise_on_5xx: bool = True,
+        include_session: bool = False,
+        include_auth: bool = False,
+        parse_response: bool = True,
     ) -> ApiResponse:
         """Make a form-encoded POST request (used by OAuth endpoints).
 
@@ -91,6 +94,14 @@ class TaskManagerClient:
             fallback_error_key: Secondary JSON key to try if error_key not found
             raise_on_401: Whether to raise AuthenticationError on 401
             raise_on_5xx: Whether to raise ServerError on 5xx
+            include_session: Whether to send session cookies (default False).
+                Set True for user-context OAuth endpoints like device/authorize
+                and the consent endpoint.
+            include_auth: Whether to send Bearer token header if available
+                (default False). OAuth form endpoints are public and should not
+                receive auth credentials.
+            parse_response: Whether to parse the response body as JSON
+                (default True). Set False for endpoints that return no body.
 
         Returns:
             ApiResponse object
@@ -101,18 +112,20 @@ class TaskManagerClient:
             ServerError: For 5xx status codes (when raise_on_5xx is True)
         """
         url = f"{self.base_url}{endpoint}"
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        headers: dict[str, str] = {"Content-Type": "application/x-www-form-urlencoded"}
 
-        # Add Bearer token if available
-        if self.access_token:
+        # Add Bearer token only for session-authenticated endpoints
+        if include_auth and self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
+
+        cookies = self.cookies if include_session else {}
 
         try:
             response = self.session.post(
                 url,
                 data=form_data,
                 headers=headers,
-                cookies=self.cookies,
+                cookies=cookies,
             )
 
             if response.status_code >= 400:
@@ -141,10 +154,12 @@ class TaskManagerClient:
                     success=False, error=error_message, status_code=response.status_code
                 )
 
-            try:
-                json_data = response.json()
-            except (ValueError, requests.exceptions.JSONDecodeError):
-                json_data = None
+            json_data: Any = None
+            if parse_response:
+                try:
+                    json_data = response.json()
+                except (ValueError, requests.exceptions.JSONDecodeError):
+                    json_data = None
 
             return ApiResponse(
                 success=True, data=json_data, status_code=response.status_code
@@ -1607,6 +1622,8 @@ class TaskManagerClient:
         return self._make_form_request(
             "/oauth/device/authorize",
             {"user_code": user_code, "action": action},
+            include_session=True,
+            parse_response=False,
         )
 
     def oauth_authorize(
@@ -1688,6 +1705,8 @@ class TaskManagerClient:
             form_data,
             raise_on_401=False,
             raise_on_5xx=False,
+            include_session=True,
+            parse_response=False,
         )
 
     def oauth_token(
