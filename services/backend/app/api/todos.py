@@ -2,12 +2,15 @@
 
 from collections import deque
 from datetime import UTC, date, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.exc import IntegrityError
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import errors
 from app.db.queries import (
@@ -1078,6 +1081,225 @@ def _validate_batch_dependency_graph(todos: list[TodoCreate]) -> None:
         )
 
 
+async def _validate_batch_wiki_page(
+    db: "AsyncSession", wiki_page_id: int, user_id: int
+) -> None:
+    """Phase 0a: Validate that the wiki page exists and belongs to the user."""
+    await get_resource_for_user(
+        db, WikiPage, wiki_page_id, user_id, errors.wiki_page_not_found
+    )
+
+
+def _validate_batch_depends_on(todos: list[TodoCreate], batch_size: int) -> None:
+    """Phase 0b: Validate depends_on indices for bounds, self-refs, and cycles."""
+    for i, item in enumerate(todos):
+        if item.depends_on:
+            for dep_idx in item.depends_on:
+                if dep_idx < 0 or dep_idx >= batch_size:
+                    raise errors.validation(
+                        f"Task at index {i}: depends_on index {dep_idx} "
+                        f"is out of bounds (batch size: {batch_size})"
+                    )
+                if dep_idx == i:
+                    raise errors.validation(
+                        f"Task at index {i}: cannot depend on itself "
+                        f"(self-reference at index {dep_idx})"
+                    )
+    _validate_batch_dependency_graph(todos)
+
+
+async def _detect_batch_duplicates(
+    db: "AsyncSession",
+    todos: list[TodoCreate],
+    user_id: int,
+    skip_duplicates: bool,
+) -> set[int]:
+    """Phase 0c: Check intra-batch and DB duplicates. Return skipped indices."""
+    skipped_indices: set[int] = set()
+    seen_titles: dict[str, int] = {}  # normalized title -> first batch index
+    for i, item in enumerate(todos):
+        normalized = item.title.strip().lower()
+
+        # Intra-batch duplicate
+        if normalized in seen_titles:
+            if skip_duplicates:
+                skipped_indices.add(i)
+                continue
+            raise errors.intra_batch_duplicate(
+                batch_index=seen_titles[normalized],
+                duplicate_index=i,
+                title=item.title.strip(),
+            )
+        seen_titles[normalized] = i
+
+        # Check against existing DB todos
+        existing = await _find_duplicate_active_todo(db, user_id, item.title)
+        if existing:
+            if skip_duplicates:
+                skipped_indices.add(i)
+                # Mark as seen so later batch items with the same title are
+                # caught by the in-memory check instead of a redundant DB query.
+                seen_titles[normalized] = i
+                continue
+            raise errors.duplicate_todo(existing.id, existing.title)
+
+    return skipped_indices
+
+
+async def _prepare_batch_todos(
+    db: "AsyncSession",
+    todos: list[TodoCreate],
+    user_id: int,
+    skipped_indices: set[int],
+) -> tuple[list[Todo], dict[int, int], dict[int, int]]:
+    """Phase 1: Validate items, resolve categories, build Todo objects.
+
+    Returns (prepared, batch_to_prepared, parent_index_map).
+    """
+    prepared: list[Todo] = []
+    batch_to_prepared: dict[int, int] = {}
+    parent_index_map: dict[int, int] = {}  # prepared idx -> parent batch idx
+
+    for i, item in enumerate(todos):
+        if i in skipped_indices:
+            continue
+
+        # Resolve category name to project_id
+        if item.category and not item.project_id:
+            item.project_id = await _resolve_category_to_project(
+                db, item.category, user_id
+            )
+
+        # Verify parent todo exists and belongs to user (only for parent_id,
+        # not parent_index which references items within this batch)
+        if item.parent_id:
+            parent = await get_resource_for_user(
+                db, Todo, item.parent_id, user_id, errors.todo_not_found
+            )
+            if parent.parent_id is not None:
+                raise errors.validation(
+                    "Cannot create subtasks of subtasks. "
+                    "Only one level of nesting is allowed."
+                )
+
+        # Record parent_index for later resolution (skip if parent was skipped)
+        if item.parent_index is not None:
+            if item.parent_index in skipped_indices:
+                raise errors.validation(
+                    f"Todo at index {i}: parent at index {item.parent_index} "
+                    f"was skipped as a duplicate."
+                )
+            parent_index_map[len(prepared)] = item.parent_index
+
+        batch_to_prepared[i] = len(prepared)
+
+        # Auto-assign position if not provided.
+        # For parent_index items, parent_id is not yet known so we pass None
+        # and positions will be recalculated in phase 3.
+        effective_parent_id = item.parent_id  # None for parent_index items
+        position = item.position
+        if position is None:
+            position = await get_next_position(
+                db, Todo, user_id, parent_id=effective_parent_id
+            )
+
+        # Infer agent fields if not provided
+        agent_actionable = item.agent_actionable
+        action_type = item.action_type
+        autonomy_tier = item.autonomy_tier
+        if agent_actionable is None or action_type is None or autonomy_tier is None:
+            inferred_type, inferred_actionable, inferred_tier = infer_action_type(
+                item.title, item.description, item.tags
+            )
+            if action_type is None:
+                action_type = inferred_type
+            if agent_actionable is None:
+                agent_actionable = inferred_actionable
+            if autonomy_tier is None:
+                autonomy_tier = inferred_tier
+
+        prepared.append(
+            Todo(
+                user_id=user_id,
+                title=item.title,
+                description=item.description,
+                priority=item.priority,
+                status=item.status,
+                due_date=item.due_date,
+                deadline_type=item.deadline_type,
+                project_id=item.project_id,
+                tags=item.tags,
+                context=item.context,
+                estimated_hours=item.estimated_hours,
+                parent_id=item.parent_id,
+                position=position,
+                agent_actionable=agent_actionable,
+                action_type=action_type,
+                autonomy_tier=autonomy_tier,
+            )
+        )
+
+    return prepared, batch_to_prepared, parent_index_map
+
+
+async def _resolve_batch_parent_indices(
+    db: "AsyncSession",
+    prepared: list[Todo],
+    batch_to_prepared: dict[int, int],
+    parent_index_map: dict[int, int],
+    user_id: int,
+) -> None:
+    """Phase 3: Set parent_id on items that used parent_index, recalculate positions."""
+    for child_prepared_idx, parent_batch_idx in parent_index_map.items():
+        child_todo = prepared[child_prepared_idx]
+        parent_prepared_idx = batch_to_prepared[parent_batch_idx]
+        parent_todo = prepared[parent_prepared_idx]
+        child_todo.parent_id = parent_todo.id
+        # Recalculate position under the new parent
+        child_todo.position = await get_next_position(
+            db, Todo, user_id, parent_id=parent_todo.id
+        )
+        await db.flush()
+        await db.refresh(child_todo)
+
+
+async def _create_batch_dependencies(
+    db: "AsyncSession",
+    todos: list[TodoCreate],
+    prepared: list[Todo],
+    batch_to_prepared: dict[int, int],
+    skipped_indices: set[int],
+) -> None:
+    """Phase 4: Insert dependency relationships using the now-assigned IDs."""
+    for i, item in enumerate(todos):
+        if i in skipped_indices:
+            continue
+        if item.depends_on:
+            for dep_idx in item.depends_on:
+                if dep_idx in skipped_indices:
+                    raise errors.validation(
+                        f"Todo at index {i}: dependency at index {dep_idx} "
+                        f"was skipped as a duplicate."
+                    )
+                await db.execute(
+                    task_dependencies.insert().values(
+                        dependent_id=prepared[batch_to_prepared[i]].id,
+                        dependency_id=prepared[batch_to_prepared[dep_idx]].id,
+                    )
+                )
+    await db.flush()
+
+
+async def _link_batch_wiki_pages(
+    db: "AsyncSession", prepared: list[Todo], wiki_page_id: int
+) -> None:
+    """Phase 6: Link all created tasks to a wiki page."""
+    for todo in prepared:
+        await db.execute(
+            todo_wiki_links.insert().values(todo_id=todo.id, wiki_page_id=wiki_page_id)
+        )
+
+
 @router.post("/batch", status_code=201)
 async def batch_create_todos(
     request: BatchTodoCreate,
@@ -1107,188 +1329,32 @@ async def batch_create_todos(
     If ``wiki_page_id`` is provided, all created tasks are automatically
     linked to that wiki page.
     """
-    # Phase 0a: Validate wiki page if provided
+    # Validation
     if request.wiki_page_id is not None:
-        await get_resource_for_user(
-            db, WikiPage, request.wiki_page_id, user.id, errors.wiki_page_not_found
-        )
+        await _validate_batch_wiki_page(db, request.wiki_page_id, user.id)
+    _validate_batch_depends_on(request.todos, len(request.todos))
+    skipped_indices = await _detect_batch_duplicates(
+        db, request.todos, user.id, request.skip_duplicates
+    )
 
-    # Phase 0b: Validate depends_on indices before any database work
-    batch_size = len(request.todos)
-    for i, item in enumerate(request.todos):
-        if item.depends_on:
-            for dep_idx in item.depends_on:
-                if dep_idx < 0 or dep_idx >= batch_size:
-                    raise errors.validation(
-                        f"Task at index {i}: depends_on index {dep_idx} "
-                        f"is out of bounds (batch size: {batch_size})"
-                    )
-                if dep_idx == i:
-                    raise errors.validation(
-                        f"Task at index {i}: cannot depend on itself "
-                        f"(self-reference at index {dep_idx})"
-                    )
-
-    # Check for circular dependencies within the batch using topological sort
-    _validate_batch_dependency_graph(request.todos)
-
-    # Phase 0c: Duplicate detection — check all titles against existing active
-    # todos and within the batch itself.
-    skipped_indices: set[int] = set()
-    seen_titles: dict[str, int] = {}  # normalized title -> first batch index
-    for i, item in enumerate(request.todos):
-        normalized = item.title.strip().lower()
-
-        # Intra-batch duplicate
-        if normalized in seen_titles:
-            if request.skip_duplicates:
-                skipped_indices.add(i)
-                continue
-            raise errors.intra_batch_duplicate(
-                batch_index=seen_titles[normalized],
-                duplicate_index=i,
-                title=item.title.strip(),
-            )
-        seen_titles[normalized] = i
-
-        # Check against existing DB todos
-        existing = await _find_duplicate_active_todo(db, user.id, item.title)
-        if existing:
-            if request.skip_duplicates:
-                skipped_indices.add(i)
-                # Mark as seen so later batch items with the same title are
-                # caught by the in-memory check instead of a redundant DB query.
-                seen_titles[normalized] = i
-                continue
-            raise errors.duplicate_todo(existing.id, existing.title)
-
-    # Phase 1: Validate all items and prepare Todo objects before any writes.
-    # Items with parent_index skip parent_id assignment here — it's set in
-    # phase 3 after all items have been flushed and have real IDs.
-    prepared: list[Todo] = []
-    # Maps from original batch index to prepared list index, and which
-    # items need parent_index resolution.
-    batch_to_prepared: dict[int, int] = {}
-    parent_index_map: dict[int, int] = {}  # prepared idx -> parent batch idx
-
-    for i, item in enumerate(request.todos):
-        if i in skipped_indices:
-            continue
-
-        # Resolve category name to project_id
-        if item.category and not item.project_id:
-            item.project_id = await _resolve_category_to_project(
-                db, item.category, user.id
-            )
-
-        # Verify parent todo exists and belongs to user (only for parent_id,
-        # not parent_index which references items within this batch)
-        if item.parent_id:
-            parent = await get_resource_for_user(
-                db, Todo, item.parent_id, user.id, errors.todo_not_found
-            )
-            if parent.parent_id is not None:
-                raise errors.validation(
-                    "Cannot create subtasks of subtasks. "
-                    "Only one level of nesting is allowed."
-                )
-
-        # Record parent_index for later resolution (skip if parent was skipped)
-        if item.parent_index is not None:
-            if item.parent_index in skipped_indices:
-                raise errors.validation(
-                    f"Todo at index {i}: parent at index {item.parent_index} "
-                    f"was skipped as a duplicate."
-                )
-            parent_index_map[len(prepared)] = item.parent_index
-
-        batch_to_prepared[i] = len(prepared)
-
-        # Auto-assign position if not provided.
-        # For parent_index items, parent_id is not yet known so we pass None
-        # and positions will be recalculated in phase 3.
-        effective_parent_id = item.parent_id  # None for parent_index items
-        position = item.position
-        if position is None:
-            position = await get_next_position(
-                db, Todo, user.id, parent_id=effective_parent_id
-            )
-
-        # Infer agent fields if not provided
-        agent_actionable = item.agent_actionable
-        action_type = item.action_type
-        autonomy_tier = item.autonomy_tier
-        if agent_actionable is None or action_type is None or autonomy_tier is None:
-            inferred_type, inferred_actionable, inferred_tier = infer_action_type(
-                item.title, item.description, item.tags
-            )
-            if action_type is None:
-                action_type = inferred_type
-            if agent_actionable is None:
-                agent_actionable = inferred_actionable
-            if autonomy_tier is None:
-                autonomy_tier = inferred_tier
-
-        prepared.append(
-            Todo(
-                user_id=user.id,
-                title=item.title,
-                description=item.description,
-                priority=item.priority,
-                status=item.status,
-                due_date=item.due_date,
-                deadline_type=item.deadline_type,
-                project_id=item.project_id,
-                tags=item.tags,
-                context=item.context,
-                estimated_hours=item.estimated_hours,
-                parent_id=item.parent_id,
-                position=position,
-                agent_actionable=agent_actionable,
-                action_type=action_type,
-                autonomy_tier=autonomy_tier,
-            )
-        )
-
-    # Phase 2: All validation passed — write to database
+    # Prepare and write
+    prepared, batch_to_prepared, parent_index_map = await _prepare_batch_todos(
+        db, request.todos, user.id, skipped_indices
+    )
     for todo in prepared:
         db.add(todo)
         await db.flush()
         await db.refresh(todo)
 
-    # Phase 3: Resolve parent_index references now that all items have IDs
-    for child_prepared_idx, parent_batch_idx in parent_index_map.items():
-        child_todo = prepared[child_prepared_idx]
-        parent_prepared_idx = batch_to_prepared[parent_batch_idx]
-        parent_todo = prepared[parent_prepared_idx]
-        child_todo.parent_id = parent_todo.id
-        # Recalculate position under the new parent
-        child_todo.position = await get_next_position(
-            db, Todo, user.id, parent_id=parent_todo.id
-        )
-        await db.flush()
-        await db.refresh(child_todo)
+    # Resolve references and dependencies
+    await _resolve_batch_parent_indices(
+        db, prepared, batch_to_prepared, parent_index_map, user.id
+    )
+    await _create_batch_dependencies(
+        db, request.todos, prepared, batch_to_prepared, skipped_indices
+    )
 
-    # Phase 4: Create dependency relationships using the now-assigned IDs
-    for i, item in enumerate(request.todos):
-        if i in skipped_indices:
-            continue
-        if item.depends_on:
-            for dep_idx in item.depends_on:
-                if dep_idx in skipped_indices:
-                    raise errors.validation(
-                        f"Todo at index {i}: dependency at index {dep_idx} "
-                        f"was skipped as a duplicate."
-                    )
-                await db.execute(
-                    task_dependencies.insert().values(
-                        dependent_id=prepared[batch_to_prepared[i]].id,
-                        dependency_id=prepared[batch_to_prepared[dep_idx]].id,
-                    )
-                )
-    await db.flush()
-
-    # Phase 5: Build responses
+    # Build response
     created: list[TodoResponse] = []
     for todo in prepared:
         project_name, project_color = await get_project_info(
@@ -1296,14 +1362,8 @@ async def batch_create_todos(
         )
         created.append(_build_todo_response(todo, project_name, project_color))
 
-    # Phase 6: Link all created tasks to the wiki page if requested
     if request.wiki_page_id is not None:
-        for todo in prepared:
-            await db.execute(
-                todo_wiki_links.insert().values(
-                    todo_id=todo.id, wiki_page_id=request.wiki_page_id
-                )
-            )
+        await _link_batch_wiki_pages(db, prepared, request.wiki_page_id)
 
     result: dict = {"data": created, "meta": {"count": len(created)}}
     if skipped_indices:
