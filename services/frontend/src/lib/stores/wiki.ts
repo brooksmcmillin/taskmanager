@@ -110,6 +110,18 @@ function createWikiStore() {
 			}
 		},
 
+		movePage: async (id: number, parentId: number | null): Promise<WikiPage> => {
+			try {
+				const response = await api.patch<{ data: WikiPage }>(`/api/wiki/${id}/move`, {
+					parent_id: parentId
+				});
+				return response.data;
+			} catch (error) {
+				logger.error('Failed to move wiki page:', error);
+				throw error;
+			}
+		},
+
 		remove: async (id: number): Promise<void> => {
 			try {
 				await api.delete(`/api/wiki/${id}`);
