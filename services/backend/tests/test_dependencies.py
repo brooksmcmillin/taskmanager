@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import ApiError
 from app.core.security import generate_api_key, generate_token, hash_password
 from app.dependencies import (
+    _get_client_ip,
     get_admin_user,
     get_current_user,
     get_current_user_flexible,
@@ -699,9 +701,7 @@ async def test_get_admin_user_bearer_token(
     request = Request(
         scope={
             "type": "http",
-            "headers": [
-                (b"authorization", f"Bearer {token.token}".encode())
-            ],
+            "headers": [(b"authorization", f"Bearer {token.token}".encode())],
             "query_string": b"",
             "root_path": "",
             "path": "/",
@@ -718,9 +718,7 @@ async def test_get_admin_user_bearer_token(
 
 
 @pytest.mark.asyncio
-async def test_get_admin_user_api_key(
-    db_session: AsyncSession, admin_user: User
-):
+async def test_get_admin_user_api_key(db_session: AsyncSession, admin_user: User):
     """Test admin user authentication via API key."""
     raw_key = generate_api_key()
     api_key = ApiKey(
@@ -736,9 +734,7 @@ async def test_get_admin_user_api_key(
     request = Request(
         scope={
             "type": "http",
-            "headers": [
-                (b"authorization", f"Bearer {raw_key}".encode())
-            ],
+            "headers": [(b"authorization", f"Bearer {raw_key}".encode())],
             "query_string": b"",
             "root_path": "",
             "path": "/",
@@ -829,3 +825,152 @@ async def test_get_optional_user_not_authenticated(db_session: AsyncSession):
     user = await get_optional_user(request, db_session)
 
     assert user is None
+
+
+# =============================================================================
+# _get_client_ip Tests
+# =============================================================================
+
+
+# Helper: build a minimal Request with the given headers and an optional client.
+def _make_request(
+    headers: list[tuple[bytes, bytes]],
+    client_host: str | None = "10.0.0.1",
+) -> Request:
+    scope: dict = {
+        "type": "http",
+        "headers": headers,
+        "query_string": b"",
+        "root_path": "",
+        "path": "/",
+        "method": "GET",
+        "scheme": "http",
+    }
+    if client_host is not None:
+        scope["client"] = (client_host, 12345)
+    return Request(scope)
+
+
+def test_get_client_ip_no_forwarded_header_uses_client_host():
+    """No X-Forwarded-For header → falls back to request.client.host."""
+    request = _make_request(headers=[], client_host="203.0.113.1")
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    assert ip == "203.0.113.1"
+
+
+def test_get_client_ip_single_proxy_default():
+    """Single trusted proxy (default) with valid X-Forwarded-For → picks client IP."""
+    # Header: "client, proxy1"
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"1.2.3.4, 10.0.0.1")],
+        client_host="10.0.0.1",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    assert ip == "1.2.3.4"
+
+
+def test_get_client_ip_two_proxies():
+    """Two trusted proxies → picks the IP two positions from the right."""
+    # Header: "client, proxy1, proxy2"
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"5.6.7.8, 192.168.1.1, 10.0.0.1")],
+        client_host="10.0.0.1",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 2
+        ip = _get_client_ip(request)
+    assert ip == "5.6.7.8"
+
+
+def test_get_client_ip_spoofed_header_too_few_entries_falls_back():
+    """Spoofed X-Forwarded-For with fewer entries than trusted_proxy_count.
+
+    Falls back to request.client.host.
+    """
+    # Attacker sends only one entry; we trust 2 proxies, so the chain is too short.
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"evil.attacker.com")],
+        client_host="10.0.0.1",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 2
+        ip = _get_client_ip(request)
+    # Falls back to the TCP-layer address, not the attacker-supplied value.
+    assert ip == "10.0.0.1"
+
+
+def test_get_client_ip_exactly_trusted_proxy_count_entries_falls_back():
+    """Header has exactly trusted_proxy_count entries (no room for client IP).
+
+    Falls back to request.client.host.
+    """
+    # With trusted_proxy_count=1, a header with 1 entry means the client IP is missing.
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"10.0.0.1")],
+        client_host="10.0.0.2",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    assert ip == "10.0.0.2"
+
+
+def test_get_client_ip_empty_forwarded_header_falls_back():
+    """Empty X-Forwarded-For header → falls back to client.host."""
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"")],
+        client_host="172.16.0.5",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    assert ip == "172.16.0.5"
+
+
+def test_get_client_ip_whitespace_only_header_falls_back():
+    """Whitespace-only X-Forwarded-For header → falls back to client.host."""
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"   ,  ,  ")],
+        client_host="172.16.0.6",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    assert ip == "172.16.0.6"
+
+
+def test_get_client_ip_trusted_proxy_count_zero_ignores_header():
+    """trusted_proxy_count=0 → always uses request.client.host, ignoring any header."""
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"1.2.3.4, 10.0.0.1")],
+        client_host="10.0.0.1",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 0
+        ip = _get_client_ip(request)
+    assert ip == "10.0.0.1"
+
+
+def test_get_client_ip_no_client_and_no_header_returns_none():
+    """No client and no X-Forwarded-For → returns None."""
+    request = _make_request(headers=[], client_host=None)
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    assert ip is None
+
+
+def test_get_client_ip_strips_whitespace_around_ips():
+    """Entries with surrounding whitespace are stripped correctly."""
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"  9.9.9.9  ,  10.0.0.1  ")],
+        client_host="10.0.0.1",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    assert ip == "9.9.9.9"

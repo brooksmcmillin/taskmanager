@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     # Rate limiting
     login_max_attempts: int = 5
     login_window_ms: int = 15 * 60 * 1000  # 15 minutes
+    # Number of trusted reverse proxies in front of this application.
+    # Used to correctly extract the real client IP from X-Forwarded-For.
+    # Set to 0 if running without a reverse proxy (use request.client.host directly).
+    # Set to 1 (default) for a single reverse proxy (e.g. nginx or a load balancer).
+    # Set to N for N chained trusted proxies.
+    trusted_proxy_count: int = 1
 
     # OAuth
     access_token_expiry: int = 86400  # 24 hours in seconds
