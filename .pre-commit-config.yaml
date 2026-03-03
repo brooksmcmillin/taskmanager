@@ -56,7 +56,8 @@ repos:
             .*/oauth_provider.*|
             .*/auth_server\.py|
             .*/taskmanager_sdk/.*|
-            services/backend/app/dependencies\.py
+            services/backend/app/dependencies\.py|
+            services/mcp-resource/mcp_resource/server\.py
           )$
 
   # =============================================================================
