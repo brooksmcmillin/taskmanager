@@ -31,6 +31,7 @@ from app.api import (
     snippets,
     todos,
     trash,
+    unified_search,
     webauthn,
     wiki,
 )
@@ -97,6 +98,7 @@ app.include_router(snippets.router)
 app.include_router(wiki.router)
 app.include_router(wiki.todo_wiki_router)
 app.include_router(notifications.router)
+app.include_router(unified_search.router)
 
 
 # Static files (self-hosted fonts)

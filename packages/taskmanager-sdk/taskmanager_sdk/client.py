@@ -1400,6 +1400,26 @@ class TaskManagerClient:
             params={"q": query, **self._build_params(category=category)},
         )
 
+    def search(
+        self,
+        query: str,
+        types: str | None = None,
+        limit: int | None = None,
+    ) -> ApiResponse:
+        """
+        Unified search across tasks, wiki pages, snippets, and articles.
+
+        Args:
+            query: Search query string
+            types: Comma-separated content types to search (task,wiki,snippet,article)
+            limit: Max results per type (1-20)
+
+        Returns:
+            ApiResponse with grouped results by type
+        """
+        params = {"q": query, **self._build_params(types=types, limit=limit)}
+        return self._make_request("GET", "/search", params=params)
+
     # OAuth methods
     def get_oauth_clients(self) -> ApiResponse:
         """
