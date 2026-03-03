@@ -392,6 +392,7 @@ class TestAPIErrorHandling:
 
         with (
             patch("mcp_resource_framework.security.lakera_guard.LAKERA_GUARD_ENABLED", True),
+            patch("mcp_resource_framework.security.lakera_guard.LAKERA_FAIL_OPEN", True),
             patch("mcp_resource_framework.security.lakera_guard.screen_content", failing_screen),
         ):
             # Should not raise, execution continues (fail-open for availability)
