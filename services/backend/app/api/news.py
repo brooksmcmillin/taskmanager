@@ -786,6 +786,7 @@ async def summarize_article(
 ) -> dict:
     """Generate an AI summary for a single article on demand."""
     summarize_rate_limiter.check(str(user.id))
+    summarize_rate_limiter.record(str(user.id))
 
     article = await db.get(Article, article_id)
     if not article:
@@ -802,7 +803,5 @@ async def summarize_article(
 
     if summary is None:
         raise errors.service_unavailable()
-
-    summarize_rate_limiter.record(str(user.id))
 
     return {"data": {"article_id": article_id, "ai_summary": summary}}
