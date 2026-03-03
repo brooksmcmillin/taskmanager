@@ -308,7 +308,11 @@
 
 		<!-- Filters (Right) -->
 		<div class="toolbar-filters">
-			<button class="btn btn-secondary btn-med search-trigger" on:click={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}>
+			<button
+				class="btn btn-secondary btn-med search-trigger"
+				on:click={() =>
+					window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"

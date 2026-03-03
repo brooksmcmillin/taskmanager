@@ -86,18 +86,19 @@ async def _search_wiki(
     db: AsyncSession, user_id: int, query: str, limit: int
 ) -> list[UnifiedSearchItem]:
     """Search wiki pages using ILIKE."""
-    pattern = f"%{query}%"
+    escaped = _escape_ilike(query)
+    pattern = f"%{escaped}%"
     stmt = (
         select(WikiPage.id, WikiPage.title, WikiPage.slug, WikiPage.content)
         .where(
             WikiPage.user_id == user_id,
             WikiPage.deleted_at.is_(None),
             or_(
-                WikiPage.title.ilike(pattern),
-                WikiPage.content.ilike(pattern),
+                WikiPage.title.ilike(pattern, escape="\\"),
+                WikiPage.content.ilike(pattern, escape="\\"),
             ),
         )
-        .order_by(WikiPage.updated_at.desc().nullslast())
+        .order_by(WikiPage.updated_at.desc().nulls_last())
         .limit(limit)
     )
 
@@ -118,16 +119,17 @@ async def _search_snippets(
     db: AsyncSession, user_id: int, query: str, limit: int
 ) -> list[UnifiedSearchItem]:
     """Search snippets using ILIKE."""
-    pattern = f"%{query}%"
+    escaped = _escape_ilike(query)
+    pattern = f"%{escaped}%"
     stmt = (
         select(Snippet.id, Snippet.title, Snippet.category, Snippet.snippet_date)
         .where(
             Snippet.user_id == user_id,
             Snippet.deleted_at.is_(None),
             or_(
-                Snippet.title.ilike(pattern),
-                Snippet.content.ilike(pattern),
-                Snippet.category.ilike(pattern),
+                Snippet.title.ilike(pattern, escape="\\"),
+                Snippet.content.ilike(pattern, escape="\\"),
+                Snippet.category.ilike(pattern, escape="\\"),
             ),
         )
         .order_by(Snippet.snippet_date.desc(), Snippet.created_at.desc())
@@ -230,6 +232,6 @@ async def unified_search(
     return DataResponse(
         data={
             "results": results,
-            "meta": {"total": total, "query": q, "types": list(results.keys())},
+            "meta": {"total": total, "types": list(results.keys())},
         }
     )

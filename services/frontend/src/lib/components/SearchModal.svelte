@@ -93,7 +93,9 @@
 	function selectResult(item: UnifiedSearchItem) {
 		close();
 		if (item.metadata?.external) {
-			window.open(item.url, '_blank', 'noopener');
+			if (/^https?:\/\//i.test(item.url)) {
+				window.open(item.url, '_blank', 'noopener,noreferrer');
+			}
 		} else {
 			goto(item.url);
 		}
