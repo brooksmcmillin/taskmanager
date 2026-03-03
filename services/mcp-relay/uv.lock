@@ -282,6 +282,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "click" },
+    { name = "httpx" },
     { name = "mcp" },
     { name = "mcp-resource-framework" },
     { name = "pydantic" },
@@ -302,6 +303,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "mcp", specifier = ">=1.24.0" },
     { name = "mcp-resource-framework", directory = "../../packages/mcp-resource-framework" },
     { name = "pydantic", specifier = ">=2.0.0" },
