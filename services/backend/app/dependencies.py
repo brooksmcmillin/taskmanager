@@ -1,5 +1,6 @@
 """FastAPI dependency injection."""
 
+import ipaddress
 import secrets
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
@@ -257,6 +258,15 @@ async def _validate_api_key(
     raise errors.invalid_token()
 
 
+def _parse_ip(value: str) -> str | None:
+    """Return value if it is a valid IPv4/IPv6 address string, else None."""
+    try:
+        ipaddress.ip_address(value)
+        return value
+    except ValueError:
+        return None
+
+
 def _get_client_ip(request: Request) -> str | None:
     """Extract client IP from request, validating X-Forwarded-For.
 
@@ -269,10 +279,10 @@ def _get_client_ip(request: Request) -> str | None:
       - The rightmost entry (10.0.0.1) was added by our single trusted proxy.
       - The entry just to the left of it (1.2.3.4) is the real client IP.
 
-    If the X-Forwarded-For chain is shorter than expected (e.g. an attacker
-    sent the header but the request did not pass through all expected proxies)
-    we fall back to request.client.host, which is the TCP-layer address that
-    cannot be spoofed by the client.
+    If the X-Forwarded-For chain is shorter than expected, or if the selected
+    entry is not a valid IP address (e.g. a hostname or "unknown"), we fall back
+    to request.client.host, which is the TCP-layer address that cannot be
+    spoofed by the client.
     """
     trusted_proxy_count = settings.trusted_proxy_count
 
@@ -290,8 +300,12 @@ def _get_client_ip(request: Request) -> str | None:
         # The real client IP sits one position before those proxy entries.
         # Required minimum list length: trusted_proxy_count + 1 (the actual client).
         if len(ips) > trusted_proxy_count:
-            return ips[-(trusted_proxy_count + 1)]
-        # The header chain is shorter than expected — fall through to direct host.
+            candidate = ips[-(trusted_proxy_count + 1)]
+            parsed = _parse_ip(candidate)
+            if parsed is not None:
+                return parsed
+        # The header chain is shorter than expected or contains non-IP values —
+        # fall through to the direct host address.
 
     # Fall back to the direct TCP-layer peer address.
     if request.client:

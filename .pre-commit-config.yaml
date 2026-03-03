@@ -56,7 +56,7 @@ repos:
             .*/oauth_provider.*|
             .*/auth_server\.py|
             .*/taskmanager_sdk/.*|
-            .*/dependencies\.py
+            services/backend/app/dependencies\.py
           )$
 
   # =============================================================================

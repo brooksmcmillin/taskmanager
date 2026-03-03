@@ -13,6 +13,7 @@ from app.core.errors import ApiError
 from app.core.security import generate_api_key, generate_token, hash_password
 from app.dependencies import (
     _get_client_ip,
+    _parse_ip,
     get_admin_user,
     get_current_user,
     get_current_user_flexible,
@@ -974,3 +975,51 @@ def test_get_client_ip_strips_whitespace_around_ips():
         mock_settings.trusted_proxy_count = 1
         ip = _get_client_ip(request)
     assert ip == "9.9.9.9"
+
+
+def test_get_client_ip_non_ip_value_falls_back():
+    """Non-IP string in the header (e.g. hostname or 'unknown') falls back."""
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"unknown, 10.0.0.1")],
+        client_host="10.0.0.1",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    # "unknown" is not a valid IP — should fall back to client.host.
+    assert ip == "10.0.0.1"
+
+
+def test_get_client_ip_ipv6_address():
+    """IPv6 addresses in X-Forwarded-For are handled correctly."""
+    request = _make_request(
+        headers=[(b"x-forwarded-for", b"2001:db8::1, 10.0.0.1")],
+        client_host="10.0.0.1",
+    )
+    with patch("app.dependencies.settings") as mock_settings:
+        mock_settings.trusted_proxy_count = 1
+        ip = _get_client_ip(request)
+    assert ip == "2001:db8::1"
+
+
+# Tests for the _parse_ip helper directly.
+
+
+def test_parse_ip_valid_ipv4():
+    """Valid IPv4 address is returned as-is."""
+    assert _parse_ip("1.2.3.4") == "1.2.3.4"
+
+
+def test_parse_ip_valid_ipv6():
+    """Valid IPv6 address is returned as-is."""
+    assert _parse_ip("::1") == "::1"
+
+
+def test_parse_ip_hostname_returns_none():
+    """Hostnames are rejected and None is returned."""
+    assert _parse_ip("example.com") is None
+
+
+def test_parse_ip_unknown_returns_none():
+    """'unknown' string is rejected and None is returned."""
+    assert _parse_ip("unknown") is None
