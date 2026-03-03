@@ -152,9 +152,7 @@
 						class:btn-subscribed={subscribed}
 						onclick={toggleSubscription}
 						disabled={subscribing}
-						title={subscribed
-							? 'Unsubscribe from notifications'
-							: 'Subscribe to notifications'}
+						title={subscribed ? 'Unsubscribe from notifications' : 'Subscribe to notifications'}
 					>
 						<svg
 							width="14"
@@ -191,11 +189,7 @@
 			{#if subscribed}
 				<div class="subscription-options">
 					<label class="include-children-toggle">
-						<input
-							type="checkbox"
-							checked={includeChildren}
-							onchange={toggleIncludeChildren}
-						/>
+						<input type="checkbox" checked={includeChildren} onchange={toggleIncludeChildren} />
 						<span>Notify on child page changes</span>
 					</label>
 				</div>

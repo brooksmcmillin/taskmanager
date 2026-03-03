@@ -114,11 +114,7 @@
 		</div>
 
 		<div class="filter-bar">
-			<button
-				class="filter-btn"
-				class:active={filter === 'all'}
-				onclick={() => (filter = 'all')}
-			>
+			<button class="filter-btn" class:active={filter === 'all'} onclick={() => (filter = 'all')}>
 				All
 			</button>
 			<button
@@ -135,9 +131,7 @@
 		{:else if items.length === 0}
 			<div class="empty-state">
 				<p>No {filter === 'unread' ? 'unread ' : ''}notifications</p>
-				<p class="text-muted">
-					Subscribe to wiki pages to get notified when they are updated.
-				</p>
+				<p class="text-muted">Subscribe to wiki pages to get notified when they are updated.</p>
 			</div>
 		{:else}
 			<div class="notification-list">
@@ -189,7 +183,10 @@
 						<button
 							class="notification-dismiss"
 							title="Delete notification"
-							onclick={(e: MouseEvent) => { e.stopPropagation(); handleDelete(item.id); }}
+							onclick={(e: MouseEvent) => {
+								e.stopPropagation();
+								handleDelete(item.id);
+							}}
 						>
 							&times;
 						</button>

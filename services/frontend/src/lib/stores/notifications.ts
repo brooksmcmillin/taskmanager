@@ -41,9 +41,7 @@ function createNotificationStore() {
 
 		markRead: async (id: number) => {
 			try {
-				const response = await api.put<{ data: NotificationItem }>(
-					`/api/notifications/${id}/read`
-				);
+				const response = await api.put<{ data: NotificationItem }>(`/api/notifications/${id}/read`);
 				update((items) => items.map((n) => (n.id === id ? response.data : n)));
 				unreadCount.update((c) => Math.max(0, c - 1));
 				return response.data;
