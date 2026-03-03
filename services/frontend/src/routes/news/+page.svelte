@@ -35,7 +35,7 @@
 			// Auto-expand the newly generated summary
 			expandedSummaries = new Set([...expandedSummaries, articleId]);
 		} catch (error) {
-			toasts.show('Failed to generate summary: ' + (error as Error).message, 'error');
+			toasts.show('Failed to generate summary. Please try again.', 'error');
 		} finally {
 			const next = new Set(summarizingArticles);
 			next.delete(articleId);

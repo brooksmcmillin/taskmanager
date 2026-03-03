@@ -692,4 +692,4 @@ class TestSummarizeArticle:
         mock_gen.return_value = None
 
         response = await authenticated_client.post(f"/api/news/{article.id}/summarize")
-        assert response.status_code == 400
+        assert response.status_code == 503
