@@ -4,12 +4,16 @@
 	import { toasts } from '$lib/stores/ui';
 	import type { WikiPage, WikiTreeNode } from '$lib/types';
 
+	let { onMoved }: { onMoved?: () => void } = $props();
+
 	let modal: Modal;
 	let page: WikiPage | null = null;
 	let selectedParentId: number | null = null;
 	let eligibleParents: { id: number; title: string; depth: number }[] = [];
 	let loading = false;
 	let saving = false;
+
+	const MAX_WIKI_DEPTH = 3;
 
 	function collectDescendantIds(nodes: WikiTreeNode[], targetId: number): Set<number> {
 		const ids = new Set<number>();
@@ -27,6 +31,23 @@
 		return ids;
 	}
 
+	function getSubtreeDepth(nodes: WikiTreeNode[], targetId: number): number {
+		function findNode(nodeList: WikiTreeNode[]): WikiTreeNode | null {
+			for (const node of nodeList) {
+				if (node.id === targetId) return node;
+				const found = findNode(node.children);
+				if (found) return found;
+			}
+			return null;
+		}
+		function maxDepth(node: WikiTreeNode): number {
+			if (node.children.length === 0) return 0;
+			return 1 + Math.max(...node.children.map(maxDepth));
+		}
+		const node = findNode(nodes);
+		return node ? maxDepth(node) : 0;
+	}
+
 	export async function open(wikiPage: WikiPage) {
 		page = wikiPage;
 		selectedParentId = wikiPage.parent_id;
@@ -37,10 +58,12 @@
 		try {
 			const tree = await wiki.loadTree();
 			const selfAndDescendants = collectDescendantIds(tree, wikiPage.id);
+			const subtreeDepth = getSubtreeDepth(tree, wikiPage.id);
+			const maxParentDepth = MAX_WIKI_DEPTH - subtreeDepth - 1;
 			const parents: { id: number; title: string; depth: number }[] = [];
 			function collectParents(nodes: WikiTreeNode[], depth: number) {
 				for (const node of nodes) {
-					if (!selfAndDescendants.has(node.id) && depth <= 2) {
+					if (!selfAndDescendants.has(node.id) && depth <= maxParentDepth) {
 						parents.push({ id: node.id, title: node.title, depth });
 						collectParents(node.children, depth + 1);
 					}
@@ -70,8 +93,7 @@
 			await wiki.movePage(page.id, selectedParentId);
 			toasts.show('Page moved', 'success');
 			modal.closeModal();
-			// Reload the current page to reflect new ancestors/breadcrumbs
-			window.location.reload();
+			onMoved?.();
 		} catch (e) {
 			toasts.show('Failed to move page: ' + (e as Error).message, 'error');
 		} finally {

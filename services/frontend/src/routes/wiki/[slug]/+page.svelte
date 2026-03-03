@@ -191,7 +191,7 @@
 			{/if}
 		{/if}
 	</div>
-	<WikiMoveModal bind:this={moveModal} />
+	<WikiMoveModal bind:this={moveModal} onMoved={loadPage} />
 </main>
 
 <style>
