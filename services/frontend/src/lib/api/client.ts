@@ -1,10 +1,13 @@
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import type { ApiResponse } from '$lib/types';
+import { getTabId } from '$lib/services/eventStream';
 
 // Always use relative URLs in production to go through SvelteKit's server-side proxy
 // This ensures cookies are properly forwarded between frontend and backend
 const BASE_URL = '';
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 class ApiClient {
 	private async request<T>(
@@ -20,11 +23,19 @@ class ApiClient {
 			});
 		}
 
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json'
+		};
+
+		// Attach tab ID on mutating requests so PG triggers can tag the event
+		if (MUTATING_METHODS.has(method)) {
+			const tabId = getTabId();
+			if (tabId) headers['X-Tab-Id'] = tabId;
+		}
+
 		const response = await fetch(url.toString(), {
 			method,
-			headers: {
-				'Content-Type': 'application/json'
-			},
+			headers,
 			credentials: 'include',
 			body: options.body ? JSON.stringify(options.body) : undefined
 		});
@@ -67,8 +78,13 @@ class ApiClient {
 		const formData = new FormData();
 		formData.append('file', file);
 
+		const uploadHeaders: Record<string, string> = {};
+		const tabId = getTabId();
+		if (tabId) uploadHeaders['X-Tab-Id'] = tabId;
+
 		const response = await fetch(url.toString(), {
 			method: 'POST',
+			headers: uploadHeaders,
 			credentials: 'include',
 			body: formData
 		});
