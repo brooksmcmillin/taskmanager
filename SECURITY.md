@@ -65,7 +65,7 @@ This will automatically run:
 - Secret detection (detect-secrets)
 - Security linting (bandit for Python, eslint for JavaScript)
 - Code formatting (ruff, prettier)
-- Static analysis (mypy, TypeScript)
+- Static analysis (pyright, TypeScript)
 
 ## Best Practices
 
@@ -93,9 +93,9 @@ This will automatically run:
 - Configure PostgreSQL-backed token storage
 - Implement token revocation mechanisms
 
-**Rate Limiting**: No built-in rate limiting. For production:
-- Implement rate limiting at nginx level
-- Add request throttling to prevent DoS
+**Rate Limiting**: Rate limiting is implemented on authentication endpoints via `slowapi`. For production, consider also:
+- Adding rate limiting at the nginx level for additional protection
+- Tuning thresholds based on expected traffic patterns
 
 ## Dependency Management
 

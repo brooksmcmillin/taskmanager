@@ -288,8 +288,7 @@ Hooks include:
 - `.github/workflows/backend-ci.yml` - Backend tests (FastAPI + pytest)
 - `.github/workflows/frontend-ci.yml` - Frontend tests (SvelteKit + Playwright)
 - `.github/workflows/python-ci.yml` - Python tests for MCP services and SDK
-- `.github/workflows/claude-security-review.yml` - AI-powered security reviews on PRs
-- `.github/workflows/claude-code-review.yml` - AI-powered code reviews on PRs
+- `.github/workflows/claude-reviews.yml` - AI-powered security and code reviews on PRs
 
 ## Testing
 
