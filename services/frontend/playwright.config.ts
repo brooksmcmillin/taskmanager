@@ -49,7 +49,7 @@ const config: PlaywrightTestConfig = {
 	fullyParallel: true,
 	forbidOnly: isCI,
 	retries: isCI ? 1 : 0,
-	workers: isCI ? 'auto' : undefined,
+	workers: isCI ? '50%' : undefined,
 	projects: [
 		{
 			name: 'firefox',
