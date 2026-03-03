@@ -67,7 +67,7 @@
 			logger.error('Failed to load full task details:', error);
 			toasts.show('Could not load full task details', 'warning');
 		}
-		renderDescription();
+		await renderDescription();
 	}
 
 	export async function openEdit(selectedTodo: Todo) {
