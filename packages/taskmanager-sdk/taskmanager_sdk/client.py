@@ -47,6 +47,127 @@ class TaskManagerClient:
         self.access_token: str | None = access_token
         self.token_expires_at: float | None = None
 
+    def _build_params(self, **kwargs: Any) -> dict[str, Any]:
+        """Build a params/data dict, omitting keys whose value is None.
+
+        Args:
+            **kwargs: Key-value pairs to include when not None
+
+        Returns:
+            dict with only non-None values
+        """
+        return {k: v for k, v in kwargs.items() if v is not None}
+
+    def _validate_deadline_type(self, deadline_type: str | None) -> None:
+        """Validate deadline_type value.
+
+        Args:
+            deadline_type: Deadline type string to validate, or None (no-op)
+
+        Raises:
+            ValidationError: If deadline_type is not one of the valid values
+        """
+        if deadline_type is not None and deadline_type not in VALID_DEADLINE_TYPES:
+            raise ValidationError(
+                f"Invalid deadline_type: {deadline_type!r}. "
+                f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
+            )
+
+    def _make_form_request(
+        self,
+        endpoint: str,
+        form_data: dict[str, str],
+        error_key: str = "error",
+        fallback_error_key: str | None = None,
+        raise_on_401: bool = True,
+        raise_on_5xx: bool = True,
+        include_session: bool = False,
+        include_auth: bool = False,
+        parse_response: bool = True,
+    ) -> ApiResponse:
+        """Make a form-encoded POST request (used by OAuth endpoints).
+
+        Args:
+            endpoint: API endpoint path
+            form_data: Form fields to send as application/x-www-form-urlencoded
+            error_key: JSON key to read error message from (default "error")
+            fallback_error_key: Secondary JSON key to try if error_key not found
+            raise_on_401: Whether to raise AuthenticationError on 401
+            raise_on_5xx: Whether to raise ServerError on 5xx
+            include_session: Whether to send session cookies (default False).
+                Set True for user-context OAuth endpoints like device/authorize
+                and the consent endpoint.
+            include_auth: Whether to send Bearer token header if available
+                (default False). OAuth form endpoints are public and should not
+                receive auth credentials.
+            parse_response: Whether to parse the response body as JSON
+                (default True). Set False for endpoints that return no body.
+
+        Returns:
+            ApiResponse object
+
+        Raises:
+            NetworkError: For connection/network issues
+            AuthenticationError: For 401 status codes (when raise_on_401 is True)
+            ServerError: For 5xx status codes (when raise_on_5xx is True)
+        """
+        url = f"{self.base_url}{endpoint}"
+        headers: dict[str, str] = {"Content-Type": "application/x-www-form-urlencoded"}
+
+        # Add Bearer token only for session-authenticated endpoints
+        if include_auth and self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
+
+        cookies = self.cookies if include_session else {}
+
+        try:
+            response = self.session.post(
+                url,
+                data=form_data,
+                headers=headers,
+                cookies=cookies,
+            )
+
+            if response.status_code >= 400:
+                try:
+                    error_data = response.json()
+                    if fallback_error_key is not None:
+                        error_message = error_data.get(
+                            error_key,
+                            error_data.get(
+                                fallback_error_key, f"HTTP {response.status_code}"
+                            ),
+                        )
+                    else:
+                        error_message = error_data.get(
+                            error_key, f"HTTP {response.status_code}"
+                        )
+                except (ValueError, requests.exceptions.JSONDecodeError):
+                    error_message = f"HTTP {response.status_code}: {response.text}"
+
+                if raise_on_401 and response.status_code == 401:
+                    raise AuthenticationError(error_message)
+                if raise_on_5xx and response.status_code >= 500:
+                    raise ServerError(error_message)
+
+                return ApiResponse(
+                    success=False, error=error_message, status_code=response.status_code
+                )
+
+            json_data: Any = None
+            if parse_response:
+                try:
+                    json_data = response.json()
+                except (ValueError, requests.exceptions.JSONDecodeError):
+                    json_data = None
+
+            return ApiResponse(
+                success=True, data=json_data, status_code=response.status_code
+            )
+
+        except requests.exceptions.RequestException as e:
+            raise NetworkError(str(e)) from e
+
     def _make_request(
         self,
         method: str,
@@ -110,7 +231,7 @@ class TaskManagerClient:
             if response.status_code >= 400:
                 try:
                     error_data = response.json()
-                    # FastAPI format: {"detail": {"code": "...", "message": "...", "details": {...}}}
+                    # FastAPI format: {"detail": {"code": "...", "message": "..."}}
                     # Legacy format: {"error": "..."}
                     if "detail" in error_data and isinstance(
                         error_data["detail"], dict
@@ -182,9 +303,7 @@ class TaskManagerClient:
             headers["Authorization"] = f"Bearer {self.access_token}"
 
         try:
-            response = self.session.get(
-                url, headers=headers, cookies=self.cookies
-            )
+            response = self.session.get(url, headers=headers, cookies=self.cookies)
             try:
                 json_data = response.json()
             except (ValueError, requests.exceptions.JSONDecodeError):
@@ -269,14 +388,18 @@ class TaskManagerClient:
         Returns:
             ApiResponse with created project data
         """
-        data: dict[str, str | bool] = {"name": name}
-        if description is not None:
-            data["description"] = description
-        if color is not None:
-            data["color"] = color
-        if show_on_calendar is not None:
-            data["show_on_calendar"] = show_on_calendar
-        return self._make_request("POST", "/projects", data)
+        return self._make_request(
+            "POST",
+            "/projects",
+            {
+                "name": name,
+                **self._build_params(
+                    description=description,
+                    color=color,
+                    show_on_calendar=show_on_calendar,
+                ),
+            },
+        )
 
     def get_project(self, project_id: int) -> ApiResponse:
         """
@@ -309,14 +432,11 @@ class TaskManagerClient:
         Returns:
             ApiResponse with updated project data
         """
-        data = {}
-        if name is not None:
-            data["name"] = name
-        if color is not None:
-            data["color"] = color
-        if description is not None:
-            data["description"] = description
-        return self._make_request("PUT", f"/projects/{project_id}", data)
+        return self._make_request(
+            "PUT",
+            f"/projects/{project_id}",
+            self._build_params(name=name, color=color, description=description),
+        )
 
     def delete_project(self, project_id: int) -> ApiResponse:
         """
@@ -348,7 +468,8 @@ class TaskManagerClient:
 
         Args:
             project_id: Filter by project ID
-            status: Filter by status (pending, in_progress, completed, cancelled, overdue, all)
+            status: Filter by status
+                (pending, in_progress, completed, cancelled, overdue, all)
             start_date: Filter tasks with due_date on or after this date (ISO format)
             end_date: Filter tasks with due_date on or before this date (ISO format)
             category: Filter by category name (project name)
@@ -360,28 +481,7 @@ class TaskManagerClient:
         Returns:
             ApiResponse with TaskListResponse data
         """
-        params: dict[str, str | int | bool] = {}
-        if project_id is not None:
-            params["project_id"] = project_id
-        if status is not None:
-            params["status"] = status
-        if start_date is not None:
-            params["start_date"] = start_date
-        if end_date is not None:
-            params["end_date"] = end_date
-        if category is not None:
-            params["category"] = category
-        if deadline_type is not None:
-            if deadline_type not in VALID_DEADLINE_TYPES:
-                raise ValidationError(
-                    f"Invalid deadline_type: {deadline_type!r}. "
-                    f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
-                )
-            params["deadline_type"] = deadline_type
-        if limit is not None:
-            params["limit"] = limit
-        if include_subtasks:
-            params["include_subtasks"] = True
+        self._validate_deadline_type(deadline_type)
         if order_by is not None:
             valid_order_by = ("position", "due_date", "deadline_type")
             if order_by not in valid_order_by:
@@ -389,7 +489,18 @@ class TaskManagerClient:
                     f"Invalid order_by: {order_by!r}. "
                     f"Must be one of: {', '.join(valid_order_by)}"
                 )
-            params["order_by"] = order_by
+        params = self._build_params(
+            project_id=project_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            category=category,
+            deadline_type=deadline_type,
+            limit=limit,
+            order_by=order_by,
+        )
+        if include_subtasks:
+            params["include_subtasks"] = True
         return self._make_request("GET", "/todos", params=params)
 
     def create_todo(
@@ -423,31 +534,25 @@ class TaskManagerClient:
         Returns:
             ApiResponse with TaskCreateResponse data
         """
-        data: dict[str, str | int | float | list[str]] = {"title": title}
-        if project_id is not None:
-            data["project_id"] = project_id
-        if description is not None:
-            data["description"] = description
-        if category is not None:
-            data["category"] = category
-        if priority is not None:
-            data["priority"] = priority
-        if estimated_hours is not None:
-            data["estimated_hours"] = estimated_hours
-        if due_date is not None:
-            data["due_date"] = due_date
-        if deadline_type is not None:
-            if deadline_type not in VALID_DEADLINE_TYPES:
-                raise ValidationError(
-                    f"Invalid deadline_type: {deadline_type!r}. "
-                    f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
-                )
-            data["deadline_type"] = deadline_type
-        if tags is not None:
-            data["tags"] = tags
-        if parent_id is not None:
-            data["parent_id"] = parent_id
-        return self._make_request("POST", "/todos", data)
+        self._validate_deadline_type(deadline_type)
+        return self._make_request(
+            "POST",
+            "/todos",
+            {
+                "title": title,
+                **self._build_params(
+                    project_id=project_id,
+                    description=description,
+                    category=category,
+                    priority=priority,
+                    estimated_hours=estimated_hours,
+                    due_date=due_date,
+                    deadline_type=deadline_type,
+                    tags=tags,
+                    parent_id=parent_id,
+                ),
+            },
+        )
 
     def batch_create_todos(
         self,
@@ -474,11 +579,12 @@ class TaskManagerClient:
         Returns:
             ApiResponse with list of created todos
         """
-        data: dict[str, Any] = {"todos": todos}
+        data: dict[str, Any] = {
+            "todos": todos,
+            **self._build_params(wiki_page_id=wiki_page_id),
+        }
         if skip_duplicates:
             data["skip_duplicates"] = True
-        if wiki_page_id is not None:
-            data["wiki_page_id"] = wiki_page_id
         return self._make_request("POST", "/todos/batch", data)
 
     def get_todo(self, todo_id: int) -> ApiResponse:
@@ -540,47 +646,30 @@ class TaskManagerClient:
         Returns:
             ApiResponse with TaskUpdateResponse data
         """
-        data: dict[str, float | str | int | bool | list[str]] = {}
-        if title is not None:
-            data["title"] = title
-        if description is not None:
-            data["description"] = description
-        if category is not None:
-            data["category"] = category
-        if priority is not None:
-            data["priority"] = priority
-        if estimated_hours is not None:
-            data["estimated_hours"] = estimated_hours
-        if actual_hours is not None:
-            data["actual_hours"] = actual_hours
-        if status is not None:
-            data["status"] = status
-        if due_date is not None:
-            data["due_date"] = due_date
-        if deadline_type is not None:
-            if deadline_type not in VALID_DEADLINE_TYPES:
-                raise ValidationError(
-                    f"Invalid deadline_type: {deadline_type!r}. "
-                    f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
-                )
-            data["deadline_type"] = deadline_type
-        if tags is not None:
-            data["tags"] = tags
-        if parent_id is not None:
-            data["parent_id"] = parent_id
-        if agent_actionable is not None:
-            data["agent_actionable"] = agent_actionable
-        if action_type is not None:
-            data["action_type"] = action_type
-        if autonomy_tier is not None:
-            data["autonomy_tier"] = autonomy_tier
-        if agent_status is not None:
-            data["agent_status"] = agent_status
-        if agent_notes is not None:
-            data["agent_notes"] = agent_notes
-        if blocking_reason is not None:
-            data["blocking_reason"] = blocking_reason
-        return self._make_request("PUT", f"/todos/{todo_id}", data)
+        self._validate_deadline_type(deadline_type)
+        return self._make_request(
+            "PUT",
+            f"/todos/{todo_id}",
+            self._build_params(
+                title=title,
+                description=description,
+                category=category,
+                priority=priority,
+                estimated_hours=estimated_hours,
+                actual_hours=actual_hours,
+                status=status,
+                due_date=due_date,
+                deadline_type=deadline_type,
+                tags=tags,
+                parent_id=parent_id,
+                agent_actionable=agent_actionable,
+                action_type=action_type,
+                autonomy_tier=autonomy_tier,
+                agent_status=agent_status,
+                agent_notes=agent_notes,
+                blocking_reason=blocking_reason,
+            ),
+        )
 
     def delete_todo(self, todo_id: int) -> ApiResponse:
         """
@@ -607,10 +696,11 @@ class TaskManagerClient:
         Returns:
             ApiResponse with completion result
         """
-        data: dict[str, float] = {}
-        if actual_hours is not None:
-            data["actual_hours"] = actual_hours
-        return self._make_request("POST", f"/todos/{todo_id}/complete", data)
+        return self._make_request(
+            "POST",
+            f"/todos/{todo_id}/complete",
+            self._build_params(actual_hours=actual_hours),
+        )
 
     def get_attachments(self, todo_id: int) -> ApiResponse:
         """
@@ -709,9 +799,7 @@ class TaskManagerClient:
         Returns:
             ApiResponse with list of wiki page summaries
         """
-        params: dict[str, str] = {}
-        if q is not None:
-            params["q"] = q
+        params = self._build_params(q=q)
         return self._make_request("GET", "/wiki", params=params or None)
 
     def create_wiki_page(
@@ -733,12 +821,15 @@ class TaskManagerClient:
         Returns:
             ApiResponse with created wiki page data
         """
-        data: dict[str, Any] = {"title": title, "content": content}
-        if slug is not None:
-            data["slug"] = slug
-        if parent_id is not None:
-            data["parent_id"] = parent_id
-        return self._make_request("POST", "/wiki", data)
+        return self._make_request(
+            "POST",
+            "/wiki",
+            {
+                "title": title,
+                "content": content,
+                **self._build_params(slug=slug, parent_id=parent_id),
+            },
+        )
 
     def get_wiki_page(self, slug_or_id: str | int) -> ApiResponse:
         """
@@ -779,17 +870,11 @@ class TaskManagerClient:
         """
         if parent_id is not None and remove_parent:
             raise ValueError("parent_id and remove_parent are mutually exclusive")
-        data: dict[str, Any] = {}
-        if title is not None:
-            data["title"] = title
-        if content is not None:
-            data["content"] = content
-        if slug is not None:
-            data["slug"] = slug
+        data = self._build_params(
+            title=title, content=content, slug=slug, parent_id=parent_id
+        )
         if append:
             data["append"] = True
-        if parent_id is not None:
-            data["parent_id"] = parent_id
         if remove_parent:
             data["remove_parent"] = True
         return self._make_request("PUT", f"/wiki/{page_id}", data)
@@ -887,9 +972,7 @@ class TaskManagerClient:
         """
         return self._make_request("GET", f"/wiki/{page_id}/revisions")
 
-    def get_wiki_page_revision(
-        self, page_id: int, revision_number: int
-    ) -> ApiResponse:
+    def get_wiki_page_revision(self, page_id: int, revision_number: int) -> ApiResponse:
         """
         Get a specific revision of a wiki page.
 
@@ -900,9 +983,7 @@ class TaskManagerClient:
         Returns:
             ApiResponse with revision data including content
         """
-        return self._make_request(
-            "GET", f"/wiki/{page_id}/revisions/{revision_number}"
-        )
+        return self._make_request("GET", f"/wiki/{page_id}/revisions/{revision_number}")
 
     # Snippet methods
     def list_snippets(
@@ -926,18 +1007,10 @@ class TaskManagerClient:
         Returns:
             ApiResponse with list of snippet summaries
         """
-        params: dict[str, str] = {}
-        if q is not None:
-            params["q"] = q
-        if category is not None:
-            params["category"] = category
-        if tag is not None:
-            params["tag"] = tag
-        if date_from is not None:
-            params["date_from"] = date_from
-        if date_to is not None:
-            params["date_to"] = date_to
-        return self._make_request("GET", "/snippets", params=params)
+        params = self._build_params(
+            q=q, category=category, tag=tag, date_from=date_from, date_to=date_to
+        )
+        return self._make_request("GET", "/snippets", params=params or None)
 
     def create_snippet(
         self,
@@ -961,16 +1034,16 @@ class TaskManagerClient:
         Returns:
             ApiResponse with created snippet data
         """
-        data: dict[str, Any] = {
-            "category": category,
-            "title": title,
-            "content": content,
-        }
-        if snippet_date is not None:
-            data["snippet_date"] = snippet_date
-        if tags is not None:
-            data["tags"] = tags
-        return self._make_request("POST", "/snippets", data)
+        return self._make_request(
+            "POST",
+            "/snippets",
+            {
+                "category": category,
+                "title": title,
+                "content": content,
+                **self._build_params(snippet_date=snippet_date, tags=tags),
+            },
+        )
 
     def get_snippet(self, snippet_id: int) -> ApiResponse:
         """
@@ -1007,18 +1080,17 @@ class TaskManagerClient:
         Returns:
             ApiResponse with updated snippet data
         """
-        data: dict[str, Any] = {}
-        if category is not None:
-            data["category"] = category
-        if title is not None:
-            data["title"] = title
-        if content is not None:
-            data["content"] = content
-        if snippet_date is not None:
-            data["snippet_date"] = snippet_date
-        if tags is not None:
-            data["tags"] = tags
-        return self._make_request("PUT", f"/snippets/{snippet_id}", data)
+        return self._make_request(
+            "PUT",
+            f"/snippets/{snippet_id}",
+            self._build_params(
+                category=category,
+                title=title,
+                content=content,
+                snippet_date=snippet_date,
+                tags=tags,
+            ),
+        )
 
     def delete_snippet(self, snippet_id: int) -> ApiResponse:
         """
@@ -1065,19 +1137,15 @@ class TaskManagerClient:
         Returns:
             ApiResponse with list of articles and pagination meta
         """
-        params: dict[str, str | int | bool] = {}
+        params = self._build_params(
+            search=search,
+            feed_type=feed_type,
+            featured=featured,
+            limit=limit,
+            offset=offset,
+        )
         if unread_only:
             params["unread_only"] = True
-        if search is not None:
-            params["search"] = search
-        if feed_type is not None:
-            params["feed_type"] = feed_type
-        if featured is not None:
-            params["featured"] = featured
-        if limit is not None:
-            params["limit"] = limit
-        if offset is not None:
-            params["offset"] = offset
         return self._make_request("GET", "/news", params=params or None)
 
     def get_article(self, article_id: int) -> ApiResponse:
@@ -1092,9 +1160,7 @@ class TaskManagerClient:
         """
         return self._make_request("GET", f"/news/{article_id}")
 
-    def mark_article_read(
-        self, article_id: int, is_read: bool = True
-    ) -> ApiResponse:
+    def mark_article_read(self, article_id: int, is_read: bool = True) -> ApiResponse:
         """
         Mark an article as read or unread.
 
@@ -1124,9 +1190,7 @@ class TaskManagerClient:
             "POST", f"/news/{article_id}/rate", {"rating": rating}
         )
 
-    def list_feed_sources(
-        self, featured: bool | None = None
-    ) -> ApiResponse:
+    def list_feed_sources(self, featured: bool | None = None) -> ApiResponse:
         """
         List RSS/Atom feed sources.
 
@@ -1136,12 +1200,8 @@ class TaskManagerClient:
         Returns:
             ApiResponse with list of feed sources
         """
-        params: dict[str, bool] = {}
-        if featured is not None:
-            params["featured"] = featured
-        return self._make_request(
-            "GET", "/news/sources", params=params or None
-        )
+        params = self._build_params(featured=featured)
+        return self._make_request("GET", "/news/sources", params=params or None)
 
     def create_feed_source(
         self,
@@ -1168,17 +1228,19 @@ class TaskManagerClient:
         Returns:
             ApiResponse with created feed source data
         """
-        data: dict[str, Any] = {
-            "name": name,
-            "url": url,
-            "type": feed_type,
-            "is_active": is_active,
-            "is_featured": is_featured,
-            "fetch_interval_hours": fetch_interval_hours,
-        }
-        if description is not None:
-            data["description"] = description
-        return self._make_request("POST", "/news/sources", data)
+        return self._make_request(
+            "POST",
+            "/news/sources",
+            {
+                "name": name,
+                "url": url,
+                "type": feed_type,
+                "is_active": is_active,
+                "is_featured": is_featured,
+                "fetch_interval_hours": fetch_interval_hours,
+                **self._build_params(description=description),
+            },
+        )
 
     def update_feed_source(
         self,
@@ -1207,24 +1269,17 @@ class TaskManagerClient:
         Returns:
             ApiResponse with updated feed source data
         """
-        data: dict[str, Any] = {}
-        if name is not None:
-            data["name"] = name
-        if url is not None:
-            data["url"] = url
-        if description is not None:
-            data["description"] = description
+        data = self._build_params(
+            name=name,
+            url=url,
+            description=description,
+            is_active=is_active,
+            is_featured=is_featured,
+            fetch_interval_hours=fetch_interval_hours,
+        )
         if feed_type is not None:
             data["type"] = feed_type
-        if is_active is not None:
-            data["is_active"] = is_active
-        if is_featured is not None:
-            data["is_featured"] = is_featured
-        if fetch_interval_hours is not None:
-            data["fetch_interval_hours"] = fetch_interval_hours
-        return self._make_request(
-            "PUT", f"/news/sources/{source_id}", data
-        )
+        return self._make_request("PUT", f"/news/sources/{source_id}", data)
 
     def delete_feed_source(self, source_id: int) -> ApiResponse:
         """
@@ -1236,13 +1291,9 @@ class TaskManagerClient:
         Returns:
             ApiResponse with deletion result
         """
-        return self._make_request(
-            "DELETE", f"/news/sources/{source_id}"
-        )
+        return self._make_request("DELETE", f"/news/sources/{source_id}")
 
-    def toggle_feed_source(
-        self, source_id: int, is_active: bool
-    ) -> ApiResponse:
+    def toggle_feed_source(self, source_id: int, is_active: bool) -> ApiResponse:
         """
         Toggle a feed source's active status (admin only).
 
@@ -1259,9 +1310,7 @@ class TaskManagerClient:
             {"is_active": is_active},
         )
 
-    def force_fetch_feed(
-        self, source_id: int, hours: int = 168
-    ) -> ApiResponse:
+    def force_fetch_feed(self, source_id: int, hours: int = 168) -> ApiResponse:
         """
         Force-fetch articles from a feed source (admin only).
 
@@ -1345,10 +1394,11 @@ class TaskManagerClient:
         Returns:
             ApiResponse with TaskSearchResponse data
         """
-        params: dict[str, str] = {"q": query}
-        if category is not None:
-            params["category"] = category
-        return self._make_request("GET", "/tasks/search", params=params)
+        return self._make_request(
+            "GET",
+            "/tasks/search",
+            params={"q": query, **self._build_params(category=category)},
+        )
 
     # OAuth methods
     def get_oauth_clients(self) -> ApiResponse:
@@ -1399,14 +1449,19 @@ class TaskManagerClient:
         Returns:
             ApiResponse with created OAuth client data
         """
-        data: dict[str, str | list[str]] = {"name": name, "redirectUris": redirect_uris}
-        if grant_types is not None:
-            data["grantTypes"] = grant_types
-        if scopes is not None:
-            data["scopes"] = scopes
-        if token_endpoint_auth_method is not None:
-            data["token_endpoint_auth_method"] = token_endpoint_auth_method
-        return self._make_request("POST", "/oauth/clients", data)
+        return self._make_request(
+            "POST",
+            "/oauth/clients",
+            {
+                "name": name,
+                "redirectUris": redirect_uris,
+                **self._build_params(
+                    grantTypes=grant_types,
+                    scopes=scopes,
+                    token_endpoint_auth_method=token_endpoint_auth_method,
+                ),
+            },
+        )
 
     def create_system_oauth_client(
         self,
@@ -1435,14 +1490,19 @@ class TaskManagerClient:
         Returns:
             ApiResponse with created OAuth client data
         """
-        data: dict[str, str | list[str]] = {"name": name, "redirectUris": redirect_uris}
-        if grant_types is not None:
-            data["grantTypes"] = grant_types
-        if scopes is not None:
-            data["scopes"] = scopes
-        if token_endpoint_auth_method is not None:
-            data["token_endpoint_auth_method"] = token_endpoint_auth_method
-        return self._make_request("POST", "/oauth/clients/system", data)
+        return self._make_request(
+            "POST",
+            "/oauth/clients/system",
+            {
+                "name": name,
+                "redirectUris": redirect_uris,
+                **self._build_params(
+                    grantTypes=grant_types,
+                    scopes=scopes,
+                    token_endpoint_auth_method=token_endpoint_auth_method,
+                ),
+            },
+        )
 
     def update_oauth_client(
         self,
@@ -1465,12 +1525,15 @@ class TaskManagerClient:
         Returns:
             ApiResponse with updated OAuth client data
         """
-        data: dict[str, str | list[str]] = {"name": name, "redirectUris": redirect_uris}
-        if grant_types is not None:
-            data["grantTypes"] = grant_types
-        if scopes is not None:
-            data["scopes"] = scopes
-        return self._make_request("PUT", f"/oauth/clients/{client_id}", data)
+        return self._make_request(
+            "PUT",
+            f"/oauth/clients/{client_id}",
+            {
+                "name": name,
+                "redirectUris": redirect_uris,
+                **self._build_params(grantTypes=grant_types, scopes=scopes),
+            },
+        )
 
     def delete_oauth_client(self, client_id: str) -> ApiResponse:
         """
@@ -1530,48 +1593,16 @@ class TaskManagerClient:
         Returns:
             ApiResponse with DeviceAuthorizationResponse data
         """
-        data: dict[str, str] = {"client_id": client_id}
-        if scope is not None:
-            data["scope"] = scope
-
-        # Device code endpoint uses form encoding
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-        try:
-            response = self.session.post(
-                f"{self.base_url}/oauth/device/code", data=data, headers=headers
-            )
-
-            if response.status_code >= 400:
-                try:
-                    error_data = response.json()
-                    error_message = error_data.get(
-                        "error_description",
-                        error_data.get("error", f"HTTP {response.status_code}"),
-                    )
-                except (ValueError, requests.exceptions.JSONDecodeError):
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-
-                if response.status_code == 401:
-                    raise AuthenticationError(error_message)
-                elif response.status_code >= 500:
-                    raise ServerError(error_message)
-
-                return ApiResponse(
-                    success=False, error=error_message, status_code=response.status_code
-                )
-
-            try:
-                json_data = response.json()
-            except (ValueError, requests.exceptions.JSONDecodeError):
-                json_data = None
-
-            return ApiResponse(
-                success=True, data=json_data, status_code=response.status_code
-            )
-
-        except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+        form_data: dict[str, str] = {
+            "client_id": client_id,
+            **self._build_params(scope=scope),
+        }
+        return self._make_form_request(
+            "/oauth/device/code",
+            form_data,
+            error_key="error_description",
+            fallback_error_key="error",
+        )
 
     def authorize_device(self, user_code: str, action: str) -> ApiResponse:
         """
@@ -1588,41 +1619,12 @@ class TaskManagerClient:
         Returns:
             ApiResponse with authorization result
         """
-        data = {"user_code": user_code, "action": action}
-
-        # Device authorize endpoint uses form encoding
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-        try:
-            response = self.session.post(
-                f"{self.base_url}/oauth/device/authorize",
-                data=data,
-                headers=headers,
-                cookies=self.cookies,
-            )
-
-            if response.status_code >= 400:
-                try:
-                    error_data = response.json()
-                    error_message = error_data.get(
-                        "error", f"HTTP {response.status_code}"
-                    )
-                except (ValueError, requests.exceptions.JSONDecodeError):
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-
-                if response.status_code == 401:
-                    raise AuthenticationError(error_message)
-                elif response.status_code >= 500:
-                    raise ServerError(error_message)
-
-                return ApiResponse(
-                    success=False, error=error_message, status_code=response.status_code
-                )
-
-            return ApiResponse(success=True, status_code=response.status_code)
-
-        except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+        return self._make_form_request(
+            "/oauth/device/authorize",
+            {"user_code": user_code, "action": action},
+            include_session=True,
+            parse_response=False,
+        )
 
     def oauth_authorize(
         self,
@@ -1653,16 +1655,13 @@ class TaskManagerClient:
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "response_type": response_type,
+            **self._build_params(
+                scope=scope,
+                state=state,
+                code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method,
+            ),
         }
-        if scope is not None:
-            params["scope"] = scope
-        if state is not None:
-            params["state"] = state
-        if code_challenge is not None:
-            params["code_challenge"] = code_challenge
-        if code_challenge_method is not None:
-            params["code_challenge_method"] = code_challenge_method
-
         return self._make_request("GET", "/oauth/authorize", params=params)
 
     def oauth_consent(
@@ -1690,44 +1689,25 @@ class TaskManagerClient:
         Returns:
             ApiResponse with consent result
         """
-        data = {"client_id": client_id, "redirect_uri": redirect_uri, "action": action}
-        if scope is not None:
-            data["scope"] = scope
-        if state is not None:
-            data["state"] = state
-        if code_challenge is not None:
-            data["code_challenge"] = code_challenge
-        if code_challenge_method is not None:
-            data["code_challenge_method"] = code_challenge_method
-
-        # Use form encoding for OAuth consent
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-        try:
-            response = self.session.post(
-                f"{self.base_url}/oauth/authorize",
-                data=data,
-                headers=headers,
-                cookies=self.cookies,
-            )
-
-            if response.status_code >= 400:
-                try:
-                    error_data = response.json()
-                    error_message = error_data.get(
-                        "error", f"HTTP {response.status_code}"
-                    )
-                except (ValueError, requests.exceptions.JSONDecodeError):
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-
-                return ApiResponse(
-                    success=False, error=error_message, status_code=response.status_code
-                )
-
-            return ApiResponse(success=True, status_code=response.status_code)
-
-        except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+        form_data = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "action": action,
+            **self._build_params(
+                scope=scope,
+                state=state,
+                code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method,
+            ),
+        }
+        return self._make_form_request(
+            "/oauth/authorize",
+            form_data,
+            raise_on_401=False,
+            raise_on_5xx=False,
+            include_session=True,
+            parse_response=False,
+        )
 
     def oauth_token(
         self,
@@ -1759,67 +1739,33 @@ class TaskManagerClient:
         Returns:
             ApiResponse with token data
         """
-        data = {
+        form_data: dict[str, str] = {
             "grant_type": grant_type,
             "client_id": client_id,
             "client_secret": client_secret,
         }
 
         if grant_type == "authorization_code":
-            if code is not None:
-                data["code"] = code
-            if redirect_uri is not None:
-                data["redirect_uri"] = redirect_uri
-            if code_verifier is not None:
-                data["code_verifier"] = code_verifier
-        elif grant_type == "refresh_token":
-            if refresh_token is not None:
-                data["refresh_token"] = refresh_token
-        elif grant_type == "urn:ietf:params:oauth:grant-type:device_code":
-            if device_code is not None:
-                data["device_code"] = device_code
-        elif grant_type == "client_credentials":
-            if scope is not None:
-                data["scope"] = scope
-
-        # OAuth token endpoint uses form encoding
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-
-        try:
-            response = self.session.post(
-                f"{self.base_url}/oauth/token", data=data, headers=headers
-            )
-
-            if response.status_code >= 400:
-                try:
-                    error_data = response.json()
-                    error_message = error_data.get(
-                        "error_description",
-                        error_data.get("error", f"HTTP {response.status_code}"),
-                    )
-                except (ValueError, requests.exceptions.JSONDecodeError):
-                    error_message = f"HTTP {response.status_code}: {response.text}"
-
-                if response.status_code == 401:
-                    raise AuthenticationError(error_message)
-                elif response.status_code >= 500:
-                    raise ServerError(error_message)
-
-                return ApiResponse(
-                    success=False, error=error_message, status_code=response.status_code
+            form_data.update(
+                self._build_params(
+                    code=code,
+                    redirect_uri=redirect_uri,
+                    code_verifier=code_verifier,
                 )
-
-            try:
-                json_data = response.json()
-            except (ValueError, requests.exceptions.JSONDecodeError):
-                json_data = None
-
-            return ApiResponse(
-                success=True, data=json_data, status_code=response.status_code
             )
+        elif grant_type == "refresh_token":
+            form_data.update(self._build_params(refresh_token=refresh_token))
+        elif grant_type == "urn:ietf:params:oauth:grant-type:device_code":
+            form_data.update(self._build_params(device_code=device_code))
+        elif grant_type == "client_credentials":
+            form_data.update(self._build_params(scope=scope))
 
-        except requests.exceptions.RequestException as e:
-            raise NetworkError(str(e)) from e
+        return self._make_form_request(
+            "/oauth/token",
+            form_data,
+            error_key="error_description",
+            fallback_error_key="error",
+        )
 
 
 def create_authenticated_client(
