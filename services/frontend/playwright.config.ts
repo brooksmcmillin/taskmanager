@@ -46,10 +46,11 @@ const config: PlaywrightTestConfig = {
 	expect: {
 		timeout: 5000
 	},
-	fullyParallel: true,
+	// Sequential in CI: single backend server can't handle parallel test traffic
+	fullyParallel: false,
 	forbidOnly: isCI,
 	retries: isCI ? 1 : 0,
-	workers: isCI ? '50%' : undefined,
+	workers: isCI ? 1 : undefined,
 	projects: [
 		{
 			name: 'firefox',
