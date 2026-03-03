@@ -1683,6 +1683,39 @@ h6 {
 	}
 }
 
+// Wiki content tables
+.wiki-content table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 1rem 0;
+	font-size: 0.875rem;
+	display: block;
+	overflow-x: auto;
+}
+
+.wiki-content th {
+	background: var(--bg-hover);
+	font-weight: 600;
+	text-align: left;
+	padding: 0.625rem 0.75rem;
+	border-bottom: 2px solid var(--border-color);
+	white-space: nowrap;
+}
+
+.wiki-content td {
+	padding: 0.625rem 0.75rem;
+	border-bottom: 1px solid var(--border-color);
+	vertical-align: top;
+}
+
+.wiki-content tr:last-child td {
+	border-bottom: none;
+}
+
+.wiki-content tbody tr:hover {
+	background: var(--bg-hover);
+}
+
 // Print styles
 @media print {
 	.no-print {
