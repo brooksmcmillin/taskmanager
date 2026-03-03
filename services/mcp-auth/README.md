@@ -96,10 +96,21 @@ docker compose up mcp-auth
 ```
 mcp_auth/
 ├── __init__.py
-├── auth_server.py              # Main server entry point
-├── taskmanager_oauth_provider.py  # OAuth provider implementation
-├── token_storage.py            # Token persistence (memory/PostgreSQL)
-└── config.py                   # Token TTL configuration
+├── auth_server.py                  # Main server entry point and request routing
+├── taskmanager_oauth_provider.py   # OAuth 2.0 provider implementation
+├── jwt_auth.py                     # RFC 7523 JWT private_key_jwt authentication
+├── cimd.py                         # Client ID Metadata Document (CIMD) support
+├── static/                         # Static assets (device authorization UI)
+└── templates/                      # Jinja2 templates for authorization forms
+
+tests/
+├── conftest.py                 # Shared test fixtures
+├── test_device_flow.py         # Device authorization grant tests
+├── test_refresh_tokens.py      # Refresh token exchange tests
+├── test_jwt_auth.py            # JWT authentication tests
+├── test_client_registration.py # Dynamic client registration tests
+├── test_cimd.py                # CIMD metadata document tests
+└── test_token_validation.py    # Token validation tests
 ```
 
 ## Token Storage
