@@ -7,11 +7,11 @@
 	let { onMoved }: { onMoved?: () => void } = $props();
 
 	let modal: Modal;
-	let page: WikiPage | null = null;
-	let selectedParentId: number | null = null;
-	let eligibleParents: { id: number; title: string; depth: number }[] = [];
-	let loading = false;
-	let saving = false;
+	let page: WikiPage | null = $state(null);
+	let selectedParentId: number | null = $state(null);
+	let eligibleParents: { id: number; title: string; depth: number }[] = $state([]);
+	let loading = $state(false);
+	let saving = $state(false);
 
 	const MAX_WIKI_DEPTH = 3;
 
