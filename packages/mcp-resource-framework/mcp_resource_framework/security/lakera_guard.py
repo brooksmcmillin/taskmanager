@@ -22,6 +22,8 @@ LAKERA_API_URL = os.environ.get("LAKERA_GUARD_API_URL", "https://api.lakera.ai/v
 LAKERA_API_KEY = os.environ.get("LAKERA_GUARD_API_KEY", "")
 LAKERA_GUARD_ENABLED = os.environ.get("LAKERA_GUARD_ENABLED", "false").lower() == "true"
 LAKERA_PROJECT_ID = os.environ.get("LAKERA_GUARD_PROJECT_ID", "project-9146177048")
+# When true, API errors allow the request through (fail-open). Default is fail-closed.
+LAKERA_FAIL_OPEN = os.environ.get("LAKERA_FAIL_OPEN", "false").lower() in ("true", "1", "yes")
 
 # Type variables for generic decorator
 P = ParamSpec("P")
@@ -214,9 +216,20 @@ async def _screen_and_handle(
             logger.debug(f"Lakera Guard: {context} passed security screening")
 
     except httpx.HTTPError as e:
-        logger.error(f"Lakera Guard API error while screening {context}: {e}")
-        # On API errors, we log but don't block (fail-open for availability)
-        # Change this behavior based on your security requirements
+        if LAKERA_FAIL_OPEN:
+            logger.warning(
+                f"Lakera Guard API error while screening {context}: {e}. "
+                "LAKERA_FAIL_OPEN=true, allowing request through."
+            )
+        else:
+            logger.error(
+                f"Lakera Guard API error while screening {context}: {e}. "
+                "LAKERA_FAIL_OPEN=false (fail-closed), rejecting request."
+            )
+            raise LakeraGuardError(
+                f"Lakera Guard API unavailable while screening {context}; "
+                "request blocked for safety."
+            ) from e
 
 
 def guard_tool(
