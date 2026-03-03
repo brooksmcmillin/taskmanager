@@ -27,9 +27,11 @@
 		}
 	}
 
+	let prevFilter: 'all' | 'unread' = filter;
 	$effect(() => {
-		// Re-load when filter changes
-		if (!loading) {
+		const currentFilter = filter;
+		if (currentFilter !== prevFilter) {
+			prevFilter = currentFilter;
 			loadNotifications();
 		}
 	});

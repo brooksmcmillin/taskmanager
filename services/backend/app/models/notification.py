@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Enum,
     ForeignKey,
     String,
     Text,
@@ -74,7 +73,7 @@ class Notification(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     notification_type: Mapped[NotificationType] = mapped_column(
-        Enum(NotificationType, name="notification_type_enum")
+        String(30)
     )
     title: Mapped[str] = mapped_column(String(500))
     message: Mapped[str] = mapped_column(Text)

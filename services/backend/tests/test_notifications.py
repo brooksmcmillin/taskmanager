@@ -125,7 +125,7 @@ async def test_subscribe_updates_include_children(
         f"/api/wiki/{page_id}/subscription",
         json={"include_children": False},
     )
-    assert sub_resp.status_code == 201
+    assert sub_resp.status_code == 200
     assert sub_resp.json()["data"]["include_children"] is False
 
 

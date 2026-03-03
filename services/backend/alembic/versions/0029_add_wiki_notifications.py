@@ -20,15 +20,6 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Create notification_type_enum
-    notification_type_enum = sa.Enum(
-        "wiki_page_updated",
-        "wiki_page_created",
-        "wiki_page_deleted",
-        name="notification_type_enum",
-    )
-    notification_type_enum.create(op.get_bind(), checkfirst=True)
-
     # Create wiki_page_subscriptions table
     op.create_table(
         "wiki_page_subscriptions",
@@ -84,7 +75,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "notification_type",
-            notification_type_enum,
+            sa.String(30),
             nullable=False,
         ),
         sa.Column("title", sa.String(500), nullable=False),
@@ -123,4 +114,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("notifications")
     op.drop_table("wiki_page_subscriptions")
-    sa.Enum(name="notification_type_enum").drop(op.get_bind(), checkfirst=True)

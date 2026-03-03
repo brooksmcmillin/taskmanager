@@ -4,9 +4,9 @@ import re
 from datetime import UTC, date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import CursorResult, delete, select, update
+from sqlalchemy import CursorResult, delete, or_, select, update
 from sqlalchemy import func as sa_func
 
 from app.core.errors import errors
@@ -1048,6 +1048,7 @@ async def subscribe_to_page(
     body: WikiSubscriptionCreate,
     user: CurrentUserFlexible,
     db: DbSession,
+    response: Response,
 ) -> DataResponse[WikiSubscriptionResponse]:
     """Subscribe to notifications for a wiki page (and optionally its children)."""
     await get_resource_for_user(
@@ -1067,6 +1068,7 @@ async def subscribe_to_page(
         existing.include_children = body.include_children
         await db.flush()
         await db.refresh(existing)
+        response.status_code = 200
         return DataResponse(data=WikiSubscriptionResponse.model_validate(existing))
 
     sub = WikiPageSubscription(
@@ -1153,8 +1155,6 @@ async def _notify_subscribers(
             (WikiPageSubscription.wiki_page_id.in_(ancestor_ids))
             & (WikiPageSubscription.include_children.is_(True))
         )
-
-    from sqlalchemy import or_
 
     query = select(WikiPageSubscription).where(
         or_(*conditions),
