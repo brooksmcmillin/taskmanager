@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import ThemeToggle from './ThemeToggle.svelte';
+	import ConnectionStatus from './ConnectionStatus.svelte';
 	import { api } from '$lib/api/client';
 	import { toasts } from '$lib/stores/ui';
 	import { notifications } from '$lib/stores/notifications';
@@ -408,6 +409,9 @@
 
 			<div class="flex items-center space-x-4">
 				{#if user}
+					<!-- Connection Status Indicator -->
+					<ConnectionStatus />
+
 					<!-- Notification Bell -->
 					<a
 						href="/notifications"

@@ -21,6 +21,7 @@ from app.api import (
     auth,
     categories,
     comments,
+    events,
     news,
     notifications,
     projects,
@@ -39,8 +40,10 @@ from app.api.oauth import authorize, clients, device, github, token
 from app.config import settings
 from app.core.csrf import CSRFMiddleware
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.tab_id import TabIdMiddleware
 from app.db.database import init_db
 from app.dependencies import get_db
+from app.services.event_bus import event_bus
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -51,7 +54,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Ensure upload directory exists
     settings.upload_path.mkdir(parents=True, exist_ok=True)
     start_scheduler()
+    await event_bus.start()
     yield
+    await event_bus.stop()
     stop_scheduler()
 
 
@@ -61,6 +66,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Tab ID middleware — propagates X-Tab-Id header to a ContextVar for PG triggers
+app.add_middleware(TabIdMiddleware)
 
 # CSRF middleware (must be added before CORS so it runs after CORS in the chain)
 app.add_middleware(CSRFMiddleware, allowed_origins=settings.cors_origins)
@@ -107,6 +115,7 @@ app.include_router(wiki.router)
 app.include_router(wiki.todo_wiki_router)
 app.include_router(notifications.router)
 app.include_router(unified_search.router)
+app.include_router(events.router)
 
 
 # Static files (self-hosted fonts)

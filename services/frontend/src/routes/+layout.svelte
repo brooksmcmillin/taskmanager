@@ -7,6 +7,8 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import { connect, disconnect } from '$lib/services/eventStream';
+	import { startEventHandlers, stopEventHandlers } from '$lib/services/eventHandlers';
 
 	export let data;
 
@@ -39,6 +41,17 @@
 		if (!data.user && !isPublicRoute) {
 			goto(`/login?redirect=${encodeURIComponent($page.url.pathname)}`);
 		}
+
+		// Start real-time event stream for authenticated users
+		if (browser && data.user) {
+			startEventHandlers();
+			connect();
+		}
+
+		return () => {
+			stopEventHandlers();
+			disconnect();
+		};
 	});
 
 	// Hide navigation on OAuth consent page

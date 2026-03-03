@@ -7,13 +7,14 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.errors import errors
 from app.core.rate_limit import api_key_rate_limiter
 from app.core.security import hash_password, is_api_key, verify_password
+from app.core.tab_id import tab_id_var
 from app.db.database import async_session_maker
 from app.models.api_key import ApiKey
 from app.models.session import Session
@@ -24,6 +25,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Yield database session."""
     async with async_session_maker() as session:
         try:
+            # Propagate the tab ID into a PG session variable so that
+            # the notify_event() trigger can include it in payloads.
+            tab_id = tab_id_var.get("")
+            if tab_id:
+                await session.execute(
+                    text("SET LOCAL \"app.tab_id\" = :val"), {"val": tab_id}
+                )
             yield session
             await session.commit()
         except Exception:
