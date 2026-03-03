@@ -119,11 +119,23 @@ jobs:
         run: npx playwright install-deps firefox
         working-directory: services/frontend
 
+      - name: Determine affected tests
+        id: affected
+        working-directory: services/frontend
+        run: |
+          specs=$(bash scripts/affected-tests.sh)
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          if [ -z "$specs" ]; then
+            echo "Running all E2E tests"
+          else
+            echo "Running affected tests: $specs"
+          fi
+
       - name: Run E2E tests
         working-directory: services/frontend
         env:
           PGPASSWORD: taskmanager  # pragma: allowlist secret
-        run: npx playwright test
+        run: npx playwright test ${{ steps.affected.outputs.specs }}
 
       - name: Upload test report
         uses: actions/upload-artifact@v7
