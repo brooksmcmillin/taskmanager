@@ -47,21 +47,19 @@ class EventBus:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def _dsn(self) -> dict[str, str | int]:
-        """Return asyncpg keyword args (avoids DSN string quoting issues)."""
-        return {
-            "user": settings.postgres_user,
-            "password": settings.postgres_password,
-            "host": settings.postgres_host,
-            "port": settings.postgres_port,
-            "database": settings.postgres_db,
-        }
-
     async def _connect(self) -> None:
         """Open a connection, register listeners."""
-        self._conn = await asyncpg.connect(**self._dsn(), ssl="prefer")
-        self._conn.add_termination_listener(self._on_connection_lost)
-        await self._conn.add_listener("events", self._on_notify)
+        conn = await asyncpg.connect(
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            ssl="prefer",
+        )
+        conn.add_termination_listener(self._on_connection_lost)
+        await conn.add_listener("events", self._on_notify)
+        self._conn = conn
         logger.info("EventBus connected — listening on 'events' channel")
 
     async def start(self) -> None:
