@@ -879,13 +879,12 @@ class TestHealthCheck:
         result = client.health_check()
 
         assert result.success is True
+        assert result.data is not None
         assert result.data["status"] == "healthy"
         assert "subsystems" in result.data
         assert result.status_code == 200
 
-    def test_health_check_strips_api_prefix(
-        self, mock_session: Mock
-    ) -> None:
+    def test_health_check_strips_api_prefix(self, mock_session: Mock) -> None:
         """Test health_check correctly strips /api from base_url."""
         mock_response = Mock()
         mock_response.status_code = 200
@@ -1068,7 +1067,7 @@ class TestWikiPageParentId:
     def test_update_wiki_page_parent_id_and_remove_parent_conflict(
         self, client: TaskManagerClient, mock_session: Mock
     ) -> None:
-        """Test update_wiki_page raises ValueError when both parent_id and remove_parent are set."""
+        """Test update_wiki_page raises ValueError for conflicting parent args."""
         with pytest.raises(ValueError, match="mutually exclusive"):
             client.update_wiki_page(page_id=3, parent_id=7, remove_parent=True)
 
@@ -1395,9 +1394,7 @@ class TestNewsMethods:
         call_args = mock_session.post.call_args
         assert call_args.kwargs["json"]["is_read"] is False
 
-    def test_rate_article(
-        self, client: TaskManagerClient, mock_session: Mock
-    ) -> None:
+    def test_rate_article(self, client: TaskManagerClient, mock_session: Mock) -> None:
         """Test rating an article."""
         mock_response = Mock()
         mock_response.status_code = 200
@@ -1497,9 +1494,7 @@ class TestNewsMethods:
         }
         mock_session.post.return_value = mock_response
 
-        result = client.create_feed_source(
-            name="Feed", url="https://example.com/feed"
-        )
+        result = client.create_feed_source(name="Feed", url="https://example.com/feed")
 
         assert result.success is True
         call_args = mock_session.post.call_args
@@ -1520,9 +1515,7 @@ class TestNewsMethods:
         }
         mock_session.put.return_value = mock_response
 
-        result = client.update_feed_source(
-            1, name="Updated Feed", is_featured=True
-        )
+        result = client.update_feed_source(1, name="Updated Feed", is_featured=True)
 
         assert result.success is True
         call_args = mock_session.put.call_args
@@ -1607,3 +1600,64 @@ class TestNewsMethods:
         assert result.success is True
         call_args = mock_session.post.call_args
         assert call_args.kwargs["json"]["hours"] == 168
+
+
+class TestBuildParamsHelper:
+    """Test the _build_params() helper method."""
+
+    def test_build_params_filters_none(self) -> None:
+        """Test that _build_params excludes None values."""
+        client = TaskManagerClient()
+        result = client._build_params(a=1, b=None, c="hello", d=None)
+        assert result == {"a": 1, "c": "hello"}
+
+    def test_build_params_all_none(self) -> None:
+        """Test that _build_params returns empty dict when all values are None."""
+        client = TaskManagerClient()
+        result = client._build_params(a=None, b=None)
+        assert result == {}
+
+    def test_build_params_no_args(self) -> None:
+        """Test that _build_params returns empty dict with no args."""
+        client = TaskManagerClient()
+        result = client._build_params()
+        assert result == {}
+
+    def test_build_params_keeps_falsy_non_none(self) -> None:
+        """Test that _build_params keeps False, 0, and empty string."""
+        client = TaskManagerClient()
+        result = client._build_params(flag=False, count=0, name="")
+        assert result == {"flag": False, "count": 0, "name": ""}
+
+    def test_build_params_all_present(self) -> None:
+        """Test that _build_params keeps all non-None values."""
+        client = TaskManagerClient()
+        result = client._build_params(x=1, y=2, z=3)
+        assert result == {"x": 1, "y": 2, "z": 3}
+
+
+class TestValidateDeadlineType:
+    """Test the _validate_deadline_type() helper method."""
+
+    def test_validate_deadline_type_none_is_noop(self) -> None:
+        """Test that None deadline_type passes validation."""
+        client = TaskManagerClient()
+        client._validate_deadline_type(None)  # Should not raise
+
+    def test_validate_deadline_type_valid_values(self) -> None:
+        """Test that all valid deadline types pass validation."""
+        client = TaskManagerClient()
+        for dtype in ("flexible", "preferred", "firm", "hard"):
+            client._validate_deadline_type(dtype)  # Should not raise
+
+    def test_validate_deadline_type_invalid_raises(self) -> None:
+        """Test that invalid deadline_type raises ValidationError."""
+        client = TaskManagerClient()
+        with pytest.raises(ValidationError, match="Invalid deadline_type"):
+            client._validate_deadline_type("urgent")
+
+    def test_validate_deadline_type_empty_string_raises(self) -> None:
+        """Test that empty string deadline_type raises ValidationError."""
+        client = TaskManagerClient()
+        with pytest.raises(ValidationError, match="Invalid deadline_type"):
+            client._validate_deadline_type("")
