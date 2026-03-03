@@ -549,6 +549,73 @@ def test_token_decryption_invalid_token():
     assert decrypt_token("gAAAAA_not_valid_fernet") is None
 
 
+def test_hkdf_key_derivation_produces_valid_fernet_key():
+    """Test that HKDF key derivation produces a valid Fernet key."""
+    from cryptography.fernet import Fernet
+
+    from app.services.token_encryption import _get_encryption_key
+
+    key = _get_encryption_key()
+
+    # Must be bytes
+    assert isinstance(key, bytes)
+
+    # Must be a valid Fernet key (32 bytes base64url-encoded = 44 chars with padding)
+    assert len(key) == 44
+
+    # Must be usable with Fernet without raising an exception
+    fernet = Fernet(key)
+    assert fernet is not None
+
+
+def test_hkdf_key_derivation_is_deterministic():
+    """Test that HKDF key derivation is deterministic for the same secret."""
+    from app.services.token_encryption import _get_encryption_key
+
+    key1 = _get_encryption_key()
+    key2 = _get_encryption_key()
+
+    assert key1 == key2
+
+
+def test_hkdf_different_secrets_produce_different_keys():
+    """Test that different SECRET_KEY values produce different derived keys."""
+    import unittest.mock
+
+    from app.services.token_encryption import _get_encryption_key
+
+    with unittest.mock.patch("app.services.token_encryption.settings") as mock_settings:
+        mock_settings.secret_key = "secret-one"  # pragma: allowlist secret
+        key1 = _get_encryption_key()
+
+    with unittest.mock.patch("app.services.token_encryption.settings") as mock_settings:
+        mock_settings.secret_key = "secret-two"  # pragma: allowlist secret
+        key2 = _get_encryption_key()
+
+    assert key1 != key2
+
+
+def test_hkdf_token_not_decryptable_with_different_secret():
+    """Test that tokens encrypted with one secret cannot be decrypted with another."""
+    import unittest.mock
+
+    from app.services.token_encryption import decrypt_token, encrypt_token
+
+    original_token = "gho_sensitive_token_abc123"
+
+    # Encrypt with one secret
+    with unittest.mock.patch("app.services.token_encryption.settings") as mock_settings:
+        mock_settings.secret_key = "first-secret-key"  # pragma: allowlist secret
+        encrypted = encrypt_token(original_token)
+
+    # Attempt to decrypt with a different secret
+    with unittest.mock.patch("app.services.token_encryption.settings") as mock_settings:
+        mock_settings.secret_key = "second-secret-key"  # pragma: allowlist secret
+        result = decrypt_token(encrypted)
+
+    assert result is None
+
+
 # =============================================================================
 # Return-to Validation Tests
 # =============================================================================
