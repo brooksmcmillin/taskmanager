@@ -489,3 +489,26 @@ export interface CategoryCount {
 	category: string;
 	count: number;
 }
+
+// Notifications
+export interface NotificationItem {
+	id: number;
+	notification_type: string;
+	title: string;
+	message: string;
+	wiki_page_id: number | null;
+	is_read: boolean;
+	created_at: string;
+}
+
+export interface WikiSubscription {
+	id: number;
+	wiki_page_id: number;
+	include_children: boolean;
+	created_at: string;
+}
+
+export interface WikiSubscriptionStatus {
+	subscribed: boolean;
+	subscription: WikiSubscription | null;
+}

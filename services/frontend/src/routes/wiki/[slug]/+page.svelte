@@ -15,6 +15,9 @@
 	let renderedHtml = $state('');
 	let confirmDelete = $state(false);
 	let moveModal: WikiMoveModal;
+	let subscribed = $state(false);
+	let includeChildren = $state(true);
+	let subscribing = $state(false);
 
 	let slug = $derived($page.params.slug ?? '');
 
@@ -41,6 +44,15 @@
 			} catch (e) {
 				console.warn('Failed to load linked tasks:', e);
 			}
+			try {
+				const status = await wiki.getSubscriptionStatus(wikiPage.id);
+				subscribed = status.subscribed;
+				if (status.subscription) {
+					includeChildren = status.subscription.include_children;
+				}
+			} catch (e) {
+				console.warn('Failed to load subscription status:', e);
+			}
 		}
 	}
 
@@ -62,6 +74,37 @@
 			goto('/wiki');
 		} catch (e) {
 			toasts.show('Failed to delete page: ' + (e as Error).message, 'error');
+		}
+	}
+
+	async function toggleSubscription() {
+		if (!wikiPage || subscribing) return;
+		subscribing = true;
+		try {
+			if (subscribed) {
+				await wiki.unsubscribePage(wikiPage.id);
+				subscribed = false;
+				toasts.success('Unsubscribed from page notifications');
+			} else {
+				await wiki.subscribePage(wikiPage.id, includeChildren);
+				subscribed = true;
+				toasts.success('Subscribed to page notifications');
+			}
+		} catch (e) {
+			toasts.error('Failed to update subscription');
+		} finally {
+			subscribing = false;
+		}
+	}
+
+	async function toggleIncludeChildren() {
+		if (!wikiPage || !subscribed) return;
+		includeChildren = !includeChildren;
+		try {
+			await wiki.subscribePage(wikiPage.id, includeChildren);
+		} catch {
+			includeChildren = !includeChildren;
+			toasts.error('Failed to update subscription');
 		}
 	}
 
@@ -103,6 +146,29 @@
 			<div class="page-header">
 				<h1>{wikiPage.title}</h1>
 				<div class="page-actions">
+					<button
+						class="btn btn-med"
+						class:btn-secondary={!subscribed}
+						class:btn-subscribed={subscribed}
+						onclick={toggleSubscription}
+						disabled={subscribing}
+						title={subscribed ? 'Unsubscribe from notifications' : 'Subscribe to notifications'}
+					>
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 16 16"
+							fill={subscribed ? 'currentColor' : 'none'}
+							stroke="currentColor"
+							stroke-width="1.5"
+							style="margin-right: 0.25rem; vertical-align: -1px;"
+						>
+							<path
+								d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2zm.995-14.901a1 1 0 1 0-1.99 0A5.002 5.002 0 0 0 3 6c0 1.098-.5 6-2 7h14c-1.5-1-2-5.902-2-7 0-2.42-1.72-4.44-4.005-4.901z"
+							/>
+						</svg>
+						{subscribed ? 'Subscribed' : 'Subscribe'}
+					</button>
 					<a href="/wiki/{wikiPage.slug}/edit" class="btn btn-secondary btn-med">Edit</a>
 					<button class="btn btn-secondary btn-med" onclick={() => moveModal.open(wikiPage!)}
 						>Move</button
@@ -119,6 +185,15 @@
 					{/if}
 				</div>
 			</div>
+
+			{#if subscribed}
+				<div class="subscription-options">
+					<label class="include-children-toggle">
+						<input type="checkbox" checked={includeChildren} onchange={toggleIncludeChildren} />
+						<span>Notify on child page changes</span>
+					</label>
+				</div>
+			{/if}
 
 			<div class="page-meta-bar">
 				{#if wikiPage.updated_at}
@@ -469,6 +544,33 @@
 	.btn-danger-outline:hover {
 		background: var(--error-600, #dc2626);
 		color: white;
+	}
+
+	.btn-subscribed {
+		background: var(--primary-100);
+		color: var(--primary-700);
+		border: 1px solid var(--primary-300);
+	}
+
+	.btn-subscribed:hover {
+		background: var(--primary-200);
+	}
+
+	.subscription-options {
+		margin-bottom: 0.5rem;
+	}
+
+	.include-children-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.8125rem;
+		color: var(--text-secondary);
+		cursor: pointer;
+	}
+
+	.include-children-toggle input[type='checkbox'] {
+		accent-color: var(--primary-600);
 	}
 
 	@media (max-width: 640px) {

@@ -106,9 +106,7 @@ export function renderRichText(
 			const escaped = escapeHtml(title);
 			const slug = resolvedSlugs[title];
 			if (slug) {
-				parts.push(
-					`<a href="/wiki/${encodeURIComponent(slug)}" class="wiki-link">${escaped}</a>`
-				);
+				parts.push(`<a href="/wiki/${encodeURIComponent(slug)}" class="wiki-link">${escaped}</a>`);
 			} else {
 				parts.push(
 					`<a href="/wiki/new?title=${encodeURIComponent(title)}" class="wiki-link wiki-link-missing">${escaped}</a>`
