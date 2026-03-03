@@ -148,7 +148,11 @@ fi
 # 5. Quick dependency check if package.json changed
 if echo "$STAGED_FILES" | grep -q "package.*json"; then
     echo "5. Checking dependencies..."
-    if ! npm audit --production --audit-level=critical 2>&1 | grep -q "found 0 vulnerabilities"; then
+    # Source nvm if npm is not on PATH (npm installed via nvm isn't available in /bin/sh)
+    if ! command -v npm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
+        . "$HOME/.nvm/nvm.sh"
+    fi
+    if ! npm audit --omit=dev --audit-level=critical --prefix services/frontend 2>&1 | grep -q "found 0 vulnerabilities"; then
         printf '%b\n' "${RED}  ❌ Critical vulnerabilities in dependencies!${NC}"
         echo "     Run 'npm audit' for details"
         FAILED=1
