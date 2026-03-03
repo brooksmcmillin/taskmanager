@@ -22,7 +22,7 @@
 		getDeadlineTypeLabel
 	} from '$lib/utils/deadline';
 	import { contrastText } from '$lib/utils/colors';
-	import { formatDateDisplay } from '$lib/utils/dates';
+	import { formatDateDisplay, formatDateForInput } from '$lib/utils/dates';
 	import { logger } from '$lib/utils/logger';
 	import type { Todo, ApiResponse, DeadlineType } from '$lib/types';
 
@@ -42,11 +42,6 @@
 		}
 	}
 
-	function todayStr(): string {
-		const d = new Date();
-		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-	}
-
 	function endOfWeekStr(): string {
 		const d = new Date();
 		const daysUntilSunday = d.getDay() === 0 ? 0 : 7 - d.getDay();
@@ -56,21 +51,22 @@
 
 	async function loadSummaryStats() {
 		try {
+			const today = formatDateForInput(new Date());
 			const [overdueRes, todayRes, weekRes] = await Promise.all([
 				api.get<ApiResponse<Todo[]>>('/api/todos', {
 					params: { status: 'overdue', exclude_no_calendar: 'true' }
 				}),
 				api.get<ApiResponse<Todo[]>>('/api/todos', {
 					params: {
-						start_date: todayStr(),
-						end_date: todayStr(),
+						start_date: today,
+						end_date: today,
 						status: 'pending',
 						exclude_no_calendar: 'true'
 					}
 				}),
 				api.get<ApiResponse<Todo[]>>('/api/todos', {
 					params: {
-						start_date: todayStr(),
+						start_date: today,
 						end_date: endOfWeekStr(),
 						status: 'pending',
 						exclude_no_calendar: 'true'

@@ -7,6 +7,7 @@
 		getDeadlineTypeBgColor
 	} from '$lib/utils/deadline';
 	import { stripHtml } from '$lib/utils/markdown';
+	import { formatDateForInput, formatDueDate, timeAgo } from '$lib/utils/dates';
 	import { toasts } from '$lib/stores/ui';
 	import type { Todo, Article, ReadingStats, ApiResponse } from '$lib/types';
 
@@ -36,47 +37,6 @@
 			month: 'long',
 			day: 'numeric'
 		});
-	}
-
-	function todayStr(): string {
-		const d = new Date();
-		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-	}
-
-	function localMidnight(dateStr: string): Date {
-		// Parse YYYY-MM-DD as local midnight (not UTC) so date comparisons
-		// reflect the user's timezone. Do NOT use new Date(dateStr) or
-		// append 'T00:00:00Z' — both interpret as UTC which shifts the
-		// date for users west of Greenwich.
-		const [y, m, d] = dateStr.split('-').map(Number);
-		return new Date(y, m - 1, d);
-	}
-
-	function formatDueDate(dateStr: string | null): string {
-		if (!dateStr) return '';
-		const due = localMidnight(dateStr);
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-		const diff = Math.floor((due.getTime() - today.getTime()) / 86400000);
-		if (diff < 0) return `${Math.abs(diff)}d overdue`;
-		if (diff === 0) return 'today';
-		if (diff === 1) return 'tomorrow';
-		return due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-	}
-
-	function timeAgo(dateStr: string | null): string {
-		if (!dateStr) return '';
-		const now = new Date();
-		const then = new Date(dateStr);
-		const diffMs = now.getTime() - then.getTime();
-		const mins = Math.floor(diffMs / 60000);
-		if (mins < 1) return 'just now';
-		if (mins < 60) return `${mins}m ago`;
-		const hours = Math.floor(mins / 60);
-		if (hours < 24) return `${hours}h ago`;
-		const days = Math.floor(hours / 24);
-		if (days < 7) return `${days}d ago`;
-		return then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
 	function fetchArticles(featured: boolean) {
@@ -164,7 +124,7 @@
 
 	onMount(() => {
 		let mounted = true;
-		const today = todayStr();
+		const today = formatDateForInput(new Date());
 
 		Promise.all([
 			api.get<ApiResponse<Todo[]>>('/api/todos', {

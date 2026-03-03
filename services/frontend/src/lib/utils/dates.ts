@@ -63,3 +63,54 @@ export function getStartOfWeek(date: Date): Date {
 	d.setHours(0, 0, 0, 0);
 	return d;
 }
+
+/**
+ * Parse a date string as local midnight (not UTC)
+ * @param dateStr - Date string in YYYY-MM-DD format
+ * @returns Date object at local midnight
+ */
+function localMidnight(dateStr: string): Date {
+	// Parse YYYY-MM-DD as local midnight (not UTC) so date comparisons
+	// reflect the user's timezone. Do NOT use new Date(dateStr) or
+	// append 'T00:00:00Z' — both interpret as UTC which shifts the
+	// date for users west of Greenwich.
+	const [y, m, d] = dateStr.split('-').map(Number);
+	return new Date(y, m - 1, d);
+}
+
+/**
+ * Format a due date for display (e.g., "today", "tomorrow", "3d ago", or short date)
+ * @param dateStr - Date string in YYYY-MM-DD format or null
+ * @returns Formatted date string
+ */
+export function formatDueDate(dateStr: string | null): string {
+	if (!dateStr) return '';
+	const due = localMidnight(dateStr);
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+	const diff = Math.floor((due.getTime() - today.getTime()) / 86400000);
+	if (diff < 0) return `${Math.abs(diff)}d overdue`;
+	if (diff === 0) return 'today';
+	if (diff === 1) return 'tomorrow';
+	return due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Format a timestamp as relative time (e.g., "5m ago", "2h ago", "Mar 5")
+ * @param dateStr - ISO timestamp string or null
+ * @returns Relative time string
+ */
+export function timeAgo(dateStr: string | null): string {
+	if (!dateStr) return '';
+	const now = new Date();
+	const then = new Date(dateStr);
+	const diffMs = now.getTime() - then.getTime();
+	const mins = Math.floor(diffMs / 60000);
+	if (mins < 1) return 'just now';
+	if (mins < 60) return `${mins}m ago`;
+	const hours = Math.floor(mins / 60);
+	if (hours < 24) return `${hours}h ago`;
+	const days = Math.floor(hours / 24);
+	if (days < 7) return `${days}d ago`;
+	return then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
