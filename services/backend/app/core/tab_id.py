@@ -26,9 +26,7 @@ class TabIdMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         raw = request.headers.get("x-tab-id", "")
         # Sanitize: only keep alphanumeric/hyphen, max 8 chars
-        valid = raw.isalnum() or all(
-            c.isalnum() or c == "-" for c in raw
-        )
+        valid = bool(raw) and all(c.isalnum() or c == "-" for c in raw)
         tab_id = raw[:8] if valid else ""
         token = tab_id_var.set(tab_id)
         try:

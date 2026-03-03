@@ -2,6 +2,9 @@
 
 Opens a dedicated asyncpg connection (separate from SQLAlchemy's pool) and
 dispatches row-change events to per-user asyncio.Queue subscribers.
+
+On connection loss the bus automatically reconnects with exponential backoff
+and sends a sentinel to all subscribers so SSE clients reconnect.
 """
 
 import asyncio
@@ -9,13 +12,15 @@ import contextlib
 import json
 import logging
 from dataclasses import dataclass
-from urllib.parse import quote_plus
 
 import asyncpg
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+_RECONNECT_BASE = 1.0  # seconds
+_RECONNECT_MAX = 30.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,29 +40,50 @@ class EventBus:
     def __init__(self) -> None:
         self._conn: asyncpg.Connection | None = None
         self._subscribers: dict[int, set[asyncio.Queue[Event | None]]] = {}
+        self._stopping = False
+        self._reconnect_task: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
+    def _dsn(self) -> dict[str, str | int]:
+        """Return asyncpg keyword args (avoids DSN string quoting issues)."""
+        return {
+            "user": settings.postgres_user,
+            "password": settings.postgres_password,
+            "host": settings.postgres_host,
+            "port": settings.postgres_port,
+            "database": settings.postgres_db,
+        }
+
+    async def _connect(self) -> None:
+        """Open a connection, register listeners."""
+        self._conn = await asyncpg.connect(**self._dsn(), ssl="prefer")
+        self._conn.add_termination_listener(self._on_connection_lost)
+        await self._conn.add_listener("events", self._on_notify)
+        logger.info("EventBus connected — listening on 'events' channel")
+
     async def start(self) -> None:
         """Open a dedicated connection and start listening."""
-        dsn = (
-            f"postgresql://{settings.postgres_user}"
-            f":{quote_plus(settings.postgres_password)}"
-            f"@{settings.postgres_host}:{settings.postgres_port}"
-            f"/{settings.postgres_db}"
-        )
+        self._stopping = False
         try:
-            self._conn = await asyncpg.connect(dsn, ssl="prefer")
-            await self._conn.add_listener("events", self._on_notify)
-            logger.info("EventBus started — listening on 'events' channel")
+            await self._connect()
         except Exception:
-            logger.exception("EventBus failed to start")
-            self._conn = None
+            logger.exception("EventBus failed to start — will retry")
+            self._schedule_reconnect()
 
     async def stop(self) -> None:
         """Stop listening and close the connection."""
+        self._stopping = True
+
+        # Cancel any pending reconnect
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._reconnect_task
+            self._reconnect_task = None
+
         if self._conn is not None:
             try:
                 await self._conn.remove_listener("events", self._on_notify)
@@ -68,12 +94,54 @@ class EventBus:
                 self._conn = None
 
         # Send sentinel to all subscribers so SSE generators exit cleanly
+        self._send_sentinel_to_all()
+        self._subscribers.clear()
+        logger.info("EventBus stopped")
+
+    # ------------------------------------------------------------------
+    # Reconnection
+    # ------------------------------------------------------------------
+
+    def _on_connection_lost(self, conn: asyncpg.Connection) -> None:
+        """Called by asyncpg when the connection drops unexpectedly."""
+        logger.warning("EventBus connection lost — scheduling reconnect")
+        self._conn = None
+        # Notify all subscribers so SSE clients reconnect and reload
+        self._send_sentinel_to_all()
+        if not self._stopping:
+            self._schedule_reconnect()
+
+    def _schedule_reconnect(self) -> None:
+        """Kick off the reconnect loop as a background task."""
+        if self._reconnect_task and not self._reconnect_task.done():
+            return  # already reconnecting
+        self._reconnect_task = asyncio.create_task(self._reconnect_loop())
+
+    async def _reconnect_loop(self) -> None:
+        """Retry connecting with exponential backoff."""
+        attempt = 0
+        while not self._stopping:
+            delay = min(_RECONNECT_BASE * 2**attempt, _RECONNECT_MAX)
+            logger.info(
+                "EventBus reconnecting in %.1fs (attempt %d)", delay, attempt + 1
+            )
+            await asyncio.sleep(delay)
+            if self._stopping:
+                break
+            try:
+                await self._connect()
+                logger.info("EventBus reconnected successfully")
+                return
+            except Exception:
+                logger.exception("EventBus reconnect attempt %d failed", attempt + 1)
+                attempt += 1
+
+    def _send_sentinel_to_all(self) -> None:
+        """Push None to every subscriber queue so SSE generators exit."""
         for queues in self._subscribers.values():
             for q in queues:
                 with contextlib.suppress(asyncio.QueueFull):
                     q.put_nowait(None)
-        self._subscribers.clear()
-        logger.info("EventBus stopped")
 
     # ------------------------------------------------------------------
     # Subscribe / unsubscribe

@@ -109,6 +109,16 @@ class TestEventBusDispatch:
         item = q.get_nowait()
         assert item is None
 
+    def test_connection_lost_sends_sentinel(self) -> None:
+        """When the PG connection drops, all subscribers get a sentinel."""
+        q1 = self.bus.subscribe(10)
+        q2 = self.bus.subscribe(20)
+        # Simulate connection loss callback (no real connection needed)
+        self.bus._stopping = True  # prevent reconnect scheduling
+        self.bus._on_connection_lost(None)  # type: ignore[arg-type]
+        assert q1.get_nowait() is None
+        assert q2.get_nowait() is None
+
     def test_empty_tab_id(self) -> None:
         q = self.bus.subscribe(10)
         payload = json.dumps({"t": "todos", "op": "U", "id": 5, "uid": 10})

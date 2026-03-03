@@ -37,9 +37,11 @@ const BASE_DELAY = 1000;
 const MAX_DELAY = 30_000;
 
 function getReconnectDelay(): number {
-	const delay = Math.min(BASE_DELAY * 2 ** reconnectAttempt, MAX_DELAY);
+	const base = Math.min(BASE_DELAY * 2 ** reconnectAttempt, MAX_DELAY);
+	// Add ±20% jitter to prevent thundering herd on mass reconnect
+	const jitter = base * 0.2 * (Math.random() * 2 - 1);
 	reconnectAttempt++;
-	return delay;
+	return base + jitter;
 }
 
 export function onChangeEvent(handler: ChangeHandler): () => void {
@@ -49,6 +51,10 @@ export function onChangeEvent(handler: ChangeHandler): () => void {
 
 export function setReconnectCallback(cb: () => void): void {
 	onReconnectCallback = cb;
+}
+
+export function clearReconnectCallback(): void {
+	onReconnectCallback = null;
 }
 
 export function connect(): void {

@@ -11,7 +11,13 @@ import { projects } from '$lib/stores/projects';
 import { wiki } from '$lib/stores/wiki';
 import { notifications } from '$lib/stores/notifications';
 import { toasts } from '$lib/stores/ui';
-import { getTabId, onChangeEvent, setReconnectCallback, type ChangeEvent } from './eventStream';
+import {
+	getTabId,
+	onChangeEvent,
+	setReconnectCallback,
+	clearReconnectCallback,
+	type ChangeEvent
+} from './eventStream';
 
 const DEBOUNCE_MS = 300;
 
@@ -45,38 +51,38 @@ function handleChangeEvent(event: ChangeEvent): void {
 	if (event.tab_id === getTabId()) return;
 
 	const opLabel = OP_LABELS[event.op] || 'changed';
-	const tableLabel = TABLE_LABELS[event.table] || event.table;
+	const tableLabel = TABLE_LABELS[event.table] || 'Record';
 
 	switch (event.table) {
 		case 'todos':
 			debounce('todos', () => {
 				todos.load().catch(() => {});
+				toasts.info(`${tableLabel} ${opLabel}`);
 			});
-			toasts.info(`${tableLabel} ${opLabel}`);
 			break;
 
 		case 'projects':
 			debounce('projects', () => {
 				projects.load({ includeStats: true }).catch(() => {});
+				toasts.info(`${tableLabel} ${opLabel}`);
 			});
-			toasts.info(`${tableLabel} ${opLabel}`);
 			break;
 
 		case 'wiki_pages':
 			debounce('wiki_pages', () => {
 				wiki.load().catch(() => {});
+				toasts.info(`${tableLabel} ${opLabel}`);
 			});
-			toasts.info(`${tableLabel} ${opLabel}`);
 			break;
 
 		case 'notifications':
 			debounce('notifications', () => {
 				notifications.loadUnreadCount().catch(() => {});
+				// Only toast for new notifications
+				if (event.op === 'I') {
+					toasts.info('New notification');
+				}
 			});
-			// Only toast for new notifications
-			if (event.op === 'I') {
-				toasts.info('New notification');
-			}
 			break;
 	}
 }
@@ -105,6 +111,7 @@ export function stopEventHandlers(): void {
 		unsubscribe();
 		unsubscribe = null;
 	}
+	clearReconnectCallback();
 	// Clear any pending debounce timers
 	for (const key of Object.keys(debounceTimers)) {
 		clearTimeout(debounceTimers[key]);
