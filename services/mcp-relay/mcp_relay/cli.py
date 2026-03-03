@@ -8,14 +8,18 @@ Supports piping data from stdin, e.g.:
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
+from typing import Any
 
 import click
 import httpx
 
 DEFAULT_BASE_URL = "http://localhost:8002/debug"
 DEFAULT_SENDER = "cli"
+
+_CHANNEL_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
 def _make_client(base_url: str, token: str | None) -> httpx.Client:
@@ -25,12 +29,17 @@ def _make_client(base_url: str, token: str | None) -> httpx.Client:
     return httpx.Client(base_url=base_url, headers=headers, timeout=30.0)
 
 
+def _validate_channel(channel: str) -> None:
+    if not _CHANNEL_RE.match(channel):
+        _error(f"Invalid channel name: {channel!r} (only alphanumeric, hyphens, underscores)")
+
+
 def _error(msg: str) -> None:
     click.echo(f"Error: {msg}", err=True)
     sys.exit(1)
 
 
-def _handle_response(resp: httpx.Response) -> dict:
+def _handle_response(resp: httpx.Response) -> dict[str, Any]:
     if resp.status_code == 401:
         _error("Unauthorized — check your --token or MCP_RELAY_DEBUG_TOKEN.")
     if resp.status_code >= 400:
@@ -54,7 +63,7 @@ def _handle_response(resp: httpx.Response) -> dict:
     "--token",
     envvar="MCP_RELAY_DEBUG_TOKEN",
     default=None,
-    help="Bearer token for debug API authentication.",
+    help="Bearer token for debug API authentication. Prefer MCP_RELAY_DEBUG_TOKEN env var over CLI flag in shared environments.",
 )
 @click.pass_context
 def cli(ctx: click.Context, url: str, token: str | None) -> None:
@@ -91,18 +100,26 @@ def write(ctx: click.Context, channel: str, message: str | None, sender: str) ->
     if not message.strip():
         _error("Empty message.")
 
-    client = _make_client(ctx.obj["url"], ctx.obj["token"])
-    resp = client.post(
-        f"/api/channels/{channel}/messages",
-        json={"content": message, "sender": sender},
-    )
-    data = _handle_response(resp)
+    _validate_channel(channel)
+    with _make_client(ctx.obj["url"], ctx.obj["token"]) as client:
+        resp = client.post(
+            f"/api/channels/{channel}/messages",
+            json={"content": message, "sender": sender},
+        )
+        data = _handle_response(resp)
     click.echo(f"Sent to #{channel} ({len(message)} bytes, id={data['id'][:8]})")
 
 
 @cli.command()
 @click.argument("channel")
-@click.option("--limit", "-n", default=50, show_default=True, help="Max messages to return.")
+@click.option(
+    "--limit",
+    "-n",
+    default=50,
+    show_default=True,
+    type=click.IntRange(1, 1000),
+    help="Max messages to return.",
+)
 @click.option("--since", default=None, help="Only return messages after this ISO timestamp.")
 @click.option("--json-output", "-j", "json_out", is_flag=True, help="Output raw JSON.")
 @click.option(
@@ -123,12 +140,13 @@ def read(
 
     Pipe-friendly:  mcp-relay-cli read my-channel -c | grep pattern
     """
-    client = _make_client(ctx.obj["url"], ctx.obj["token"])
-    params: dict[str, str | int] = {"limit": limit}
-    if since:
-        params["since"] = since
-    resp = client.get(f"/api/channels/{channel}/messages", params=params)
-    data = _handle_response(resp)
+    _validate_channel(channel)
+    with _make_client(ctx.obj["url"], ctx.obj["token"]) as client:
+        params: dict[str, str | int] = {"limit": limit}
+        if since:
+            params["since"] = since
+        resp = client.get(f"/api/channels/{channel}/messages", params=params)
+        data = _handle_response(resp)
 
     messages = data.get("messages", [])
 
@@ -159,9 +177,9 @@ def read(
 @click.pass_context
 def channels(ctx: click.Context, json_out: bool) -> None:
     """List all channels."""
-    client = _make_client(ctx.obj["url"], ctx.obj["token"])
-    resp = client.get("/api/channels")
-    data = _handle_response(resp)
+    with _make_client(ctx.obj["url"], ctx.obj["token"]) as client:
+        resp = client.get("/api/channels")
+        data = _handle_response(resp)
     channel_list = data.get("channels", [])
 
     if json_out:
@@ -187,12 +205,13 @@ def channels(ctx: click.Context, json_out: bool) -> None:
 @click.pass_context
 def clear(ctx: click.Context, channel: str, yes: bool) -> None:
     """Clear all messages in a channel."""
+    _validate_channel(channel)
     if not yes:
         click.confirm(f"Clear all messages in #{channel}?", abort=True)
 
-    client = _make_client(ctx.obj["url"], ctx.obj["token"])
-    resp = client.post(f"/api/channels/{channel}/clear")
-    data = _handle_response(resp)
+    with _make_client(ctx.obj["url"], ctx.obj["token"]) as client:
+        resp = client.post(f"/api/channels/{channel}/clear")
+        data = _handle_response(resp)
 
     if data.get("cleared"):
         click.echo(f"Cleared #{channel}")
@@ -202,7 +221,14 @@ def clear(ctx: click.Context, channel: str, yes: bool) -> None:
 
 @cli.command()
 @click.argument("channel")
-@click.option("--interval", "-i", default=2, show_default=True, help="Poll interval in seconds.")
+@click.option(
+    "--interval",
+    "-i",
+    default=2,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="Poll interval in seconds.",
+)
 @click.option("--content-only", "-c", is_flag=True, help="Print only message content.")
 @click.pass_context
 def watch(ctx: click.Context, channel: str, interval: int, content_only: bool) -> None:
@@ -210,37 +236,38 @@ def watch(ctx: click.Context, channel: str, interval: int, content_only: bool) -
 
     Press Ctrl+C to stop.
     """
-    client = _make_client(ctx.obj["url"], ctx.obj["token"])
-    since: str | None = None
+    _validate_channel(channel)
+    with _make_client(ctx.obj["url"], ctx.obj["token"]) as client:
+        since: str | None = None
 
-    # Get current latest timestamp to only show new messages
-    resp = client.get(f"/api/channels/{channel}/messages", params={"limit": 1})
-    data = _handle_response(resp)
-    msgs = data.get("messages", [])
-    if msgs:
-        since = msgs[-1].get("timestamp")
+        # Get current latest timestamp to only show new messages
+        resp = client.get(f"/api/channels/{channel}/messages", params={"limit": 1})
+        data = _handle_response(resp)
+        msgs = data.get("messages", [])
+        if msgs:
+            since = msgs[-1].get("timestamp")
 
-    click.echo(f"Watching #{channel} (Ctrl+C to stop)...")
+        click.echo(f"Watching #{channel} (Ctrl+C to stop)...")
 
-    try:
-        while True:
-            time.sleep(interval)
-            params: dict[str, str | int] = {"limit": 100}
-            if since:
-                params["since"] = since
-            resp = client.get(f"/api/channels/{channel}/messages", params=params)
-            data = _handle_response(resp)
-            new_msgs = data.get("messages", [])
-            for msg in new_msgs:
-                if content_only:
-                    click.echo(msg["content"])
-                else:
-                    ts = msg.get("timestamp", "")[:19]
-                    sender = msg.get("sender", "?")
-                    click.echo(f"[{ts}] {sender}: {msg['content']}")
-                since = msg.get("timestamp")
-    except KeyboardInterrupt:
-        click.echo("\nStopped.")
+        try:
+            while True:
+                time.sleep(interval)
+                params: dict[str, str | int] = {"limit": 100}
+                if since:
+                    params["since"] = since
+                resp = client.get(f"/api/channels/{channel}/messages", params=params)
+                data = _handle_response(resp)
+                new_msgs = data.get("messages", [])
+                for msg in new_msgs:
+                    if content_only:
+                        click.echo(msg["content"])
+                    else:
+                        ts = msg.get("timestamp", "")[:19]
+                        sender = msg.get("sender", "?")
+                        click.echo(f"[{ts}] {sender}: {msg['content']}")
+                    since = msg.get("timestamp")
+        except KeyboardInterrupt:
+            click.echo("\nStopped.")
 
 
 def main() -> None:

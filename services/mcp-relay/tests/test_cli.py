@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
@@ -32,28 +33,12 @@ def runner() -> CliRunner:
     return CliRunner()
 
 
-@pytest.fixture
-def base_url(debug_app: TestClient) -> str:
-    """Return the base URL that the CLI should target.
-
-    Since we can't easily point the CLI at the Starlette TestClient, we test
-    CLI commands by mocking httpx calls or by using the TestClient directly
-    in integration-style tests.
-    """
-    return debug_app.base_url
-
-
 class TestCliWrite:
     """Tests for the 'write' command."""
 
-    def test_write_with_argument(
-        self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Write a message passed as a positional argument."""
+    def _patch_httpx(self, monkeypatch, store):
         app = create_debug_app(store)
         test_client = TestClient(app)
-
-        # Patch httpx.Client to use the test client's transport
         import httpx
 
         original_client_init = httpx.Client.__init__
@@ -70,6 +55,12 @@ class TestCliWrite:
             )
 
         monkeypatch.setattr(httpx.Client, "__init__", patched_init)
+
+    def test_write_with_argument(
+        self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Write a message passed as a positional argument."""
+        self._patch_httpx(monkeypatch, store)
 
         result = runner.invoke(cli, ["write", "test-channel", "hello world"])
         assert result.exit_code == 0
@@ -85,25 +76,7 @@ class TestCliWrite:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Write a message piped via stdin."""
-        app = create_debug_app(store)
-        test_client = TestClient(app)
-
-        import httpx
-
-        original_client_init = httpx.Client.__init__
-
-        def patched_init(self_client, **kwargs):
-            kwargs.pop("base_url", None)
-            kwargs.pop("headers", None)
-            kwargs.pop("timeout", None)
-            original_client_init(
-                self_client,
-                transport=test_client._transport,
-                base_url="http://testserver",
-                timeout=30.0,
-            )
-
-        monkeypatch.setattr(httpx.Client, "__init__", patched_init)
+        self._patch_httpx(monkeypatch, store)
 
         result = runner.invoke(cli, ["write", "test-channel"], input="piped data\n")
         assert result.exit_code == 0
@@ -117,25 +90,7 @@ class TestCliWrite:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Write with a custom sender identity."""
-        app = create_debug_app(store)
-        test_client = TestClient(app)
-
-        import httpx
-
-        original_client_init = httpx.Client.__init__
-
-        def patched_init(self_client, **kwargs):
-            kwargs.pop("base_url", None)
-            kwargs.pop("headers", None)
-            kwargs.pop("timeout", None)
-            original_client_init(
-                self_client,
-                transport=test_client._transport,
-                base_url="http://testserver",
-                timeout=30.0,
-            )
-
-        monkeypatch.setattr(httpx.Client, "__init__", patched_init)
+        self._patch_httpx(monkeypatch, store)
 
         result = runner.invoke(cli, ["write", "test-channel", "--sender", "my-script", "hello"])
         assert result.exit_code == 0
@@ -375,3 +330,148 @@ class TestCliHelp:
         result = runner.invoke(cli, ["watch", "--help"])
         assert result.exit_code == 0
         assert "Watch a channel" in result.output
+
+
+class TestCliWatch:
+    """Tests for the 'watch' command."""
+
+    def _patch_httpx(self, monkeypatch, store):
+        app = create_debug_app(store)
+        test_client = TestClient(app)
+        import httpx
+
+        original_client_init = httpx.Client.__init__
+
+        def patched_init(self_client, **kwargs):
+            kwargs.pop("base_url", None)
+            kwargs.pop("headers", None)
+            kwargs.pop("timeout", None)
+            original_client_init(
+                self_client,
+                transport=test_client._transport,
+                base_url="http://testserver",
+                timeout=30.0,
+            )
+
+        monkeypatch.setattr(httpx.Client, "__init__", patched_init)
+
+    def test_watch_shows_new_messages(
+        self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Watch should display messages added after polling starts."""
+        self._patch_httpx(monkeypatch, store)
+
+        call_count = 0
+
+        def fake_sleep(seconds):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # Simulate a new message arriving between polls
+                store.add("test-channel", "new message", "alice")
+            elif call_count >= 2:
+                raise KeyboardInterrupt
+
+        with patch("mcp_relay.cli.time.sleep", side_effect=fake_sleep):
+            result = runner.invoke(cli, ["watch", "test-channel", "--interval", "1"])
+
+        assert result.exit_code == 0
+        assert "Watching #test-channel" in result.output
+        assert "alice" in result.output
+        assert "new message" in result.output
+        assert "Stopped." in result.output
+
+    def test_watch_content_only(
+        self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Watch with --content-only should print only message content."""
+        self._patch_httpx(monkeypatch, store)
+
+        call_count = 0
+
+        def fake_sleep(seconds):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                store.add("test-channel", "just the content", "bob")
+            elif call_count >= 2:
+                raise KeyboardInterrupt
+
+        with patch("mcp_relay.cli.time.sleep", side_effect=fake_sleep):
+            result = runner.invoke(cli, ["watch", "test-channel", "-c", "--interval", "1"])
+
+        assert result.exit_code == 0
+        assert "just the content" in result.output
+        # In content-only mode, sender should not appear
+        assert "bob" not in result.output
+
+    def test_watch_tracks_since(
+        self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Watch should not repeat messages across polls."""
+        self._patch_httpx(monkeypatch, store)
+
+        call_count = 0
+
+        def fake_sleep(seconds):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                store.add("test-channel", "msg-one", "alice")
+            elif call_count == 2:
+                store.add("test-channel", "msg-two", "bob")
+            elif call_count >= 3:
+                raise KeyboardInterrupt
+
+        with patch("mcp_relay.cli.time.sleep", side_effect=fake_sleep):
+            result = runner.invoke(cli, ["watch", "test-channel", "-c", "--interval", "1"])
+
+        assert result.exit_code == 0
+        lines = [
+            line
+            for line in result.output.strip().split("\n")
+            if not line.startswith("Watching") and line != "Stopped."
+        ]
+        # Each message should appear exactly once
+        assert lines.count("msg-one") == 1
+        assert lines.count("msg-two") == 1
+
+
+class TestChannelValidation:
+    """Tests for channel name validation."""
+
+    def test_invalid_channel_name(self, runner: CliRunner) -> None:
+        result = runner.invoke(cli, ["read", "../etc/passwd"])
+        assert result.exit_code != 0
+        assert "Invalid channel name" in result.output
+
+    def test_invalid_channel_with_spaces(self, runner: CliRunner) -> None:
+        result = runner.invoke(cli, ["read", "my channel"])
+        assert result.exit_code != 0
+        assert "Invalid channel name" in result.output
+
+    def test_valid_channel_names(
+        self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Valid channel names with alphanumeric, hyphens, and underscores should work."""
+        app = create_debug_app(store)
+        test_client = TestClient(app)
+        import httpx
+
+        original_client_init = httpx.Client.__init__
+
+        def patched_init(self_client, **kwargs):
+            kwargs.pop("base_url", None)
+            kwargs.pop("headers", None)
+            kwargs.pop("timeout", None)
+            original_client_init(
+                self_client,
+                transport=test_client._transport,
+                base_url="http://testserver",
+                timeout=30.0,
+            )
+
+        monkeypatch.setattr(httpx.Client, "__init__", patched_init)
+
+        result = runner.invoke(cli, ["read", "my-channel_123"])
+        assert result.exit_code == 0
