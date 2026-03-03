@@ -2045,8 +2045,13 @@ class TestWikiTools:
             assert "error" not in parsed
             assert parsed["status"] == "updated"
             mock_api_client.update_wiki_page.assert_called_with(
-                page_id=3, title=None, content="New content", slug=None, append=True,
-                parent_id=None, remove_parent=False,
+                page_id=3,
+                title=None,
+                content="New content",
+                slug=None,
+                append=True,
+                parent_id=None,
+                remove_parent=False,
             )
 
     @pytest.mark.asyncio
@@ -2109,8 +2114,13 @@ class TestWikiTools:
             assert parsed["status"] == "updated"
             assert parsed["page"]["parent_id"] == 7
             mock_api_client.update_wiki_page.assert_called_with(
-                page_id=3, title=None, content=None, slug=None, append=False,
-                parent_id=7, remove_parent=False,
+                page_id=3,
+                title=None,
+                content=None,
+                slug=None,
+                append=False,
+                parent_id=7,
+                remove_parent=False,
             )
 
     @pytest.mark.asyncio
@@ -2141,8 +2151,13 @@ class TestWikiTools:
             assert parsed["status"] == "updated"
             assert parsed["page"]["parent_id"] is None
             mock_api_client.update_wiki_page.assert_called_with(
-                page_id=3, title=None, content=None, slug=None, append=False,
-                parent_id=None, remove_parent=True,
+                page_id=3,
+                title=None,
+                content=None,
+                slug=None,
+                append=False,
+                parent_id=None,
+                remove_parent=True,
             )
 
     @pytest.mark.asyncio
@@ -2154,9 +2169,7 @@ class TestWikiTools:
 
         with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
             tools = self._create_server(mock_api_client)
-            result = await tools["update_wiki_page"].fn(
-                page_id=3, parent_id=7, remove_parent=True
-            )
+            result = await tools["update_wiki_page"].fn(page_id=3, parent_id=7, remove_parent=True)
             parsed = json.loads(result)
             assert "error" in parsed
             assert "mutually exclusive" in parsed["error"]
@@ -2820,9 +2833,7 @@ class TestNewsFeedTools:
             )
 
     @pytest.mark.asyncio
-    async def test_list_articles_invalid_feed_type(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_list_articles_invalid_feed_type(self, mock_api_client: MagicMock) -> None:
         """Test list_articles rejects invalid feed_type."""
         import json
 
@@ -2971,9 +2982,7 @@ class TestNewsFeedTools:
             assert "Invalid rating" in parsed["error"]
 
     @pytest.mark.asyncio
-    async def test_rate_article_all_valid_ratings(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_rate_article_all_valid_ratings(self, mock_api_client: MagicMock) -> None:
         """Test rate_article accepts all valid rating values."""
         import json
 
@@ -2984,9 +2993,7 @@ class TestNewsFeedTools:
                 status_code=200,
             )
 
-            with patch(
-                "mcp_resource.server.get_api_client", return_value=mock_api_client
-            ):
+            with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
                 tools = self._create_server(mock_api_client)
                 result = await tools["rate_article"].fn(article_id=1, rating=rating)
                 parsed = json.loads(result)
@@ -3019,9 +3026,7 @@ class TestNewsFeedTools:
             assert parsed["sources"][0]["name"] == "PythonNews"
 
     @pytest.mark.asyncio
-    async def test_list_feed_sources_featured_filter(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_list_feed_sources_featured_filter(self, mock_api_client: MagicMock) -> None:
         """Test list_feed_sources passes featured filter."""
         import json
 
@@ -3105,18 +3110,14 @@ class TestNewsFeedTools:
 
         with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
             tools = self._create_server(mock_api_client)
-            result = await tools["update_feed_source"].fn(
-                source_id=1, name="Updated Feed"
-            )
+            result = await tools["update_feed_source"].fn(source_id=1, name="Updated Feed")
             parsed = json.loads(result)
             assert "error" not in parsed
             assert parsed["source"]["name"] == "Updated Feed"
             assert parsed["status"] == "updated"
 
     @pytest.mark.asyncio
-    async def test_update_feed_source_not_found(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_update_feed_source_not_found(self, mock_api_client: MagicMock) -> None:
         """Test update_feed_source handles not found."""
         import json
 
@@ -3128,9 +3129,7 @@ class TestNewsFeedTools:
 
         with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
             tools = self._create_server(mock_api_client)
-            result = await tools["update_feed_source"].fn(
-                source_id=999, name="Nope"
-            )
+            result = await tools["update_feed_source"].fn(source_id=999, name="Nope")
             parsed = json.loads(result)
             assert "error" in parsed
 
@@ -3156,9 +3155,7 @@ class TestNewsFeedTools:
             assert parsed["status"] == "deleted"
 
     @pytest.mark.asyncio
-    async def test_delete_feed_source_not_found(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_delete_feed_source_not_found(self, mock_api_client: MagicMock) -> None:
         """Test delete_feed_source handles not found."""
         import json
 
@@ -3189,9 +3186,7 @@ class TestNewsFeedTools:
 
         with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
             tools = self._create_server(mock_api_client)
-            result = await tools["toggle_feed_source"].fn(
-                source_id=1, is_active=False
-            )
+            result = await tools["toggle_feed_source"].fn(source_id=1, is_active=False)
             parsed = json.loads(result)
             assert "error" not in parsed
             assert parsed["source_id"] == 1
@@ -3211,9 +3206,7 @@ class TestNewsFeedTools:
 
         with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
             tools = self._create_server(mock_api_client)
-            result = await tools["toggle_feed_source"].fn(
-                source_id=999, is_active=True
-            )
+            result = await tools["toggle_feed_source"].fn(source_id=999, is_active=True)
             parsed = json.loads(result)
             assert "error" in parsed
 
@@ -3241,9 +3234,7 @@ class TestNewsFeedTools:
             assert parsed["result"]["articles_fetched"] == 5
 
     @pytest.mark.asyncio
-    async def test_force_fetch_feed_default_hours(
-        self, mock_api_client: MagicMock
-    ) -> None:
+    async def test_force_fetch_feed_default_hours(self, mock_api_client: MagicMock) -> None:
         """Test force_fetch_feed uses default hours."""
         import json
 

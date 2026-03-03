@@ -16,7 +16,11 @@ from mcp_resource_framework.auth import IntrospectionTokenVerifier
 from mcp_resource_framework.middleware import NormalizePathMiddleware
 from mcp_resource_framework.oauth_discovery import register_oauth_discovery_endpoints
 from mcp_resource_framework.security import guard_tool
-from mcp_resource_framework.validation import validate_dict_response, validate_list_response
+from mcp_resource_framework.validation import (
+    json_error,
+    validate_dict_response,
+    validate_list_response,
+)
 from pydantic import AnyHttpUrl
 from taskmanager_sdk import VALID_DEADLINE_TYPES, TaskManagerClient
 
@@ -160,7 +164,7 @@ def create_resource_server(
         response = api_client.health_check()
         data, error = validate_dict_response(response, "health")
         if error:
-            return json.dumps({"error": error})
+            return json_error(error)
         return json.dumps(data)
 
     @app.resource("taskmanager://categories")
@@ -170,7 +174,7 @@ def create_resource_server(
         response = api_client.get_categories()
         categories, error = validate_list_response(response, "categories")
         if error:
-            return json.dumps({"error": error})
+            return json_error(error)
         return json.dumps({"categories": categories})
 
     @app.resource("taskmanager://snippets/categories")
@@ -180,7 +184,7 @@ def create_resource_server(
         response = api_client.get_snippet_categories()
         categories, error = validate_list_response(response, "categories", key="data")
         if error:
-            return json.dumps({"error": error})
+            return json_error(error)
         return json.dumps({"categories": categories})
 
     @app.resource("taskmanager://wiki/pages")
@@ -190,7 +194,7 @@ def create_resource_server(
         response = api_client.list_wiki_pages()
         pages, error = validate_list_response(response, "wiki pages", key="data")
         if error:
-            return json.dumps({"error": error})
+            return json_error(error)
         return json.dumps({"pages": pages, "count": len(pages)})
 
     # -----------------------------------------------------------------------
@@ -252,7 +256,7 @@ def create_resource_server(
             tasks, tasks_error = validate_list_response(response, "tasks")
             if tasks_error:
                 logger.error(f"Failed to get tasks: {tasks_error}")
-                return json.dumps({"error": tasks_error})
+                return json_error(tasks_error)
 
             logger.info(f"Retrieved {len(tasks)} tasks")
 
@@ -311,7 +315,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in get_tasks: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["title", "description", "category", "tags"], screen_output=True)
@@ -349,11 +353,9 @@ def create_resource_server(
         try:
             # Validate deadline_type
             if deadline_type not in VALID_DEADLINE_TYPES:
-                return json.dumps(
-                    {
-                        "error": f"Invalid deadline_type: {deadline_type!r}. "
-                        f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
-                    }
+                return json_error(
+                    f"Invalid deadline_type: {deadline_type!r}. "
+                    f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
                 )
 
             api_client = get_api_client()
@@ -368,7 +370,7 @@ def create_resource_server(
                 try:
                     parent_id_int = int(numeric_id)
                 except ValueError:
-                    return json.dumps({"error": f"Invalid parent_id format: {parent_id}"})
+                    return json_error(f"Invalid parent_id format: {parent_id}")
 
             # Use SDK method with parent_id support
             response = api_client.create_todo(
@@ -388,7 +390,7 @@ def create_resource_server(
             task, task_error = validate_dict_response(response, "created task")
             if task_error:
                 logger.error(f"Failed to create task: {task_error}")
-                return json.dumps({"error": task_error})
+                return json_error(task_error)
 
             logger.info(f"Created task: {task}")
 
@@ -396,7 +398,7 @@ def create_resource_server(
             task_id = task.get("id") if task is not None else None
             if task_id is None:
                 logger.warning("Task data missing 'id' field")
-                return json.dumps({"error": "Created task has no ID"})
+                return json_error("Created task has no ID")
 
             # Include the resolved category in the response so callers can confirm
             # what project was matched or auto-created when a category was requested.
@@ -416,7 +418,7 @@ def create_resource_server(
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Exception in create_task: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(screen_output=True)
@@ -469,27 +471,25 @@ def create_resource_server(
         """
         try:
             if not tasks:
-                return json.dumps({"error": "tasks array must not be empty"})
+                return json_error("tasks array must not be empty")
             if len(tasks) > 50:
-                return json.dumps({"error": "Maximum 50 tasks per batch"})
+                return json_error("Maximum 50 tasks per batch")
 
             # Validate and transform each task
             todo_dicts: list[dict[str, Any]] = []
             for i, task in enumerate(tasks):
                 if not isinstance(task, dict):
-                    return json.dumps({"error": f"Task at index {i} must be an object"})
+                    return json_error(f"Task at index {i} must be an object")
                 title = task.get("title")
                 if not title:
-                    return json.dumps({"error": f"Task at index {i} is missing required 'title'"})
+                    return json_error(f"Task at index {i} is missing required 'title'")
 
                 deadline_type = task.get("deadline_type", "preferred")
                 if deadline_type not in VALID_DEADLINE_TYPES:
-                    return json.dumps(
-                        {
-                            "error": f"Task at index {i}: invalid deadline_type "
-                            f"{deadline_type!r}. "
-                            f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
-                        }
+                    return json_error(
+                        f"Task at index {i}: invalid deadline_type "
+                        f"{deadline_type!r}. "
+                        f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
                     )
 
                 todo: dict[str, Any] = {"title": title}
@@ -512,11 +512,8 @@ def create_resource_server(
                 parent_index = task.get("parent_index")
 
                 if parent_id is not None and parent_index is not None:
-                    return json.dumps(
-                        {
-                            "error": f"Task at index {i}: cannot specify both "
-                            f"parent_id and parent_index"
-                        }
+                    return json_error(
+                        f"Task at index {i}: cannot specify both parent_id and parent_index"
                     )
 
                 if parent_id is not None:
@@ -527,22 +524,20 @@ def create_resource_server(
                     try:
                         todo["parent_id"] = int(numeric_id)
                     except ValueError:
-                        return json.dumps(
-                            {"error": f"Task at index {i}: invalid parent_id format: {parent_id}"}
+                        return json_error(
+                            f"Task at index {i}: invalid parent_id format: {parent_id}"
                         )
 
                 if parent_index is not None:
                     if not isinstance(parent_index, int):
-                        return json.dumps(
-                            {"error": f"Task at index {i}: parent_index must be an integer"}
-                        )
+                        return json_error(f"Task at index {i}: parent_index must be an integer")
                     todo["parent_index"] = parent_index
 
                 depends_on = task.get("depends_on")
                 if depends_on is not None:
                     if not isinstance(depends_on, list):
-                        return json.dumps(
-                            {"error": f"Task at index {i}: depends_on must be a list of integers"}
+                        return json_error(
+                            f"Task at index {i}: depends_on must be a list of integers"
                         )
                     todo["depends_on"] = depends_on
 
@@ -557,7 +552,7 @@ def create_resource_server(
 
             created_tasks, list_error = validate_list_response(response, "batch created tasks")
             if list_error:
-                return json.dumps({"error": list_error})
+                return json_error(list_error)
 
             results: list[dict[str, Any]] = []
             warnings: list[str] = []
@@ -595,7 +590,7 @@ def create_resource_server(
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Exception in create_tasks: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(
@@ -640,11 +635,9 @@ def create_resource_server(
         try:
             # Validate deadline_type if provided
             if deadline_type is not None and deadline_type not in VALID_DEADLINE_TYPES:
-                return json.dumps(
-                    {
-                        "error": f"Invalid deadline_type: {deadline_type!r}. "
-                        f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
-                    }
+                return json_error(
+                    f"Invalid deadline_type: {deadline_type!r}. "
+                    f"Must be one of: {', '.join(VALID_DEADLINE_TYPES)}"
                 )
 
             api_client = get_api_client()
@@ -655,7 +648,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             # Convert parent_id if provided
             parent_id_int: int | None = None
@@ -666,7 +659,7 @@ def create_resource_server(
                 try:
                     parent_id_int = int(parent_numeric_id)
                 except ValueError:
-                    return json.dumps({"error": f"Invalid parent_id format: {parent_id}"})
+                    return json_error(f"Invalid parent_id format: {parent_id}")
 
             # Track which fields are being updated
             updated_fields = []
@@ -711,7 +704,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to update task: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             # Return response in expected format
             result: dict[str, Any] = {
@@ -726,7 +719,7 @@ def create_resource_server(
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Exception in update_task: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["name", "description"], screen_output=True)
@@ -771,14 +764,14 @@ def create_resource_server(
             project, project_error = validate_dict_response(response, "created project")
             if project_error:
                 logger.error(f"Failed to create project: {project_error}")
-                return json.dumps({"error": project_error})
+                return json_error(project_error)
 
             logger.info(f"Created project: {project}")
 
             project_id = project.get("id") if project is not None else None
             if project_id is None:
                 logger.warning("Project data missing 'id' field")
-                return json.dumps({"error": "Created project has no ID"})
+                return json_error("Created project has no ID")
 
             result = {
                 "id": project_id,
@@ -789,7 +782,7 @@ def create_resource_server(
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Exception in create_project: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["query", "category"], screen_output=True)
@@ -822,7 +815,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to search tasks: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             data = response.data
             if data is None:
@@ -895,7 +888,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in search_tasks: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["query"], screen_output=True)
@@ -921,9 +914,7 @@ def create_resource_server(
         Returns:
             JSON object with results grouped by type and total count
         """
-        logger.info(
-            f"=== unified_search called: query='{query}', types={types}, limit={limit} ==="
-        )
+        logger.info(f"=== unified_search called: query='{query}', types={types}, limit={limit} ===")
         try:
             api_client = get_api_client()
             response = api_client.search(query=query, types=types, limit=limit)
@@ -934,7 +925,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to search: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             data = response.data
             if data is None:
@@ -943,7 +934,7 @@ def create_resource_server(
             return json.dumps(data)
         except Exception as e:
             logger.error(f"Exception in unified_search: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -968,7 +959,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             # Get attachments using SDK method
             response = api_client.get_attachments(todo_id)
@@ -979,7 +970,7 @@ def create_resource_server(
             attachments, attachments_error = validate_list_response(response, "attachments")
             if attachments_error:
                 logger.error(f"Failed to get attachments: {attachments_error}")
-                return json.dumps({"error": attachments_error})
+                return json_error(attachments_error)
 
             logger.info(f"Returning {len(attachments)} attachments")
             return json.dumps(
@@ -992,7 +983,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in list_task_attachments: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -1015,7 +1006,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             response = api_client.get_comments(todo_id)
             logger.info(
@@ -1025,7 +1016,7 @@ def create_resource_server(
             comments, comments_error = validate_list_response(response, "comments")
             if comments_error:
                 logger.error(f"Failed to get comments: {comments_error}")
-                return json.dumps({"error": comments_error})
+                return json_error(comments_error)
 
             logger.info(f"Returning {len(comments)} comments")
             return json.dumps(
@@ -1038,7 +1029,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in list_task_comments: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["content"], screen_output=True)
@@ -1061,7 +1052,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             response = api_client.create_comment(todo_id, content)
             logger.info(
@@ -1071,7 +1062,7 @@ def create_resource_server(
             comment, comment_error = validate_dict_response(response, "created comment")
             if comment_error:
                 logger.error(f"Failed to create comment: {comment_error}")
-                return json.dumps({"error": comment_error})
+                return json_error(comment_error)
 
             logger.info(f"Created comment: {comment}")
             comment_id = comment.get("id") if comment is not None else None
@@ -1086,7 +1077,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in add_task_comment: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -1116,7 +1107,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             # Get task details using SDK method
             response = api_client.get_todo(todo_id)
@@ -1127,7 +1118,7 @@ def create_resource_server(
             task, task_error = validate_dict_response(response, "task")
             if task_error or task is None:
                 logger.error(f"Failed to get task: {task_error}")
-                return json.dumps({"error": task_error or "Task not found"})
+                return json_error(task_error or "Task not found")
 
             logger.info(f"Retrieved task: {task.get('id')}")
 
@@ -1175,7 +1166,7 @@ def create_resource_server(
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Exception in get_task: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -1202,7 +1193,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             # Delete task using SDK method
             response = api_client.delete_todo(todo_id)
@@ -1212,7 +1203,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to delete task: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             logger.info(f"Deleted task {task_id}")
             return json.dumps(
@@ -1224,7 +1215,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in delete_task: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["status", "category"], screen_output=True)
@@ -1278,7 +1269,7 @@ def create_resource_server(
             tasks, tasks_error = validate_list_response(response, "tasks")
             if tasks_error:
                 logger.error(f"Failed to get tasks: {tasks_error}")
-                return json.dumps({"error": tasks_error})
+                return json_error(tasks_error)
 
             # Filter based on agent criteria
             result_tasks = []
@@ -1353,7 +1344,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in get_agent_tasks: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["action_type", "blocking_reason"], screen_output=True)
@@ -1400,7 +1391,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             # Validate action_type
             valid_action_types = [
@@ -1418,20 +1409,16 @@ def create_resource_server(
                 "other",
             ]
             if action_type not in valid_action_types:
-                return json.dumps(
-                    {
-                        "error": f"Invalid action_type: {action_type}. Must be one of: {valid_action_types}"
-                    }
+                return json_error(
+                    f"Invalid action_type: {action_type}. Must be one of: {valid_action_types}"
                 )
 
             # Validate autonomy_tier if provided
             if autonomy_tier is not None:
                 if not isinstance(autonomy_tier, int):
-                    return json.dumps({"error": "autonomy_tier must be an integer"})
+                    return json_error("autonomy_tier must be an integer")
                 if autonomy_tier < 1 or autonomy_tier > 4:
-                    return json.dumps(
-                        {"error": f"Invalid autonomy_tier: {autonomy_tier}. Must be 1-4."}
-                    )
+                    return json_error(f"Invalid autonomy_tier: {autonomy_tier}. Must be 1-4.")
 
             # Infer default autonomy_tier from action_type if not provided
             # NOTE: This mapping is duplicated from services/backend/app/models/todo.py
@@ -1464,7 +1451,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to classify task: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             return json.dumps(
                 {
@@ -1479,7 +1466,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in classify_task: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["note"], screen_output=True)
@@ -1508,7 +1495,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             # Get current task to append notes if needed
             if append:
@@ -1529,7 +1516,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to add note: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             return json.dumps(
                 {
@@ -1540,7 +1527,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in add_agent_note: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["status", "blocking_reason"], screen_output=True)
@@ -1573,7 +1560,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             # Validate status
             valid_statuses = [
@@ -1584,13 +1571,11 @@ def create_resource_server(
                 "needs_human",
             ]
             if status not in valid_statuses:
-                return json.dumps(
-                    {"error": f"Invalid status: {status}. Must be one of: {valid_statuses}"}
-                )
+                return json_error(f"Invalid status: {status}. Must be one of: {valid_statuses}")
 
             # Require blocking_reason for blocked status
             if status == "blocked" and not blocking_reason:
-                return json.dumps({"error": "blocking_reason is required when status is 'blocked'"})
+                return json_error("blocking_reason is required when status is 'blocked'")
 
             # Update task with agent status
             response = api_client.update_todo(
@@ -1601,7 +1586,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to set agent status: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             return json.dumps(
                 {
@@ -1613,7 +1598,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in set_agent_status: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -1640,7 +1625,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             # Complete task using SDK method
             response = api_client.complete_todo(todo_id)
@@ -1650,7 +1635,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to complete task: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             logger.info(f"Completed task {task_id}")
             return json.dumps(
@@ -1662,7 +1647,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in complete_task: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -1689,7 +1674,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             response = api_client.get_dependencies(todo_id)
             logger.info(
@@ -1699,7 +1684,7 @@ def create_resource_server(
             dependencies, dep_error = validate_list_response(response, "dependencies")
             if dep_error:
                 logger.error(f"Failed to get dependencies: {dep_error}")
-                return json.dumps({"error": dep_error})
+                return json_error(dep_error)
 
             # Transform dependency IDs to task_N format
             result_deps = []
@@ -1729,7 +1714,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in list_dependencies: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -1760,7 +1745,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             dep_numeric_id = (
                 dependency_id.replace("task_", "")
@@ -1770,7 +1755,7 @@ def create_resource_server(
             try:
                 dep_id = int(dep_numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid dependency_id format: {dependency_id}"})
+                return json_error(f"Invalid dependency_id format: {dependency_id}")
 
             response = api_client.add_dependency(todo_id, dep_id)
             logger.info(
@@ -1779,7 +1764,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to add dependency: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             logger.info(f"Added dependency: task {task_id} depends on {dependency_id}")
             return json.dumps(
@@ -1792,7 +1777,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in add_dependency: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     # -----------------------------------------------------------------------
     # Wiki tools
@@ -1825,7 +1810,7 @@ def create_resource_server(
             pages, pages_error = validate_list_response(response, "wiki pages", key="data")
             if pages_error:
                 logger.error(f"Failed to list wiki pages: {pages_error}")
-                return json.dumps({"error": pages_error})
+                return json_error(pages_error)
 
             logger.info(f"Returning {len(pages)} wiki pages")
             return json.dumps(
@@ -1837,7 +1822,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in search_wiki_pages: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["title", "content"], screen_output=True)
@@ -1862,10 +1847,14 @@ def create_resource_server(
             JSON object with created page data including id, title, slug, content,
             created_at, and updated_at
         """
-        logger.info(f"=== create_wiki_page called: title='{title}', slug={slug}, parent_id={parent_id} ===")
+        logger.info(
+            f"=== create_wiki_page called: title='{title}', slug={slug}, parent_id={parent_id} ==="
+        )
         try:
             api_client = get_api_client()
-            response = api_client.create_wiki_page(title=title, content=content, slug=slug, parent_id=parent_id)
+            response = api_client.create_wiki_page(
+                title=title, content=content, slug=slug, parent_id=parent_id
+            )
             logger.info(
                 f"create_wiki_page response: success={response.success}, status={response.status_code}"
             )
@@ -1873,7 +1862,7 @@ def create_resource_server(
             page, page_error = validate_dict_response(response, "created wiki page")
             if page_error:
                 logger.error(f"Failed to create wiki page: {page_error}")
-                return json.dumps({"error": page_error})
+                return json_error(page_error)
 
             logger.info(f"Created wiki page: {page}")
             return json.dumps(
@@ -1885,7 +1874,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in create_wiki_page: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -1911,7 +1900,7 @@ def create_resource_server(
             page, page_error = validate_dict_response(response, "wiki page")
             if page_error:
                 logger.error(f"Failed to get wiki page: {page_error}")
-                return json.dumps({"error": page_error})
+                return json_error(page_error)
 
             logger.info(f"Retrieved wiki page: id={page.get('id') if page else None}")
             return json.dumps(
@@ -1922,7 +1911,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in get_wiki_page: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["title", "content"], screen_output=True)
@@ -1960,12 +1949,17 @@ def create_resource_server(
             f"=== update_wiki_page called: page_id={page_id}, title={title}, slug={slug}, append={append}, parent_id={parent_id}, remove_parent={remove_parent} ==="
         )
         if parent_id is not None and remove_parent:
-            return json.dumps({"error": "parent_id and remove_parent are mutually exclusive"})
+            return json_error("parent_id and remove_parent are mutually exclusive")
         try:
             api_client = get_api_client()
             response = api_client.update_wiki_page(
-                page_id=page_id, title=title, content=content, slug=slug, append=append,
-                parent_id=parent_id, remove_parent=remove_parent,
+                page_id=page_id,
+                title=title,
+                content=content,
+                slug=slug,
+                append=append,
+                parent_id=parent_id,
+                remove_parent=remove_parent,
             )
             logger.info(
                 f"update_wiki_page response: success={response.success}, status={response.status_code}"
@@ -1974,7 +1968,7 @@ def create_resource_server(
             page, page_error = validate_dict_response(response, "updated wiki page")
             if page_error:
                 logger.error(f"Failed to update wiki page: {page_error}")
-                return json.dumps({"error": page_error})
+                return json_error(page_error)
 
             logger.info(f"Updated wiki page: {page}")
             return json.dumps(
@@ -1986,7 +1980,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in update_wiki_page: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2013,7 +2007,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to delete wiki page: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             logger.info(f"Deleted wiki page {page_id}")
             return json.dumps(
@@ -2025,7 +2019,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in delete_wiki_page: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2053,7 +2047,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             response = api_client.link_wiki_page_to_task(page_id, todo_id)
             logger.info(
@@ -2063,7 +2057,7 @@ def create_resource_server(
             task, task_error = validate_dict_response(response, "linked task")
             if task_error:
                 logger.error(f"Failed to link wiki page to task: {task_error}")
-                return json.dumps({"error": task_error})
+                return json_error(task_error)
 
             logger.info(f"Linked wiki page {page_id} to task {task_id}")
             return json.dumps(
@@ -2077,7 +2071,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in link_wiki_page_to_task: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2104,7 +2098,7 @@ def create_resource_server(
             tasks, tasks_error = validate_list_response(response, "linked tasks", key="data")
             if tasks_error:
                 logger.error(f"Failed to get linked tasks: {tasks_error}")
-                return json.dumps({"error": tasks_error})
+                return json_error(tasks_error)
 
             # Prefix task IDs
             for task in tasks:
@@ -2122,7 +2116,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in get_wiki_page_linked_tasks: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2145,7 +2139,7 @@ def create_resource_server(
             try:
                 todo_id = int(numeric_id)
             except ValueError:
-                return json.dumps({"error": f"Invalid task_id format: {task_id}"})
+                return json_error(f"Invalid task_id format: {task_id}")
 
             response = api_client.get_task_wiki_pages(todo_id)
             logger.info(
@@ -2156,7 +2150,7 @@ def create_resource_server(
             pages, pages_error = validate_list_response(response, "wiki pages", key="data")
             if pages_error:
                 logger.error(f"Failed to get task wiki pages: {pages_error}")
-                return json.dumps({"error": pages_error})
+                return json_error(pages_error)
 
             logger.info(f"Returning {len(pages)} wiki pages for task {task_id}")
             return json.dumps(
@@ -2169,7 +2163,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in get_task_wiki_pages: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2204,7 +2198,7 @@ def create_resource_server(
                     invalid_ids.append(tid)
 
             if invalid_ids:
-                return json.dumps({"error": f"Invalid task_id format(s): {', '.join(invalid_ids)}"})
+                return json_error(f"Invalid task_id format(s): {', '.join(invalid_ids)}")
 
             response = api_client.batch_link_wiki_page_to_tasks(page_id, todo_ids)
             logger.info(
@@ -2215,7 +2209,7 @@ def create_resource_server(
             result, result_error = validate_dict_response(response, "batch link result")
             if result_error:
                 logger.error(f"Failed to batch link tasks: {result_error}")
-                return json.dumps({"error": result_error})
+                return json_error(result_error)
 
             assert result is not None
             logger.info(f"Batch linked tasks to wiki page {page_id}: {result}")
@@ -2231,7 +2225,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in batch_link_wiki_page_to_tasks: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     # -----------------------------------------------------------------------
     # Snippet tools
@@ -2279,7 +2273,7 @@ def create_resource_server(
             snippets, snippets_error = validate_list_response(response, "snippets", key="data")
             if snippets_error:
                 logger.error(f"Failed to list snippets: {snippets_error}")
-                return json.dumps({"error": snippets_error})
+                return json_error(snippets_error)
 
             logger.info(f"Returning {len(snippets)} snippets")
             return json.dumps(
@@ -2291,7 +2285,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in list_snippets: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["category", "title", "content"], screen_output=True)
@@ -2341,7 +2335,7 @@ def create_resource_server(
             snippet, snippet_error = validate_dict_response(response, "created snippet")
             if snippet_error:
                 logger.error(f"Failed to create snippet: {snippet_error}")
-                return json.dumps({"error": snippet_error})
+                return json_error(snippet_error)
 
             logger.info(f"Created snippet: id={snippet.get('id') if snippet else None}")
             return json.dumps(
@@ -2353,7 +2347,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in create_snippet: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2379,7 +2373,7 @@ def create_resource_server(
             snippet, snippet_error = validate_dict_response(response, "snippet")
             if snippet_error:
                 logger.error(f"Failed to get snippet: {snippet_error}")
-                return json.dumps({"error": snippet_error})
+                return json_error(snippet_error)
 
             logger.info(f"Retrieved snippet: id={snippet.get('id') if snippet else None}")
             return json.dumps(
@@ -2390,7 +2384,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in get_snippet: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["category", "title", "content"], screen_output=True)
@@ -2439,7 +2433,7 @@ def create_resource_server(
             snippet, snippet_error = validate_dict_response(response, "updated snippet")
             if snippet_error:
                 logger.error(f"Failed to update snippet: {snippet_error}")
-                return json.dumps({"error": snippet_error})
+                return json_error(snippet_error)
 
             logger.info(f"Updated snippet: id={snippet.get('id') if snippet else None}")
             return json.dumps(
@@ -2451,7 +2445,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in update_snippet: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2479,7 +2473,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to delete snippet: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             logger.info(f"Deleted snippet {snippet_id}")
             return json.dumps(
@@ -2491,7 +2485,7 @@ def create_resource_server(
             )
         except Exception as e:
             logger.error(f"Exception in delete_snippet: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     # News / RSS feed tools
 
@@ -2531,14 +2525,7 @@ def create_resource_server(
         )
         valid_feed_types = {"paper", "article"}
         if feed_type is not None and feed_type not in valid_feed_types:
-            return json.dumps(
-                {
-                    "error": (
-                        f"Invalid feed_type '{feed_type}'. "
-                        f"Must be one of: article, paper"
-                    )
-                }
-            )
+            return json_error(f"Invalid feed_type '{feed_type}'. Must be one of: article, paper")
         try:
             api_client = get_api_client()
             response = api_client.list_articles(
@@ -2550,16 +2537,13 @@ def create_resource_server(
                 offset=offset,
             )
             logger.info(
-                f"list_articles response: success={response.success}, "
-                f"status={response.status_code}"
+                f"list_articles response: success={response.success}, status={response.status_code}"
             )
 
-            articles, articles_error = validate_list_response(
-                response, "articles", key="data"
-            )
+            articles, articles_error = validate_list_response(response, "articles", key="data")
             if articles_error:
                 logger.error(f"Failed to list articles: {articles_error}")
-                return json.dumps({"error": articles_error})
+                return json_error(articles_error)
 
             # Extract pagination meta if present
             meta = {}
@@ -2572,14 +2556,12 @@ def create_resource_server(
                     "articles": articles,
                     "count": len(articles),
                     "meta": meta,
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
             logger.error(f"Exception in list_articles: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2599,35 +2581,28 @@ def create_resource_server(
             api_client = get_api_client()
             response = api_client.get_article(article_id)
             logger.info(
-                f"get_article response: success={response.success}, "
-                f"status={response.status_code}"
+                f"get_article response: success={response.success}, status={response.status_code}"
             )
 
             article, article_error = validate_dict_response(response, "article")
             if article_error:
                 logger.error(f"Failed to get article: {article_error}")
-                return json.dumps({"error": article_error})
+                return json_error(article_error)
 
-            logger.info(
-                f"Retrieved article: id={article.get('id') if article else None}"
-            )
+            logger.info(f"Retrieved article: id={article.get('id') if article else None}")
             return json.dumps(
                 {
                     "article": article,
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
             logger.error(f"Exception in get_article: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["is_read"], screen_output=True)
-    async def mark_article_read(
-        article_id: int, is_read: bool = True
-    ) -> str:
+    async def mark_article_read(article_id: int, is_read: bool = True) -> str:
         """
         Mark an article as read or unread.
 
@@ -2638,10 +2613,7 @@ def create_resource_server(
         Returns:
             JSON object confirming read status change
         """
-        logger.info(
-            f"=== mark_article_read called: article_id={article_id}, "
-            f"is_read={is_read} ==="
-        )
+        logger.info(f"=== mark_article_read called: article_id={article_id}, is_read={is_read} ===")
         try:
             api_client = get_api_client()
             response = api_client.mark_article_read(article_id, is_read)
@@ -2652,20 +2624,16 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to mark article read: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             result = response.data if isinstance(response.data, dict) else {}
             result["article_id"] = article_id
             result["status"] = "updated"
-            result["current_time"] = datetime.datetime.now(
-                tz=datetime.UTC
-            ).isoformat()
+            result["current_time"] = datetime.datetime.now(tz=datetime.UTC).isoformat()
             return json.dumps(result)
         except Exception as e:
-            logger.error(
-                f"Exception in mark_article_read: {e}", exc_info=True
-            )
-            return json.dumps({"error": str(e)})
+            logger.error(f"Exception in mark_article_read: {e}", exc_info=True)
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["rating"], screen_output=True)
@@ -2680,45 +2648,34 @@ def create_resource_server(
         Returns:
             JSON object confirming rating
         """
-        logger.info(
-            f"=== rate_article called: article_id={article_id}, "
-            f"rating={rating} ==="
-        )
+        logger.info(f"=== rate_article called: article_id={article_id}, rating={rating} ===")
         valid_ratings = {"good", "bad", "not_interested"}
         if rating not in valid_ratings:
-            return json.dumps(
-                {
-                    "error": (
-                        f"Invalid rating '{rating}'. "
-                        f"Must be one of: {', '.join(sorted(valid_ratings))}"
-                    )
-                }
+            return json_error(
+                f"Invalid rating '{rating}'. Must be one of: {', '.join(sorted(valid_ratings))}"
             )
         try:
             api_client = get_api_client()
             response = api_client.rate_article(article_id, rating)
             logger.info(
-                f"rate_article response: success={response.success}, "
-                f"status={response.status_code}"
+                f"rate_article response: success={response.success}, status={response.status_code}"
             )
 
             if not response.success:
                 logger.error(f"Failed to rate article: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             return json.dumps(
                 {
                     "article_id": article_id,
                     "rating": rating,
                     "status": "rated",
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
             logger.error(f"Exception in rate_article: {e}", exc_info=True)
-            return json.dumps({"error": str(e)})
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["featured"], screen_output=True)
@@ -2732,9 +2689,7 @@ def create_resource_server(
         Returns:
             JSON object with "sources" array of feed sources
         """
-        logger.info(
-            f"=== list_feed_sources called: featured={featured} ==="
-        )
+        logger.info(f"=== list_feed_sources called: featured={featured} ===")
         try:
             api_client = get_api_client()
             response = api_client.list_feed_sources(featured=featured)
@@ -2743,28 +2698,22 @@ def create_resource_server(
                 f"status={response.status_code}"
             )
 
-            sources, sources_error = validate_list_response(
-                response, "sources", key="data"
-            )
+            sources, sources_error = validate_list_response(response, "sources", key="data")
             if sources_error:
                 logger.error(f"Failed to list feed sources: {sources_error}")
-                return json.dumps({"error": sources_error})
+                return json_error(sources_error)
 
             logger.info(f"Returning {len(sources)} feed sources")
             return json.dumps(
                 {
                     "sources": sources,
                     "count": len(sources),
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in list_feed_sources: {e}", exc_info=True
-            )
-            return json.dumps({"error": str(e)})
+            logger.error(f"Exception in list_feed_sources: {e}", exc_info=True)
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(
@@ -2796,19 +2745,11 @@ def create_resource_server(
             JSON object with created feed source data
         """
         logger.info(
-            f"=== create_feed_source called: name='{name}', url='{url}', "
-            f"feed_type={feed_type} ==="
+            f"=== create_feed_source called: name='{name}', url='{url}', feed_type={feed_type} ==="
         )
         valid_feed_types = {"paper", "article"}
         if feed_type not in valid_feed_types:
-            return json.dumps(
-                {
-                    "error": (
-                        f"Invalid feed_type '{feed_type}'. "
-                        f"Must be one of: article, paper"
-                    )
-                }
-            )
+            return json_error(f"Invalid feed_type '{feed_type}'. Must be one of: article, paper")
         try:
             api_client = get_api_client()
             response = api_client.create_feed_source(
@@ -2825,30 +2766,22 @@ def create_resource_server(
                 f"status={response.status_code}"
             )
 
-            source, source_error = validate_dict_response(
-                response, "feed source"
-            )
+            source, source_error = validate_dict_response(response, "feed source")
             if source_error:
                 logger.error(f"Failed to create feed source: {source_error}")
-                return json.dumps({"error": source_error})
+                return json_error(source_error)
 
-            logger.info(
-                f"Created feed source: id={source.get('id') if source else None}"
-            )
+            logger.info(f"Created feed source: id={source.get('id') if source else None}")
             return json.dumps(
                 {
                     "source": source,
                     "status": "created",
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in create_feed_source: {e}", exc_info=True
-            )
-            return json.dumps({"error": str(e)})
+            logger.error(f"Exception in create_feed_source: {e}", exc_info=True)
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(
@@ -2882,19 +2815,11 @@ def create_resource_server(
             JSON object with updated feed source data
         """
         logger.info(
-            f"=== update_feed_source called: source_id={source_id}, "
-            f"name={name}, url={url} ==="
+            f"=== update_feed_source called: source_id={source_id}, name={name}, url={url} ==="
         )
         valid_feed_types = {"paper", "article"}
         if feed_type is not None and feed_type not in valid_feed_types:
-            return json.dumps(
-                {
-                    "error": (
-                        f"Invalid feed_type '{feed_type}'. "
-                        f"Must be one of: article, paper"
-                    )
-                }
-            )
+            return json_error(f"Invalid feed_type '{feed_type}'. Must be one of: article, paper")
         try:
             api_client = get_api_client()
             response = api_client.update_feed_source(
@@ -2912,30 +2837,22 @@ def create_resource_server(
                 f"status={response.status_code}"
             )
 
-            source, source_error = validate_dict_response(
-                response, "updated feed source"
-            )
+            source, source_error = validate_dict_response(response, "updated feed source")
             if source_error:
                 logger.error(f"Failed to update feed source: {source_error}")
-                return json.dumps({"error": source_error})
+                return json_error(source_error)
 
-            logger.info(
-                f"Updated feed source: id={source.get('id') if source else None}"
-            )
+            logger.info(f"Updated feed source: id={source.get('id') if source else None}")
             return json.dumps(
                 {
                     "source": source,
                     "status": "updated",
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in update_feed_source: {e}", exc_info=True
-            )
-            return json.dumps({"error": str(e)})
+            logger.error(f"Exception in update_feed_source: {e}", exc_info=True)
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=[], screen_output=True)
@@ -2952,9 +2869,7 @@ def create_resource_server(
         Returns:
             JSON object confirming deletion with deleted status
         """
-        logger.info(
-            f"=== delete_feed_source called: source_id={source_id} ==="
-        )
+        logger.info(f"=== delete_feed_source called: source_id={source_id} ===")
         try:
             api_client = get_api_client()
             response = api_client.delete_feed_source(source_id)
@@ -2965,29 +2880,23 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to delete feed source: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             logger.info(f"Deleted feed source {source_id}")
             return json.dumps(
                 {
                     "source_id": source_id,
                     "status": "deleted",
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in delete_feed_source: {e}", exc_info=True
-            )
-            return json.dumps({"error": str(e)})
+            logger.error(f"Exception in delete_feed_source: {e}", exc_info=True)
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["is_active"], screen_output=True)
-    async def toggle_feed_source(
-        source_id: int, is_active: bool
-    ) -> str:
+    async def toggle_feed_source(source_id: int, is_active: bool) -> str:
         """
         Toggle a feed source's active status (admin only).
 
@@ -2999,8 +2908,7 @@ def create_resource_server(
             JSON object confirming toggle
         """
         logger.info(
-            f"=== toggle_feed_source called: source_id={source_id}, "
-            f"is_active={is_active} ==="
+            f"=== toggle_feed_source called: source_id={source_id}, is_active={is_active} ==="
         )
         try:
             api_client = get_api_client()
@@ -3011,29 +2919,21 @@ def create_resource_server(
             )
 
             if not response.success:
-                logger.error(
-                    f"Failed to toggle feed source: {response.error}"
-                )
-                return json.dumps({"error": response.error})
+                logger.error(f"Failed to toggle feed source: {response.error}")
+                return json_error(response.error or "Unknown error")
 
             result = response.data if isinstance(response.data, dict) else {}
             result["source_id"] = source_id
             result["status"] = "toggled"
-            result["current_time"] = datetime.datetime.now(
-                tz=datetime.UTC
-            ).isoformat()
+            result["current_time"] = datetime.datetime.now(tz=datetime.UTC).isoformat()
             return json.dumps(result)
         except Exception as e:
-            logger.error(
-                f"Exception in toggle_feed_source: {e}", exc_info=True
-            )
-            return json.dumps({"error": str(e)})
+            logger.error(f"Exception in toggle_feed_source: {e}", exc_info=True)
+            return json_error(str(e))
 
     @app.tool()
     @guard_tool(input_params=["hours"], screen_output=True)
-    async def force_fetch_feed(
-        source_id: int, hours: int = 168
-    ) -> str:
+    async def force_fetch_feed(source_id: int, hours: int = 168) -> str:
         """
         Force-fetch articles from a feed source (admin only).
 
@@ -3047,10 +2947,7 @@ def create_resource_server(
         Returns:
             JSON object with fetch result
         """
-        logger.info(
-            f"=== force_fetch_feed called: source_id={source_id}, "
-            f"hours={hours} ==="
-        )
+        logger.info(f"=== force_fetch_feed called: source_id={source_id}, hours={hours} ===")
         try:
             api_client = get_api_client()
             response = api_client.force_fetch_feed(source_id, hours)
@@ -3061,7 +2958,7 @@ def create_resource_server(
 
             if not response.success:
                 logger.error(f"Failed to force fetch feed: {response.error}")
-                return json.dumps({"error": response.error})
+                return json_error(response.error or "Unknown error")
 
             result = response.data if isinstance(response.data, dict) else {}
             return json.dumps(
@@ -3070,16 +2967,12 @@ def create_resource_server(
                     "hours": hours,
                     "result": result,
                     "status": "fetched",
-                    "current_time": datetime.datetime.now(
-                        tz=datetime.UTC
-                    ).isoformat(),
+                    "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
         except Exception as e:
-            logger.error(
-                f"Exception in force_fetch_feed: {e}", exc_info=True
-            )
-            return json.dumps({"error": str(e)})
+            logger.error(f"Exception in force_fetch_feed: {e}", exc_info=True)
+            return json_error(str(e))
 
     return app
 
