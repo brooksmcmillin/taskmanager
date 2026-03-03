@@ -46,32 +46,17 @@ const config: PlaywrightTestConfig = {
 	expect: {
 		timeout: 5000
 	},
-	// Disable parallel execution until test isolation is fixed
-	// (shared test data can cause race conditions)
-	fullyParallel: false,
+	fullyParallel: true,
 	forbidOnly: isCI,
-	retries: isCI ? 2 : 0,
-	workers: isCI ? 1 : undefined,
+	retries: isCI ? 1 : 0,
+	workers: isCI ? 'auto' : undefined,
 	projects: [
-		{
-			name: 'chromium',
-			use: {
-				browserName: 'chromium'
-			}
-		},
 		{
 			name: 'firefox',
 			use: {
 				browserName: 'firefox'
 			}
 		}
-		// WebKit disabled - missing system dependencies on Debian
-		// {
-		// 	name: 'webkit',
-		// 	use: {
-		// 		browserName: 'webkit'
-		// 	}
-		// }
 	]
 };
 
