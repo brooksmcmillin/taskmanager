@@ -128,6 +128,7 @@ while IFS= read -r file; do
       ;;
     *)
       # Unrecognized frontend file — run all tests to be safe
+      echo "Unrecognized file triggered full test run: $file" >&2
       exit 0
       ;;
   esac

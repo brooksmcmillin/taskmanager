@@ -58,6 +58,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -135,7 +137,8 @@ jobs:
         working-directory: services/frontend
         env:
           PGPASSWORD: taskmanager  # pragma: allowlist secret
-        run: npx playwright test ${{ steps.affected.outputs.specs }}
+          SPECS: ${{ steps.affected.outputs.specs }}
+        run: npx playwright test $SPECS
 
       - name: Upload test report
         uses: actions/upload-artifact@v7
