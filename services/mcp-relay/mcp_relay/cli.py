@@ -16,7 +16,7 @@ from typing import Any
 import click
 import httpx
 
-DEFAULT_BASE_URL = "http://localhost:8002/debug"
+DEFAULT_BASE_URL = "http://localhost:8002/api"
 DEFAULT_SENDER = "cli"
 
 _CHANNEL_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
@@ -41,7 +41,7 @@ def _error(msg: str) -> None:
 
 def _handle_response(resp: httpx.Response) -> dict[str, Any]:
     if resp.status_code == 401:
-        _error("Unauthorized — check your --token or MCP_RELAY_DEBUG_TOKEN.")
+        _error("Unauthorized — check your --token or MCP_RELAY_TOKEN.")
     if resp.status_code >= 400:
         try:
             detail = resp.json().get("error", resp.text)
@@ -57,19 +57,19 @@ def _handle_response(resp: httpx.Response) -> dict[str, Any]:
     envvar="MCP_RELAY_URL",
     default=DEFAULT_BASE_URL,
     show_default=True,
-    help="Base URL of the MCP Relay debug API.",
+    help="Base URL of the MCP Relay API.",
 )
 @click.option(
     "--token",
-    envvar="MCP_RELAY_DEBUG_TOKEN",
+    envvar="MCP_RELAY_TOKEN",
     default=None,
-    help="Bearer token for debug API authentication. Prefer MCP_RELAY_DEBUG_TOKEN env var over CLI flag in shared environments.",
+    help="Bearer token (OAuth or debug). Prefer MCP_RELAY_TOKEN env var over CLI flag in shared environments.",
 )
 @click.pass_context
 def cli(ctx: click.Context, url: str, token: str | None) -> None:
     """CLI for the MCP Relay server.
 
-    Send and receive messages on named channels via the debug REST API.
+    Send and receive messages on named channels via the REST API.
 
     Supports piping:  cat file.txt | mcp-relay-cli write my-channel
     """
