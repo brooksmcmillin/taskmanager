@@ -848,6 +848,93 @@ async def _fetch_subtasks_map(
     return subtasks_map
 
 
+async def _verify_parent_allows_children(parent: Todo) -> None:
+    """Raise a validation error if *parent* cannot accept subtasks.
+
+    A task may not be used as a parent when it is itself a subtask (i.e. it
+    already has a ``parent_id``), because only one level of nesting is
+    supported.
+
+    Args:
+        parent: The candidate parent Todo instance, already fetched from DB.
+
+    Raises:
+        ApiError: If ``parent`` is itself a subtask.
+    """
+    if parent.parent_id is not None:
+        raise errors.validation(
+            "Cannot create subtasks of subtasks. Only one level of nesting is allowed."
+        )
+
+
+def _resolve_agent_fields(
+    agent_actionable: bool | None,
+    action_type: ActionType | None,
+    autonomy_tier: int | None,
+    title: str,
+    description: str | None,
+    tags: list[str],
+) -> tuple[bool | None, ActionType | None, int | None]:
+    """Infer any unset agent fields from the task's title, description, and tags.
+
+    If all three agent fields are already set by the caller they are returned
+    unchanged. Otherwise ``infer_action_type`` is called once and each ``None``
+    field is filled with the inferred value (which may still be ``None`` if the
+    inference engine found no match).
+
+    Args:
+        agent_actionable: Caller-supplied value (may be None).
+        action_type: Caller-supplied value (may be None).
+        autonomy_tier: Caller-supplied value (may be None).
+        title: Task title used for keyword inference.
+        description: Optional task description used for keyword inference.
+        tags: Task tags used for tag-pattern inference.
+
+    Returns:
+        Tuple of (agent_actionable, action_type, autonomy_tier) with any
+        previously-``None`` values filled in from inference where possible.
+    """
+    if agent_actionable is None or action_type is None or autonomy_tier is None:
+        inferred_type, inferred_actionable, inferred_tier = infer_action_type(
+            title, description, tags
+        )
+        if action_type is None:
+            action_type = inferred_type
+        if agent_actionable is None:
+            agent_actionable = inferred_actionable
+        if autonomy_tier is None:
+            autonomy_tier = inferred_tier
+    return agent_actionable, action_type, autonomy_tier
+
+
+async def _apply_category_resolution(
+    db: "DbSession",
+    update_data: dict,
+    user_id: int,
+) -> None:
+    """Resolve a ``category`` key in *update_data* to a ``project_id`` in-place.
+
+    If *update_data* contains a ``"category"`` key, the key is removed and —
+    provided there is no explicit ``"project_id"`` already present — the
+    category name is resolved to a project ID via
+    :func:`_resolve_category_to_project` and stored under ``"project_id"``.
+
+    Mutates *update_data* in place; returns nothing.
+
+    Args:
+        db: Database session.
+        update_data: Mutable mapping of field name to new value, as returned
+            by ``model.model_dump(exclude_unset=True)``.
+        user_id: Authenticated user ID used for project lookup / creation.
+    """
+    if "category" in update_data:
+        category = update_data.pop("category")
+        if category and "project_id" not in update_data:
+            update_data["project_id"] = await _resolve_category_to_project(
+                db, category, user_id
+            )
+
+
 @router.get("")
 async def list_todos(
     user: CurrentUserFlexible,
@@ -980,13 +1067,7 @@ async def create_todo(
         parent = await get_resource_for_user(
             db, Todo, request.parent_id, user.id, errors.todo_not_found
         )
-
-        # Prevent nested subtasks (subtasks of subtasks)
-        if parent.parent_id is not None:
-            raise errors.validation(
-                "Cannot create subtasks of subtasks. "
-                "Only one level of nesting is allowed."
-            )
+        await _verify_parent_allows_children(parent)
 
     # Auto-assign position if not provided
     position = request.position
@@ -996,19 +1077,14 @@ async def create_todo(
         )
 
     # Infer agent fields if not provided
-    agent_actionable = request.agent_actionable
-    action_type = request.action_type
-    autonomy_tier = request.autonomy_tier
-    if agent_actionable is None or action_type is None or autonomy_tier is None:
-        inferred_type, inferred_actionable, inferred_tier = infer_action_type(
-            request.title, request.description, request.tags
-        )
-        if action_type is None:
-            action_type = inferred_type
-        if agent_actionable is None:
-            agent_actionable = inferred_actionable
-        if autonomy_tier is None:
-            autonomy_tier = inferred_tier
+    agent_actionable, action_type, autonomy_tier = _resolve_agent_fields(
+        request.agent_actionable,
+        request.action_type,
+        request.autonomy_tier,
+        request.title,
+        request.description,
+        request.tags,
+    )
 
     todo = Todo(
         user_id=user.id,
@@ -1046,8 +1122,6 @@ def _validate_batch_dependency_graph(todos: list[TodoCreate]) -> None:
     Raises:
         errors.validation: If a circular dependency is detected.
     """
-    from collections import deque
-
     n = len(todos)
     # Build adjacency list and in-degree count
     # Edge: dep_idx -> i means "i depends on dep_idx" (dep_idx must come first)
@@ -1177,11 +1251,7 @@ async def _prepare_batch_todos(
             parent = await get_resource_for_user(
                 db, Todo, item.parent_id, user_id, errors.todo_not_found
             )
-            if parent.parent_id is not None:
-                raise errors.validation(
-                    "Cannot create subtasks of subtasks. "
-                    "Only one level of nesting is allowed."
-                )
+            await _verify_parent_allows_children(parent)
 
         # Record parent_index for later resolution (skip if parent was skipped)
         if item.parent_index is not None:
@@ -1205,19 +1275,14 @@ async def _prepare_batch_todos(
             )
 
         # Infer agent fields if not provided
-        agent_actionable = item.agent_actionable
-        action_type = item.action_type
-        autonomy_tier = item.autonomy_tier
-        if agent_actionable is None or action_type is None or autonomy_tier is None:
-            inferred_type, inferred_actionable, inferred_tier = infer_action_type(
-                item.title, item.description, item.tags
-            )
-            if action_type is None:
-                action_type = inferred_type
-            if agent_actionable is None:
-                agent_actionable = inferred_actionable
-            if autonomy_tier is None:
-                autonomy_tier = inferred_tier
+        agent_actionable, action_type, autonomy_tier = _resolve_agent_fields(
+            item.agent_actionable,
+            item.action_type,
+            item.autonomy_tier,
+            item.title,
+            item.description,
+            item.tags,
+        )
 
         prepared.append(
             Todo(
@@ -1476,25 +1541,14 @@ async def update_todo(
 
     # Resolve category name to project_id
     update_data = request.model_dump(exclude_unset=True)
-    if "category" in update_data:
-        category = update_data.pop("category")
-        if category and "project_id" not in update_data:
-            update_data["project_id"] = await _resolve_category_to_project(
-                db, category, user.id
-            )
+    await _apply_category_resolution(db, update_data, user.id)
 
     # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
         parent = await get_resource_for_user(
             db, Todo, update_data["parent_id"], user.id, errors.todo_not_found
         )
-
-        # Prevent nested subtasks (subtasks of subtasks)
-        if parent.parent_id is not None:
-            raise errors.validation(
-                "Cannot create subtasks of subtasks. "
-                "Only one level of nesting is allowed."
-            )
+        await _verify_parent_allows_children(parent)
 
         # Prevent tasks with existing children from becoming subtasks
         children_count = await db.scalar(
@@ -1544,25 +1598,14 @@ async def bulk_update_todos(
 
     # Resolve category name to project_id
     update_data = request.updates.model_dump(exclude_unset=True)
-    if "category" in update_data:
-        category = update_data.pop("category")
-        if category and "project_id" not in update_data:
-            update_data["project_id"] = await _resolve_category_to_project(
-                db, category, user.id
-            )
+    await _apply_category_resolution(db, update_data, user.id)
 
     # Verify parent_id authorization if being updated
     if "parent_id" in update_data and update_data["parent_id"] is not None:
         parent = await get_resource_for_user(
             db, Todo, update_data["parent_id"], user.id, errors.todo_not_found
         )
-
-        # Prevent nested subtasks (subtasks of subtasks)
-        if parent.parent_id is not None:
-            raise errors.validation(
-                "Cannot create subtasks of subtasks. "
-                "Only one level of nesting is allowed."
-            )
+        await _verify_parent_allows_children(parent)
 
         # Prevent tasks with existing children from becoming subtasks
         for todo in todos:
@@ -1667,11 +1710,7 @@ async def create_subtask(
         db, Todo, todo_id, user.id, errors.todo_not_found
     )
 
-    # Prevent nested subtasks (subtasks of subtasks)
-    if parent.parent_id is not None:
-        raise errors.validation(
-            "Cannot create subtasks of subtasks. Only one level of nesting is allowed."
-        )
+    await _verify_parent_allows_children(parent)
 
     # Auto-assign position for the subtask
     position = await get_next_position(db, Todo, user.id, parent_id=todo_id)
