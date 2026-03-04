@@ -1771,6 +1771,17 @@ h6 {
 	color: var(--primary-700);
 }
 
+.wiki-content .wiki-link {
+	color: var(--primary-600);
+	text-decoration: underline;
+}
+
+.wiki-content .wiki-link-missing {
+	color: var(--error-600, #dc2626);
+	text-decoration: underline;
+	text-decoration-style: dashed;
+}
+
 // Wiki content tables
 .wiki-content table {
 	width: 100%;

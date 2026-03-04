@@ -385,20 +385,6 @@
 		line-height: 1.7;
 	}
 
-	/* Wiki content typography now in app.scss */
-
-	/* Wiki links */
-	.wiki-content :global(.wiki-link) {
-		color: var(--primary-600);
-		text-decoration: underline;
-	}
-
-	.wiki-content :global(.wiki-link-missing) {
-		color: var(--error-600, #dc2626);
-		text-decoration: underline;
-		text-decoration-style: dashed;
-	}
-
 	/* Sections */
 	.linked-section {
 		margin-top: 2rem;
