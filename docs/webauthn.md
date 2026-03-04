@@ -206,7 +206,7 @@ Verifies a registration response and saves the credential. Requires an active se
 }
 ```
 
-**Response (201):**
+**Response (200):**
 
 ```json
 {
