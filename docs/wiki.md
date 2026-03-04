@@ -172,7 +172,7 @@ The previous state of the page is saved as a revision before the update is appli
 DELETE /api/wiki/{page_id}
 ```
 
-Soft-deletes the page and all of its descendants. Deleted pages do not appear in listings and cannot be fetched, but revision history is preserved internally.
+Soft-deletes the page and all of its descendants. Deleted pages do not appear in listings and cannot be fetched, but the page record and its revision history are preserved in the database. Users should be aware that deleting a page does not immediately erase the content from storage.
 
 Response:
 ```json
@@ -644,7 +644,7 @@ Use `append=true` to add new content to a page without replacing the existing bo
 update_wiki_page(
     page_id=10,
     content="\n## 2026-03-03 Update\n\nNew information here.",
-    append=True
+    append=true
 )
 ```
 
