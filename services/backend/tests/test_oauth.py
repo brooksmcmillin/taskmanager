@@ -1599,3 +1599,43 @@ async def test_confidential_client_without_pkce_still_works(
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
+
+
+# ─── Client creation response includes is_public ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_confidential_client_response_includes_is_public(
+    authenticated_client: AsyncClient,
+):
+    """ClientCreateResponse includes is_public=False for confidential clients."""
+    response = await authenticated_client.post(
+        "/api/oauth/clients",
+        json={
+            "name": "Confidential Test",
+            "redirectUris": ["http://localhost/callback"],
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["is_public"] is False
+    assert data["client_secret"] is not None
+
+
+@pytest.mark.asyncio
+async def test_create_public_client_response_includes_is_public(
+    authenticated_client: AsyncClient,
+):
+    """ClientCreateResponse includes is_public=True for public clients."""
+    response = await authenticated_client.post(
+        "/api/oauth/clients",
+        json={
+            "name": "Public Test",
+            "redirectUris": ["http://localhost/callback"],
+            "isPublic": True,
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()["data"]
+    assert data["is_public"] is True
+    assert data["client_secret"] is None
