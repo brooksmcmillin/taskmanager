@@ -19,8 +19,12 @@ from mcp_auth_framework.rate_limiting import SlidingWindowRateLimiter
 from mcp_auth_framework.responses import (
     backend_connection_error,
     backend_invalid_response,
+    backend_oauth_error,
     backend_timeout,
+    invalid_client,
+    invalid_grant,
     invalid_request,
+    invalid_scope,
     rate_limit_exceeded,
     server_error,
     slow_down,
@@ -306,11 +310,7 @@ async def authenticate_client(
     if auth_method == "private_key_jwt":
         if not client_assertion or not client_assertion_type:
             logger.warning(f"Missing client_assertion for private_key_jwt client: {client_id}")
-            return False, JSONResponse(
-                {"error": "invalid_client", "error_description": "client_assertion required"},
-                status_code=401,
-                headers={"Cache-Control": "no-store"},
-            )
+            return False, invalid_client("client_assertion required")
 
         try:
             jwt_auth = JWTClientAuthenticator(
@@ -322,22 +322,14 @@ async def authenticate_client(
             return True, None
         except JWTAuthError as e:
             logger.warning(f"JWT authentication failed for client {client_id}: {e}")
-            return False, JSONResponse(
-                {"error": "invalid_client", "error_description": str(e)},
-                status_code=401,
-                headers={"Cache-Control": "no-store"},
-            )
+            return False, invalid_client(str(e))
 
     # Traditional client_secret authentication
     client_secret = parsed_body.get("client_secret", [""])[0]
 
     if not client_secret:
         logger.warning(f"Missing client_secret for confidential client: {client_id}")
-        return False, JSONResponse(
-            {"error": "invalid_client", "error_description": "client_secret required"},
-            status_code=401,
-            headers={"Cache-Control": "no-store"},
-        )
+        return False, invalid_client("client_secret required")
 
     # Verify client secret using constant-time comparison
     if client.client_secret and not secrets.compare_digest(
@@ -345,11 +337,7 @@ async def authenticate_client(
         client.client_secret.encode("utf-8"),
     ):
         logger.warning(f"Invalid client_secret for client: {client_id}")
-        return False, JSONResponse(
-            {"error": "invalid_client", "error_description": "Invalid client credentials"},
-            status_code=401,
-            headers={"Cache-Control": "no-store"},
-        )
+        return False, invalid_client("Invalid client credentials")
 
     logger.info(f"Client {client_id} authenticated via client_secret")
     return True, None
@@ -381,18 +369,10 @@ async def handle_refresh_token_exchange(
 
     # === Input Validation ===
     if not refresh_token_str:
-        return JSONResponse(
-            {"error": "invalid_request", "error_description": "refresh_token is required"},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_request("refresh_token is required")
 
     if not client_id:
-        return JSONResponse(
-            {"error": "invalid_request", "error_description": "client_id is required"},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_request("client_id is required")
 
     # Validate client_id format (allow both traditional IDs and CIMD URLs)
     cimd_fetcher = get_cimd_fetcher()
@@ -400,22 +380,14 @@ async def handle_refresh_token_exchange(
 
     if not is_cimd and not validate_client_id(client_id):
         logger.warning("Invalid client_id format in refresh token exchange")
-        return JSONResponse(
-            {"error": "invalid_request", "error_description": "Invalid client_id format"},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_request("Invalid client_id format")
 
     # === Client Authentication ===
     # Get client information
     client = await oauth_provider.get_client(client_id)
     if not client:
         logger.warning(f"Unknown client in refresh token exchange: {client_id}")
-        return JSONResponse(
-            {"error": "invalid_client", "error_description": "Unknown client"},
-            status_code=401,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_client("Unknown client")
 
     # Authenticate the client using the appropriate method
     auth_success, auth_error = await authenticate_client(
@@ -432,11 +404,7 @@ async def handle_refresh_token_exchange(
     refresh_token = await oauth_provider.load_refresh_token(client, refresh_token_str)
     if not refresh_token:
         logger.warning(f"Invalid or expired refresh token for client: {client_id}")
-        return JSONResponse(
-            {"error": "invalid_grant", "error_description": "Invalid or expired refresh token"},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_grant("Invalid or expired refresh token")
 
     # === Exchange Refresh Token ===
     try:
@@ -459,18 +427,71 @@ async def handle_refresh_token_exchange(
         )
     except ValueError as e:
         logger.error(f"Refresh token exchange failed: {e}")
-        return JSONResponse(
-            {"error": "invalid_scope", "error_description": str(e)},
-            status_code=400,
-            headers={"Cache-Control": "no-store"},
-        )
+        return invalid_scope(str(e))
     except Exception as e:
         logger.error(f"Unexpected error in refresh token exchange: {e}")
-        return JSONResponse(
-            {"error": "server_error", "error_description": "Internal server error"},
-            status_code=500,
-            headers={"Cache-Control": "no-store"},
+        return server_error("Internal server error")
+
+
+async def _store_mcp_tokens(
+    oauth_provider: "TaskManagerAuthProvider",  # type: ignore[type-arg]
+    mcp_token: str,
+    mcp_refresh_token: str,
+    client_id: str,
+    scopes: list[str],
+    expires_at: int,
+    refresh_expires_at: int,
+) -> None:
+    """Store MCP access and refresh tokens in the appropriate storage backend.
+
+    If a database-backed token storage is configured on the provider, tokens are
+    persisted to PostgreSQL.  Otherwise they fall back to the in-memory dicts that
+    the MCP auth provider maintains.
+
+    Args:
+        oauth_provider: The TaskManagerAuthProvider that owns the token stores.
+        mcp_token: The MCP access token string.
+        mcp_refresh_token: The MCP refresh token string.
+        client_id: The OAuth client identifier.
+        scopes: List of granted scopes.
+        expires_at: Unix timestamp at which the access token expires.
+        refresh_expires_at: Unix timestamp at which the refresh token expires.
+    """
+    if oauth_provider.token_storage:
+        await oauth_provider.token_storage.store_token(
+            token=mcp_token,
+            client_id=client_id,
+            scopes=scopes,
+            expires_at=expires_at,
+            resource=None,
         )
+        await oauth_provider.token_storage.store_refresh_token(
+            refresh_token=mcp_refresh_token,
+            client_id=client_id,
+            scopes=scopes,
+            expires_at=refresh_expires_at,
+            resource=None,
+        )
+        logger.debug("Stored MCP access and refresh tokens from device flow in database")
+    else:
+        # Fall back to in-memory storage
+        from mcp.server.auth.provider import AccessToken, RefreshToken
+
+        oauth_provider.tokens[mcp_token] = AccessToken(
+            token=mcp_token,
+            client_id=client_id,
+            scopes=scopes,
+            expires_at=expires_at,
+            resource=None,
+        )
+        oauth_provider.refresh_tokens[mcp_refresh_token] = RefreshToken(
+            token=mcp_refresh_token,
+            client_id=client_id,
+            scopes=scopes,
+            expires_at=refresh_expires_at,
+        )
+        oauth_provider.refresh_token_resources[mcp_refresh_token] = None
+        logger.debug("Stored MCP access and refresh tokens from device flow in memory")
 
 
 async def handle_device_code_token_exchange(
@@ -581,12 +602,8 @@ async def handle_device_code_token_exchange(
                 # This includes authorization_pending, slow_down, expired_token, access_denied
                 # IMPORTANT: Must transform to RFC 6749 format for OAuth client compatibility
                 if resp.status != 200:
-                    oauth_error = transform_backend_error_to_oauth(response_data)
-                    return JSONResponse(
-                        oauth_error,
-                        status_code=resp.status,
-                        headers={"Cache-Control": "no-store"},
-                    )
+                    transformed_error = transform_backend_error_to_oauth(response_data)
+                    return backend_oauth_error(transformed_error, resp.status)
 
                 # TaskManager returned an access token - now issue an MCP token
                 taskmanager_token = response_data.get("access_token")
@@ -606,44 +623,16 @@ async def handle_device_code_token_exchange(
                 scope_str = response_data.get("scope", auth_settings.mcp_scope)
                 scopes = scope_str.split() if scope_str else [auth_settings.mcp_scope]
 
-                # Store MCP tokens in database if available
-                if oauth_provider.token_storage:
-                    await oauth_provider.token_storage.store_token(
-                        token=mcp_token,
-                        client_id=client_id,
-                        scopes=scopes,
-                        expires_at=expires_at,
-                        resource=None,
-                    )
-                    await oauth_provider.token_storage.store_refresh_token(
-                        refresh_token=mcp_refresh_token,
-                        client_id=client_id,
-                        scopes=scopes,
-                        expires_at=refresh_expires_at,
-                        resource=None,
-                    )
-                    logger.debug(
-                        "Stored MCP access and refresh tokens from device flow in database"
-                    )
-                else:
-                    # Fall back to in-memory storage
-                    from mcp.server.auth.provider import AccessToken, RefreshToken
-
-                    oauth_provider.tokens[mcp_token] = AccessToken(
-                        token=mcp_token,
-                        client_id=client_id,
-                        scopes=scopes,
-                        expires_at=expires_at,
-                        resource=None,
-                    )
-                    oauth_provider.refresh_tokens[mcp_refresh_token] = RefreshToken(
-                        token=mcp_refresh_token,
-                        client_id=client_id,
-                        scopes=scopes,
-                        expires_at=refresh_expires_at,
-                    )
-                    oauth_provider.refresh_token_resources[mcp_refresh_token] = None
-                    logger.debug("Stored MCP access and refresh tokens from device flow in memory")
+                # Store MCP tokens in database or in-memory fallback
+                await _store_mcp_tokens(
+                    oauth_provider=oauth_provider,
+                    mcp_token=mcp_token,
+                    mcp_refresh_token=mcp_refresh_token,
+                    client_id=client_id,
+                    scopes=scopes,
+                    expires_at=expires_at,
+                    refresh_expires_at=refresh_expires_at,
+                )
 
                 # Return MCP token response with our own refresh token
                 mcp_response: dict[str, str | int] = {
@@ -1121,12 +1110,8 @@ def create_authorization_server(
                     if resp.status != 200:
                         logger.warning(f"Device code request failed with status: {resp.status}")
                         # Transform backend error to OAuth format for client compatibility
-                        oauth_error = transform_backend_error_to_oauth(response_data)
-                        return JSONResponse(
-                            oauth_error,
-                            status_code=resp.status,
-                            headers={"Cache-Control": "no-store"},
-                        )
+                        transformed_error = transform_backend_error_to_oauth(response_data)
+                        return backend_oauth_error(transformed_error, resp.status)
 
                     # Return the device code response
                     # The verification_uri points to TaskManager where user will authenticate
