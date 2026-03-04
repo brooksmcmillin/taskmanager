@@ -4,7 +4,15 @@ import asyncio
 import json
 
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.tab_id import tab_id_var
+from app.db.database import Base
+from app.dependencies import get_db
+from app.main import app
 from app.services.event_bus import Event, EventBus
 
 # ---------------------------------------------------------------------------
@@ -162,3 +170,71 @@ class TestSSEEndpoint:
 
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(_check_stream(), timeout=1.0)
+
+
+# ---------------------------------------------------------------------------
+# Integration test: X-Tab-Id header with set_config()
+# ---------------------------------------------------------------------------
+
+
+class TestTabIdSetConfig:
+    """Verify that requests with X-Tab-Id don't crash on the SET LOCAL fix."""
+
+    @pytest_asyncio.fixture
+    async def tab_id_client(
+        self, db_engine, db_session: AsyncSession, test_user
+    ) -> AsyncClient:
+        """Client that uses a get_db override preserving the tab_id logic."""
+        from collections.abc import AsyncGenerator
+
+        from sqlalchemy.ext.asyncio import async_sessionmaker
+
+        session_maker = async_sessionmaker(
+            db_engine, class_=AsyncSession, expire_on_commit=False
+        )
+
+        async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+            async with session_maker() as session:
+                try:
+                    tab_id = tab_id_var.get("")
+                    if tab_id:
+                        await session.execute(
+                            text("SELECT set_config('app.tab_id', :val, true)"),
+                            {"val": tab_id},
+                        )
+                    yield session
+                    await session.commit()
+                except Exception:
+                    await session.rollback()
+                    raise
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            # Log in to get session cookie
+            from tests.conftest import TEST_USER_PASSWORD
+
+            resp = await ac.post(
+                "/api/auth/login",
+                json={
+                    "email": test_user.email,
+                    "password": TEST_USER_PASSWORD,
+                },
+            )
+            assert resp.status_code == 200
+            yield ac
+
+        app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_create_todo_with_tab_id(self, tab_id_client: AsyncClient) -> None:
+        """POST with X-Tab-Id header should succeed (not crash on SET LOCAL)."""
+        response = await tab_id_client.post(
+            "/api/todos",
+            json={"title": "Tab-id smoke test"},
+            headers={"X-Tab-Id": "abc123"},
+        )
+        assert response.status_code == 201
