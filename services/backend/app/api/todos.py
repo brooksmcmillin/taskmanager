@@ -1090,8 +1090,9 @@ async def _validate_batch_wiki_page(
     )
 
 
-def _validate_batch_depends_on(todos: list[TodoCreate], batch_size: int) -> None:
+def _validate_batch_depends_on(todos: list[TodoCreate]) -> None:
     """Phase 0b: Validate depends_on indices for bounds, self-refs, and cycles."""
+    batch_size = len(todos)
     for i, item in enumerate(todos):
         if item.depends_on:
             for dep_idx in item.depends_on:
@@ -1332,7 +1333,7 @@ async def batch_create_todos(
     # Validation
     if request.wiki_page_id is not None:
         await _validate_batch_wiki_page(db, request.wiki_page_id, user.id)
-    _validate_batch_depends_on(request.todos, len(request.todos))
+    _validate_batch_depends_on(request.todos)
     skipped_indices = await _detect_batch_duplicates(
         db, request.todos, user.id, request.skip_duplicates
     )

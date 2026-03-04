@@ -27,10 +27,15 @@ class TestEventBusDispatch:
         user_id: int = 10,
         tab: str = "abc123",
     ) -> str:
-        return json.dumps({
-            "t": table, "op": op, "id": row_id,
-            "uid": user_id, "tab": tab,
-        })
+        return json.dumps(
+            {
+                "t": table,
+                "op": op,
+                "id": row_id,
+                "uid": user_id,
+                "tab": tab,
+            }
+        )
 
     def test_dispatch_to_correct_user(self) -> None:
         q = self.bus.subscribe(10)
@@ -66,7 +71,7 @@ class TestEventBusDispatch:
         # Fill the queue (maxsize=256)
         for i in range(256):
             self.bus._on_notify(  # type: ignore[arg-type]
-                None,
+                None,  # pyright: ignore[reportArgumentType]
                 0,
                 "events",
                 self._make_payload(user_id=10, row_id=i),
@@ -74,7 +79,7 @@ class TestEventBusDispatch:
         assert q.full()
         # This should not raise
         self.bus._on_notify(  # type: ignore[arg-type]
-            None,
+            None,  # pyright: ignore[reportArgumentType]
             0,
             "events",
             self._make_payload(user_id=10, row_id=999),
