@@ -448,7 +448,9 @@ await deletePasskey(42);
 
 ### Cloned Authenticator Detection
 
-Every authentication response includes a signature counter. If the received counter is not greater than the stored counter, the backend logs a warning indicating a possible cloned authenticator. The current implementation logs the warning but does not reject the authentication. Tighten this policy if your threat model requires it by raising an error in `verify_authentication` in `services/backend/app/api/webauthn.py`.
+Every authentication response includes a signature counter. When the stored sign count is greater than zero and the received counter does not exceed the stored value, the backend logs a warning indicating a possible cloned authenticator. Sign count zero is intentionally excluded from the check because some authenticators legitimately do not implement counters (they always report zero).
+
+The current implementation logs the warning but does not reject the authentication. Tighten this policy if your threat model requires it by raising an error in `verify_authentication` in `services/backend/app/api/webauthn.py`.
 
 ### User Enumeration
 
@@ -456,12 +458,19 @@ The `/authenticate/options` endpoint deliberately returns a valid challenge rega
 
 ### Rate Limiting
 
+Each endpoint has its own independent rate limit counter:
+
 | Endpoint | Limit | Key |
 |---|---|---|
-| `/register/options` and `/register/verify` | 5 per 5 minutes | Per user ID |
-| `/authenticate/options` and `/authenticate/verify` | 10 per 5 minutes | Per client IP |
+| `POST /register/options` | 5 per 5 minutes | Per user ID |
+| `POST /authenticate/options` | 10 per 5 minutes | Per client IP |
+| `POST /authenticate/verify` | 10 per 5 minutes | Per client IP |
 
-Failed authentication attempts count against the limit; successful attempts reset it.
+`/register/verify` has no rate limit of its own — abuse is mitigated by the fact that a valid `challenge_id` is required, which can only be obtained from the rate-limited `/register/options` endpoint.
+
+The `/authenticate/options` and `/authenticate/verify` limits are independent: an attacker can make up to 10 requests to each endpoint before triggering a limit. The counters use distinct keys (`webauthn_auth_options_<ip>` and `webauthn_auth_verify_<ip>`).
+
+Failed authentication attempts count against the `/authenticate/verify` limit; successful authentication resets it.
 
 ### Origin and RP ID Binding
 
