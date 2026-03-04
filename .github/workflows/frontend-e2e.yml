@@ -1,0 +1,151 @@
+name: Frontend E2E Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/frontend/**'
+      - 'services/backend/**'
+      - '.github/workflows/frontend-e2e.yml'
+  schedule:
+    # Run nightly at 6am UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: taskmanager
+          POSTGRES_PASSWORD: taskmanager #  pragma: allowlist secret
+          POSTGRES_DB: taskmanager_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5434:5432
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: services/frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install PostgreSQL client (cached)
+        uses: awalsh128/cache-apt-pkgs-action@2c09a5e66da6c8016428a2172bd76e5e4f14bb17 # v1
+        with:
+          packages: postgresql-client
+
+      - name: Install backend dependencies
+        working-directory: services/backend
+        run: uv sync --all-extras
+
+      - name: Update backend test config for CI  # pragma: allowlist secret
+        working-directory: services/backend
+        run: |  # pragma: allowlist secret
+          sed -i 's/POSTGRES_PORT=5432/POSTGRES_PORT=5434/' .env.test
+          sed -i 's/POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=taskmanager/' .env.test  # pragma: allowlist secret
+
+      - name: Install frontend dependencies
+        working-directory: services/frontend
+        run: npm ci
+
+      - name: Setup frontend environment variables
+        working-directory: services/frontend
+        run: cp .env.example .env
+
+      - name: Get Playwright version
+        id: playwright-version
+        working-directory: services/frontend
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: cache-playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright browsers
+        working-directory: services/frontend
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps firefox
+
+      - name: Install Playwright system deps
+        if: steps.cache-playwright.outputs.cache-hit == 'true'
+        run: npx playwright install-deps firefox
+        working-directory: services/frontend
+
+      - name: Run E2E tests
+        working-directory: services/frontend
+        env:
+          PGPASSWORD: taskmanager  # pragma: allowlist secret
+        run: npx playwright test
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playwright-report
+          path: services/frontend/playwright-report/
+          retention-days: 30
+
+      - name: Create or update issue on failure
+        if: failure() && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          EXISTING=$(gh issue list --label "bug,e2e" --state open --search "Frontend E2E tests failing on main" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$(cat <<EOF
+          Still failing.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Commit:** ${{ github.sha }}
+          **Triggered by:** ${{ github.event_name }}
+          EOF
+          )"
+          else
+            gh issue create \
+              --title "Frontend E2E tests failing on main" \
+              --label "bug,e2e" \
+              --body "$(cat <<EOF
+          ## E2E Test Failure
+
+          The frontend E2E tests are failing on the \`main\` branch.
+
+          **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Commit:** ${{ github.sha }}
+          **Triggered by:** ${{ github.event_name }}
+
+          Please investigate the [test report artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+          EOF
+          )"
+          fi
