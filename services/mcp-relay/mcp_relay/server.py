@@ -23,6 +23,7 @@ from mcp_resource_framework.middleware import NormalizePathMiddleware
 from mcp_resource_framework.oauth_discovery import register_oauth_discovery_endpoints
 from pydantic import AnyHttpUrl
 
+from mcp_relay.api import create_api_app
 from mcp_relay.debug import create_debug_app
 
 logger = logging.getLogger(__name__)
@@ -358,17 +359,27 @@ class MessageStore:
 store = MessageStore()
 
 
-def create_relay_server(
+def create_token_verifier(
     server_url: str,
     auth_server_url: str,
-    auth_server_public_url: str,
-) -> FastMCP:
-    """Create the MCP Relay Server with OAuth-protected message broker tools."""
-    token_verifier = IntrospectionTokenVerifier(
+) -> IntrospectionTokenVerifier:
+    """Create an OAuth token introspection verifier."""
+    return IntrospectionTokenVerifier(
         introspection_endpoint=f"{auth_server_url}/introspect",
         server_url=server_url,
         validate_resource=False,
     )
+
+
+def create_relay_server(
+    server_url: str,
+    auth_server_url: str,
+    auth_server_public_url: str,
+    token_verifier: IntrospectionTokenVerifier | None = None,
+) -> FastMCP:
+    """Create the MCP Relay Server with OAuth-protected message broker tools."""
+    if token_verifier is None:
+        token_verifier = create_token_verifier(server_url, auth_server_url)
 
     parsed_url = urlparse(server_url)
     allowed_host = parsed_url.netloc
@@ -679,11 +690,15 @@ def main(
     auth_server_public_url = auth_server_public_url.rstrip("/")
 
     try:
-        mcp_server = create_relay_server(server_url, auth_server, auth_server_public_url)
+        token_verifier = create_token_verifier(server_url, auth_server)
+        mcp_server = create_relay_server(
+            server_url, auth_server, auth_server_public_url, token_verifier=token_verifier
+        )
 
         logger.info("=" * 60)
         logger.info(f"MCP Relay Server running on http://{host}:{port}")
         logger.info(f"MCP endpoint: http://{host}:{port}/mcp")
+        logger.info(f"API endpoint: http://{host}:{port}/api/")
         logger.info(f"Auth server (internal): {auth_server}")
         logger.info(f"Auth server (public): {auth_server_public_url}")
         logger.info(f"Max messages/channel: {MAX_MESSAGES_PER_CHANNEL}")
@@ -693,6 +708,10 @@ def main(
         import uvicorn
 
         starlette_app = mcp_server.streamable_http_app()
+
+        # Mount public OAuth-protected API
+        api_app = create_api_app(store, token_verifier)
+        starlette_app.mount("/api", api_app)
 
         debug_enabled = os.environ.get("MCP_RELAY_DEBUG_UI", "").lower() in ("1", "true", "yes")
         if debug_enabled:

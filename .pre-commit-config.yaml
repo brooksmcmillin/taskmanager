@@ -57,7 +57,9 @@ repos:
             .*/auth_server\.py|
             .*/taskmanager_sdk/.*|
             services/backend/app/dependencies\.py|
-            services/mcp-resource/mcp_resource/server\.py
+            services/mcp-resource/mcp_resource/server\.py|
+            services/mcp-relay/mcp_relay/server\.py|
+            services/mcp-relay/mcp_relay/api\.py
           )$
 
   # =============================================================================
