@@ -24,7 +24,9 @@ from app.models.user import User
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Rate limiter for account modifications (5 attempts per 5 minutes)
-account_update_rate_limiter = RateLimiter(max_attempts=5, window_ms=300000)
+account_update_rate_limiter = RateLimiter(
+    max_attempts=5, window_ms=300000, name="account_update"
+)
 
 
 def _check_password_strength(v: str) -> str:
@@ -165,18 +167,18 @@ async def login(
         raise errors.invalid_credentials()
 
     # Rate limiting by email
-    login_rate_limiter.check(email)
+    await login_rate_limiter.check(email, db)
 
     # Find user
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(password, user.password_hash):
-        login_rate_limiter.record(email)
+        await login_rate_limiter.record(email, db)
         raise errors.invalid_credentials()
 
     # Reset rate limit on success
-    login_rate_limiter.reset(email)
+    await login_rate_limiter.reset(email, db)
 
     # Create session and set cookie
     session = await create_session_and_set_cookie(db, response, user.id)
@@ -255,7 +257,7 @@ async def update_email(
     rate_limit_key = f"email_update_{user.id}"
 
     # Rate limit by user ID
-    account_update_rate_limiter.check(rate_limit_key)
+    await account_update_rate_limiter.check(rate_limit_key, db)
 
     # Check if email is already taken by another user
     # Always query to maintain constant-time response regardless of email existence
@@ -265,11 +267,11 @@ async def update_email(
     email_taken = result.scalar_one_or_none() is not None
 
     if email_taken:
-        account_update_rate_limiter.record(rate_limit_key)
+        await account_update_rate_limiter.record(rate_limit_key, db)
         raise errors.email_exists()
 
     # Reset rate limit on success
-    account_update_rate_limiter.reset(rate_limit_key)
+    await account_update_rate_limiter.reset(rate_limit_key, db)
 
     # Update email
     user.email = request.email
@@ -291,15 +293,15 @@ async def update_password(
     rate_limit_key = f"password_update_{user.id}"
 
     # Rate limit by user ID
-    account_update_rate_limiter.check(rate_limit_key)
+    await account_update_rate_limiter.check(rate_limit_key, db)
 
     # Verify current password
     if not verify_password(request.current_password, user.password_hash):
-        account_update_rate_limiter.record(rate_limit_key)
+        await account_update_rate_limiter.record(rate_limit_key, db)
         raise errors.invalid_credentials()
 
     # Reset rate limit on success
-    account_update_rate_limiter.reset(rate_limit_key)
+    await account_update_rate_limiter.reset(rate_limit_key, db)
 
     # Update password
     user.password_hash = hash_password(request.new_password)

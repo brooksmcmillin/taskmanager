@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -10,7 +11,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.tab_id import tab_id_var
-from app.db.database import Base
 from app.dependencies import get_db
 from app.main import app
 from app.services.event_bus import Event, EventBus
@@ -183,10 +183,8 @@ class TestTabIdSetConfig:
     @pytest_asyncio.fixture
     async def tab_id_client(
         self, db_engine, db_session: AsyncSession, test_user
-    ) -> AsyncClient:
+    ) -> AsyncGenerator[AsyncClient, None]:
         """Client that uses a get_db override preserving the tab_id logic."""
-        from collections.abc import AsyncGenerator
-
         from sqlalchemy.ext.asyncio import async_sessionmaker
 
         session_maker = async_sessionmaker(

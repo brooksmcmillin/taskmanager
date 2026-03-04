@@ -225,7 +225,7 @@ async def _validate_api_key(
     """
     # Rate limit by IP address to prevent brute force attacks
     rate_limit_key = client_ip or "unknown"
-    api_key_rate_limiter.check(rate_limit_key)
+    await api_key_rate_limiter.check(rate_limit_key, db)
 
     # Extract prefix for efficient lookup
     prefix = key[:11]
@@ -243,7 +243,7 @@ async def _validate_api_key(
     if not api_keys:
         # Dummy hash to maintain constant timing
         hash_password("dummy_timing_normalization_value")
-        api_key_rate_limiter.record(rate_limit_key)
+        await api_key_rate_limiter.record(rate_limit_key, db)
         raise errors.invalid_token()
 
     # Check each candidate with bcrypt verification
@@ -251,7 +251,7 @@ async def _validate_api_key(
         if verify_password(key, api_key.key_hash):
             # Check expiration
             if api_key.expires_at and api_key.expires_at < datetime.now(UTC):
-                api_key_rate_limiter.record(rate_limit_key)
+                await api_key_rate_limiter.record(rate_limit_key, db)
                 raise errors.invalid_token()
 
             # Update last_used_at and commit immediately
@@ -259,11 +259,11 @@ async def _validate_api_key(
             await db.commit()
 
             # Reset rate limiter on successful auth
-            api_key_rate_limiter.reset(rate_limit_key)
+            await api_key_rate_limiter.reset(rate_limit_key, db)
             return api_key
 
     # Record failed attempt for rate limiting
-    api_key_rate_limiter.record(rate_limit_key)
+    await api_key_rate_limiter.record(rate_limit_key, db)
     raise errors.invalid_token()
 
 
