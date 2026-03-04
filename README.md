@@ -120,6 +120,7 @@ taskmanager/
 The task management UI built with SvelteKit, featuring:
 - User authentication with session management and passkey (WebAuthn) support
 - Project and task management with comments and file attachments
+- Wiki knowledge base at `/wiki` with Markdown editing, nested pages, and task linking
 - News aggregator with RSS/Atom feed management
 - Real-time updates and responsive design
 
@@ -132,6 +133,7 @@ The REST API built with FastAPI, featuring:
 - Full API with Pydantic validation
 - Multiple auth methods: session cookies, OAuth 2.0, API keys, WebAuthn/passkeys
 - Task comments and image attachments with magic-byte validation
+- Wiki CRUD with revisions, slug-based access, hierarchical nesting, and task linking
 - News aggregator with feed source management
 - Rate limiting, CSRF protection, and security features
 
@@ -152,7 +154,8 @@ OAuth 2.0 authorization server that enables MCP clients to authenticate:
 MCP server providing AI assistants with task management tools:
 - `get_all_projects()` - List all projects
 - `get_all_tasks()` - List all tasks
-- `create_task()` - Create new tasks
+- `create_task()` / `create_tasks()` - Create tasks (with optional wiki page auto-linking)
+- 13 wiki tools: create, read, update, delete, search, link to tasks, manage revisions
 - OAuth-protected endpoints
 
 **[View MCP Resource Documentation](services/mcp-resource/README.md)**
@@ -161,7 +164,7 @@ MCP server providing AI assistants with task management tools:
 
 Client library for programmatic access to the TaskManager API:
 - Session-based and OAuth authentication
-- Full API coverage for projects, todos, and OAuth
+- Full API coverage for projects, todos, wiki pages, and OAuth
 - Type hints and comprehensive error handling
 
 **[View SDK Documentation](packages/taskmanager-sdk/README.md)**
