@@ -64,4 +64,4 @@ function createToastStore() {
 }
 
 export const toasts = createToastStore();
-export type { Toast, ToastAction };
+export type { Toast, ToastAction, ToastOptions };

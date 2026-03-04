@@ -72,14 +72,19 @@ function handleChangeEvent(event: ChangeEvent): void {
 
 		case 'wiki_pages':
 			debounce('wiki_pages', () => {
-				wiki.load().catch(() => {});
-				let wikiHref: string | undefined;
-				if (event.op !== 'D') {
-					const pages = get(wiki);
-					const page = pages.find((p) => p.id === event.id);
-					wikiHref = page ? `/wiki/${page.slug}` : '/wiki';
-				}
-				toasts.info(`${tableLabel} ${opLabel}`, 3000, { href: wikiHref });
+				wiki
+					.load()
+					.then(() => {
+						let wikiHref: string | undefined;
+						if (event.op !== 'D') {
+							const page = get(wiki).find((p) => p.id === event.id);
+							wikiHref = page ? `/wiki/${page.slug}` : '/wiki';
+						}
+						toasts.info(`${tableLabel} ${opLabel}`, 3000, { href: wikiHref });
+					})
+					.catch(() => {
+						toasts.info(`${tableLabel} ${opLabel}`);
+					});
 			});
 			break;
 

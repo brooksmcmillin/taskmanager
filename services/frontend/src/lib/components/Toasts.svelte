@@ -38,10 +38,14 @@
 		<div
 			class="toast toast-{toast.type}"
 			class:toast-clickable={!!toast.href}
-			role="alert"
+			role={toast.href ? 'button' : 'alert'}
+			tabindex={toast.href ? 0 : undefined}
 			in:fly={{ y: 40, duration: 250 }}
 			out:fade={{ duration: 150 }}
 			on:click={() => handleToastClick(toast)}
+			on:keydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') handleToastClick(toast);
+			}}
 		>
 			<span class="toast-icon toast-icon-{toast.type}">{typeIcon(toast.type)}</span>
 			<span class="toast-message">{toast.message}</span>
