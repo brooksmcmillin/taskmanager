@@ -702,8 +702,9 @@ def create_authorization_server(
         revocation_options=mcp_auth_settings.revocation_options,
     )
 
-    # Sensitive fields that must never appear in logs
+    # Sensitive fields that must never appear in logs (request body and response body)
     _sensitive_fields = {"client_secret", "code", "refresh_token", "device_code"}
+    _sensitive_response_fields = {"access_token", "refresh_token", "id_token", "token"}
 
     def _redact_body(raw: str) -> str:
         """Return a redacted version of a URL-encoded body string."""
@@ -712,6 +713,22 @@ def create_authorization_server(
         parsed = parse_qs(raw, keep_blank_values=True)
         redacted = {k: ["[REDACTED]"] if k in _sensitive_fields else v for k, v in parsed.items()}
         return urlencode(redacted, doseq=True)
+
+    def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
+        """Return headers with the Authorization value masked."""
+        return {k: "[REDACTED]" if k.lower() == "authorization" else v for k, v in headers.items()}
+
+    def _redact_response_body(body_bytes: bytes) -> str:
+        """Return a redacted JSON representation of the response body."""
+        try:
+            resp_json: dict[str, Any] = json.loads(body_bytes.decode("utf-8"))
+            redacted = {
+                k: "[REDACTED]" if k in _sensitive_response_fields else v
+                for k, v in resp_json.items()
+            }
+            return str(redacted)
+        except Exception:
+            return "[unparseable]"
 
     # Whether to emit verbose debug logging for the token endpoint.
     # Must be explicitly opted-in; logs are always at DEBUG level and
@@ -731,7 +748,7 @@ def create_authorization_server(
                     logger.debug("=== TOKEN ENDPOINT DEBUG ===")
                     logger.debug(f"Method: {request.method}")
                     logger.debug(f"URL: {request.url}")
-                    logger.debug(f"Headers: {dict(request.headers)}")
+                    logger.debug(f"Headers: {_redact_headers(dict(request.headers))}")
 
                 try:
                     # Read the raw body
@@ -814,15 +831,11 @@ def create_authorization_server(
                     if _token_debug_logging:
                         logger.debug(f"Token endpoint result: {response_data['status']}")
 
-                        # Log response body for debugging
+                        # Log response body for debugging (sensitive fields redacted)
                         if response_data["body"]:
-                            try:
-                                response_text = cast(bytes, response_data["body"]).decode("utf-8")
-                                logger.debug(f"Token endpoint response body: {response_text}")
-                            except Exception:
-                                logger.debug(
-                                    f"Token endpoint response body (raw): {response_data['body']}"
-                                )
+                            logger.debug(
+                                f"Token endpoint response body: {_redact_response_body(cast(bytes, response_data['body']))}"
+                            )
 
                     # Convert headers back to dict format for Response
                     headers_dict = {}
