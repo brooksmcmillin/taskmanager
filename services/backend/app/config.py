@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     # Loki (log aggregation)
     loki_url: str = "http://loki:3100"
 
+    # MCP Relay
+    mcp_relay_url: str = "http://mcp-relay:8002"
+    mcp_relay_debug_token: str = ""
+
     # Environment
     environment: str = "development"
 

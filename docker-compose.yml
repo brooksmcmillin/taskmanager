@@ -19,6 +19,8 @@ services:
       - DEBUG=false
       - FRONTEND_URL=${FRONTEND_URL:-https://todo.brooksmcmillin.com}
       - UPLOAD_DIR=/app/uploads
+      - MCP_RELAY_URL=${MCP_RELAY_URL:-http://mcp-relay:8002}
+      - MCP_RELAY_DEBUG_TOKEN=${MCP_RELAY_DEBUG_TOKEN:-}
     volumes:
       - uploads_data:/app/uploads
     depends_on:
@@ -155,7 +157,7 @@ services:
       - MAX_CHANNELS=${MAX_CHANNELS:-100}
       - MCP_AUTH_SERVER=http://mcp-auth:9000
       - MCP_AUTH_SERVER_PUBLIC_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
-      - MCP_RELAY_DEBUG_UI=${MCP_RELAY_DEBUG_UI:-false}
+      - MCP_RELAY_DEBUG_UI=${MCP_RELAY_DEBUG_UI:-true}
       - MCP_RELAY_DEBUG_TOKEN=${MCP_RELAY_DEBUG_TOKEN:-}
     depends_on:
       - mcp-auth

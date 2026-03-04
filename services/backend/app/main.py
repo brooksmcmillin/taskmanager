@@ -27,6 +27,7 @@ from app.api import (
     projects,
     recurring_tasks,
     registration_codes,
+    relay,
     search,
     service_accounts,
     snippets,
@@ -109,6 +110,7 @@ app.include_router(api_keys.router)
 app.include_router(webauthn.router)
 app.include_router(github.router)
 app.include_router(admin_loki.router)
+app.include_router(relay.router)
 app.include_router(service_accounts.router)
 app.include_router(snippets.router)
 app.include_router(wiki.router)
