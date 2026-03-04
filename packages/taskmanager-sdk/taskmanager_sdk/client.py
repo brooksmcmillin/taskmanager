@@ -1510,6 +1510,9 @@ class TaskManagerClient:
         Returns:
             ApiResponse with created OAuth client data
         """
+        is_public = (
+            token_endpoint_auth_method == "none" if token_endpoint_auth_method else None
+        )
         return self._make_request(
             "POST",
             "/oauth/clients/system",
@@ -1519,7 +1522,7 @@ class TaskManagerClient:
                 **self._build_params(
                     grantTypes=grant_types,
                     scopes=scopes,
-                    token_endpoint_auth_method=token_endpoint_auth_method,
+                    isPublic=is_public,
                 ),
             },
         )

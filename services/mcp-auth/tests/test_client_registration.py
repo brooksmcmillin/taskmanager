@@ -46,10 +46,12 @@ def _create_client_info(
     """Create an OAuthClientInformationFull for testing."""
     return OAuthClientInformationFull(
         client_id=client_id,
-        redirect_uris=[AnyHttpUrl(u) for u in (redirect_uris or ["http://localhost:3000/callback"])],
+        redirect_uris=[
+            AnyHttpUrl(u) for u in (redirect_uris or ["http://localhost:3000/callback"])
+        ],
         grant_types=grant_types or ["authorization_code", "refresh_token"],
         scope=scope,
-        token_endpoint_auth_method=auth_method,
+        token_endpoint_auth_method=auth_method,  # type: ignore[arg-type]
     )
 
 
@@ -243,9 +245,7 @@ class TestRegisterWithTaskmanager:
         """Handles success=True but data=None without raising."""
         mock_api = MagicMock()
         mock_api.token_expires_at = 9999999999
-        mock_api.create_system_oauth_client.return_value = MagicMock(
-            success=True, data=None
-        )
+        mock_api.create_system_oauth_client.return_value = MagicMock(success=True, data=None)
         provider = _create_provider(api_client=mock_api)
         client_info = _create_client_info()
 
