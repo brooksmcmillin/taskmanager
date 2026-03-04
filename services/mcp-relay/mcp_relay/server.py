@@ -715,15 +715,17 @@ def main(
 
         debug_enabled = os.environ.get("MCP_RELAY_DEBUG_UI", "").lower() in ("1", "true", "yes")
         if debug_enabled:
-            debug_token = os.environ.get("MCP_RELAY_DEBUG_TOKEN")
+            debug_token = os.environ.get("MCP_RELAY_DEBUG_TOKEN", "").strip()
+            if not debug_token:
+                logger.error(
+                    "Debug UI is enabled (MCP_RELAY_DEBUG_UI=true) but MCP_RELAY_DEBUG_TOKEN is "
+                    "not set. Refusing to start debug UI without authentication. "
+                    "Set MCP_RELAY_DEBUG_TOKEN to a secure token to enable the debug UI."
+                )
+                sys.exit(1)
             debug_app = create_debug_app(store, token=debug_token)
             starlette_app.mount("/debug", debug_app)
-            if debug_token:
-                logger.info(f"Debug UI: http://{host}:{port}/debug/ (token-protected)")
-            else:
-                logger.warning(
-                    f"Debug UI: http://{host}:{port}/debug/ (NO AUTH — set MCP_RELAY_DEBUG_TOKEN)"
-                )
+            logger.info(f"Debug UI: http://{host}:{port}/debug/ (token-protected)")
         else:
             logger.info("Debug UI disabled (set MCP_RELAY_DEBUG_UI=true to enable)")
 
