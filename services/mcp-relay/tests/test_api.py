@@ -217,7 +217,7 @@ class TestApiSend:
             headers=auth_headers(),
         )
         assert resp.status_code == 400
-        assert "content is required" in resp.json()["error"]
+        assert "non-empty string" in resp.json()["error"]
 
     def test_missing_content(self, client: TestClient) -> None:
         resp = client.post(
@@ -226,7 +226,27 @@ class TestApiSend:
             headers=auth_headers(),
         )
         assert resp.status_code == 400
-        assert "content is required" in resp.json()["error"]
+        assert "non-empty string" in resp.json()["error"]
+
+    def test_non_string_content(self, client: TestClient) -> None:
+        """Non-string content (e.g. array, integer) should be rejected."""
+        resp = client.post(
+            "/channels/test/messages",
+            json={"content": [1, 2, 3]},
+            headers=auth_headers(),
+        )
+        assert resp.status_code == 400
+        assert "non-empty string" in resp.json()["error"]
+
+    def test_non_dict_body(self, client: TestClient) -> None:
+        """JSON array body should return 400, not 500."""
+        resp = client.post(
+            "/channels/test/messages",
+            json=[1, 2, 3],
+            headers=auth_headers(),
+        )
+        assert resp.status_code == 400
+        assert "JSON object" in resp.json()["error"]
 
     def test_invalid_json(self, client: TestClient) -> None:
         resp = client.post(

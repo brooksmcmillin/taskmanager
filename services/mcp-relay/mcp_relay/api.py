@@ -121,9 +121,12 @@ async def send_handler(request: Request) -> JSONResponse:
     except Exception:
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
 
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Request body must be a JSON object"}, status_code=400)
+
     content = body.get("content", "")
-    if not content:
-        return JSONResponse({"error": "content is required"}, status_code=400)
+    if not isinstance(content, str) or not content:
+        return JSONResponse({"error": "content must be a non-empty string"}, status_code=400)
 
     sender = request.state.access_token.client_id[:MAX_SENDER_LENGTH]
 
