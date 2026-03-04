@@ -16,6 +16,10 @@ concurrency:
   group: frontend-e2e-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   e2e:
     name: E2E Tests
@@ -38,8 +42,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
