@@ -354,7 +354,8 @@ def create_store() -> MessageStore:
         from mcp_relay.redis_store import RedisMessageStore
 
         client = aioredis.from_url(redis_url, decode_responses=False)
-        logger.info(f"Using Redis message store: {redis_url}")
+        safe_url = urlparse(redis_url)._replace(netloc=urlparse(redis_url).hostname + (f":{urlparse(redis_url).port}" if urlparse(redis_url).port else ""))
+        logger.info(f"Using Redis message store: {safe_url.geturl()}")
         return RedisMessageStore(  # type: ignore[return-value]
             redis=client,
             max_per_channel=MAX_MESSAGES_PER_CHANNEL,
