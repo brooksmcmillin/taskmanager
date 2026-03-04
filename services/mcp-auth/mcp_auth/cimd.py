@@ -202,73 +202,137 @@ class CIMDFetcher:
         """
         Validate a URL for SSRF vulnerabilities.
 
-        This checks that the URL doesn't point to internal/private resources.
+        Delegates to _validate_jwks_url or _validate_cimd_url based on is_jwks.
 
         Args:
             url: The URL to validate
-            is_jwks: If True, this is a JWKS URI (stricter validation)
+            is_jwks: If True, apply stricter JWKS URI validation
 
         Raises:
             CIMDValidationError: If the URL fails SSRF validation
+        """
+        if is_jwks:
+            self._validate_jwks_url(url)
+        else:
+            self._validate_cimd_url(url)
+
+    def _parse_hostname(self, url: str) -> tuple[str, str]:
+        """
+        Parse a URL and return (scheme, hostname).
+
+        Args:
+            url: The URL to parse
+
+        Returns:
+            Tuple of (scheme, hostname)
+
+        Raises:
+            CIMDValidationError: If the URL cannot be parsed
         """
         try:
             parsed = urlparse(url)
         except Exception as e:
             raise CIMDValidationError(f"Invalid URL format: {e}") from e
+        return parsed.scheme, parsed.hostname or ""
 
-        hostname = parsed.hostname or ""
+    def _validate_jwks_url(self, url: str) -> None:
+        """
+        Validate a JWKS URI for SSRF vulnerabilities (strict mode).
+
+        JWKS URIs must use HTTPS and cannot point to any private/local address.
+
+        Args:
+            url: The JWKS URI to validate
+
+        Raises:
+            CIMDValidationError: If the URL fails SSRF validation
+        """
+        scheme, hostname = self._parse_hostname(url)
 
         # Block known cloud metadata endpoints
         if hostname in BLOCKED_METADATA_HOSTS:
             raise CIMDValidationError(f"URL points to blocked metadata endpoint: {hostname}")
 
-        # For JWKS URIs, always require HTTPS (no localhost exception)
-        if is_jwks and parsed.scheme != "https":
-            raise CIMDValidationError(f"jwks_uri must use HTTPS (got {parsed.scheme})")
+        # JWKS URIs must always use HTTPS
+        if scheme != "https":
+            raise CIMDValidationError(f"jwks_uri must use HTTPS (got {scheme})")
+
+        # Check if hostname is an IP address
+        try:
+            ipaddress.ip_address(hostname)
+            # It is an IP — block if private (no localhost exceptions for JWKS)
+            if self._is_private_ip(hostname):
+                raise CIMDValidationError(f"jwks_uri cannot point to private IP: {hostname}")
+            return
+        except ValueError:
+            pass
+
+        # Hostname is not an IP — block localhost-style hostnames
+        if hostname in ("localhost", "localhost.localdomain"):
+            raise CIMDValidationError(f"jwks_uri cannot point to localhost: {hostname}")
+
+        # Resolve DNS and block if it resolves to a private IP
+        try:
+            addrs = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for addr in addrs:
+                ip_str = str(addr[4][0])
+                if self._is_private_ip(ip_str):
+                    raise CIMDValidationError(
+                        f"jwks_uri hostname {hostname} resolves to private IP: {ip_str}"
+                    )
+        except socket.gaierror:
+            logger.warning(f"Could not resolve hostname for SSRF check: {hostname}")
+
+    def _validate_cimd_url(self, url: str) -> None:
+        """
+        Validate a CIMD metadata URL for SSRF vulnerabilities.
+
+        Localhost is permitted when allow_localhost=True, but all other private
+        addresses are always blocked.
+
+        Args:
+            url: The CIMD URL to validate
+
+        Raises:
+            CIMDValidationError: If the URL fails SSRF validation
+        """
+        _scheme, hostname = self._parse_hostname(url)
+
+        # Block known cloud metadata endpoints
+        if hostname in BLOCKED_METADATA_HOSTS:
+            raise CIMDValidationError(f"URL points to blocked metadata endpoint: {hostname}")
 
         # Check if hostname is an IP address
         try:
             ip = ipaddress.ip_address(hostname)
-            # For JWKS, block all private IPs
-            if is_jwks and self._is_private_ip(hostname):
-                raise CIMDValidationError(f"jwks_uri cannot point to private IP: {hostname}")
-            # For CIMD metadata, allow localhost if enabled
-            if self._is_private_ip(hostname):
-                if not self.allow_localhost:
-                    raise CIMDValidationError(f"URL points to private IP: {hostname}")
-                # Only allow actual localhost, not other private IPs
-                if str(ip) not in ("127.0.0.1", "::1"):
-                    raise CIMDValidationError(
-                        f"URL points to private IP (only localhost allowed): {hostname}"
-                    )
-        except ValueError:
-            # Not an IP address, it's a hostname - resolve and check
-            # For JWKS, also block localhost hostnames
-            if is_jwks and hostname in ("localhost", "localhost.localdomain"):
-                raise CIMDValidationError(
-                    f"jwks_uri cannot point to localhost: {hostname}"
-                ) from None
+            if not self._is_private_ip(hostname):
+                return
 
-            # Try to resolve the hostname and check if it resolves to a private IP
-            try:
-                # Use getaddrinfo to resolve the hostname
-                addrs = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-                for addr in addrs:
-                    ip_str = str(addr[4][0])
-                    if self._is_private_ip(ip_str):
-                        # For JWKS, block all private IPs
-                        if is_jwks:
-                            raise CIMDValidationError(
-                                f"jwks_uri hostname {hostname} resolves to private IP: {ip_str}"
-                            )
-                        # For CIMD, only allow localhost
-                        if not self.allow_localhost or ip_str not in ("127.0.0.1", "::1"):
-                            raise CIMDValidationError(
-                                f"Hostname {hostname} resolves to private IP: {ip_str}"
-                            )
-            except socket.gaierror:
-                # DNS resolution failed - we'll let the actual request fail
-                logger.warning(f"Could not resolve hostname for SSRF check: {hostname}")
+            # Private IP — only allow true localhost when allow_localhost=True
+            if not self.allow_localhost:
+                raise CIMDValidationError(f"URL points to private IP: {hostname}")
+            if str(ip) not in ("127.0.0.1", "::1"):
+                raise CIMDValidationError(
+                    f"URL points to private IP (only localhost allowed): {hostname}"
+                )
+            return
+        except ValueError:
+            pass
+
+        # Hostname is not an IP — resolve DNS and check resolved addresses
+        try:
+            addrs = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            for addr in addrs:
+                ip_str = str(addr[4][0])
+                if not self._is_private_ip(ip_str):
+                    continue
+                # Resolved to a private IP — only allow localhost when allow_localhost=True
+                if not self.allow_localhost or ip_str not in ("127.0.0.1", "::1"):
+                    raise CIMDValidationError(
+                        f"Hostname {hostname} resolves to private IP: {ip_str}"
+                    )
+        except socket.gaierror:
+            logger.warning(f"Could not resolve hostname for SSRF check: {hostname}")
 
     def _validate_url(self, url: str) -> None:
         """

@@ -200,6 +200,238 @@ class TestCIMDMetadataValidation:
         fetcher._validate_metadata("https://example.com/oauth/metadata.json", valid_metadata)
 
 
+class TestSSRFValidation:
+    """Test SSRF protection in _validate_url_ssrf, _validate_cimd_url, and _validate_jwks_url."""
+
+    # --- Valid URL cases ---
+
+    def test_valid_https_public_url_cimd(self) -> None:
+        """Valid HTTPS URL with public hostname passes CIMD SSRF validation."""
+        fetcher = CIMDFetcher()
+        # Should not raise - public HTTPS URL
+        fetcher._validate_url_ssrf("https://example.com/metadata.json", is_jwks=False)
+
+    def test_valid_https_public_url_jwks(self) -> None:
+        """Valid HTTPS URL with public hostname passes JWKS SSRF validation."""
+        fetcher = CIMDFetcher()
+        # Should not raise
+        fetcher._validate_url_ssrf("https://example.com/.well-known/jwks.json", is_jwks=True)
+
+    def test_valid_localhost_cimd_when_allowed(self) -> None:
+        """Localhost URL passes CIMD validation when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        # Should not raise for localhost IP
+        fetcher._validate_url_ssrf("https://127.0.0.1/metadata.json", is_jwks=False)
+
+    def test_valid_localhost_ipv6_cimd_when_allowed(self) -> None:
+        """IPv6 loopback passes CIMD validation when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        fetcher._validate_url_ssrf("https://[::1]/metadata.json", is_jwks=False)
+
+    # --- Blocked cloud metadata hosts ---
+
+    def test_blocks_aws_metadata_endpoint_cimd(self) -> None:
+        """AWS metadata endpoint is blocked for CIMD."""
+        fetcher = CIMDFetcher()
+        with pytest.raises(CIMDValidationError, match="blocked metadata endpoint"):
+            fetcher._validate_url_ssrf("http://169.254.169.254/latest/meta-data/", is_jwks=False)
+
+    def test_blocks_aws_metadata_endpoint_jwks(self) -> None:
+        """AWS metadata endpoint is blocked for JWKS."""
+        fetcher = CIMDFetcher()
+        with pytest.raises(CIMDValidationError, match="blocked metadata endpoint"):
+            fetcher._validate_url_ssrf("https://169.254.169.254/jwks.json", is_jwks=True)
+
+    def test_blocks_google_metadata_internal(self) -> None:
+        """Google metadata internal hostname is blocked."""
+        fetcher = CIMDFetcher()
+        with pytest.raises(CIMDValidationError, match="blocked metadata endpoint"):
+            fetcher._validate_url_ssrf(
+                "http://metadata.google.internal/computeMetadata/v1/", is_jwks=False
+            )
+
+    def test_blocks_metadata_goog(self) -> None:
+        """metadata.goog hostname is blocked."""
+        fetcher = CIMDFetcher()
+        with pytest.raises(CIMDValidationError, match="blocked metadata endpoint"):
+            fetcher._validate_url_ssrf("http://metadata.goog/", is_jwks=False)
+
+    # --- JWKS-specific HTTPS enforcement ---
+
+    def test_jwks_requires_https_not_http(self) -> None:
+        """JWKS URL must use HTTPS, not HTTP."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri must use HTTPS"):
+            fetcher._validate_url_ssrf("http://example.com/jwks.json", is_jwks=True)
+
+    def test_jwks_requires_https_not_ftp(self) -> None:
+        """JWKS URL must use HTTPS, not FTP."""
+        fetcher = CIMDFetcher()
+        with pytest.raises(CIMDValidationError, match="jwks_uri must use HTTPS"):
+            fetcher._validate_url_ssrf("ftp://example.com/jwks.json", is_jwks=True)
+
+    # --- JWKS blocks localhost IPs ---
+
+    def test_jwks_blocks_localhost_ip(self) -> None:
+        """JWKS validation blocks localhost IP even when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to private IP"):
+            fetcher._validate_url_ssrf("https://127.0.0.1/jwks.json", is_jwks=True)
+
+    def test_jwks_blocks_ipv6_loopback(self) -> None:
+        """JWKS validation blocks IPv6 loopback even when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to private IP"):
+            fetcher._validate_url_ssrf("https://[::1]/jwks.json", is_jwks=True)
+
+    def test_jwks_blocks_private_ip_10_x(self) -> None:
+        """JWKS validation blocks 10.x.x.x private IP range."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to private IP"):
+            fetcher._validate_url_ssrf("https://10.0.0.1/jwks.json", is_jwks=True)
+
+    def test_jwks_blocks_private_ip_192_168(self) -> None:
+        """JWKS validation blocks 192.168.x.x private IP range."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to private IP"):
+            fetcher._validate_url_ssrf("https://192.168.1.1/jwks.json", is_jwks=True)
+
+    def test_jwks_blocks_private_ip_172_16(self) -> None:
+        """JWKS validation blocks 172.16.x.x private IP range."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to private IP"):
+            fetcher._validate_url_ssrf("https://172.16.0.1/jwks.json", is_jwks=True)
+
+    # --- JWKS blocks localhost hostnames ---
+
+    def test_jwks_blocks_localhost_hostname(self) -> None:
+        """JWKS validation blocks 'localhost' hostname."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to localhost"):
+            fetcher._validate_url_ssrf("https://localhost/jwks.json", is_jwks=True)
+
+    def test_jwks_blocks_localhost_localdomain(self) -> None:
+        """JWKS validation blocks 'localhost.localdomain' hostname."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to localhost"):
+            fetcher._validate_url_ssrf("https://localhost.localdomain/jwks.json", is_jwks=True)
+
+    # --- CIMD: private IPs blocked when allow_localhost=False ---
+
+    def test_cimd_blocks_private_ip_when_not_allow_localhost(self) -> None:
+        """CIMD validation blocks private IPs when allow_localhost=False."""
+        fetcher = CIMDFetcher(allow_localhost=False)
+        with pytest.raises(CIMDValidationError, match="URL points to private IP"):
+            fetcher._validate_url_ssrf("https://192.168.1.1/metadata.json", is_jwks=False)
+
+    def test_cimd_blocks_localhost_ip_when_not_allow_localhost(self) -> None:
+        """CIMD validation blocks localhost IP when allow_localhost=False."""
+        fetcher = CIMDFetcher(allow_localhost=False)
+        with pytest.raises(CIMDValidationError, match="URL points to private IP"):
+            fetcher._validate_url_ssrf("https://127.0.0.1/metadata.json", is_jwks=False)
+
+    # --- CIMD: non-localhost private IPs always blocked ---
+
+    def test_cimd_blocks_non_localhost_private_ip_when_allow_localhost(self) -> None:
+        """CIMD validation blocks non-localhost private IPs even when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="private IP.*only localhost allowed"):
+            fetcher._validate_url_ssrf("https://192.168.1.1/metadata.json", is_jwks=False)
+
+    def test_cimd_blocks_10_x_private_ip_when_allow_localhost(self) -> None:
+        """CIMD validation blocks 10.x.x.x even when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="private IP.*only localhost allowed"):
+            fetcher._validate_url_ssrf("https://10.0.0.1/metadata.json", is_jwks=False)
+
+    # --- Link-local / special ranges ---
+
+    def test_blocks_link_local_ip_cimd(self) -> None:
+        """CIMD validation blocks 169.254.x.x (link-local) IPs."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        # 169.254.169.254 is in BLOCKED_METADATA_HOSTS, use a different link-local IP
+        with pytest.raises(CIMDValidationError, match="private IP.*only localhost allowed"):
+            fetcher._validate_url_ssrf("https://169.254.1.1/metadata.json", is_jwks=False)
+
+    def test_blocks_link_local_ip_jwks(self) -> None:
+        """JWKS validation blocks 169.254.x.x (link-local) IPs."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to private IP"):
+            fetcher._validate_url_ssrf("https://169.254.1.1/jwks.json", is_jwks=True)
+
+    # --- Direct tests for split methods ---
+
+    def test_validate_jwks_url_valid_https(self) -> None:
+        """_validate_jwks_url accepts valid HTTPS public URL."""
+        fetcher = CIMDFetcher()
+        fetcher._validate_jwks_url("https://example.com/.well-known/jwks.json")
+
+    def test_validate_jwks_url_rejects_http(self) -> None:
+        """_validate_jwks_url rejects HTTP scheme."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri must use HTTPS"):
+            fetcher._validate_jwks_url("http://example.com/jwks.json")
+
+    def test_validate_jwks_url_rejects_localhost_even_when_allowed(self) -> None:
+        """_validate_jwks_url rejects localhost hostname even when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to localhost"):
+            fetcher._validate_jwks_url("https://localhost/jwks.json")
+
+    def test_validate_jwks_url_rejects_private_ip(self) -> None:
+        """_validate_jwks_url rejects private IP addresses."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="jwks_uri cannot point to private IP"):
+            fetcher._validate_jwks_url("https://10.1.2.3/jwks.json")
+
+    def test_validate_jwks_url_rejects_blocked_metadata_host(self) -> None:
+        """_validate_jwks_url rejects blocked metadata hosts."""
+        fetcher = CIMDFetcher()
+        with pytest.raises(CIMDValidationError, match="blocked metadata endpoint"):
+            fetcher._validate_jwks_url("https://169.254.169.254/jwks.json")
+
+    def test_validate_cimd_url_valid_public_https(self) -> None:
+        """_validate_cimd_url accepts valid public HTTPS URL."""
+        fetcher = CIMDFetcher()
+        fetcher._validate_cimd_url("https://example.com/metadata.json")
+
+    def test_validate_cimd_url_allows_localhost_when_enabled(self) -> None:
+        """_validate_cimd_url allows localhost IP when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        fetcher._validate_cimd_url("https://127.0.0.1/metadata.json")
+
+    def test_validate_cimd_url_blocks_localhost_when_disabled(self) -> None:
+        """_validate_cimd_url blocks localhost IP when allow_localhost=False."""
+        fetcher = CIMDFetcher(allow_localhost=False)
+        with pytest.raises(CIMDValidationError, match="URL points to private IP"):
+            fetcher._validate_cimd_url("https://127.0.0.1/metadata.json")
+
+    def test_validate_cimd_url_blocks_non_localhost_private_ip(self) -> None:
+        """_validate_cimd_url blocks non-localhost private IPs even when allow_localhost=True."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        with pytest.raises(CIMDValidationError, match="only localhost allowed"):
+            fetcher._validate_cimd_url("https://192.168.10.1/metadata.json")
+
+    def test_validate_cimd_url_blocks_metadata_host(self) -> None:
+        """_validate_cimd_url blocks known cloud metadata endpoints."""
+        fetcher = CIMDFetcher()
+        with pytest.raises(CIMDValidationError, match="blocked metadata endpoint"):
+            fetcher._validate_cimd_url("http://metadata.google.internal/computeMetadata/v1/")
+
+    def test_validate_url_ssrf_delegates_to_jwks_validator(self) -> None:
+        """_validate_url_ssrf with is_jwks=True delegates to _validate_jwks_url."""
+        fetcher = CIMDFetcher(allow_localhost=True)
+        # JWKS path should reject http (CIMD path would not reject http on its own)
+        with pytest.raises(CIMDValidationError, match="jwks_uri must use HTTPS"):
+            fetcher._validate_url_ssrf("http://example.com/jwks.json", is_jwks=True)
+
+    def test_validate_url_ssrf_delegates_to_cimd_validator(self) -> None:
+        """_validate_url_ssrf with is_jwks=False delegates to _validate_cimd_url."""
+        fetcher = CIMDFetcher(allow_localhost=False)
+        with pytest.raises(CIMDValidationError, match="URL points to private IP"):
+            fetcher._validate_url_ssrf("https://127.0.0.1/metadata.json", is_jwks=False)
+
+
 class TestCIMDMetadataFetching:
     """Test fetching CIMD metadata documents."""
 
