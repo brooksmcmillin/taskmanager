@@ -454,7 +454,11 @@
 				{@const overflow = isExpanded ? 0 : Math.max(0, allItems.length - MAX_VISIBLE_TASKS)}
 				<div class="calendar-day" class:today={isTodayDay} data-date={dateStr}>
 					<div class="calendar-date">
-						{date.getMonth() + 1}/{date.getDate()}
+						{#if isTodayDay}
+							<span class="date-number">{date.getDate()}</span>
+						{:else}
+							{date.getMonth() + 1}/{date.getDate()}
+						{/if}
 					</div>
 					<div
 						class="tasks-container"
@@ -641,12 +645,30 @@
 
 	.day-pill.today {
 		border-color: var(--primary-500, #3b82f6);
+		border-width: 2px;
+
+		.day-pill-date {
+			background-color: var(--primary-500, #d4763a);
+			color: white;
+			border-radius: 50%;
+			width: 1.5rem;
+			height: 1.5rem;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+		}
 	}
 
 	.day-pill.selected {
 		background: var(--primary-500, #3b82f6);
 		color: white;
 		border-color: var(--primary-600, #2563eb);
+	}
+
+	/* When today is also selected, show an inverted circle so it's visible on the filled background */
+	.day-pill.today.selected .day-pill-date {
+		background-color: white;
+		color: var(--primary-600, #2563eb);
 	}
 
 	.day-pill-date {
