@@ -702,23 +702,42 @@ def create_authorization_server(
         revocation_options=mcp_auth_settings.revocation_options,
     )
 
-    # Add debug wrapper for token endpoint
+    # Sensitive fields that must never appear in logs
+    _sensitive_fields = {"client_secret", "code", "refresh_token", "device_code"}
+
+    def _redact_body(raw: str) -> str:
+        """Return a redacted version of a URL-encoded body string."""
+        from urllib.parse import parse_qs, urlencode
+
+        parsed = parse_qs(raw, keep_blank_values=True)
+        redacted = {k: ["[REDACTED]"] if k in _sensitive_fields else v for k, v in parsed.items()}
+        return urlencode(redacted, doseq=True)
+
+    # Whether to emit verbose debug logging for the token endpoint.
+    # Must be explicitly opted-in; logs are always at DEBUG level and
+    # sensitive fields are always redacted even when enabled.
+    _token_debug_logging = os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
+
+    # Add wrapper for token endpoint to handle device_code / refresh_token
+    # grant types and (optionally) emit redacted debug logs.
     original_token_route = None
     for i, route in enumerate(routes):
         if route.path == "/token" and route.methods is not None and "POST" in route.methods:
             original_token_route = route
 
-            # Create debug wrapper
+            # Create token handler wrapper
             async def debug_token_handler(request: Request) -> Response:
-                logger.info("=== TOKEN ENDPOINT DEBUG ===")
-                logger.info(f"Method: {request.method}")
-                logger.info(f"URL: {request.url}")
-                logger.info(f"Headers: {dict(request.headers)}")
+                if _token_debug_logging:
+                    logger.debug("=== TOKEN ENDPOINT DEBUG ===")
+                    logger.debug(f"Method: {request.method}")
+                    logger.debug(f"URL: {request.url}")
+                    logger.debug(f"Headers: {dict(request.headers)}")
 
                 try:
                     # Read the raw body
                     body = await request.body()
-                    logger.info(f"Raw body: {body.decode()}")
+                    if _token_debug_logging:
+                        logger.debug(f"Raw body: {_redact_body(body.decode())}")
 
                     # Check for device_code grant type
                     from urllib.parse import parse_qs
@@ -727,7 +746,8 @@ def create_authorization_server(
                     grant_type = parsed_body.get("grant_type", [""])[0]
 
                     if grant_type == "urn:ietf:params:oauth:grant-type:device_code":
-                        logger.info("=== DEVICE CODE TOKEN EXCHANGE ===")
+                        if _token_debug_logging:
+                            logger.debug("=== DEVICE CODE TOKEN EXCHANGE ===")
                         return await handle_device_code_token_exchange(
                             parsed_body,
                             oauth_provider,
@@ -736,13 +756,14 @@ def create_authorization_server(
                         )
 
                     if grant_type == "refresh_token":
-                        logger.info("=== REFRESH TOKEN EXCHANGE ===")
+                        if _token_debug_logging:
+                            logger.debug("=== REFRESH TOKEN EXCHANGE ===")
                         return await handle_refresh_token_exchange(
                             parsed_body, oauth_provider, token_endpoint=f"{server_url}/token"
                         )
 
                     # Try to parse form data
-                    if request.headers.get("content-type", "").startswith(
+                    if _token_debug_logging and request.headers.get("content-type", "").startswith(
                         "application/x-www-form-urlencoded"
                     ):
                         # Reconstruct request with body
@@ -754,10 +775,15 @@ def create_authorization_server(
 
                         new_request = Request(scope, url_encode_receive)
                         form_data = await new_request.form()
-                        logger.info(f"Form data: {dict(form_data)}")
+                        redacted_form = {
+                            k: "[REDACTED]" if k in _sensitive_fields else v
+                            for k, v in dict(form_data).items()
+                        }
+                        logger.debug(f"Form data: {redacted_form}")
 
                     # Call original handler - handle ASGI interface properly
-                    logger.info("Calling original token endpoint")
+                    if _token_debug_logging:
+                        logger.debug("Calling original token endpoint")
 
                     # Create a new scope and receive callable with fresh body
                     scope = dict(request.scope).copy()
@@ -785,17 +811,18 @@ def create_authorization_server(
                     # Call the endpoint as ASGI app
                     await original_token_route.app(scope, receive, send)  # noqa: B023
 
-                    logger.info(f"Token endpoint result: {response_data['status']}")
+                    if _token_debug_logging:
+                        logger.debug(f"Token endpoint result: {response_data['status']}")
 
-                    # Log response body for debugging
-                    if response_data["body"]:
-                        try:
-                            response_text = cast(bytes, response_data["body"]).decode("utf-8")
-                            logger.info(f"Token endpoint response body: {response_text}")
-                        except Exception:
-                            logger.info(
-                                f"Token endpoint response body (raw): {response_data['body']}"
-                            )
+                        # Log response body for debugging
+                        if response_data["body"]:
+                            try:
+                                response_text = cast(bytes, response_data["body"]).decode("utf-8")
+                                logger.debug(f"Token endpoint response body: {response_text}")
+                            except Exception:
+                                logger.debug(
+                                    f"Token endpoint response body (raw): {response_data['body']}"
+                                )
 
                     # Convert headers back to dict format for Response
                     headers_dict = {}
