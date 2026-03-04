@@ -15,6 +15,11 @@ dependencies = [
     "uvicorn>=0.30.0",
 ]
 
+[project.optional-dependencies]
+redis = [
+    "redis>=5.0.0",
+]
+
 [project.scripts]
 mcp-relay = "mcp_relay.server:main"
 mcp-relay-cli = "mcp_relay.cli:main"
@@ -89,6 +94,7 @@ mcp-resource-framework = { path = "../../packages/mcp-resource-framework" }
 
 [dependency-groups]
 dev = [
+    "fakeredis>=2.34.1",
     "httpx>=0.27.0",
     "pyright>=1.1.400",
     "pytest>=9.0.2",

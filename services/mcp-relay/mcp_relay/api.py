@@ -53,7 +53,7 @@ class OAuthTokenMiddleware(BaseHTTPMiddleware):
 async def channels_handler(request: Request) -> JSONResponse:
     """Return all channels with message counts."""
     store: MessageStore = request.app.state.store
-    channels = store.list_channels()
+    channels = await store.list_channels()
     return JSONResponse(
         {
             "channels": [
@@ -91,7 +91,7 @@ async def messages_handler(request: Request) -> JSONResponse:
         limit = 100
 
     try:
-        messages, _ = store.get(channel, since=since, limit=limit)
+        messages, _ = await store.get(channel, since=since, limit=limit)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
@@ -131,7 +131,7 @@ async def send_handler(request: Request) -> JSONResponse:
     sender = request.state.access_token.client_id[:MAX_SENDER_LENGTH]
 
     try:
-        msg = store.add(channel, content, sender)
+        msg = await store.add(channel, content, sender)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
@@ -163,7 +163,7 @@ async def clear_handler(request: Request) -> JSONResponse:
             status_code=403,
         )
 
-    cleared = store.clear(channel)
+    cleared = await store.clear(channel)
     return JSONResponse({"channel": channel, "cleared": cleared})
 
 
