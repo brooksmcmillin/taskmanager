@@ -2,8 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import delete, func, select, type_coerce
+from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -102,64 +102,48 @@ class RateLimiter:
                 await session.commit()
 
     async def _record_impl(self, key: str, db: AsyncSession) -> None:
-        """Internal record implementation."""
+        """Internal record implementation.
+
+        Uses a single atomic upsert to append the new timestamp to the
+        attempts array. On conflict (existing key), the append happens
+        entirely in SQL using JSONB concatenation, so concurrent workers
+        cannot lose each other's writes.
+
+        Note: expired timestamps are filtered out at check time rather
+        than at record time, keeping the atomic append simple. The cleanup()
+        method can be called periodically to remove fully expired entries.
+        """
         db_key = self._db_key(key)
         now = datetime.now(UTC)
         now_ts = now.timestamp()
+        new_attempt_json = type_coerce(func.jsonb_build_array(now_ts), JSONB)
 
-        # Get existing attempts
-        result = await db.execute(
-            select(SharedState).where(
-                SharedState.namespace == NAMESPACE,
-                SharedState.key == db_key,
+        # Atomic upsert: INSERT new entry or append to existing array
+        # The ON CONFLICT clause uses the *existing row's* value column
+        # (via excluded/shared_state reference), so concurrent upserts
+        # each atomically append their own timestamp.
+        stmt = (
+            insert(SharedState)
+            .values(
+                namespace=NAMESPACE,
+                key=db_key,
+                value=func.jsonb_build_object("attempts", new_attempt_json),
+                expires_at=self._expiry(),
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["namespace", "key"],
+                set_={
+                    "value": func.jsonb_build_object(
+                        "attempts",
+                        SharedState.value["attempts"].concat(new_attempt_json),
+                    ),
+                    "expires_at": self._expiry(),
+                    "updated_at": now,
+                },
             )
         )
-        existing = result.scalar_one_or_none()
-
-        if existing is not None:
-            # Filter old attempts and add new one
-            attempts = self._filter_attempts(existing.value.get("attempts", []))
-            attempts.append(now_ts)
-            # Use upsert to handle concurrent writes
-            stmt = (
-                insert(SharedState)
-                .values(
-                    namespace=NAMESPACE,
-                    key=db_key,
-                    value={"attempts": attempts},
-                    expires_at=self._expiry(),
-                    updated_at=now,
-                )
-                .on_conflict_do_update(
-                    index_elements=["namespace", "key"],
-                    set_={
-                        "value": {"attempts": attempts},
-                        "expires_at": self._expiry(),
-                        "updated_at": now,
-                    },
-                )
-            )
-            await db.execute(stmt)
-        else:
-            # Create new entry
-            stmt = (
-                insert(SharedState)
-                .values(
-                    namespace=NAMESPACE,
-                    key=db_key,
-                    value={"attempts": [now_ts]},
-                    expires_at=self._expiry(),
-                )
-                .on_conflict_do_update(
-                    index_elements=["namespace", "key"],
-                    set_={
-                        "value": {"attempts": [now_ts]},
-                        "expires_at": self._expiry(),
-                        "updated_at": now,
-                    },
-                )
-            )
-            await db.execute(stmt)
+        await db.execute(stmt)
 
     async def reset(self, key: str, db: AsyncSession | None = None) -> None:
         """Reset attempts for a key (e.g., after successful login).

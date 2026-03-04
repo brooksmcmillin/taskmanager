@@ -163,7 +163,7 @@ async def test_rate_limiter_stores_in_database(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_rate_limiter_concurrent_records(db_session: AsyncSession):
+async def test_rate_limiter_accumulates_multiple_records(db_session: AsyncSession):
     """Test that multiple records accumulate correctly."""
     limiter = RateLimiter(max_attempts=10, window_ms=5000, name="test_accum")
 

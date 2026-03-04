@@ -63,7 +63,13 @@ async def _cleanup_expired_states(db: AsyncSession) -> None:
 
 
 async def _store_oauth_state(db: AsyncSession, state: str, return_to: str) -> None:
-    """Store an OAuth state token in the database with TTL."""
+    """Store an OAuth state token in the database with TTL.
+
+    Also opportunistically cleans up expired states to prevent accumulation.
+    """
+    # Opportunistic cleanup of expired states
+    await _cleanup_expired_states(db)
+
     now = datetime.now(UTC)
     expires_at = now + timedelta(minutes=STATE_EXPIRY_MINUTES)
 
@@ -79,33 +85,36 @@ async def _store_oauth_state(db: AsyncSession, state: str, return_to: str) -> No
 
 
 async def _validate_and_consume_state(state: str, db: AsyncSession) -> dict | None:
-    """Validate state parameter and remove it from storage.
+    """Validate state parameter and remove it from storage atomically.
+
+    Uses DELETE ... RETURNING to ensure the state token can only be consumed
+    once, even under concurrent requests (prevents TOCTOU race conditions).
 
     Returns the state data if valid, None if invalid or expired.
     """
     now = datetime.now(UTC)
 
-    # Look up and delete in one operation
+    # Atomic delete-and-return: only one concurrent request can consume the state
     result = await db.execute(
-        select(SharedState).where(
+        delete(SharedState)
+        .where(
             SharedState.namespace == OAUTH_STATE_NAMESPACE,
             SharedState.key == state,
         )
+        .returning(SharedState.value, SharedState.expires_at)
     )
-    entry = result.scalar_one_or_none()
+    row = result.one_or_none()
 
-    if not entry:
+    if not row:
         return None
 
-    # Remove the state (consume it)
-    await db.delete(entry)
-    await db.flush()
+    value, expires_at = row
 
     # Check expiration
-    if entry.expires_at < now:
+    if expires_at < now:
         return None
 
-    return entry.value
+    return value
 
 
 def _validate_return_to(return_to: str) -> str:
