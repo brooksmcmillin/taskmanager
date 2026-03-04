@@ -227,7 +227,7 @@ class TestTabIdSetConfig:
             assert resp.status_code == 200
             yield ac
 
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_db, None)
 
     @pytest.mark.asyncio
     async def test_create_todo_with_tab_id(self, tab_id_client: AsyncClient) -> None:
