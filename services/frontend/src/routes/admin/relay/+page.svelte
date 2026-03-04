@@ -38,17 +38,21 @@
 		if (!filterText) return messages;
 		const q = filterText.toLowerCase();
 		return messages.filter(
-			(m) =>
-				m.content.toLowerCase().includes(q) ||
-				m.sender.toLowerCase().includes(q)
+			(m) => m.content.toLowerCase().includes(q) || m.sender.toLowerCase().includes(q)
 		);
 	}
 
 	async function fetchJSON(path: string, opts?: RequestInit) {
 		const resp = await fetch(path, { credentials: 'include', ...opts });
 		if (!resp.ok) {
-			if (resp.status === 401) { goto('/login'); return null; }
-			if (resp.status === 403) { goto('/'); return null; }
+			if (resp.status === 401) {
+				goto('/login');
+				return null;
+			}
+			if (resp.status === 403) {
+				goto('/');
+				return null;
+			}
 			throw new Error(`HTTP ${resp.status}`);
 		}
 		return resp.json();
@@ -63,9 +67,8 @@
 				channels = [];
 			} else {
 				error = '';
-				channels = (data.channels || []).sort(
-					(a: Channel, b: Channel) =>
-						(b.last_activity || '').localeCompare(a.last_activity || '')
+				channels = (data.channels || []).sort((a: Channel, b: Channel) =>
+					(b.last_activity || '').localeCompare(a.last_activity || '')
 				);
 			}
 		} catch (err) {
@@ -106,14 +109,11 @@
 		if (!selectedChannel || !sendContent.trim()) return;
 		sending = true;
 		try {
-			await fetchJSON(
-				`/api/admin/relay/channels/${encodeURIComponent(selectedChannel)}/messages`,
-				{
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ content: sendContent, sender: sendSender || 'admin-ui' }),
-				}
-			);
+			await fetchJSON(`/api/admin/relay/channels/${encodeURIComponent(selectedChannel)}/messages`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ content: sendContent, sender: sendSender || 'admin-ui' })
+			});
 			sendContent = '';
 			await loadMessages();
 			await loadChannels();
@@ -127,10 +127,9 @@
 	async function handleClear() {
 		if (!selectedChannel || !confirm(`Clear all messages in #${selectedChannel}?`)) return;
 		try {
-			await fetchJSON(
-				`/api/admin/relay/channels/${encodeURIComponent(selectedChannel)}/clear`,
-				{ method: 'POST' }
-			);
+			await fetchJSON(`/api/admin/relay/channels/${encodeURIComponent(selectedChannel)}/clear`, {
+				method: 'POST'
+			});
 			messages = [];
 			await loadChannels();
 		} catch {
@@ -144,7 +143,7 @@
 				hour12: false,
 				hour: '2-digit',
 				minute: '2-digit',
-				second: '2-digit',
+				second: '2-digit'
 			});
 		} catch {
 			return iso;
@@ -290,12 +289,7 @@
 
 		{#if showSendForm && selectedChannel}
 			<div class="send-form">
-				<input
-					type="text"
-					class="sender-input"
-					placeholder="sender"
-					bind:value={sendSender}
-				/>
+				<input type="text" class="sender-input" placeholder="sender" bind:value={sendSender} />
 				<textarea
 					class="content-input"
 					placeholder="Message content (Enter to send, Shift+Enter for newline)"
@@ -303,7 +297,11 @@
 					onkeydown={handleContentKeydown}
 					rows="2"
 				></textarea>
-				<button class="btn btn-sm btn-primary" onclick={handleSend} disabled={sending || !sendContent.trim()}>
+				<button
+					class="btn btn-sm btn-primary"
+					onclick={handleSend}
+					disabled={sending || !sendContent.trim()}
+				>
 					{sending ? 'Sending...' : 'Send'}
 				</button>
 			</div>
