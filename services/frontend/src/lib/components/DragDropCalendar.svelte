@@ -648,7 +648,7 @@
 		border-width: 2px;
 
 		.day-pill-date {
-			background-color: var(--primary-500, #d4763a);
+			background-color: var(--primary-500, #3b82f6);
 			color: white;
 			border-radius: 50%;
 			width: 1.5rem;
