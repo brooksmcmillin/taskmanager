@@ -1135,11 +1135,26 @@ h6 {
 
 	&.today {
 		border-color: var(--primary-500);
+		border-width: 2px;
 		background-color: var(--primary-50);
 
+		/* For today's date, only .date-number is rendered inside .calendar-date
+		   (via the {#if isTodayDay} branch in DragDropCalendar.svelte).
+		   color: white applies to that span's text; non-today cells are unaffected. */
 		.calendar-date {
-			color: var(--primary-600);
+			color: white;
 			font-weight: 700;
+
+			.date-number {
+				background-color: var(--primary-500);
+				border-radius: 50%;
+				width: 1.625rem;
+				height: 1.625rem;
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 0.8125rem;
+			}
 		}
 	}
 
