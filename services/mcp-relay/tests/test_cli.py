@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import patch
 
@@ -14,6 +15,15 @@ from mcp_relay.debug import create_debug_app
 from mcp_relay.server import MessageStore
 
 TEST_TOKEN = "test-cli-token-12345"
+
+
+def _sync(coro):
+    """Run an async store method synchronously for test setup/verification."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 @pytest.fixture
@@ -67,7 +77,7 @@ class TestCliWrite:
         assert "Sent to #test-channel" in result.output
         assert "11 bytes" in result.output
 
-        messages, _ = store.get("test-channel")
+        messages, _ = _sync(store.get("test-channel"))
         assert len(messages) == 1
         assert messages[0].content == "hello world"
         assert messages[0].sender == "cli"
@@ -82,7 +92,7 @@ class TestCliWrite:
         assert result.exit_code == 0
         assert "Sent to #test-channel" in result.output
 
-        messages, _ = store.get("test-channel")
+        messages, _ = _sync(store.get("test-channel"))
         assert len(messages) == 1
         assert messages[0].content == "piped data\n"
 
@@ -95,7 +105,7 @@ class TestCliWrite:
         result = runner.invoke(cli, ["write", "test-channel", "--sender", "my-script", "hello"])
         assert result.exit_code == 0
 
-        messages, _ = store.get("test-channel")
+        messages, _ = _sync(store.get("test-channel"))
         assert messages[0].sender == "my-script"
 
     def test_write_empty_message_errors(self, runner: CliRunner) -> None:
@@ -140,8 +150,8 @@ class TestCliRead:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_httpx(monkeypatch, store)
-        store.add("test-channel", "first message", "alice")
-        store.add("test-channel", "second message", "bob")
+        _sync(store.add("test-channel", "first message", "alice"))
+        _sync(store.add("test-channel", "second message", "bob"))
 
         result = runner.invoke(cli, ["read", "test-channel"])
         assert result.exit_code == 0
@@ -155,7 +165,7 @@ class TestCliRead:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_httpx(monkeypatch, store)
-        store.add("test-channel", "hello", "alice")
+        _sync(store.add("test-channel", "hello", "alice"))
 
         result = runner.invoke(cli, ["read", "test-channel", "-j"])
         assert result.exit_code == 0
@@ -167,8 +177,8 @@ class TestCliRead:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_httpx(monkeypatch, store)
-        store.add("test-channel", "line one", "alice")
-        store.add("test-channel", "line two", "bob")
+        _sync(store.add("test-channel", "line one", "alice"))
+        _sync(store.add("test-channel", "line two", "bob"))
 
         result = runner.invoke(cli, ["read", "test-channel", "-c"])
         assert result.exit_code == 0
@@ -211,9 +221,9 @@ class TestCliChannels:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_httpx(monkeypatch, store)
-        store.add("alpha", "msg1")
-        store.add("alpha", "msg2")
-        store.add("beta", "msg3")
+        _sync(store.add("alpha", "msg1"))
+        _sync(store.add("alpha", "msg2"))
+        _sync(store.add("beta", "msg3"))
 
         result = runner.invoke(cli, ["channels"])
         assert result.exit_code == 0
@@ -224,7 +234,7 @@ class TestCliChannels:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_httpx(monkeypatch, store)
-        store.add("test", "msg")
+        _sync(store.add("test", "msg"))
 
         result = runner.invoke(cli, ["channels", "-j"])
         assert result.exit_code == 0
@@ -260,21 +270,21 @@ class TestCliClear:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_httpx(monkeypatch, store)
-        store.add("test-channel", "msg1")
-        store.add("test-channel", "msg2")
+        _sync(store.add("test-channel", "msg1"))
+        _sync(store.add("test-channel", "msg2"))
 
         result = runner.invoke(cli, ["clear", "test-channel"], input="y\n")
         assert result.exit_code == 0
         assert "Cleared #test-channel" in result.output
 
-        messages, _ = store.get("test-channel")
+        messages, _ = _sync(store.get("test-channel"))
         assert messages == []
 
     def test_clear_with_yes_flag(
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_httpx(monkeypatch, store)
-        store.add("test-channel", "msg1")
+        _sync(store.add("test-channel", "msg1"))
 
         result = runner.invoke(cli, ["clear", "test-channel", "-y"])
         assert result.exit_code == 0
@@ -284,13 +294,13 @@ class TestCliClear:
         self, runner: CliRunner, store: MessageStore, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         self._patch_httpx(monkeypatch, store)
-        store.add("test-channel", "msg1")
+        _sync(store.add("test-channel", "msg1"))
 
         result = runner.invoke(cli, ["clear", "test-channel"], input="n\n")
         assert result.exit_code != 0  # click.Abort
 
         # Messages should still be there
-        messages, _ = store.get("test-channel")
+        messages, _ = _sync(store.get("test-channel"))
         assert len(messages) == 1
 
     def test_clear_nonexistent_channel(
@@ -368,7 +378,7 @@ class TestCliWatch:
             call_count += 1
             if call_count == 1:
                 # Simulate a new message arriving between polls
-                store.add("test-channel", "new message", "alice")
+                _sync(store.add("test-channel", "new message", "alice"))
             elif call_count >= 2:
                 raise KeyboardInterrupt
 
@@ -393,7 +403,7 @@ class TestCliWatch:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                store.add("test-channel", "just the content", "bob")
+                _sync(store.add("test-channel", "just the content", "bob"))
             elif call_count >= 2:
                 raise KeyboardInterrupt
 
@@ -417,9 +427,9 @@ class TestCliWatch:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                store.add("test-channel", "msg-one", "alice")
+                _sync(store.add("test-channel", "msg-one", "alice"))
             elif call_count == 2:
-                store.add("test-channel", "msg-two", "bob")
+                _sync(store.add("test-channel", "msg-two", "bob"))
             elif call_count >= 3:
                 raise KeyboardInterrupt
 

@@ -11,6 +11,7 @@ dependencies = [
     "mcp-resource-framework",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
+    "redis>=5.0.0",
     "starlette>=0.40.0",
     "uvicorn>=0.30.0",
 ]
@@ -89,6 +90,7 @@ mcp-resource-framework = { path = "../../packages/mcp-resource-framework" }
 
 [dependency-groups]
 dev = [
+    "fakeredis>=2.34.1",
     "httpx>=0.27.0",
     "pyright>=1.1.400",
     "pytest>=9.0.2",
