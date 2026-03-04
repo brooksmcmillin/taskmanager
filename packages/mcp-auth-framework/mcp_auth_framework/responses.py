@@ -102,3 +102,39 @@ def backend_connection_error() -> JSONResponse:
 def backend_invalid_response() -> JSONResponse:
     """Create an invalid backend response error (502)."""
     return server_error("Invalid response from backend", 502)
+
+
+def invalid_grant(description: str) -> JSONResponse:
+    """Create an invalid_grant error response (400).
+
+    Use for: invalid or expired authorization codes, refresh tokens, or device codes.
+    """
+    return oauth_error("invalid_grant", description, 400)
+
+
+def invalid_scope(description: str) -> JSONResponse:
+    """Create an invalid_scope error response (400).
+
+    Use for: requested scope is invalid, unknown, or exceeds what was granted.
+    """
+    return oauth_error("invalid_scope", description, 400)
+
+
+def backend_oauth_error(error_dict: dict[str, str], status_code: int) -> JSONResponse:
+    """Create a JSONResponse from an already-formatted OAuth error dict.
+
+    Use for: forwarding transformed backend errors that are already in
+    {"error": "...", "error_description": "..."} format.
+
+    Args:
+        error_dict: Dict with "error" and "error_description" keys
+        status_code: HTTP status code from the backend response
+
+    Returns:
+        JSONResponse with Cache-Control: no-store header
+    """
+    return JSONResponse(
+        error_dict,
+        status_code=status_code,
+        headers=OAUTH_NO_CACHE_HEADERS.copy(),
+    )

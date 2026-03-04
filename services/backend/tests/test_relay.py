@@ -1,6 +1,7 @@
 """Tests for the MCP Relay admin proxy endpoints."""
 
 import json
+from collections.abc import Mapping
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -67,7 +68,7 @@ async def regular_client(client: AsyncClient, regular_user: User) -> AsyncClient
 
 
 def _make_response(
-    json_data: dict,
+    json_data: Mapping[str, object],
     status_code: int = 200,
     method: str = "GET",
 ) -> httpx.Response:

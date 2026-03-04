@@ -200,7 +200,7 @@ def generate_slug(title: str) -> str:
     return slug or "untitled"
 
 
-def extract_snippet(content: str, query: str, max_len: int = 200) -> str | None:
+def extract_snippet(content: str, query: str) -> str | None:
     """Extract a snippet of content around the first match of query."""
     idx = content.lower().find(query.lower())
     if idx == -1:
@@ -1182,9 +1182,7 @@ async def _notify_subscribers(
             continue
         notified_users.add(sub.user_id)
 
-        is_delete = (
-            notification_type == NotificationType.WIKI_PAGE_DELETED
-        )
+        is_delete = notification_type == NotificationType.WIKI_PAGE_DELETED
         notification = Notification(
             user_id=sub.user_id,
             notification_type=notification_type,
