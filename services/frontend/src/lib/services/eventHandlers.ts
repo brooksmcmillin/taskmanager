@@ -6,6 +6,7 @@
  * Rapid-fire events are debounced so batch operations coalesce into one reload.
  */
 
+import { get } from 'svelte/store';
 import { todos } from '$lib/stores/todos';
 import { projects } from '$lib/stores/projects';
 import { wiki } from '$lib/stores/wiki';
@@ -57,21 +58,28 @@ function handleChangeEvent(event: ChangeEvent): void {
 		case 'todos':
 			debounce('todos', () => {
 				todos.load().catch(() => {});
-				toasts.info(`${tableLabel} ${opLabel}`);
+				const todoHref = event.op !== 'D' ? `/task/${event.id}` : undefined;
+				toasts.info(`${tableLabel} ${opLabel}`, 3000, { href: todoHref });
 			});
 			break;
 
 		case 'projects':
 			debounce('projects', () => {
 				projects.load({ includeStats: true }).catch(() => {});
-				toasts.info(`${tableLabel} ${opLabel}`);
+				toasts.info(`${tableLabel} ${opLabel}`, 3000, { href: '/projects' });
 			});
 			break;
 
 		case 'wiki_pages':
 			debounce('wiki_pages', () => {
 				wiki.load().catch(() => {});
-				toasts.info(`${tableLabel} ${opLabel}`);
+				let wikiHref: string | undefined;
+				if (event.op !== 'D') {
+					const pages = get(wiki);
+					const page = pages.find((p) => p.id === event.id);
+					wikiHref = page ? `/wiki/${page.slug}` : '/wiki';
+				}
+				toasts.info(`${tableLabel} ${opLabel}`, 3000, { href: wikiHref });
 			});
 			break;
 
@@ -80,7 +88,7 @@ function handleChangeEvent(event: ChangeEvent): void {
 				notifications.loadUnreadCount().catch(() => {});
 				// Only toast for new notifications
 				if (event.op === 'I') {
-					toasts.info('New notification');
+					toasts.info('New notification', 3000, { href: '/notifications' });
 				}
 			});
 			break;
