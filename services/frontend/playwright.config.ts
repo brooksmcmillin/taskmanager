@@ -36,7 +36,7 @@ const config: PlaywrightTestConfig = {
 		headless: true
 	},
 	reporter: isCI
-		? [['blob', { outputDir: 'blob-report' }], ['list']]
+		? [['html', { outputFolder: 'playwright-report' }], ['list']]
 		: [
 				['html', { outputFolder: 'playwright-report' }],
 				['list'],

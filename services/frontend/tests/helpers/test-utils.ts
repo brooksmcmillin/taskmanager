@@ -39,7 +39,8 @@ let emailCounter = 0;
 
 /**
  * Generate a unique email for testing
- * Uses timestamp + counter + random suffix to avoid collisions across parallel workers
+ * Counter prevents within-process collisions (same-millisecond calls).
+ * Cross-worker uniqueness relies on Date.now() + random suffix.
  */
 export function getUniqueEmail(): string {
 	const id = `${Date.now()}-${++emailCounter}-${Math.random().toString(36).slice(2, 6)}`;

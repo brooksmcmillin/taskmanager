@@ -124,6 +124,8 @@ jobs:
       - name: Determine affected tests
         id: affected
         working-directory: services/frontend
+        env:
+          BASE_REF: origin/${{ github.event.pull_request.base.ref || 'main' }}
         run: |
           specs=$(bash scripts/affected-tests.sh)
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
@@ -145,5 +147,5 @@ jobs:
         if: always()
         with:
           name: playwright-report
-          path: services/frontend/blob-report/
+          path: services/frontend/playwright-report/
           retention-days: 30
