@@ -163,9 +163,9 @@ uv run alembic upgrade head
 ### News Feed (`/api/news`)
 
 - `GET /api/news` - List articles
-- `GET /api/news/{article_id}` - Get article
 - `GET /api/news/highlight` - Get highlighted/featured article
 - `GET /api/news/stats` - Reading statistics
+- `GET /api/news/{article_id}` - Get article
 - `GET /api/news/sources` - List feed sources
 - `POST /api/news/sources` - Add feed source
 - `PUT /api/news/sources/{source_id}` - Update feed source
@@ -212,6 +212,13 @@ uv run alembic upgrade head
 
 - `GET /api/categories` - List task categories/tags
 
+### Registration Codes (`/api/registration-codes`)
+
+- `GET /api/registration-codes` - List registration codes
+- `POST /api/registration-codes` - Create registration code
+- `DELETE /api/registration-codes/{code_id}` - Delete registration code
+- `PATCH /api/registration-codes/{code_id}/deactivate` - Deactivate code
+
 ### Admin (`/api/admin`)
 
 - `GET /api/admin/loki/summary` - Loki log summary
@@ -224,10 +231,6 @@ uv run alembic upgrade head
 - `GET /api/admin/service-accounts/{account_id}` - Get service account
 - `PATCH /api/admin/service-accounts/{account_id}` - Update service account
 - `DELETE /api/admin/service-accounts/{account_id}` - Delete service account
-- `GET /api/registration-codes` - List registration codes
-- `POST /api/registration-codes` - Create registration code
-- `DELETE /api/registration-codes/{code_id}` - Delete registration code
-- `PATCH /api/registration-codes/{code_id}/deactivate` - Deactivate code
 
 ## Task Model Fields
 
