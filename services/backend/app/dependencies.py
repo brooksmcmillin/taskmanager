@@ -48,10 +48,6 @@ async def get_current_user(
     db: DbSession,
 ) -> User:
     """Get current authenticated user from session cookie."""
-    from datetime import datetime
-
-    from sqlalchemy import select
-
     session_id = request.cookies.get("session")
     if not session_id:
         raise errors.auth_required()
@@ -126,10 +122,6 @@ async def _validate_access_token(db: DbSession, token: str):
     Raises:
         HTTPException: If token is invalid or expired
     """
-    from datetime import datetime
-
-    from sqlalchemy import select
-
     from app.models.oauth import AccessToken
 
     result = await db.execute(
@@ -154,8 +146,6 @@ async def get_current_user_oauth(
     db: DbSession,
 ) -> User:
     """Get current authenticated user from OAuth Bearer token."""
-    from sqlalchemy import select
-
     # Extract and validate token
     token = await _extract_bearer_token(request)
     access_token = await _validate_access_token(db, token)
