@@ -334,18 +334,6 @@
 		background: var(--bg-card);
 	}
 
-	/* Wiki content styles for preview */
-	.wiki-content :global(.wiki-link) {
-		color: var(--primary-600);
-		text-decoration: underline;
-	}
-
-	.wiki-content :global(.wiki-link-missing) {
-		color: var(--error-600, #dc2626);
-		text-decoration: underline;
-		text-decoration-style: dashed;
-	}
-
 	.form-actions {
 		display: flex;
 		justify-content: flex-end;
