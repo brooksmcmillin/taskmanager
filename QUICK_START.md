@@ -59,43 +59,9 @@ npm run dev
 # Frontend runs on http://localhost:3000 in dev mode
 ```
 
-## 📁 Project Structure
+## Project Structure
 
-```
-taskmanager/
-├── services/
-│   ├── backend/              # FastAPI backend
-│   │   ├── app/
-│   │   │   ├── api/         # API route files
-│   │   │   ├── models/      # SQLAlchemy models
-│   │   │   ├── core/        # Security, errors, rate limiting
-│   │   │   └── db/          # Database utilities
-│   │   ├── tests/           # Comprehensive test suites
-│   │   ├── alembic/         # Database migrations
-│   │   └── pyproject.toml   # uv dependencies
-│   │
-│   ├── frontend/            # SvelteKit frontend
-│   │   ├── src/
-│   │   │   ├── routes/      # Pages (login, register, etc.)
-│   │   │   ├── lib/
-│   │   │   │   ├── components/  # Svelte components
-│   │   │   │   ├── stores/      # State management
-│   │   │   │   └── api/         # API client
-│   │   │   └── app.scss     # Global styles
-│   │   └── package.json
-│   │
-│   ├── mcp-auth/            # OAuth server (port 9000)
-│   └── mcp-resource/        # MCP resource server (port 8001)
-│
-├── packages/
-│   ├── taskmanager-sdk/     # Python SDK
-│   ├── mcp-auth-framework/  # MCP auth framework
-│   └── mcp-resource-framework/  # MCP resource framework
-│
-├── docker-compose.yml       # All services configuration
-├── Makefile                 # Development commands
-└── docs/                    # Documentation
-```
+See the [Project Structure section in README.md](README.md#project-structure) for the full directory layout.
 
 ## 🔧 Common Commands
 

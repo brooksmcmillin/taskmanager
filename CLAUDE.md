@@ -75,40 +75,7 @@ uv run pyright           # Type checking
 
 ### Project Structure
 
-```
-taskmanager/
-├── services/
-│   ├── frontend/          # SvelteKit frontend
-│   │   ├── src/
-│   │   │   ├── routes/    # SvelteKit pages
-│   │   │   ├── lib/       # Components, stores, API client
-│   │   │   └── app.scss   # Global styles
-│   │   └── tests/         # Playwright E2E tests
-│   ├── backend/           # FastAPI backend
-│   │   ├── app/
-│   │   │   ├── api/       # API route handlers
-│   │   │   ├── core/      # Security, errors, rate limiting
-│   │   │   ├── models/    # SQLAlchemy models
-│   │   │   ├── schemas/   # Pydantic request/response schemas
-│   │   │   └── db/        # Database connection & utilities
-│   │   ├── alembic/       # Database migrations
-│   │   └── tests/         # pytest unit tests
-│   ├── mcp-auth/          # OAuth 2.0 authorization server
-│   │   ├── mcp_auth/      # Python package
-│   │   └── tests/
-│   ├── mcp-resource/      # MCP resource server
-│   │   ├── mcp_resource/  # Python package
-│   │   └── tests/
-│   └── db/                # Database configuration
-├── packages/
-│   └── taskmanager-sdk/   # Python SDK
-│       ├── taskmanager_sdk/
-│       └── tests/
-├── docs/                  # Documentation
-├── docker-compose.yml     # All services
-├── Makefile               # Development commands
-└── .pre-commit-config.yaml
-```
+See the [Project Structure section in README.md](README.md#project-structure) for the full directory layout.
 
 ### Core Patterns
 
