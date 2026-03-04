@@ -30,7 +30,6 @@ jobs:
               - '.github/workflows/backend-ci.yml'
             frontend:
               - 'services/frontend/**'
-              - 'services/backend/**'
               - '.github/workflows/frontend-ci.yml'
 
   backend:
