@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,6 +11,8 @@ from starlette.testclient import TestClient
 from mcp_relay.api import create_api_app
 from mcp_relay.server import MessageStore
 
+TOKEN_MAP: dict[str, FakeAccessToken] = {}
+
 
 @dataclass
 class FakeAccessToken:
@@ -18,7 +20,7 @@ class FakeAccessToken:
 
     token: str
     client_id: str
-    scopes: list[str]
+    scopes: list[str] = field(default_factory=lambda: ["read"])
     expires_at: int | None = None
     resource: str | None = None
 
@@ -29,6 +31,20 @@ VALID_TOKEN = FakeAccessToken(
     scopes=["read"],
 )
 
+DELETE_TOKEN = FakeAccessToken(
+    token="delete-token",
+    client_id="admin-client",
+    scopes=["read", "delete"],
+)
+
+LONG_CLIENT_TOKEN = FakeAccessToken(
+    token="long-client-token",
+    client_id="x" * 200,
+    scopes=["read"],
+)
+
+TOKEN_MAP = {t.token: t for t in [VALID_TOKEN, DELETE_TOKEN, LONG_CLIENT_TOKEN]}
+
 
 @pytest.fixture
 def store() -> MessageStore:
@@ -37,13 +53,11 @@ def store() -> MessageStore:
 
 @pytest.fixture
 def mock_verifier() -> AsyncMock:
-    """Token verifier that accepts 'valid-token' and rejects everything else."""
+    """Token verifier that accepts known tokens and rejects everything else."""
     verifier = AsyncMock()
 
     async def verify(token: str) -> FakeAccessToken | None:
-        if token == "valid-token":
-            return VALID_TOKEN
-        return None
+        return TOKEN_MAP.get(token)
 
     verifier.verify_token = AsyncMock(side_effect=verify)
     return verifier
@@ -57,6 +71,10 @@ def client(store: MessageStore, mock_verifier: AsyncMock) -> TestClient:
 
 def auth_headers(token: str = "valid-token") -> dict[str, str]:  # noqa: S107
     return {"Authorization": f"Bearer {token}"}
+
+
+def delete_headers() -> dict[str, str]:
+    return auth_headers("delete-token")
 
 
 class TestOAuthMiddleware:
@@ -147,6 +165,11 @@ class TestApiMessages:
         assert data["count"] == 1
         assert data["messages"][0]["content"] == "new"
 
+    def test_invalid_channel_name(self, client: TestClient) -> None:
+        resp = client.get("/channels/bad%20name/messages", headers=auth_headers())
+        assert resp.status_code == 400
+        assert "Invalid channel name" in resp.json()["error"]
+
 
 class TestApiSend:
     """Tests for POST /channels/{channel}/messages."""
@@ -176,6 +199,16 @@ class TestApiSend:
         )
         assert resp.status_code == 201
         assert resp.json()["sender"] == "test-client"
+
+    def test_sender_length_capped(self, client: TestClient, store: MessageStore) -> None:
+        """Sender from client_id is truncated to MAX_SENDER_LENGTH."""
+        resp = client.post(
+            "/channels/test/messages",
+            json={"content": "msg"},
+            headers=auth_headers("long-client-token"),
+        )
+        assert resp.status_code == 201
+        assert len(resp.json()["sender"]) == 128
 
     def test_empty_content(self, client: TestClient) -> None:
         resp = client.post(
@@ -213,15 +246,35 @@ class TestApiSend:
         assert resp.status_code == 400
         assert "Message too large" in resp.json()["error"]
 
+    def test_invalid_channel_name(self, client: TestClient) -> None:
+        resp = client.post(
+            "/channels/foo bar/messages",
+            json={"content": "msg"},
+            headers=auth_headers(),
+        )
+        assert resp.status_code == 400
+        assert "Invalid channel name" in resp.json()["error"]
+
 
 class TestApiClear:
     """Tests for POST /channels/{channel}/clear."""
 
-    def test_clear_existing(self, client: TestClient, store: MessageStore) -> None:
+    def test_clear_requires_delete_scope(self, client: TestClient, store: MessageStore) -> None:
+        """Read-only token should be rejected with 403."""
+        store.add("test", "msg1")
+        resp = client.post("/channels/test/clear", headers=auth_headers())
+        assert resp.status_code == 403
+        assert "insufficient_scope" in resp.json()["error"]
+
+        # Messages should still be there
+        messages, _ = store.get("test")
+        assert len(messages) == 1
+
+    def test_clear_with_delete_scope(self, client: TestClient, store: MessageStore) -> None:
         store.add("test", "msg1")
         store.add("test", "msg2")
 
-        resp = client.post("/channels/test/clear", headers=auth_headers())
+        resp = client.post("/channels/test/clear", headers=delete_headers())
         assert resp.status_code == 200
         data = resp.json()
         assert data["cleared"] is True
@@ -230,6 +283,11 @@ class TestApiClear:
         assert messages == []
 
     def test_clear_nonexistent(self, client: TestClient) -> None:
-        resp = client.post("/channels/nonexistent/clear", headers=auth_headers())
+        resp = client.post("/channels/nonexistent/clear", headers=delete_headers())
         assert resp.status_code == 200
         assert resp.json()["cleared"] is False
+
+    def test_clear_invalid_channel_name(self, client: TestClient) -> None:
+        resp = client.post("/channels/bad%20name/clear", headers=delete_headers())
+        assert resp.status_code == 400
+        assert "Invalid channel name" in resp.json()["error"]

@@ -70,10 +70,17 @@ async def channels_handler(request: Request) -> JSONResponse:
 
 async def messages_handler(request: Request) -> JSONResponse:
     """Return messages for a specific channel."""
+    from mcp_relay.server import validate_channel_name
+
     store: MessageStore = request.app.state.store
     channel = request.path_params["channel"]
     since = request.query_params.get("since")
     limit_str = request.query_params.get("limit", "100")
+
+    try:
+        validate_channel_name(channel)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
     try:
         limit = int(limit_str)
@@ -99,8 +106,15 @@ async def messages_handler(request: Request) -> JSONResponse:
 
 async def send_handler(request: Request) -> JSONResponse:
     """Send a message to a channel. Sender is derived from OAuth client_id."""
+    from mcp_relay.server import validate_channel_name
+
     store: MessageStore = request.app.state.store
     channel = request.path_params["channel"]
+
+    try:
+        validate_channel_name(channel)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
     try:
         body = await request.json()
@@ -111,21 +125,41 @@ async def send_handler(request: Request) -> JSONResponse:
     if not content:
         return JSONResponse({"error": "content is required"}, status_code=400)
 
-    sender = request.state.access_token.client_id
+    sender = request.state.access_token.client_id[:MAX_SENDER_LENGTH]
 
     try:
         msg = store.add(channel, content, sender)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-    logger.info(f"API: Message sent to #{channel} by {sender!r} ({len(content)} bytes)")
+    logger.info(f"API: Message sent to #{channel!r} by {sender!r} ({len(content)} bytes)")
     return JSONResponse(msg.to_dict(), status_code=201)
 
 
 async def clear_handler(request: Request) -> JSONResponse:
-    """Clear all messages in a channel."""
+    """Clear all messages in a channel. Requires the 'delete' scope."""
+    from mcp_relay.server import DELETE_SCOPE, validate_channel_name
+
     store: MessageStore = request.app.state.store
     channel = request.path_params["channel"]
+
+    try:
+        validate_channel_name(channel)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    access_token = request.state.access_token
+    if DELETE_SCOPE not in access_token.scopes:
+        return JSONResponse(
+            {
+                "error": "insufficient_scope",
+                "error_description": (
+                    f"The '{DELETE_SCOPE}' scope is required to clear a channel."
+                ),
+            },
+            status_code=403,
+        )
+
     cleared = store.clear(channel)
     return JSONResponse({"channel": channel, "cleared": cleared})
 
@@ -142,7 +176,7 @@ def create_api_app(
     """
     app = Starlette(
         routes=[
-            Route("/channels", channels_handler),
+            Route("/channels", channels_handler, methods=["GET"]),
             Route("/channels/{channel}/messages", messages_handler, methods=["GET"]),
             Route("/channels/{channel}/messages", send_handler, methods=["POST"]),
             Route("/channels/{channel}/clear", clear_handler, methods=["POST"]),
