@@ -1,11 +1,19 @@
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
+	import { goto } from '$app/navigation';
 	import { toasts } from '$lib/stores/ui';
 	import type { Toast } from '$lib/stores/ui';
 
 	function handleAction(toast: Toast) {
 		if (toast.action) {
 			toast.action.callback();
+			toasts.dismiss(toast.id);
+		}
+	}
+
+	function handleToastClick(toast: Toast) {
+		if (toast.href) {
+			goto(toast.href);
 			toasts.dismiss(toast.id);
 		}
 	}
@@ -29,19 +37,27 @@
 	{#each $toasts as toast (toast.id)}
 		<div
 			class="toast toast-{toast.type}"
-			role="alert"
+			class:toast-clickable={!!toast.href}
+			role={toast.href ? 'button' : 'alert'}
+			tabindex={toast.href ? 0 : undefined}
 			in:fly={{ y: 40, duration: 250 }}
 			out:fade={{ duration: 150 }}
+			on:click={() => handleToastClick(toast)}
+			on:keydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') handleToastClick(toast);
+			}}
 		>
 			<span class="toast-icon toast-icon-{toast.type}">{typeIcon(toast.type)}</span>
 			<span class="toast-message">{toast.message}</span>
 			{#if toast.action}
-				<button class="toast-action" on:click={() => handleAction(toast)}>
+				<button class="toast-action" on:click|stopPropagation={() => handleAction(toast)}>
 					{toast.action.label}
 				</button>
 			{/if}
-			<button class="toast-dismiss" on:click={() => toasts.dismiss(toast.id)} aria-label="Dismiss"
-				>&times;</button
+			<button
+				class="toast-dismiss"
+				on:click|stopPropagation={() => toasts.dismiss(toast.id)}
+				aria-label="Dismiss">&times;</button
 			>
 		</div>
 	{/each}
@@ -74,6 +90,15 @@
 		font-size: 0.875rem;
 		color: var(--text-primary, #1f2937);
 		pointer-events: auto;
+	}
+
+	.toast-clickable {
+		cursor: pointer;
+		transition: border-color 0.15s ease;
+	}
+
+	.toast-clickable:hover {
+		border-color: var(--primary-400, #60a5fa);
 	}
 
 	.toast-icon {

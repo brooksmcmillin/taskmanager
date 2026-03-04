@@ -218,14 +218,16 @@
 			await todos.load(buildFilters());
 			loadSummaryStats();
 			toasts.success('Task completed', 5000, {
-				label: 'Undo',
-				callback: async () => {
-					try {
-						await todos.updateTodo(todoId, { status: 'pending' });
-						await todos.load(buildFilters());
-						loadSummaryStats();
-					} catch {
-						toasts.error('Failed to undo completion');
+				action: {
+					label: 'Undo',
+					callback: async () => {
+						try {
+							await todos.updateTodo(todoId, { status: 'pending' });
+							await todos.load(buildFilters());
+							loadSummaryStats();
+						} catch {
+							toasts.error('Failed to undo completion');
+						}
 					}
 				}
 			});

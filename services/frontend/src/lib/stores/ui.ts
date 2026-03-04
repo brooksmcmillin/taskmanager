@@ -11,6 +11,12 @@ interface Toast {
 	type: 'success' | 'error' | 'info' | 'warning';
 	duration?: number;
 	action?: ToastAction;
+	href?: string;
+}
+
+interface ToastOptions {
+	action?: ToastAction;
+	href?: string;
 }
 
 function createToastStore() {
@@ -21,10 +27,10 @@ function createToastStore() {
 		message: string,
 		type: Toast['type'] = 'info',
 		duration = 3000,
-		action?: ToastAction
+		options?: ToastOptions
 	): number {
 		const id = nextId++;
-		const toast: Toast = { id, message, type, duration, action };
+		const toast: Toast = { id, message, type, duration, ...options };
 
 		update((toasts) => [...toasts, toast]);
 
@@ -44,15 +50,18 @@ function createToastStore() {
 	return {
 		subscribe,
 		show,
-		success: (message: string, duration = 3000, action?: ToastAction) =>
-			show(message, 'success', duration, action),
-		error: (message: string, duration = 5000) => show(message, 'error', duration),
-		info: (message: string, duration = 3000) => show(message, 'info', duration),
-		warning: (message: string, duration = 4000) => show(message, 'warning', duration),
+		success: (message: string, duration = 3000, options?: ToastOptions) =>
+			show(message, 'success', duration, options),
+		error: (message: string, duration = 5000, options?: ToastOptions) =>
+			show(message, 'error', duration, options),
+		info: (message: string, duration = 3000, options?: ToastOptions) =>
+			show(message, 'info', duration, options),
+		warning: (message: string, duration = 4000, options?: ToastOptions) =>
+			show(message, 'warning', duration, options),
 		dismiss,
 		clear: () => update(() => [])
 	};
 }
 
 export const toasts = createToastStore();
-export type { Toast, ToastAction };
+export type { Toast, ToastAction, ToastOptions };

@@ -125,20 +125,22 @@
 			}
 
 			toasts.success('Task completed', 5000, {
-				label: 'Undo',
-				callback: async () => {
-					try {
-						await api.put(`/api/todos/${taskId}`, { status: 'pending' });
-						if (removedTask) {
-							const restored = { ...removedTask, status: 'pending' as const };
-							if (source === 'today') {
-								tasks = [...tasks, restored];
-							} else {
-								overdueTasks = [...overdueTasks, restored];
+				action: {
+					label: 'Undo',
+					callback: async () => {
+						try {
+							await api.put(`/api/todos/${taskId}`, { status: 'pending' });
+							if (removedTask) {
+								const restored = { ...removedTask, status: 'pending' as const };
+								if (source === 'today') {
+									tasks = [...tasks, restored];
+								} else {
+									overdueTasks = [...overdueTasks, restored];
+								}
 							}
+						} catch {
+							toasts.error('Failed to undo completion');
 						}
-					} catch {
-						toasts.error('Failed to undo completion');
 					}
 				}
 			});
