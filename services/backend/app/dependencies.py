@@ -30,7 +30,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             tab_id = tab_id_var.get("")
             if tab_id:
                 await session.execute(
-                    text("SET LOCAL \"app.tab_id\" = :val"), {"val": tab_id}
+                    text("SELECT set_config('app.tab_id', :val, true)"),
+                    {"val": tab_id},
                 )
             yield session
             await session.commit()
