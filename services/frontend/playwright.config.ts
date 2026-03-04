@@ -36,7 +36,7 @@ const config: PlaywrightTestConfig = {
 		headless: true
 	},
 	reporter: isCI
-		? [['blob', { outputDir: 'blob-report' }], ['list']]
+		? [['html', { outputFolder: 'playwright-report' }], ['list']]
 		: [
 				['html', { outputFolder: 'playwright-report' }],
 				['list'],
@@ -46,32 +46,18 @@ const config: PlaywrightTestConfig = {
 	expect: {
 		timeout: 5000
 	},
-	// Disable parallel execution until test isolation is fixed
-	// (shared test data can cause race conditions)
+	// Sequential in CI: single backend server can't handle parallel test traffic
 	fullyParallel: false,
 	forbidOnly: isCI,
-	retries: isCI ? 2 : 0,
+	retries: isCI ? 1 : 0,
 	workers: isCI ? 1 : undefined,
 	projects: [
-		{
-			name: 'chromium',
-			use: {
-				browserName: 'chromium'
-			}
-		},
 		{
 			name: 'firefox',
 			use: {
 				browserName: 'firefox'
 			}
 		}
-		// WebKit disabled - missing system dependencies on Debian
-		// {
-		// 	name: 'webkit',
-		// 	use: {
-		// 		browserName: 'webkit'
-		// 	}
-		// }
 	]
 };
 

@@ -35,12 +35,16 @@ export function getTodayDate(): string {
 	return new Date().toISOString().split('T')[0];
 }
 
+let emailCounter = 0;
+
 /**
  * Generate a unique email for testing
- * Avoids conflicts when tests create users
+ * Counter prevents within-process collisions (same-millisecond calls).
+ * Cross-worker uniqueness relies on Date.now() + random suffix.
  */
 export function getUniqueEmail(): string {
-	return `testuser-${Date.now()}@example.com`;
+	const id = `${Date.now()}-${++emailCounter}-${Math.random().toString(36).slice(2, 6)}`;
+	return `testuser-${id}@example.com`;
 }
 
 /**
