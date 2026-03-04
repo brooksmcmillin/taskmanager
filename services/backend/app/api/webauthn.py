@@ -37,9 +37,13 @@ router = APIRouter(prefix="/api/auth/webauthn", tags=["webauthn"])
 
 # Rate limiters for WebAuthn endpoints
 # Authentication attempts: 10 per 5 minutes per IP
-webauthn_auth_rate_limiter = RateLimiter(max_attempts=10, window_ms=300000)
+webauthn_auth_rate_limiter = RateLimiter(
+    max_attempts=10, window_ms=300000, name="webauthn_auth"
+)
 # Registration attempts: 5 per 5 minutes per user (requires auth)
-webauthn_register_rate_limiter = RateLimiter(max_attempts=5, window_ms=300000)
+webauthn_register_rate_limiter = RateLimiter(
+    max_attempts=5, window_ms=300000, name="webauthn_register"
+)
 
 # In-memory challenge store (in production, use Redis or similar)
 # Format: {challenge_id: {"challenge": bytes, "user_id": int|None, "expires_at": dt}}
@@ -140,7 +144,7 @@ async def get_registration_options(
     """Generate WebAuthn registration options for authenticated user."""
     # Rate limit by user ID
     rate_limit_key = f"webauthn_register_{user.id}"
-    webauthn_register_rate_limiter.check(rate_limit_key)
+    await webauthn_register_rate_limiter.check(rate_limit_key, db)
 
     logger.info("WebAuthn registration options requested for user %s", user.email)
 
@@ -300,7 +304,7 @@ async def get_authentication_options(
     """
     # Rate limit by IP address
     client_ip = http_request.client.host if http_request.client else "unknown"
-    webauthn_auth_rate_limiter.check(f"webauthn_auth_options_{client_ip}")
+    await webauthn_auth_rate_limiter.check(f"webauthn_auth_options_{client_ip}", db)
 
     allow_credentials = None
     user_id_for_challenge = None
@@ -372,7 +376,7 @@ async def verify_authentication(
     # Rate limit by IP address
     client_ip = http_request.client.host if http_request.client else "unknown"
     rate_limit_key = f"webauthn_auth_verify_{client_ip}"
-    webauthn_auth_rate_limiter.check(rate_limit_key)
+    await webauthn_auth_rate_limiter.check(rate_limit_key, db)
 
     # Retrieve challenge
     challenge_data = _get_challenge(request.challenge_id)
@@ -380,7 +384,7 @@ async def verify_authentication(
         logger.warning(
             "WebAuthn authentication failed: invalid challenge from %s", client_ip
         )
-        webauthn_auth_rate_limiter.record(rate_limit_key)
+        await webauthn_auth_rate_limiter.record(rate_limit_key, db)
         raise errors.validation("Invalid or expired challenge")
 
     try:
@@ -412,7 +416,7 @@ async def verify_authentication(
             logger.warning(
                 "WebAuthn authentication failed: unknown credential from %s", client_ip
             )
-            webauthn_auth_rate_limiter.record(rate_limit_key)
+            await webauthn_auth_rate_limiter.record(rate_limit_key, db)
             raise errors.invalid_credentials()
 
         # Get the user
@@ -424,7 +428,7 @@ async def verify_authentication(
                 "WebAuthn authentication failed: inactive user for credential %s",
                 webauthn_cred.id,
             )
-            webauthn_auth_rate_limiter.record(rate_limit_key)
+            await webauthn_auth_rate_limiter.record(rate_limit_key, db)
             raise errors.invalid_credentials()
 
         # Verify the authentication response
@@ -461,11 +465,11 @@ async def verify_authentication(
         logger.warning(
             "WebAuthn authentication verification failed from %s: %s", client_ip, e
         )
-        webauthn_auth_rate_limiter.record(rate_limit_key)
+        await webauthn_auth_rate_limiter.record(rate_limit_key, db)
         raise errors.validation(f"Authentication verification failed: {e}") from e
 
     # Reset rate limit on success
-    webauthn_auth_rate_limiter.reset(rate_limit_key)
+    await webauthn_auth_rate_limiter.reset(rate_limit_key, db)
 
     # Create session and set cookie
     await create_session_and_set_cookie(db, response, user.id)

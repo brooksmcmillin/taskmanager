@@ -3,7 +3,6 @@
 import pytest
 from httpx import AsyncClient
 
-from app.core.rate_limit import api_key_rate_limiter
 from app.core.security import generate_api_key, get_api_key_prefix
 
 
@@ -281,9 +280,6 @@ class TestApiKeyRateLimiting:
     @pytest.mark.asyncio
     async def test_rate_limit_on_invalid_keys(self, client: AsyncClient) -> None:
         """Too many invalid API key attempts triggers rate limiting."""
-        # Clear any existing rate limit state
-        api_key_rate_limiter._attempts.clear()
-
         # Make 20 invalid attempts (the limit)
         for _ in range(20):
             await client.get(
@@ -299,16 +295,14 @@ class TestApiKeyRateLimiting:
         assert response.status_code == 429
         assert "RATE_001" in response.json()["detail"]["code"]
 
-        # Clean up
-        api_key_rate_limiter._attempts.clear()
+        # Rate limiter state cleaned up by database reset between tests
 
     @pytest.mark.asyncio
     async def test_successful_auth_resets_rate_limit(
         self, authenticated_client: AsyncClient
     ) -> None:
         """Successful API key auth resets rate limit counter."""
-        # Clear any existing rate limit state
-        api_key_rate_limiter._attempts.clear()
+        # Rate limiter state cleaned up by database reset between tests
 
         # Create a valid API key
         create_response = await authenticated_client.post(
@@ -332,8 +326,7 @@ class TestApiKeyRateLimiting:
         )
         assert response.status_code == 200
 
-        # Clean up
-        api_key_rate_limiter._attempts.clear()
+        # Rate limiter state cleaned up by database reset between tests
 
 
 class TestApiKeyExpiration:
@@ -358,8 +351,7 @@ class TestApiKeyExpiration:
         # Clear cookies to ensure we're not using session auth
         authenticated_client.cookies.clear()
 
-        # Clear rate limiter
-        api_key_rate_limiter._attempts.clear()
+        # Rate limiter state cleaned up by database reset between tests
 
         # Try to use expired key
         response = await authenticated_client.get(
@@ -368,8 +360,7 @@ class TestApiKeyExpiration:
         )
         assert response.status_code == 401
 
-        # Clean up rate limiter
-        api_key_rate_limiter._attempts.clear()
+        # Rate limiter state cleaned up by database reset between tests
 
     @pytest.mark.asyncio
     async def test_non_expired_api_key_works(

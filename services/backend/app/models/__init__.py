@@ -13,6 +13,7 @@ from app.models.project import Project
 from app.models.recurring_task import Frequency, RecurringTask
 from app.models.registration_code import RegistrationCode
 from app.models.session import Session
+from app.models.shared_state import SharedState
 from app.models.snippet import Snippet
 from app.models.todo import Priority, Status, TimeHorizon, Todo
 from app.models.user import User
@@ -23,6 +24,7 @@ __all__ = [
     "ApiKey",
     "User",
     "Session",
+    "SharedState",
     "Todo",
     "Priority",
     "Status",

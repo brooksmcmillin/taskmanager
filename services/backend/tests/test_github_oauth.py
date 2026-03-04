@@ -9,17 +9,26 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.oauth.github import OAUTH_STATE_NAMESPACE
 from app.models.oauth_provider import UserOAuthProvider
+from app.models.shared_state import SharedState
 from app.models.user import User
 from app.services.github_oauth import GitHubOAuthError, GitHubUser
 
 
-def _create_valid_state(github_module, state_key: str, return_to: str = "/") -> None:
-    """Helper to create a valid state with proper timestamp."""
-    github_module._oauth_states[state_key] = {
-        "return_to": return_to,
-        "created_at": datetime.now(UTC),
-    }
+async def _create_valid_state(
+    db: AsyncSession, state_key: str, return_to: str = "/"
+) -> None:
+    """Helper to create a valid state with proper timestamp in the database."""
+    now = datetime.now(UTC)
+    entry = SharedState(
+        namespace=OAUTH_STATE_NAMESPACE,
+        key=state_key,
+        value={"return_to": return_to},
+        expires_at=now + timedelta(minutes=5),
+    )
+    db.add(entry)
+    await db.flush()
 
 
 @pytest.mark.asyncio
@@ -69,7 +78,7 @@ async def test_github_authorize_not_configured(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_github_authorize_redirect(client: AsyncClient):
+async def test_github_authorize_redirect(client: AsyncClient, db_session: AsyncSession):
     """Test authorize endpoint redirects to GitHub."""
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -89,10 +98,10 @@ async def test_github_authorize_redirect(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_github_authorize_validates_return_to(client: AsyncClient):
+async def test_github_authorize_validates_return_to(
+    client: AsyncClient, db_session: AsyncSession
+):
     """Test that authorize endpoint validates return_to to prevent open redirect."""
-    from app.api.oauth import github as github_module
-
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
         patch(
@@ -109,21 +118,22 @@ async def test_github_authorize_validates_return_to(client: AsyncClient):
 
         assert response.status_code == 302
 
-        # Check that the stored state has "/" instead of the malicious URL
-        # (state was created during the request)
-        stored_states = list(github_module._oauth_states.values())
-        if stored_states:
-            assert stored_states[-1]["return_to"] == "/"
-
-        # Cleanup
-        github_module._oauth_states.clear()
+        # Check that the stored state in the database has "/"
+        result = await db_session.execute(
+            select(SharedState).where(
+                SharedState.namespace == OAUTH_STATE_NAMESPACE,
+            )
+        )
+        entries = result.scalars().all()
+        if entries:
+            assert entries[-1].value["return_to"] == "/"
 
 
 @pytest.mark.asyncio
-async def test_github_authorize_allows_relative_paths(client: AsyncClient):
+async def test_github_authorize_allows_relative_paths(
+    client: AsyncClient, db_session: AsyncSession
+):
     """Test that authorize endpoint allows relative paths."""
-    from app.api.oauth import github as github_module
-
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
         patch(
@@ -140,12 +150,14 @@ async def test_github_authorize_allows_relative_paths(client: AsyncClient):
         assert response.status_code == 302
 
         # Check that the stored state preserved the relative path
-        stored_states = list(github_module._oauth_states.values())
-        if stored_states:
-            assert stored_states[-1]["return_to"] == "/dashboard"
-
-        # Cleanup
-        github_module._oauth_states.clear()
+        result = await db_session.execute(
+            select(SharedState).where(
+                SharedState.namespace == OAUTH_STATE_NAMESPACE,
+            )
+        )
+        entries = result.scalars().all()
+        if entries:
+            assert entries[-1].value["return_to"] == "/dashboard"
 
 
 @pytest.mark.asyncio
@@ -164,15 +176,20 @@ async def test_github_callback_invalid_state(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_github_callback_expired_state(client: AsyncClient):
+async def test_github_callback_expired_state(
+    client: AsyncClient, db_session: AsyncSession
+):
     """Test callback with expired state parameter."""
-    from app.api.oauth import github as github_module
-
     # Create an expired state (6 minutes old, beyond 5-minute limit)
-    github_module._oauth_states["expired_state"] = {
-        "return_to": "/",
-        "created_at": datetime.now(UTC) - timedelta(minutes=6),
-    }
+    now = datetime.now(UTC)
+    entry = SharedState(
+        namespace=OAUTH_STATE_NAMESPACE,
+        key="expired_state",
+        value={"return_to": "/"},
+        expires_at=now - timedelta(minutes=1),  # Already expired
+    )
+    db_session.add(entry)
+    await db_session.flush()
 
     with patch("app.api.oauth.github.is_github_configured", return_value=True):
         response = await client.get(
@@ -219,10 +236,8 @@ async def test_github_callback_creates_new_user(
         name="GitHub User",
     )
 
-    # Set up the state in the internal storage with proper timestamp
-    from app.api.oauth import github as github_module
-
-    _create_valid_state(github_module, "valid_state", "/dashboard")
+    # Set up the state in the database
+    await _create_valid_state(db_session, "valid_state", "/dashboard")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -284,9 +299,7 @@ async def test_github_callback_links_existing_user(
         name="Existing User",
     )
 
-    from app.api.oauth import github as github_module
-
-    _create_valid_state(github_module, "link_state", "/")
+    await _create_valid_state(db_session, "link_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -350,9 +363,7 @@ async def test_github_callback_existing_github_user_login(
         name="Linked User",
     )
 
-    from app.api.oauth import github as github_module
-
-    _create_valid_state(github_module, "existing_state", "/")
+    await _create_valid_state(db_session, "existing_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -378,7 +389,7 @@ async def test_github_callback_existing_github_user_login(
 
 
 @pytest.mark.asyncio
-async def test_github_callback_no_email(client: AsyncClient):
+async def test_github_callback_no_email(client: AsyncClient, db_session: AsyncSession):
     """Test callback when GitHub user has no email."""
     mock_github_user = GitHubUser(
         id="99999",
@@ -388,9 +399,7 @@ async def test_github_callback_no_email(client: AsyncClient):
         name=None,
     )
 
-    from app.api.oauth import github as github_module
-
-    _create_valid_state(github_module, "noemail_state", "/")
+    await _create_valid_state(db_session, "noemail_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -418,11 +427,11 @@ async def test_github_callback_no_email(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_github_callback_token_exchange_failure(client: AsyncClient):
+async def test_github_callback_token_exchange_failure(
+    client: AsyncClient, db_session: AsyncSession
+):
     """Test callback when token exchange fails."""
-    from app.api.oauth import github as github_module
-
-    _create_valid_state(github_module, "fail_state", "/")
+    await _create_valid_state(db_session, "fail_state", "/")
 
     with (
         patch("app.api.oauth.github.is_github_configured", return_value=True),
@@ -654,47 +663,123 @@ def test_validate_return_to_rejects_invalid_paths():
 
 
 # =============================================================================
-# State Expiration Tests
+# State Storage Tests (PostgreSQL-backed)
 # =============================================================================
 
 
-def test_validate_and_consume_state_valid():
-    """Test that valid states are accepted."""
-    from app.api.oauth import github as github_module
+@pytest.mark.asyncio
+async def test_validate_and_consume_state_valid(db_session: AsyncSession):
+    """Test that valid states are accepted and consumed."""
     from app.api.oauth.github import _validate_and_consume_state
 
-    _create_valid_state(github_module, "test_valid", "/dashboard")
+    await _create_valid_state(db_session, "test_valid", "/dashboard")
 
-    result = _validate_and_consume_state("test_valid")
+    result = await _validate_and_consume_state("test_valid", db_session)
     assert result is not None
     assert result["return_to"] == "/dashboard"
 
     # State should be consumed (removed)
-    assert "test_valid" not in github_module._oauth_states
+    from sqlalchemy import select
+
+    db_result = await db_session.execute(
+        select(SharedState).where(
+            SharedState.namespace == OAUTH_STATE_NAMESPACE,
+            SharedState.key == "test_valid",
+        )
+    )
+    assert db_result.scalar_one_or_none() is None
 
 
-def test_validate_and_consume_state_expired():
+@pytest.mark.asyncio
+async def test_validate_and_consume_state_expired(db_session: AsyncSession):
     """Test that expired states are rejected."""
-    from app.api.oauth import github as github_module
     from app.api.oauth.github import _validate_and_consume_state
 
     # Create an expired state
-    github_module._oauth_states["test_expired"] = {
-        "return_to": "/",
-        "created_at": datetime.now(UTC) - timedelta(minutes=10),
-    }
+    now = datetime.now(UTC)
+    entry = SharedState(
+        namespace=OAUTH_STATE_NAMESPACE,
+        key="test_expired",
+        value={"return_to": "/"},
+        expires_at=now - timedelta(minutes=1),
+    )
+    db_session.add(entry)
+    await db_session.flush()
 
-    result = _validate_and_consume_state("test_expired")
+    result = await _validate_and_consume_state("test_expired", db_session)
     assert result is None
 
 
-def test_validate_and_consume_state_missing_timestamp():
-    """Test that states without timestamp are rejected."""
-    from app.api.oauth import github as github_module
+@pytest.mark.asyncio
+async def test_validate_and_consume_state_nonexistent(db_session: AsyncSession):
+    """Test that nonexistent states return None."""
     from app.api.oauth.github import _validate_and_consume_state
 
-    # Create a state without timestamp
-    github_module._oauth_states["test_no_timestamp"] = {"return_to": "/"}
-
-    result = _validate_and_consume_state("test_no_timestamp")
+    result = await _validate_and_consume_state("nonexistent_state", db_session)
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_oauth_state_stored_in_database(db_session: AsyncSession):
+    """Test that OAuth state is properly stored in the database."""
+    from app.api.oauth.github import _store_oauth_state
+
+    await _store_oauth_state(db_session, "db_test_state", "/settings")
+    await db_session.flush()
+
+    result = await db_session.execute(
+        select(SharedState).where(
+            SharedState.namespace == OAUTH_STATE_NAMESPACE,
+            SharedState.key == "db_test_state",
+        )
+    )
+    entry = result.scalar_one_or_none()
+    assert entry is not None
+    assert entry.value["return_to"] == "/settings"
+    assert entry.expires_at > datetime.now(UTC)
+
+
+@pytest.mark.asyncio
+async def test_cleanup_expired_states(db_session: AsyncSession):
+    """Test that expired OAuth states are cleaned up."""
+    from app.api.oauth.github import _cleanup_expired_states
+
+    now = datetime.now(UTC)
+
+    # Create one valid and one expired state
+    valid_entry = SharedState(
+        namespace=OAUTH_STATE_NAMESPACE,
+        key="valid_state",
+        value={"return_to": "/"},
+        expires_at=now + timedelta(minutes=5),
+    )
+    expired_entry = SharedState(
+        namespace=OAUTH_STATE_NAMESPACE,
+        key="expired_cleanup_state",
+        value={"return_to": "/"},
+        expires_at=now - timedelta(minutes=1),
+    )
+    db_session.add(valid_entry)
+    db_session.add(expired_entry)
+    await db_session.flush()
+
+    await _cleanup_expired_states(db_session)
+    await db_session.flush()
+
+    # Valid state should remain
+    result = await db_session.execute(
+        select(SharedState).where(
+            SharedState.namespace == OAUTH_STATE_NAMESPACE,
+            SharedState.key == "valid_state",
+        )
+    )
+    assert result.scalar_one_or_none() is not None
+
+    # Expired state should be removed
+    result = await db_session.execute(
+        select(SharedState).where(
+            SharedState.namespace == OAUTH_STATE_NAMESPACE,
+            SharedState.key == "expired_cleanup_state",
+        )
+    )
+    assert result.scalar_one_or_none() is None

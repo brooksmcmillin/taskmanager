@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/news", tags=["news"])
 
 # Rate limiter for on-demand AI summarization: 10 requests per minute per user
-summarize_rate_limiter = RateLimiter(max_attempts=10, window_ms=60000)
+summarize_rate_limiter = RateLimiter(max_attempts=10, window_ms=60000, name="summarize")
 
 
 def _escape_ilike(value: str) -> str:
@@ -785,8 +785,8 @@ async def summarize_article(
     db: DbSession,
 ) -> dict:
     """Generate an AI summary for a single article on demand."""
-    summarize_rate_limiter.check(str(user.id))
-    summarize_rate_limiter.record(str(user.id))
+    await summarize_rate_limiter.check(str(user.id), db)
+    await summarize_rate_limiter.record(str(user.id), db)
 
     article = await db.get(Article, article_id)
     if not article:

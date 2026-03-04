@@ -98,7 +98,7 @@ async def test_login_rate_limit_triggers(client: AsyncClient, test_user):
     from app.core.rate_limit import login_rate_limiter
 
     # Ensure clean state for this test
-    login_rate_limiter.reset("test@example.com")
+    await login_rate_limiter.reset("test@example.com")
 
     # Make 5 failed login attempts
     for _ in range(5):

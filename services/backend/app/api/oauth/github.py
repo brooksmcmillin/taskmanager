@@ -7,7 +7,8 @@ from urllib.parse import urlencode, urlparse
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.errors import errors
@@ -15,6 +16,7 @@ from app.core.security import hash_password
 from app.core.session import create_session_and_set_cookie
 from app.dependencies import CurrentUser, DbSession
 from app.models.oauth_provider import UserOAuthProvider
+from app.models.shared_state import SharedState
 from app.models.user import User
 from app.services.github_oauth import (
     GitHubOAuthError,
@@ -28,11 +30,8 @@ from app.services.token_encryption import encrypt_token
 
 router = APIRouter(prefix="/api/auth/github", tags=["github-oauth"])
 
-# State storage with expiration
-# In production, use Redis with TTL instead
-_oauth_states: dict[str, dict] = {}
+OAUTH_STATE_NAMESPACE = "oauth_state"
 STATE_EXPIRY_MINUTES = 5
-STATE_CLEANUP_THRESHOLD = 100  # Cleanup when we have more than this many states
 
 
 class GitHubConfigResponse(BaseModel):
@@ -52,41 +51,61 @@ class OAuthProviderResponse(BaseModel):
     connected_at: str
 
 
-def _cleanup_expired_states() -> None:
-    """Remove expired states from storage."""
+async def _cleanup_expired_states(db: AsyncSession) -> None:
+    """Remove expired OAuth states from the database."""
     now = datetime.now(UTC)
-    expiry_delta = timedelta(minutes=STATE_EXPIRY_MINUTES)
-    expired_states = [
-        state
-        for state, data in _oauth_states.items()
-        if now - data.get("created_at", now) > expiry_delta
-    ]
-    for state in expired_states:
-        _oauth_states.pop(state, None)
+    await db.execute(
+        delete(SharedState).where(
+            SharedState.namespace == OAUTH_STATE_NAMESPACE,
+            SharedState.expires_at <= now,
+        )
+    )
 
 
-def _validate_and_consume_state(state: str) -> dict | None:
+async def _store_oauth_state(db: AsyncSession, state: str, return_to: str) -> None:
+    """Store an OAuth state token in the database with TTL."""
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(minutes=STATE_EXPIRY_MINUTES)
+
+    entry = SharedState(
+        namespace=OAUTH_STATE_NAMESPACE,
+        key=state,
+        value={"return_to": return_to},
+        expires_at=expires_at,
+    )
+    db.add(entry)
+    # Flush to ensure the state is written before we redirect
+    await db.flush()
+
+
+async def _validate_and_consume_state(state: str, db: AsyncSession) -> dict | None:
     """Validate state parameter and remove it from storage.
 
     Returns the state data if valid, None if invalid or expired.
     """
-    # Cleanup if we have too many states (memory protection)
-    if len(_oauth_states) > STATE_CLEANUP_THRESHOLD:
-        _cleanup_expired_states()
+    now = datetime.now(UTC)
 
-    state_data = _oauth_states.pop(state, None)
-    if not state_data:
+    # Look up and delete in one operation
+    result = await db.execute(
+        select(SharedState).where(
+            SharedState.namespace == OAUTH_STATE_NAMESPACE,
+            SharedState.key == state,
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if not entry:
         return None
+
+    # Remove the state (consume it)
+    await db.delete(entry)
+    await db.flush()
 
     # Check expiration
-    created_at = state_data.get("created_at")
-    if not created_at:
+    if entry.expires_at < now:
         return None
 
-    if datetime.now(UTC) - created_at > timedelta(minutes=STATE_EXPIRY_MINUTES):
-        return None
-
-    return state_data
+    return entry.value
 
 
 def _validate_return_to(return_to: str) -> str:
@@ -129,11 +148,13 @@ async def get_github_config() -> GitHubConfigResponse:
 
 @router.get("/authorize")
 async def github_authorize(
+    db: DbSession,
     return_to: str = Query("/", description="URL to redirect after authentication"),
 ) -> RedirectResponse:
     """Start GitHub OAuth flow by redirecting to GitHub.
 
     Args:
+        db: Database session for storing OAuth state.
         return_to: URL to redirect to after successful authentication (must be relative)
     """
     if not is_github_configured():
@@ -142,12 +163,9 @@ async def github_authorize(
     # Validate return_to to prevent open redirect
     safe_return_to = _validate_return_to(return_to)
 
-    # Generate and store state with timestamp
+    # Generate and store state in database
     state = generate_state()
-    _oauth_states[state] = {
-        "return_to": safe_return_to,
-        "created_at": datetime.now(UTC),
-    }
+    await _store_oauth_state(db, state, safe_return_to)
 
     # Redirect to GitHub
     auth_url = get_authorization_url(state)
@@ -186,7 +204,7 @@ async def github_callback(
         return _redirect_with_error("Missing authorization code")
 
     # Validate and consume state (checks expiration)
-    state_data = _validate_and_consume_state(state)
+    state_data = await _validate_and_consume_state(state, db)
     if not state_data:
         return _redirect_with_error("Invalid or expired OAuth state")
 

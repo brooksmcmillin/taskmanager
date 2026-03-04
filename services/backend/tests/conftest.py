@@ -23,18 +23,18 @@ from urllib.parse import quote_plus  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import delete, text  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
-from app.core.rate_limit import login_rate_limiter  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.database import Base  # noqa: E402
 from app.dependencies import get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.shared_state import SharedState  # noqa: E402
 from app.models.user import User  # noqa: E402
 
 # Use a separate test database
@@ -156,8 +156,10 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_db] = override_get_db
 
-    # Reset rate limiter before each test
-    login_rate_limiter._attempts.clear()
+    # Clear rate limiter state from database before each test
+    await db_session.execute(
+        delete(SharedState).where(SharedState.namespace == "rate_limit")
+    )
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -166,8 +168,6 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield ac
 
     app.dependency_overrides.clear()
-    # Reset rate limiter after each test
-    login_rate_limiter._attempts.clear()
 
 
 TEST_USER_PASSWORD = "TestPass123!"  # pragma: allowlist secret
