@@ -66,6 +66,7 @@ class ClientCreateResponse(BaseModel):
     client_id: str
     client_secret: str | None
     name: str
+    is_public: bool
 
 
 @router.get("")
@@ -171,6 +172,7 @@ async def _create_oauth_client(
             client_id=client_id,
             client_secret=client_secret,
             name=request.name,
+            is_public=request.is_public,
         )
     }
 
