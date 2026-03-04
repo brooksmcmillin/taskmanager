@@ -506,6 +506,14 @@
 									>
 										Log Ingestion
 									</a>
+									<a
+										href="/admin/relay"
+										class="dropdown-item"
+										class:active={currentPath === '/admin/relay'}
+										onclick={closeDropdowns}
+									>
+										MCP Relay
+									</a>
 								{/if}
 								<div class="dropdown-divider"></div>
 								<button
@@ -717,6 +725,14 @@
 						onclick={closeMobileMenu}
 					>
 						Log Ingestion
+					</a>
+					<a
+						href="/admin/relay"
+						class="mobile-menu-item"
+						class:active={currentPath === '/admin/relay'}
+						onclick={closeMobileMenu}
+					>
+						MCP Relay
 					</a>
 				{/if}
 				<button
