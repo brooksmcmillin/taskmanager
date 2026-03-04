@@ -236,6 +236,34 @@ async def test_send_message(admin_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_invalid_channel_name_returns_400(admin_client: AsyncClient) -> None:
+    """Channel names with invalid characters should be rejected."""
+    # Spaces in channel name
+    response = await admin_client.get("/api/admin/relay/channels/has%20spaces/messages")
+    assert response.status_code == 400
+
+    # Special characters
+    response = await admin_client.post(
+        "/api/admin/relay/channels/bad%40name/clear",
+    )
+    assert response.status_code == 400
+
+    # Valid channel names should not be rejected
+    # (will fail at relay level, but pass validation)
+    with patch("app.api.relay.httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(
+            side_effect=httpx.ConnectError("not running")
+        )
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        response = await admin_client.post(
+            "/api/admin/relay/channels/valid-channel_name.123/clear"
+        )
+    assert response.status_code == 200  # passes validation, fails at relay
+
+
+@pytest.mark.asyncio
 async def test_clear_channel(admin_client: AsyncClient) -> None:
     relay_data = {"channel": "test-ch", "cleared": True}
     mock_client = _mock_relay_client(
@@ -300,9 +328,7 @@ async def test_relay_unreachable_send(admin_client: AsyncClient) -> None:
             json={"content": "hello"},
         )
 
-    # FastAPI returns 201 since endpoint declared status_code=201,
-    # but body has error
-    assert response.status_code == 201
+    assert response.status_code == 502
     data = response.json()
     assert data["error"] == "Unable to connect to MCP Relay"
 

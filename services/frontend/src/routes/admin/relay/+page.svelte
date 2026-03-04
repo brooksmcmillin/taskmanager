@@ -33,14 +33,15 @@
 	let sending = $state(false);
 
 	let msgListEl: HTMLDivElement | undefined = $state(undefined);
+	let userScrolledUp = $state(false);
 
-	function filteredMessages(): Message[] {
+	let filtered = $derived.by(() => {
 		if (!filterText) return messages;
 		const q = filterText.toLowerCase();
 		return messages.filter(
 			(m) => m.content.toLowerCase().includes(q) || m.sender.toLowerCase().includes(q)
 		);
-	}
+	});
 
 	async function fetchJSON(path: string, opts?: RequestInit) {
 		const resp = await fetch(path, { credentials: 'include', ...opts });
@@ -60,14 +61,14 @@
 
 	async function loadChannels() {
 		try {
-			const data = await fetchJSON('/api/admin/relay/channels');
-			if (!data) return;
-			if (data.error) {
-				error = data.error;
+			const result = await fetchJSON('/api/admin/relay/channels');
+			if (!result) return;
+			if (result.error) {
+				error = result.error;
 				channels = [];
 			} else {
 				error = '';
-				channels = (data.channels || []).sort((a: Channel, b: Channel) =>
+				channels = (result.channels || []).sort((a: Channel, b: Channel) =>
 					(b.last_activity || '').localeCompare(a.last_activity || '')
 				);
 			}
@@ -79,13 +80,13 @@
 	async function loadMessages() {
 		if (!selectedChannel) return;
 		try {
-			const data = await fetchJSON(
+			const result = await fetchJSON(
 				`/api/admin/relay/channels/${encodeURIComponent(selectedChannel)}/messages?limit=200`
 			);
-			if (!data) return;
-			messages = data.messages || [];
+			if (!result) return;
+			messages = result.messages || [];
 			await tick();
-			scrollToBottom();
+			if (!userScrolledUp) scrollToBottom();
 		} catch {
 			// ignore - channels will show error
 		}
@@ -97,11 +98,18 @@
 		}
 	}
 
+	function handleMsgScroll() {
+		if (!msgListEl) return;
+		const { scrollTop, scrollHeight, clientHeight } = msgListEl;
+		userScrolledUp = scrollHeight - scrollTop - clientHeight > 50;
+	}
+
 	function selectChannel(name: string) {
 		selectedChannel = name;
 		messages = [];
 		filterText = '';
 		showSendForm = false;
+		userScrolledUp = false;
 		loadMessages();
 	}
 
@@ -265,15 +273,15 @@
 			{/if}
 		</div>
 
-		<div class="msg-list" bind:this={msgListEl}>
+		<div class="msg-list" bind:this={msgListEl} onscroll={handleMsgScroll}>
 			{#if !selectedChannel}
 				<div class="empty-state">Select a channel to view messages</div>
-			{:else if filteredMessages().length === 0}
+			{:else if filtered.length === 0}
 				<div class="empty-state">
 					{filterText ? 'No matching messages' : 'No messages in this channel'}
 				</div>
 			{:else}
-				{#each filteredMessages() as msg (msg.id)}
+				{#each filtered as msg (msg.id)}
 					{@const formatted = formatContent(msg.content)}
 					<div class="msg-item">
 						<div class="msg-meta">
