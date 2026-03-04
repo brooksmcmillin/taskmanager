@@ -848,7 +848,7 @@ async def _fetch_subtasks_map(
     return subtasks_map
 
 
-async def _verify_parent_allows_children(parent: Todo) -> None:
+def _verify_parent_allows_children(parent: Todo) -> None:
     """Raise a validation error if *parent* cannot accept subtasks.
 
     A task may not be used as a parent when it is itself a subtask (i.e. it
@@ -1067,7 +1067,7 @@ async def create_todo(
         parent = await get_resource_for_user(
             db, Todo, request.parent_id, user.id, errors.todo_not_found
         )
-        await _verify_parent_allows_children(parent)
+        _verify_parent_allows_children(parent)
 
     # Auto-assign position if not provided
     position = request.position
@@ -1251,7 +1251,7 @@ async def _prepare_batch_todos(
             parent = await get_resource_for_user(
                 db, Todo, item.parent_id, user_id, errors.todo_not_found
             )
-            await _verify_parent_allows_children(parent)
+            _verify_parent_allows_children(parent)
 
         # Record parent_index for later resolution (skip if parent was skipped)
         if item.parent_index is not None:
@@ -1548,7 +1548,7 @@ async def update_todo(
         parent = await get_resource_for_user(
             db, Todo, update_data["parent_id"], user.id, errors.todo_not_found
         )
-        await _verify_parent_allows_children(parent)
+        _verify_parent_allows_children(parent)
 
         # Prevent tasks with existing children from becoming subtasks
         children_count = await db.scalar(
@@ -1605,7 +1605,7 @@ async def bulk_update_todos(
         parent = await get_resource_for_user(
             db, Todo, update_data["parent_id"], user.id, errors.todo_not_found
         )
-        await _verify_parent_allows_children(parent)
+        _verify_parent_allows_children(parent)
 
         # Prevent tasks with existing children from becoming subtasks
         for todo in todos:
@@ -1710,7 +1710,7 @@ async def create_subtask(
         db, Todo, todo_id, user.id, errors.todo_not_found
     )
 
-    await _verify_parent_allows_children(parent)
+    _verify_parent_allows_children(parent)
 
     # Auto-assign position for the subtask
     position = await get_next_position(db, Todo, user.id, parent_id=todo_id)
