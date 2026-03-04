@@ -1,6 +1,7 @@
 """Tests for the MCP Relay admin proxy endpoints."""
 
 import json
+from collections.abc import Mapping
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -67,7 +68,7 @@ async def regular_client(client: AsyncClient, regular_user: User) -> AsyncClient
 
 
 def _make_response(
-    json_data: dict[str, object],
+    json_data: Mapping[str, object],
     status_code: int = 200,
     method: str = "GET",
 ) -> httpx.Response:
@@ -165,10 +166,16 @@ async def test_clear_non_admin_returns_403(regular_client: AsyncClient) -> None:
 async def test_list_channels(admin_client: AsyncClient) -> None:
     relay_data = {
         "channels": [
-            {"name": "test-ch", "message_count": 5, "last_activity": "2026-01-01T00:00:00Z"}
+            {
+                "name": "test-ch",
+                "message_count": 5,
+                "last_activity": "2026-01-01T00:00:00Z",
+            }
         ]
     }
-    mock_client = _mock_relay_client({"/debug/api/channels": _make_response(relay_data)})
+    mock_client = _mock_relay_client(
+        {"/debug/api/channels": _make_response(relay_data)}
+    )
 
     with patch("app.api.relay.httpx.AsyncClient") as mock_cls:
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -219,7 +226,11 @@ async def test_send_message(admin_client: AsyncClient) -> None:
         "timestamp": "2026-01-01T00:00:00Z",
     }
     mock_client = _mock_relay_client(
-        {"/debug/api/channels/test-ch/messages": _make_response(relay_data, status_code=201)}
+        {
+            "/debug/api/channels/test-ch/messages": _make_response(
+                relay_data, status_code=201
+            )
+        }
     )
 
     with patch("app.api.relay.httpx.AsyncClient") as mock_cls:
@@ -252,9 +263,7 @@ async def test_invalid_channel_name_returns_400(admin_client: AsyncClient) -> No
     # (will fail at relay level, but pass validation)
     with patch("app.api.relay.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.post = AsyncMock(
-            side_effect=httpx.ConnectError("not running")
-        )
+        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("not running"))
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
         response = await admin_client.post(
@@ -287,7 +296,9 @@ async def test_clear_channel(admin_client: AsyncClient) -> None:
 async def test_relay_unreachable_channels(admin_client: AsyncClient) -> None:
     with patch("app.api.relay.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.get = AsyncMock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -319,7 +330,9 @@ async def test_relay_timeout_messages(admin_client: AsyncClient) -> None:
 async def test_relay_unreachable_send(admin_client: AsyncClient) -> None:
     with patch("app.api.relay.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.post = AsyncMock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
 
@@ -337,7 +350,9 @@ async def test_relay_unreachable_send(admin_client: AsyncClient) -> None:
 async def test_relay_unreachable_clear(admin_client: AsyncClient) -> None:
     with patch("app.api.relay.httpx.AsyncClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.post = AsyncMock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
 
