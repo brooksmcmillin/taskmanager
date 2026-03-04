@@ -273,6 +273,11 @@ class TodoResponse(BaseModel):
 
 
 # Helper functions
+def _to_float(value: object) -> float | None:
+    """Convert a value to float, returning None if value is None."""
+    return float(value) if value is not None else None  # type: ignore[arg-type]
+
+
 def _build_dependency_response(
     todo: Todo, project_name: str | None = None
 ) -> DependencyResponse:
@@ -313,12 +318,8 @@ def _build_subtask_response(subtask: Todo) -> SubtaskResponse:
         status=subtask.status,
         due_date=subtask.due_date,
         deadline_type=subtask.deadline_type,
-        estimated_hours=float(subtask.estimated_hours)
-        if subtask.estimated_hours is not None
-        else None,
-        actual_hours=float(subtask.actual_hours)
-        if subtask.actual_hours is not None
-        else None,
+        estimated_hours=_to_float(subtask.estimated_hours),
+        actual_hours=_to_float(subtask.actual_hours),
         position=subtask.position,
         created_at=subtask.created_at,
         updated_at=subtask.updated_at,
@@ -397,12 +398,8 @@ def _build_todo_response(
         tags=todo.tags or [],
         context=todo.context,
         time_horizon=todo.time_horizon,
-        estimated_hours=float(todo.estimated_hours)
-        if todo.estimated_hours is not None
-        else None,
-        actual_hours=float(todo.actual_hours)
-        if todo.actual_hours is not None
-        else None,
+        estimated_hours=_to_float(todo.estimated_hours),
+        actual_hours=_to_float(todo.actual_hours),
         position=todo.position,
         parent_id=todo.parent_id,
         parent_task=parent_task_response,

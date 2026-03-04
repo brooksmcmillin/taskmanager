@@ -1,10 +1,11 @@
 """Authentication API routes."""
 
+from typing import Annotated
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import AfterValidator, BaseModel, EmailStr, Field
 from sqlalchemy import delete, select
 
 from app.config import settings
@@ -26,23 +27,31 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 account_update_rate_limiter = RateLimiter(max_attempts=5, window_ms=300000)
 
 
+def _check_password_strength(v: str) -> str:
+    """Validate that a password meets complexity requirements."""
+    if not validate_password_strength(v):
+        raise ValueError(
+            "Password must contain at least 2 of: "
+            "lowercase, uppercase, numbers, special chars"
+        )
+    return v
+
+
+# Reusable annotated type for passwords that enforces complexity requirements.
+StrongPassword = Annotated[
+    str,
+    Field(min_length=8),
+    AfterValidator(_check_password_strength),
+]
+
+
 # Request/Response schemas
 class RegisterRequest(BaseModel):
     """User registration request."""
 
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    password: StrongPassword
     registration_code: str | None = Field(None, min_length=1)
-
-    @field_validator("password")
-    @classmethod
-    def password_strong(cls, v: str) -> str:
-        if not validate_password_strength(v):
-            raise ValueError(
-                "Password must contain at least 2 of: "
-                "lowercase, uppercase, numbers, special chars"
-            )
-        return v
 
 
 class LoginRequest(BaseModel):
@@ -77,17 +86,7 @@ class UpdatePasswordRequest(BaseModel):
     """Update password request."""
 
     current_password: str
-    new_password: str = Field(..., min_length=8)
-
-    @field_validator("new_password")
-    @classmethod
-    def password_strong(cls, v: str) -> str:
-        if not validate_password_strength(v):
-            raise ValueError(
-                "Password must contain at least 2 of: "
-                "lowercase, uppercase, numbers, special chars"
-            )
-        return v
+    new_password: StrongPassword
 
 
 @router.post("/register", status_code=201)
