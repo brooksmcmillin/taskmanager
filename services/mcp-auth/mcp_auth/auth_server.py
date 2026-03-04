@@ -963,6 +963,7 @@ def create_authorization_server(
             redirect_uris=redirect_uris,
             grant_types=["authorization_code", "refresh_token", "device_code"],
             scopes=[auth_settings.mcp_scope],
+            token_endpoint_auth_method="none",
         )
 
         logger.info(f"API response status: {api_response.success}")
