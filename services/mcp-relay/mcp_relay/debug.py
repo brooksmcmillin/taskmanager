@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from typing import TYPE_CHECKING
 
 from starlette.applications import Starlette
@@ -27,7 +28,7 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]  # noqa: ANN001
         auth = request.headers.get("authorization", "")
-        if auth != f"Bearer {self.token}":
+        if not secrets.compare_digest(auth, f"Bearer {self.token}"):
             return JSONResponse(
                 {"error": "Unauthorized — set Authorization: Bearer <MCP_RELAY_DEBUG_TOKEN>"},
                 status_code=401,
