@@ -702,119 +702,209 @@ def create_authorization_server(
         revocation_options=mcp_auth_settings.revocation_options,
     )
 
-    # Add debug wrapper for token endpoint
+    # Sensitive field names that must never appear in logs
+    sensitive_fields = {"client_secret", "code", "refresh_token", "device_code"}
+
+    def _redact_params(params: dict[str, list[str]]) -> dict[str, list[str] | str]:
+        """Return a copy of parsed query-string params with sensitive values masked."""
+        redacted: dict[str, list[str] | str] = {}
+        for key, value in params.items():
+            if key in sensitive_fields:
+                redacted[key] = ["[REDACTED]"]
+            else:
+                redacted[key] = value
+        return redacted
+
+    # Add debug wrapper for token endpoint only when DEBUG=true
+    _debug_enabled = os.environ.get("DEBUG", "").lower() == "true"
     original_token_route = None
     for i, route in enumerate(routes):
         if route.path == "/token" and route.methods is not None and "POST" in route.methods:
             original_token_route = route
 
-            # Create debug wrapper
-            async def debug_token_handler(request: Request) -> Response:
-                logger.info("=== TOKEN ENDPOINT DEBUG ===")
-                logger.info(f"Method: {request.method}")
-                logger.info(f"URL: {request.url}")
-                logger.info(f"Headers: {dict(request.headers)}")
+            if not _debug_enabled:
+                # Create a lightweight pass-through handler (no logging) for non-debug mode
+                async def token_handler(request: Request) -> Response:
+                    try:
+                        # Read the raw body
+                        body = await request.body()
 
-                try:
-                    # Read the raw body
-                    body = await request.body()
-                    logger.info(f"Raw body: {body.decode()}")
+                        # Check for device_code grant type
+                        from urllib.parse import parse_qs
 
-                    # Check for device_code grant type
-                    from urllib.parse import parse_qs
+                        parsed_body = parse_qs(body.decode())
+                        grant_type = parsed_body.get("grant_type", [""])[0]
 
-                    parsed_body = parse_qs(body.decode())
-                    grant_type = parsed_body.get("grant_type", [""])[0]
-
-                    if grant_type == "urn:ietf:params:oauth:grant-type:device_code":
-                        logger.info("=== DEVICE CODE TOKEN EXCHANGE ===")
-                        return await handle_device_code_token_exchange(
-                            parsed_body,
-                            oauth_provider,
-                            auth_settings,
-                            token_endpoint=f"{server_url}/token",
-                        )
-
-                    if grant_type == "refresh_token":
-                        logger.info("=== REFRESH TOKEN EXCHANGE ===")
-                        return await handle_refresh_token_exchange(
-                            parsed_body, oauth_provider, token_endpoint=f"{server_url}/token"
-                        )
-
-                    # Try to parse form data
-                    if request.headers.get("content-type", "").startswith(
-                        "application/x-www-form-urlencoded"
-                    ):
-                        # Reconstruct request with body
-
-                        scope = dict(request.scope).copy()
-
-                        async def url_encode_receive() -> dict[str, str | bytes]:
-                            return {"type": "http.request", "body": body}
-
-                        new_request = Request(scope, url_encode_receive)
-                        form_data = await new_request.form()
-                        logger.info(f"Form data: {dict(form_data)}")
-
-                    # Call original handler - handle ASGI interface properly
-                    logger.info("Calling original token endpoint")
-
-                    # Create a new scope and receive callable with fresh body
-                    scope = dict(request.scope).copy()
-
-                    async def receive() -> dict[str, str | bytes | bool]:
-                        return {
-                            "type": "http.request",
-                            "body": body,
-                            "more_body": False,
-                        }
-
-                    # Create response handler
-                    response_started = False
-                    response_data = {"status": 500, "headers": [], "body": b""}
-
-                    async def send(message: MutableMapping[str, Any]) -> None:
-                        nonlocal response_started, response_data
-                        if message["type"] == "http.response.start":
-                            response_started = True
-                            response_data["status"] = message["status"]
-                            response_data["headers"] = message.get("headers", [])
-                        elif message["type"] == "http.response.body":
-                            response_data["body"] += message.get("body", b"")
-
-                    # Call the endpoint as ASGI app
-                    await original_token_route.app(scope, receive, send)  # noqa: B023
-
-                    logger.info(f"Token endpoint result: {response_data['status']}")
-
-                    # Log response body for debugging
-                    if response_data["body"]:
-                        try:
-                            response_text = cast(bytes, response_data["body"]).decode("utf-8")
-                            logger.info(f"Token endpoint response body: {response_text}")
-                        except Exception:
-                            logger.info(
-                                f"Token endpoint response body (raw): {response_data['body']}"
+                        if grant_type == "urn:ietf:params:oauth:grant-type:device_code":
+                            return await handle_device_code_token_exchange(
+                                parsed_body,
+                                oauth_provider,
+                                auth_settings,
+                                token_endpoint=f"{server_url}/token",
                             )
 
-                    # Convert headers back to dict format for Response
-                    headers_dict = {}
-                    for name, value in response_data["headers"]:  # type: ignore
-                        headers_dict[name.decode()] = value.decode()
+                        if grant_type == "refresh_token":
+                            return await handle_refresh_token_exchange(
+                                parsed_body, oauth_provider, token_endpoint=f"{server_url}/token"
+                            )
 
-                    return Response(
-                        content=response_data["body"],
-                        status_code=cast(int, response_data["status"]),
-                        headers=headers_dict,
-                    )
+                        # Create a new scope and receive callable with fresh body
+                        scope = dict(request.scope).copy()
 
-                except Exception as e:
-                    logger.error(f"Token endpoint error: {e}")
-                    logger.error("Traceback: ", exc_info=True)
-                    return server_error(str(e))
+                        async def receive() -> dict[str, str | bytes | bool]:
+                            return {
+                                "type": "http.request",
+                                "body": body,
+                                "more_body": False,
+                            }
 
-            # Replace the route with debug wrapper
-            routes[i] = Route(route.path, debug_token_handler, methods=route.methods)
+                        # Create response handler
+                        response_started = False
+                        response_data = {"status": 500, "headers": [], "body": b""}
+
+                        async def send(message: MutableMapping[str, Any]) -> None:
+                            nonlocal response_started, response_data
+                            if message["type"] == "http.response.start":
+                                response_started = True
+                                response_data["status"] = message["status"]
+                                response_data["headers"] = message.get("headers", [])
+                            elif message["type"] == "http.response.body":
+                                response_data["body"] += message.get("body", b"")
+
+                        # Call the endpoint as ASGI app
+                        await original_token_route.app(scope, receive, send)  # noqa: B023
+
+                        # Convert headers back to dict format for Response
+                        headers_dict = {}
+                        for name, value in response_data["headers"]:  # type: ignore
+                            headers_dict[name.decode()] = value.decode()
+
+                        return Response(
+                            content=response_data["body"],
+                            status_code=cast(int, response_data["status"]),
+                            headers=headers_dict,
+                        )
+
+                    except Exception as e:
+                        logger.error(f"Token endpoint error: {e}")
+                        logger.error("Traceback: ", exc_info=True)
+                        return server_error(str(e))
+
+                routes[i] = Route(route.path, token_handler, methods=route.methods)
+            else:
+                # Create debug wrapper (only active when DEBUG=true)
+                async def debug_token_handler(request: Request) -> Response:
+                    logger.debug("=== TOKEN ENDPOINT DEBUG ===")
+                    logger.debug(f"Method: {request.method}")
+                    logger.debug(f"URL: {request.url}")
+                    logger.debug(f"Headers: {dict(request.headers)}")
+
+                    try:
+                        # Read the raw body
+                        body = await request.body()
+
+                        # Check for device_code grant type
+                        from urllib.parse import parse_qs
+
+                        parsed_body = parse_qs(body.decode())
+                        redacted_body = _redact_params(parsed_body)
+                        logger.debug(f"Raw body (redacted): {redacted_body}")
+
+                        grant_type = parsed_body.get("grant_type", [""])[0]
+
+                        if grant_type == "urn:ietf:params:oauth:grant-type:device_code":
+                            logger.debug("=== DEVICE CODE TOKEN EXCHANGE ===")
+                            return await handle_device_code_token_exchange(
+                                parsed_body,
+                                oauth_provider,
+                                auth_settings,
+                                token_endpoint=f"{server_url}/token",
+                            )
+
+                        if grant_type == "refresh_token":
+                            logger.debug("=== REFRESH TOKEN EXCHANGE ===")
+                            return await handle_refresh_token_exchange(
+                                parsed_body, oauth_provider, token_endpoint=f"{server_url}/token"
+                            )
+
+                        # Try to parse form data
+                        if request.headers.get("content-type", "").startswith(
+                            "application/x-www-form-urlencoded"
+                        ):
+                            # Reconstruct request with body
+
+                            scope = dict(request.scope).copy()
+
+                            async def url_encode_receive() -> dict[str, str | bytes]:
+                                return {"type": "http.request", "body": body}
+
+                            new_request = Request(scope, url_encode_receive)
+                            form_data = await new_request.form()
+                            redacted_form = {
+                                k: "[REDACTED]" if k in sensitive_fields else v
+                                for k, v in dict(form_data).items()
+                            }
+                            logger.debug(f"Form data (redacted): {redacted_form}")
+
+                        # Call original handler - handle ASGI interface properly
+                        logger.debug("Calling original token endpoint")
+
+                        # Create a new scope and receive callable with fresh body
+                        scope = dict(request.scope).copy()
+
+                        async def receive() -> dict[str, str | bytes | bool]:
+                            return {
+                                "type": "http.request",
+                                "body": body,
+                                "more_body": False,
+                            }
+
+                        # Create response handler
+                        response_started = False
+                        response_data = {"status": 500, "headers": [], "body": b""}
+
+                        async def send(message: MutableMapping[str, Any]) -> None:
+                            nonlocal response_started, response_data
+                            if message["type"] == "http.response.start":
+                                response_started = True
+                                response_data["status"] = message["status"]
+                                response_data["headers"] = message.get("headers", [])
+                            elif message["type"] == "http.response.body":
+                                response_data["body"] += message.get("body", b"")
+
+                        # Call the endpoint as ASGI app
+                        await original_token_route.app(scope, receive, send)  # noqa: B023
+
+                        logger.debug(f"Token endpoint result: {response_data['status']}")
+
+                        # Log response body for debugging
+                        if response_data["body"]:
+                            try:
+                                response_text = cast(bytes, response_data["body"]).decode("utf-8")
+                                logger.debug(f"Token endpoint response body: {response_text}")
+                            except Exception:
+                                logger.debug(
+                                    f"Token endpoint response body (raw): {response_data['body']}"
+                                )
+
+                        # Convert headers back to dict format for Response
+                        headers_dict = {}
+                        for name, value in response_data["headers"]:  # type: ignore
+                            headers_dict[name.decode()] = value.decode()
+
+                        return Response(
+                            content=response_data["body"],
+                            status_code=cast(int, response_data["status"]),
+                            headers=headers_dict,
+                        )
+
+                    except Exception as e:
+                        logger.error(f"Token endpoint error: {e}")
+                        logger.error("Traceback: ", exc_info=True)
+                        return server_error(str(e))
+
+                # Replace the route with debug wrapper
+                routes[i] = Route(route.path, debug_token_handler, methods=route.methods)
             break
 
     # Add OAuth callback route (GET) - receives callback from TaskManager
