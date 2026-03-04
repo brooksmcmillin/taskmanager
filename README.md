@@ -103,14 +103,45 @@ uv run alembic upgrade head
 taskmanager/
 ├── services/
 │   ├── frontend/             # SvelteKit task management UI
+│   │   ├── src/
+│   │   │   ├── routes/       # SvelteKit pages
+│   │   │   ├── lib/          # Components, stores, API client
+│   │   │   └── app.scss      # Global styles
+│   │   └── tests/            # Playwright E2E tests
 │   ├── backend/              # FastAPI REST API
-│   ├── mcp-auth/             # OAuth 2.0 authorization server for MCP
-│   ├── mcp-resource/         # MCP resource server with tools
+│   │   ├── app/
+│   │   │   ├── api/          # API route handlers
+│   │   │   ├── core/         # Security, errors, rate limiting
+│   │   │   ├── models/       # SQLAlchemy models
+│   │   │   ├── schemas/      # Pydantic request/response schemas
+│   │   │   └── db/           # Database connection & utilities
+│   │   ├── alembic/          # Database migrations
+│   │   └── tests/            # pytest unit tests
+│   ├── mcp-auth/             # OAuth 2.0 authorization server (port 9000)
+│   │   ├── mcp_auth/         # Python package
+│   │   └── tests/
+│   ├── mcp-resource/         # MCP resource server with tools (port 8001)
+│   │   ├── mcp_resource/     # Python package
+│   │   └── tests/
+│   ├── mcp-relay/            # MCP relay service
+│   │   ├── mcp_relay/        # Python package
+│   │   └── tests/
+│   ├── monitoring/           # Observability stack (Grafana, Loki, Prometheus)
 │   └── db/                   # Database configuration & SSL certs
 ├── packages/
-│   └── taskmanager-sdk/      # Python SDK for TaskManager API
+│   ├── taskmanager-sdk/      # Python SDK for TaskManager API
+│   │   ├── taskmanager_sdk/
+│   │   └── tests/
+│   ├── mcp-auth-framework/   # Reusable MCP OAuth framework
+│   │   ├── mcp_auth_framework/
+│   │   └── tests/
+│   └── mcp-resource-framework/  # Reusable MCP resource framework
+│       ├── mcp_resource_framework/
+│       └── tests/
+├── docs/                     # Documentation
 ├── docker-compose.yml        # Container orchestration
-└── .env                      # Environment configuration
+├── Makefile                  # Development commands
+└── .pre-commit-config.yaml   # Pre-commit hook configuration
 ```
 
 ## Services
