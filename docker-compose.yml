@@ -143,6 +143,21 @@ services:
       - traefik.http.services.tm-mcp.loadbalancer.server.port=8001
     restart: unless-stopped
 
+  # ========== REDIS (mcp-relay persistence) ==========
+  redis:
+    image: redis:7-alpine
+    container_name: taskmanager-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - taskmanager_network
+
   # ========== MCP RELAY (dev tool) ==========
   mcp-relay:
     build:
@@ -159,8 +174,13 @@ services:
       - MCP_AUTH_SERVER_PUBLIC_URL=${MCP_AUTH_SERVER_PUBLIC_URL:-http://localhost:9000}
       - MCP_RELAY_DEBUG_UI=${MCP_RELAY_DEBUG_UI:-false}
       - MCP_RELAY_DEBUG_TOKEN=${MCP_RELAY_DEBUG_TOKEN:-}
+      - RELAY_STORE_BACKEND=${RELAY_STORE_BACKEND:-redis}
+      - REDIS_URL=${RELAY_REDIS_URL:-redis://redis:6379/0}
     depends_on:
-      - mcp-auth
+      redis:
+        condition: service_healthy
+      mcp-auth:
+        condition: service_started
     networks:
       - taskmanager_network
       - proxy
@@ -259,6 +279,7 @@ volumes:
   prometheus_data:
   loki_data:
   grafana_data:
+  redis_data:
 
 networks:
   taskmanager_network:

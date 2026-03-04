@@ -120,12 +120,18 @@ async def index_handler(request: Request) -> HTMLResponse:
     return HTMLResponse(DEBUG_HTML)
 
 
-def create_debug_app(store: MessageStore, token: str | None = None) -> Starlette:
+def create_debug_app(
+    store: MessageStore,
+    token: str | None = None,
+    include_ui: bool = True,
+) -> Starlette:
     """Create the debug Starlette sub-application.
 
     Args:
         store: The MessageStore instance to expose.
         token: If provided, all requests must include ``Authorization: Bearer <token>``.
+        include_ui: If True, include the HTML debug UI at ``/``. When False, only the
+            JSON API endpoints under ``/api/`` are mounted.
     """
     middleware = []
     if token:
@@ -133,16 +139,16 @@ def create_debug_app(store: MessageStore, token: str | None = None) -> Starlette
             _middleware_entry(TokenAuthMiddleware, token=token),
         )
 
-    app = Starlette(
-        routes=[
-            Route("/", index_handler),
-            Route("/api/channels", channels_handler),
-            Route("/api/channels/{channel}/messages", messages_handler, methods=["GET"]),
-            Route("/api/channels/{channel}/messages", send_handler, methods=["POST"]),
-            Route("/api/channels/{channel}/clear", clear_handler, methods=["POST"]),
-        ],
-        middleware=middleware,
-    )
+    routes = [
+        Route("/api/channels", channels_handler),
+        Route("/api/channels/{channel}/messages", messages_handler, methods=["GET"]),
+        Route("/api/channels/{channel}/messages", send_handler, methods=["POST"]),
+        Route("/api/channels/{channel}/clear", clear_handler, methods=["POST"]),
+    ]
+    if include_ui:
+        routes.insert(0, Route("/", index_handler))
+
+    app = Starlette(routes=routes, middleware=middleware)
     app.state.store = store
     return app
 

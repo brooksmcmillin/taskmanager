@@ -11,13 +11,9 @@ dependencies = [
     "mcp-resource-framework",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
+    "redis>=5.0.0",
     "starlette>=0.40.0",
     "uvicorn>=0.30.0",
-]
-
-[project.optional-dependencies]
-redis = [
-    "redis>=5.0.0",
 ]
 
 [project.scripts]

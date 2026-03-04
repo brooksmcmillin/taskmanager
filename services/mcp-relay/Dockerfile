@@ -20,7 +20,7 @@ ENV PATH="/root/.local/bin:$PATH"
 COPY packages/mcp-resource-framework /packages/mcp-resource-framework
 
 # Copy dependency files
-COPY services/mcp-relay/pyproject.toml ./
+COPY services/mcp-relay/pyproject.toml services/mcp-relay/uv.lock ./
 
 # Update pyproject.toml to use absolute paths for Docker build, then install dependencies
 RUN sed -i 's|path = "../../packages/mcp-resource-framework"|path = "/packages/mcp-resource-framework"|' pyproject.toml \

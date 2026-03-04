@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from redis.asyncio import Redis
 
-from mcp_relay.server import MAX_READ_LIMIT, ChannelInfo, Message
+from mcp_relay.types import MAX_READ_LIMIT, ChannelInfo, Message
 
 logger = logging.getLogger(__name__)
 

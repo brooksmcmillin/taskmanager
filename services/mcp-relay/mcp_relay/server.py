@@ -25,6 +25,7 @@ from pydantic import AnyHttpUrl
 
 from mcp_relay.api import create_api_app
 from mcp_relay.debug import create_debug_app
+from mcp_relay.types import MAX_READ_LIMIT, ChannelInfo, Message
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,6 @@ load_dotenv()
 MAX_MESSAGES_PER_CHANNEL = int(os.environ.get("MAX_MESSAGES_PER_CHANNEL", "1000"))
 MAX_CHANNELS = int(os.environ.get("MAX_CHANNELS", "100"))
 MAX_MESSAGE_SIZE = int(os.environ.get("MAX_MESSAGE_SIZE", "65536"))  # 64 KB
-MAX_READ_LIMIT = 200
 MAX_CHANNEL_NAME_LENGTH = 64
 
 # Allowlist: alphanumeric, hyphens, and underscores only.
@@ -101,31 +101,6 @@ def validate_message_id(message_id: str) -> None:
     """
     if not _UUID_RE.match(message_id):
         raise ValueError("Invalid message ID format: must be a UUID.")
-
-
-@dataclass
-class Message:
-    id: str
-    channel: str
-    sender: str
-    content: str
-    timestamp: str
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "id": self.id,
-            "channel": self.channel,
-            "sender": self.sender,
-            "content": self.content,
-            "timestamp": self.timestamp,
-        }
-
-
-@dataclass
-class ChannelInfo:
-    name: str
-    message_count: int
-    last_activity: str | None
 
 
 class MessageStore:
@@ -365,7 +340,7 @@ def create_store() -> MessageStore:
     Set ``RELAY_STORE_BACKEND=redis`` and ``REDIS_URL`` to use Redis.
     Defaults to in-memory storage.
     """
-    backend = os.environ.get("RELAY_STORE_BACKEND", "memory").lower()
+    backend = os.environ.get("RELAY_STORE_BACKEND", "redis").lower()
     if backend == "redis":
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         try:
@@ -748,21 +723,30 @@ def main(
         api_app = create_api_app(store, token_verifier)
         starlette_app.mount("/api", api_app)
 
-        debug_enabled = os.environ.get("MCP_RELAY_DEBUG_UI", "").lower() in ("1", "true", "yes")
-        if debug_enabled:
-            debug_token = os.environ.get("MCP_RELAY_DEBUG_TOKEN", "").strip()
-            if not debug_token:
-                logger.error(
-                    "Debug UI is enabled (MCP_RELAY_DEBUG_UI=true) but MCP_RELAY_DEBUG_TOKEN is "
-                    "not set. Refusing to start debug UI without authentication. "
-                    "Set MCP_RELAY_DEBUG_TOKEN to a secure token to enable the debug UI."
-                )
-                sys.exit(1)
-            debug_app = create_debug_app(store, token=debug_token)
+        debug_token = os.environ.get("MCP_RELAY_DEBUG_TOKEN", "").strip()
+        debug_ui_enabled = os.environ.get("MCP_RELAY_DEBUG_UI", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if debug_token:
+            debug_app = create_debug_app(
+                store, token=debug_token, include_ui=debug_ui_enabled
+            )
             starlette_app.mount("/debug", debug_app)
-            logger.info(f"Debug UI: http://{host}:{port}/debug/ (token-protected)")
+            if debug_ui_enabled:
+                logger.info(f"Debug UI + API: http://{host}:{port}/debug/ (token-protected)")
+            else:
+                logger.info(f"Debug API: http://{host}:{port}/debug/api/ (token-protected)")
+        elif debug_ui_enabled:
+            logger.error(
+                "MCP_RELAY_DEBUG_UI=true but MCP_RELAY_DEBUG_TOKEN is not set. "
+                "Refusing to start debug endpoints without authentication. "
+                "Set MCP_RELAY_DEBUG_TOKEN to a secure token."
+            )
+            sys.exit(1)
         else:
-            logger.info("Debug UI disabled (set MCP_RELAY_DEBUG_UI=true to enable)")
+            logger.info("Debug API disabled (set MCP_RELAY_DEBUG_TOKEN to enable)")
 
         app = NormalizePathMiddleware(starlette_app)
 
