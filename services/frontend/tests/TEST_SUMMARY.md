@@ -10,18 +10,18 @@ This document provides an overview of the E2E test suite for the TaskManager Sve
 | `calendar-drag-drop.spec.ts`       | 13         | Calendar & drag-and-drop            |
 | `calendar-expand-collapse.spec.ts` | 6          | Calendar overflow expand/collapse   |
 | `calendar-subtask-drag.spec.ts`    | 9          | Subtask dragging & drop targets     |
-| `deadline-type.spec.ts`            | 16         | Deadline type feature               |
+| `deadline-type.spec.ts`            | 18         | Deadline type feature               |
 | `home-page.spec.ts`                | 8          | Home dashboard                      |
 | `list-view-ux.spec.ts`             | 9          | List view UX                        |
 | `project-filter.spec.ts`           | 6          | Project filter persistence          |
 | `readme-screenshots.spec.ts`       | 5          | Screenshot generation (CI-excluded) |
 | `snippets.spec.ts`                 | 11         | Snippets CRUD                       |
-| `todo-flow.spec.ts`                | 10         | Todo management                     |
-| `ux-improvements.spec.ts`          | 19         | Search, toast, stats, calendar UX   |
-| `wiki.spec.ts`                     | 18         | Wiki pages CRUD & navigation        |
-| **Total**                          | **136**    | **13 files, all core flows**        |
+| `todo-flow.spec.ts`                | 9          | Todo management                     |
+| `ux-improvements.spec.ts`          | 22         | Search, toast, stats, calendar UX   |
+| `wiki.spec.ts`                     | 17         | Wiki pages CRUD & navigation        |
+| **Total**                          | **139**    | **13 files, all core flows**        |
 
-**Note**: `readme-screenshots.spec.ts` (5 tests) is excluded from CI runs. 131 tests execute in CI.
+**Note**: `readme-screenshots.spec.ts` (5 tests) is excluded from CI runs. 134 tests execute in CI.
 
 ## User Flow Coverage
 
@@ -36,7 +36,7 @@ This document provides an overview of the E2E test suite for the TaskManager Sve
 - Form validation (email, password strength)
 - Protected route redirection to login
 
-### 2. Todo Management Flow (10 tests)
+### 2. Todo Management Flow (9 tests)
 
 **Covered Scenarios:**
 
@@ -94,7 +94,7 @@ This document provides an overview of the E2E test suite for the TaskManager Sve
 - Move subtask due date updates calendar position
 - Parent task remains after subtask date change
 
-### 6. Deadline Type Feature (16 tests)
+### 6. Deadline Type Feature (18 tests)
 
 **Covered Scenarios:**
 
@@ -153,7 +153,7 @@ Manual-only screenshot generation for README documentation.
 - Tags displayed on view page
 - Create page with category query param
 
-### 12. UX Improvements (19 tests)
+### 12. UX Improvements (22 tests)
 
 **Covered Scenarios:**
 
@@ -163,7 +163,7 @@ Manual-only screenshot generation for README documentation.
 - Calendar: Today button, navigate to current week, single-click task detail, +N more overflow, expand/collapse overflow
 - User dropdown: open on click, close on outside click, toggle on repeated clicks, settings link
 
-### 13. Wiki Pages (18 tests)
+### 13. Wiki Pages (17 tests)
 
 **Covered Scenarios:**
 

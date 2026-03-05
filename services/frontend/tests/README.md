@@ -5,7 +5,7 @@ This directory contains end-to-end tests for the TaskManager SvelteKit frontend 
 ## Current State
 
 - 13 test files in `tests/e2e/`
-- 136 total test cases (131 run in CI; 5 screenshot tests are CI-excluded)
+- 139 total test cases (134 run in CI; 5 screenshot tests are CI-excluded)
 - Test infrastructure configured (Playwright, cross-browser testing)
 - Isolated test database setup (automatic reset before tests)
 - Backend API integration via test environment
@@ -56,7 +56,7 @@ Tests user authentication flows:
 
 ### `calendar-drag-drop.spec.ts` (13 tests)
 
-Tests drag-and-drop calendar:
+Tests drag-and-drop calendar (2 active, 11 skipped pending UI updates):
 
 - 3-week calendar view rendering
 - Week navigation (previous/next)
@@ -88,7 +88,7 @@ Tests subtask rendering and drag behavior in the calendar:
 - Dragging parent tasks and subtasks between days
 - Parent task stays after subtask date change
 
-### `deadline-type.spec.ts` (16 tests)
+### `deadline-type.spec.ts` (18 tests)
 
 Tests the deadline_type field across form UI, create, edit, and display:
 
@@ -142,16 +142,17 @@ Tests snippet CRUD and browsing:
 - Category filter chips and tag display
 - Create page with category query param
 
-### `todo-flow.spec.ts` (10 tests)
+### `todo-flow.spec.ts` (9 tests)
 
-Tests todo management (most tests currently skipped pending UI updates):
+Tests todo management (all 9 tests currently skipped pending UI updates):
 
 - Create, edit, complete, delete todos
 - Filter by status and project
-- Search and form validation
+- Search
+- Form validation (required fields)
 - Todo detail view with all fields
 
-### `ux-improvements.spec.ts` (19 tests)
+### `ux-improvements.spec.ts` (22 tests)
 
 Tests UX improvements across multiple features:
 
@@ -161,7 +162,7 @@ Tests UX improvements across multiple features:
 - Calendar improvements (Today button, single-click detail, overflow)
 - User dropdown menu (open, close, toggle, settings link)
 
-### `wiki.spec.ts` (18 tests)
+### `wiki.spec.ts` (17 tests)
 
 Tests wiki page CRUD and navigation:
 
