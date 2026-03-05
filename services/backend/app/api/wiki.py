@@ -404,6 +404,34 @@ async def _get_subtree_depth(db: DbSession, page_id: int) -> int:
     return max_depth
 
 
+async def _build_wiki_page_response(
+    db: DbSession,
+    page: WikiPage,
+    user_id: int,
+    slug_modified: bool = False,
+    requested_slug: str | None = None,
+) -> WikiPageResponse:
+    """Build a WikiPageResponse with ancestors, children, and optional slug info."""
+    ancestors = await _get_ancestors(db, page)
+    children = await _get_children_with_counts(db, page.id, user_id)
+    resp = WikiPageResponse(
+        id=page.id,
+        title=page.title,
+        slug=page.slug,
+        content=page.content,
+        parent_id=page.parent_id,
+        tags=page.tags or [],
+        revision_number=page.revision_number,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        slug_modified=slug_modified,
+        requested_slug=requested_slug,
+        ancestors=ancestors,
+        children=children,
+    )
+    return resp
+
+
 async def _soft_delete_descendants(db: DbSession, page_id: int) -> None:
     """Recursively soft-delete all descendants of a page."""
     result = await db.execute(
@@ -493,25 +521,13 @@ async def create_wiki_page(
     await db.flush()
     await db.refresh(page)
 
-    ancestors = await _get_ancestors(db, page)
-    children = await _get_children_with_counts(db, page.id, user.id)
-
-    resp = WikiPageResponse(
-        id=page.id,
-        title=page.title,
-        slug=page.slug,
-        content=page.content,
-        parent_id=page.parent_id,
-        tags=page.tags or [],
-        revision_number=page.revision_number,
-        created_at=page.created_at,
-        updated_at=page.updated_at,
-        ancestors=ancestors,
-        children=children,
+    resp = await _build_wiki_page_response(
+        db,
+        page,
+        user.id,
+        slug_modified=was_modified,
+        requested_slug=(requested_slug or slug) if was_modified else None,
     )
-    if was_modified:
-        resp.slug_modified = True
-        resp.requested_slug = requested_slug or slug
 
     # Notify subscribers of parent pages (new child page created)
     await _notify_subscribers(db, page, NotificationType.WIKI_PAGE_CREATED, user.id)
@@ -595,21 +611,7 @@ async def get_wiki_page(
 ) -> DataResponse[WikiPageResponse]:
     """Get a wiki page by slug or numeric ID."""
     page = await _resolve_page(db, user.id, slug_or_id)
-    ancestors = await _get_ancestors(db, page)
-    children = await _get_children_with_counts(db, page.id, user.id)
-    resp = WikiPageResponse(
-        id=page.id,
-        title=page.title,
-        slug=page.slug,
-        content=page.content,
-        parent_id=page.parent_id,
-        tags=page.tags or [],
-        revision_number=page.revision_number,
-        created_at=page.created_at,
-        updated_at=page.updated_at,
-        ancestors=ancestors,
-        children=children,
-    )
+    resp = await _build_wiki_page_response(db, page, user.id)
     return DataResponse(data=resp)
 
 
@@ -694,25 +696,13 @@ async def update_wiki_page(
     await db.flush()
     await db.refresh(page)
 
-    ancestors = await _get_ancestors(db, page)
-    children = await _get_children_with_counts(db, page.id, user.id)
-
-    resp = WikiPageResponse(
-        id=page.id,
-        title=page.title,
-        slug=page.slug,
-        content=page.content,
-        parent_id=page.parent_id,
-        tags=page.tags or [],
-        revision_number=page.revision_number,
-        created_at=page.created_at,
-        updated_at=page.updated_at,
-        ancestors=ancestors,
-        children=children,
+    resp = await _build_wiki_page_response(
+        db,
+        page,
+        user.id,
+        slug_modified=slug_modified,
+        requested_slug=requested_slug if slug_modified else None,
     )
-    if slug_modified:
-        resp.slug_modified = True
-        resp.requested_slug = requested_slug
 
     # Notify subscribers
     await _notify_subscribers(db, page, NotificationType.WIKI_PAGE_UPDATED, user.id)
@@ -759,24 +749,8 @@ async def move_wiki_page(
     await db.flush()
     await db.refresh(page)
 
-    ancestors = await _get_ancestors(db, page)
-    children = await _get_children_with_counts(db, page.id, user.id)
-
-    return DataResponse(
-        data=WikiPageResponse(
-            id=page.id,
-            title=page.title,
-            slug=page.slug,
-            content=page.content,
-            parent_id=page.parent_id,
-            tags=page.tags or [],
-            revision_number=page.revision_number,
-            created_at=page.created_at,
-            updated_at=page.updated_at,
-            ancestors=ancestors,
-            children=children,
-        )
-    )
+    resp = await _build_wiki_page_response(db, page, user.id)
+    return DataResponse(data=resp)
 
 
 # ---------------------------------------------------------------------------
