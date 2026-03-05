@@ -234,11 +234,16 @@ def transform_client_data(client_data: dict[str, Any]) -> dict[str, Any] | None:
     auth_method = "none" if "claude-code" in client_name else "client_secret_post"
 
     # Don't set client_secret for public clients
-    client_secret = (
-        None
-        if auth_method == "none"
-        else (client_data.get("client_secret") or client_data.get("clientSecret", "dummy-secret"))
-    )
+    if auth_method == "none":
+        client_secret = None
+    else:
+        client_secret = client_data.get("client_secret") or client_data.get("clientSecret")
+        if not client_secret:
+            logger.error(
+                f"Confidential client {client_id} has no secret configured; "
+                "refusing to register with a placeholder"
+            )
+            return None
 
     return {
         "client_id": client_id,
