@@ -236,7 +236,7 @@ uv run alembic upgrade head
 
 Tasks include agent integration fields for AI assistant workflows:
 
-- `deadline_type` - Task urgency: `preferred`, `soft`, `hard`
+- `deadline_type` - Task urgency: `flexible`, `preferred`, `firm`, `hard`
 - `time_horizon` - Planning horizon: `today`, `this_week`, `this_month`, `someday`
 - `estimated_hours` / `actual_hours` - Time tracking
 - `agent_actionable` - Whether an AI agent can complete without human
