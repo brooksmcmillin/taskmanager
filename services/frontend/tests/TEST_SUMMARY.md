@@ -4,22 +4,22 @@ This document provides an overview of the E2E test suite for the TaskManager Sve
 
 ## Test Files Overview
 
-| Test File                        | Test Count | Coverage Area                  |
-| -------------------------------- | ---------- | ------------------------------ |
-| `auth-flow.spec.ts`              | 6          | Authentication                 |
-| `calendar-drag-drop.spec.ts`     | 13         | Calendar & drag-and-drop       |
-| `calendar-expand-collapse.spec.ts` | 6        | Calendar overflow expand/collapse |
-| `calendar-subtask-drag.spec.ts`  | 9          | Subtask dragging & drop targets |
-| `deadline-type.spec.ts`          | 16         | Deadline type feature           |
-| `home-page.spec.ts`              | 8          | Home dashboard                 |
-| `list-view-ux.spec.ts`           | 9          | List view UX                   |
-| `project-filter.spec.ts`         | 6          | Project filter persistence     |
-| `readme-screenshots.spec.ts`     | 5          | Screenshot generation (CI-excluded) |
-| `snippets.spec.ts`               | 11         | Snippets CRUD                  |
-| `todo-flow.spec.ts`              | 10         | Todo management                |
-| `ux-improvements.spec.ts`        | 19         | Search, toast, stats, calendar UX |
-| `wiki.spec.ts`                   | 18         | Wiki pages CRUD & navigation   |
-| **Total**                        | **136**    | **13 files, all core flows**   |
+| Test File                          | Test Count | Coverage Area                       |
+| ---------------------------------- | ---------- | ----------------------------------- |
+| `auth-flow.spec.ts`                | 6          | Authentication                      |
+| `calendar-drag-drop.spec.ts`       | 13         | Calendar & drag-and-drop            |
+| `calendar-expand-collapse.spec.ts` | 6          | Calendar overflow expand/collapse   |
+| `calendar-subtask-drag.spec.ts`    | 9          | Subtask dragging & drop targets     |
+| `deadline-type.spec.ts`            | 16         | Deadline type feature               |
+| `home-page.spec.ts`                | 8          | Home dashboard                      |
+| `list-view-ux.spec.ts`             | 9          | List view UX                        |
+| `project-filter.spec.ts`           | 6          | Project filter persistence          |
+| `readme-screenshots.spec.ts`       | 5          | Screenshot generation (CI-excluded) |
+| `snippets.spec.ts`                 | 11         | Snippets CRUD                       |
+| `todo-flow.spec.ts`                | 10         | Todo management                     |
+| `ux-improvements.spec.ts`          | 19         | Search, toast, stats, calendar UX   |
+| `wiki.spec.ts`                     | 18         | Wiki pages CRUD & navigation        |
+| **Total**                          | **136**    | **13 files, all core flows**        |
 
 **Note**: `readme-screenshots.spec.ts` (5 tests) is excluded from CI runs. 131 tests execute in CI.
 
