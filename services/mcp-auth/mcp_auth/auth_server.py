@@ -206,6 +206,7 @@ def transform_client_data(client_data: dict[str, Any]) -> dict[str, Any] | None:
 
     Returns:
         Transformed client dict, or None if client_id is missing
+        or a confidential client has no secret configured
     """
     client_id = client_data.get("client_id") or client_data.get("clientId")
     if not client_id:
