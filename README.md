@@ -183,10 +183,10 @@ OAuth 2.0 authorization server that enables MCP clients to authenticate:
 ### MCP Resource Server
 
 MCP server providing AI assistants with task management tools:
-- `get_all_projects()` - List all projects
-- `get_all_tasks()` - List all tasks
+- `get_tasks()` - List and filter tasks
 - `create_task()` / `create_tasks()` - Create tasks (with optional wiki page auto-linking)
-- 13 wiki tools: create, read, update, delete, search, link to tasks, manage revisions
+- `create_project()` - Create a new project
+- 9 wiki tools: create, read, update, delete, search, link to tasks
 - OAuth-protected endpoints
 
 **[View MCP Resource Documentation](services/mcp-resource/README.md)**
