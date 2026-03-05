@@ -3,6 +3,8 @@
 import pytest
 from httpx import AsyncClient
 
+from app.models.user import User
+
 # Test passwords for authentication tests
 TEST_PASSWORD = "SecurePass123!"  # pragma: allowlist secret
 TEST_PASSWORD_WEAK = "weakpass"  # pragma: allowlist secret
@@ -409,3 +411,219 @@ async def test_login_unsupported_content_type(client: AsyncClient, test_user):
 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "AUTH_001"
+
+
+# =============================================================================
+# PUT /api/auth/email Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_update_email_success(authenticated_client: AsyncClient) -> None:
+    """Test successful email update."""
+    response = await authenticated_client.put(
+        "/api/auth/email",
+        json={"email": "newemail@example.com"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Email updated successfully"
+    assert data["user"]["email"] == "newemail@example.com"
+
+
+@pytest.mark.asyncio
+async def test_update_email_conflict(
+    authenticated_client: AsyncClient,
+    db_session,
+) -> None:
+    """Test email update with already-taken email returns 409."""
+    from app.core.security import hash_password as hp
+
+    other_user = User(
+        email="taken@example.com",
+        password_hash=hp(TEST_PASSWORD),
+    )
+    db_session.add(other_user)
+    await db_session.commit()
+
+    response = await authenticated_client.put(
+        "/api/auth/email",
+        json={"email": "taken@example.com"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "CONFLICT_002"
+
+
+@pytest.mark.asyncio
+async def test_update_email_unauthenticated(client: AsyncClient) -> None:
+    """Test email update without authentication returns 401."""
+    response = await client.put(
+        "/api/auth/email",
+        json={"email": "newemail@example.com"},
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_update_email_rate_limit(
+    authenticated_client: AsyncClient,
+    db_session,
+) -> None:
+    """Test email update rate limit triggers after 5 conflict attempts."""
+    from app.core.security import hash_password as hp
+
+    other_user = User(
+        email="taken@example.com",
+        password_hash=hp(TEST_PASSWORD),
+    )
+    db_session.add(other_user)
+    await db_session.commit()
+
+    # Make 5 conflict attempts to fill the rate limit bucket
+    for _ in range(5):
+        response = await authenticated_client.put(
+            "/api/auth/email",
+            json={"email": "taken@example.com"},
+        )
+        assert response.status_code == 409
+
+    # 6th attempt should be rate limited
+    response = await authenticated_client.put(
+        "/api/auth/email",
+        json={"email": "taken@example.com"},
+    )
+
+    assert response.status_code == 429
+    data = response.json()
+    assert data["detail"]["code"] == "RATE_001"
+    assert "retry_after" in data["detail"]["details"]
+
+
+# =============================================================================
+# PUT /api/auth/password Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_update_password_success(authenticated_client: AsyncClient) -> None:
+    """Test successful password update."""
+    response = await authenticated_client.put(
+        "/api/auth/password",
+        json={
+            "current_password": TEST_PASSWORD_LOGIN,
+            "new_password": "NewSecurePass456!",  # pragma: allowlist secret
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Password updated successfully. Please log in again."
+
+
+@pytest.mark.asyncio
+async def test_update_password_wrong_current(
+    authenticated_client: AsyncClient,
+) -> None:
+    """Test password update with wrong current password returns 401."""
+    response = await authenticated_client.put(
+        "/api/auth/password",
+        json={
+            "current_password": TEST_PASSWORD_WRONG,
+            "new_password": "NewSecurePass456!",  # pragma: allowlist secret
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "AUTH_001"
+
+
+@pytest.mark.asyncio
+async def test_update_password_weak_new_password(
+    authenticated_client: AsyncClient,
+) -> None:
+    """Test password update with weak new password returns 422."""
+    response = await authenticated_client.put(
+        "/api/auth/password",
+        json={
+            "current_password": TEST_PASSWORD_LOGIN,
+            "new_password": TEST_PASSWORD_WEAK,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_password_session_invalidation(
+    client: AsyncClient,
+    test_user,
+) -> None:
+    """Test that password change invalidates all sessions."""
+    # Log in to get a session
+    response = await client.post(
+        "/api/auth/login",
+        json={"email": "test@example.com", "password": TEST_PASSWORD_LOGIN},
+    )
+    assert response.status_code == 200
+
+    # Change password (client has session cookie from login)
+    response = await client.put(
+        "/api/auth/password",
+        json={
+            "current_password": TEST_PASSWORD_LOGIN,
+            "new_password": "NewSecurePass456!",  # pragma: allowlist secret
+        },
+    )
+    assert response.status_code == 200
+
+    # Old session should no longer work — accessing a protected endpoint should fail
+    response = await client.get("/api/auth/session")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_update_password_unauthenticated(client: AsyncClient) -> None:
+    """Test password update without authentication returns 401."""
+    response = await client.put(
+        "/api/auth/password",
+        json={
+            "current_password": TEST_PASSWORD_LOGIN,
+            "new_password": "NewSecurePass456!",  # pragma: allowlist secret
+        },
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_update_password_rate_limit(
+    authenticated_client: AsyncClient,
+) -> None:
+    """Test password update rate limit triggers after 5 wrong-password attempts."""
+    # Make 5 failed attempts with wrong current password
+    for _ in range(5):
+        response = await authenticated_client.put(
+            "/api/auth/password",
+            json={
+                "current_password": TEST_PASSWORD_WRONG,
+                "new_password": "NewSecurePass456!",  # pragma: allowlist secret
+            },
+        )
+        assert response.status_code == 401
+
+    # 6th attempt should be rate limited
+    response = await authenticated_client.put(
+        "/api/auth/password",
+        json={
+            "current_password": TEST_PASSWORD_WRONG,
+            "new_password": "NewSecurePass456!",  # pragma: allowlist secret
+        },
+    )
+
+    assert response.status_code == 429
+    data = response.json()
+    assert data["detail"]["code"] == "RATE_001"
+    assert "retry_after" in data["detail"]["details"]
