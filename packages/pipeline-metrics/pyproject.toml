@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pipeline-metrics"
+version = "0.1.0"
+description = "Structured instrumentation for PR pipeline observability"
+readme = "README.md"
+authors = [
+    {name = "TaskManager", email = "support@brooksmcmillin.com"}
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "ruff",
+    "pyright>=1.1.407",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pipeline_metrics*"]
+
+[tool.setuptools.package-data]
+pipeline_metrics = ["py.typed"]
+
+[tool.ruff]
+exclude = ["build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "DTZ"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
