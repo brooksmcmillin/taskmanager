@@ -7,14 +7,12 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Set working directory
 WORKDIR /app
 
-# Install uv and git
-RUN apt-get update && apt-get install -y --no-install-recommends git curl \
-    && curl -LsSf https://astral.sh/uv/install.sh | sh \
-    && apt-get purge -y curl && apt-get autoremove -y \
+# Install git (needed for uv sync with git-sourced dependencies)
+RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
-# Add uv to PATH
-ENV PATH="/root/.local/bin:$PATH"
+# Pinned uv version — update intentionally when upgrading uv
+COPY --from=ghcr.io/astral-sh/uv:0.6.6 /uv /usr/local/bin/uv
 
 # Copy SDK and framework packages first (needed for local dependencies)
 COPY packages/taskmanager-sdk /packages/taskmanager-sdk
@@ -31,9 +29,8 @@ RUN sed -i 's|path = "../../packages/taskmanager-sdk"|path = "/packages/taskmana
 # Copy application code
 COPY services/mcp-auth/mcp_auth ./mcp_auth
 
-# Move uv to system path and create non-root user
-RUN cp /root/.local/bin/uv /usr/local/bin/uv && \
-    adduser --disabled-password --gecos "" appuser
+# Create non-root user
+RUN adduser --disabled-password --gecos "" appuser
 USER appuser
 
 # Expose port
