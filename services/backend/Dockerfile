@@ -4,8 +4,8 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Install uv for dependency management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# Pinned uv version — update intentionally when upgrading uv
+COPY --from=ghcr.io/astral-sh/uv:0.6.6 /uv /bin/uv
 
 # Copy dependency files
 COPY pyproject.toml uv.lock README.md ./
