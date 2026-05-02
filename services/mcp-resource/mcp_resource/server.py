@@ -209,12 +209,15 @@ def create_resource_server(
         end_date: str | None = None,
         category: str | None = None,
         deadline_type: str | None = None,
-        limit: int | None = None,
-        include_subtasks: bool = True,
+        limit: int | None = 50,
+        include_subtasks: bool = False,
+        include_descriptions: bool = False,
         order_by: str | None = None,
     ) -> str:
         """
-        Retrieve tasks with filtering options.
+        Retrieve tasks with filtering options. Returns a summary view by default;
+        descriptions can be large, so call get_task(id) for the full body of a
+        specific task.
 
         Args:
             status: Filter by status - one of "pending", "in_progress", "completed", "cancelled", "overdue", or "all"
@@ -222,17 +225,21 @@ def create_resource_server(
             end_date: Filter tasks with due date on or before this date (ISO format, e.g., "2025-12-20")
             category: Filter by category/project name
             deadline_type: Filter by deadline type - one of "flexible", "preferred", "firm", "hard"
-            limit: Maximum number of tasks to return
-            include_subtasks: Whether to include subtasks in the response (default: True)
+            limit: Maximum number of tasks to return (default: 50; pass a higher value or None for unbounded)
+            include_subtasks: Whether to include subtasks in the response (default: False)
+            include_descriptions: Whether to include the full description field on each task (default: False — keeps payload small)
             order_by: Sort order - one of "position", "due_date", "deadline_type"
 
         Returns:
-            JSON object with "tasks" array containing task objects with fields:
-            id, title, description, due_date, deadline_type, status, category, priority, tags, parent_id, subtasks, created_at, updated_at
+            JSON object with "tasks" array. Each task always includes:
+            id, title, due_date, deadline_type, status, category, priority, tags, parent_id, created_at, updated_at.
+            description is included only when include_descriptions=True.
+            subtasks is included only when include_subtasks=True.
         """
         logger.info(
             f"=== get_tasks called: status={status}, start_date={start_date}, "
-            f"end_date={end_date}, category={category}, limit={limit}, include_subtasks={include_subtasks} ==="
+            f"end_date={end_date}, category={category}, limit={limit}, "
+            f"include_subtasks={include_subtasks}, include_descriptions={include_descriptions} ==="
         )
         try:
             api_client = get_api_client()
@@ -267,44 +274,41 @@ def create_resource_server(
                 if task_id is None:
                     continue  # Skip tasks without valid ID
 
-                # Transform subtasks if present
-                subtasks_list = []
-                if task.get("subtasks"):
+                task_out: dict[str, Any] = {
+                    "id": f"task_{task_id}",
+                    "title": task.get("title", ""),
+                    "due_date": task.get("due_date"),
+                    "deadline_type": task.get("deadline_type", "preferred"),
+                    "status": task.get("status", "pending"),
+                    "category": task.get("project_name") or task.get("category"),
+                    "priority": task.get("priority", "medium"),
+                    "tags": task.get("tags") or [],
+                    "parent_id": f"task_{task.get('parent_id')}" if task.get("parent_id") else None,
+                    "created_at": task.get("created_at"),
+                    "updated_at": task.get("updated_at"),
+                }
+                if include_descriptions:
+                    task_out["description"] = task.get("description")
+                if include_subtasks and task.get("subtasks"):
+                    subtasks_list = []
                     for subtask in task["subtasks"]:
-                        subtasks_list.append(
-                            {
-                                "id": f"task_{subtask.get('id')}",
-                                "title": subtask.get("title", ""),
-                                "description": subtask.get("description"),
-                                "status": subtask.get("status", "pending"),
-                                "priority": subtask.get("priority", "medium"),
-                                "due_date": subtask.get("due_date"),
-                                "estimated_hours": subtask.get("estimated_hours"),
-                                "actual_hours": subtask.get("actual_hours"),
-                                "created_at": subtask.get("created_at"),
-                                "updated_at": subtask.get("updated_at"),
-                            }
-                        )
+                        subtask_out: dict[str, Any] = {
+                            "id": f"task_{subtask.get('id')}",
+                            "title": subtask.get("title", ""),
+                            "status": subtask.get("status", "pending"),
+                            "priority": subtask.get("priority", "medium"),
+                            "due_date": subtask.get("due_date"),
+                            "estimated_hours": subtask.get("estimated_hours"),
+                            "actual_hours": subtask.get("actual_hours"),
+                            "created_at": subtask.get("created_at"),
+                            "updated_at": subtask.get("updated_at"),
+                        }
+                        if include_descriptions:
+                            subtask_out["description"] = subtask.get("description")
+                        subtasks_list.append(subtask_out)
+                    task_out["subtasks"] = subtasks_list
 
-                result_tasks.append(
-                    {
-                        "id": f"task_{task_id}",
-                        "title": task.get("title", ""),
-                        "description": task.get("description"),
-                        "due_date": task.get("due_date"),
-                        "deadline_type": task.get("deadline_type", "preferred"),
-                        "status": task.get("status", "pending"),
-                        "category": task.get("project_name") or task.get("category"),
-                        "priority": task.get("priority", "medium"),
-                        "tags": task.get("tags") or [],
-                        "parent_id": f"task_{task.get('parent_id')}"
-                        if task.get("parent_id")
-                        else None,
-                        "subtasks": subtasks_list,
-                        "created_at": task.get("created_at"),
-                        "updated_at": task.get("updated_at"),
-                    }
-                )
+                result_tasks.append(task_out)
 
             logger.info(f"Returning {len(result_tasks)} tasks")
             return json.dumps(
@@ -789,20 +793,37 @@ def create_resource_server(
     async def search_tasks(
         query: str,
         category: str | None = None,
+        limit: int | None = 50,
+        include_subtasks: bool = False,
+        include_descriptions: bool = False,
     ) -> str:
         """
-        Search tasks by keyword using full-text search.
+        Search tasks by keyword using full-text search. Returns a summary view by
+        default; descriptions can be large, so call get_task(id) for the full body
+        of a specific match.
 
         Searches task titles, descriptions, and tags for the given query string.
 
         Args:
             query: Search query string (required)
             category: Filter by category/project name (optional)
+            limit: Maximum number of matches to return (default: 50; pass a higher value or None for unbounded). Applied client-side after the search returns.
+            include_subtasks: Whether to include subtasks on each match (default: False)
+            include_descriptions: Whether to include the full description field on each task (default: False — keeps payload small)
 
         Returns:
-            JSON object with "tasks" array (same format as get_tasks) and "count" field
+            JSON object with "tasks" array, "count" field, and "total_matches"
+            (the unfiltered match count from the backend, useful when "count" is
+            capped by limit). Each task always includes:
+            id, title, due_date, deadline_type, status, category, priority, tags, parent_id, created_at, updated_at.
+            description is included only when include_descriptions=True.
+            subtasks is included only when include_subtasks=True.
         """
-        logger.info(f"=== search_tasks called: query='{query}', category={category} ===")
+        logger.info(
+            f"=== search_tasks called: query='{query}', category={category}, "
+            f"limit={limit}, include_subtasks={include_subtasks}, "
+            f"include_descriptions={include_descriptions} ==="
+        )
         try:
             api_client = get_api_client()
             logger.debug("API client created successfully")
@@ -819,7 +840,7 @@ def create_resource_server(
 
             data = response.data
             if data is None:
-                return json.dumps({"tasks": [], "count": 0})
+                return json.dumps({"tasks": [], "count": 0, "total_matches": 0})
 
             # Handle response format (could be list or dict with 'tasks' key)
             if isinstance(data, list):
@@ -830,6 +851,10 @@ def create_resource_server(
                 logger.warning(f"Unexpected search response format: {type(data)}")
                 tasks = []
 
+            total_matches = len(tasks)
+            if limit is not None:
+                tasks = tasks[:limit]
+
             # Transform tasks to match expected output format
             result_tasks = []
             for task in tasks:
@@ -839,50 +864,50 @@ def create_resource_server(
                 if task_id is None:
                     continue
 
-                # Transform subtasks if present
-                subtasks_list = []
-                if task.get("subtasks"):
+                task_out: dict[str, Any] = {
+                    "id": f"task_{task_id}",
+                    "title": task.get("title", ""),
+                    "due_date": task.get("due_date"),
+                    "deadline_type": task.get("deadline_type", "preferred"),
+                    "status": task.get("status", "pending"),
+                    "category": task.get("project_name") or task.get("category"),
+                    "priority": task.get("priority", "medium"),
+                    "tags": task.get("tags") or [],
+                    "parent_id": f"task_{task.get('parent_id')}" if task.get("parent_id") else None,
+                    "created_at": task.get("created_at"),
+                    "updated_at": task.get("updated_at"),
+                }
+                if include_descriptions:
+                    task_out["description"] = task.get("description")
+                if include_subtasks and task.get("subtasks"):
+                    subtasks_list = []
                     for subtask in task["subtasks"]:
-                        subtasks_list.append(
-                            {
-                                "id": f"task_{subtask.get('id')}",
-                                "title": subtask.get("title", ""),
-                                "description": subtask.get("description"),
-                                "status": subtask.get("status", "pending"),
-                                "priority": subtask.get("priority", "medium"),
-                                "due_date": subtask.get("due_date"),
-                                "estimated_hours": subtask.get("estimated_hours"),
-                                "actual_hours": subtask.get("actual_hours"),
-                                "created_at": subtask.get("created_at"),
-                                "updated_at": subtask.get("updated_at"),
-                            }
-                        )
+                        subtask_out: dict[str, Any] = {
+                            "id": f"task_{subtask.get('id')}",
+                            "title": subtask.get("title", ""),
+                            "status": subtask.get("status", "pending"),
+                            "priority": subtask.get("priority", "medium"),
+                            "due_date": subtask.get("due_date"),
+                            "estimated_hours": subtask.get("estimated_hours"),
+                            "actual_hours": subtask.get("actual_hours"),
+                            "created_at": subtask.get("created_at"),
+                            "updated_at": subtask.get("updated_at"),
+                        }
+                        if include_descriptions:
+                            subtask_out["description"] = subtask.get("description")
+                        subtasks_list.append(subtask_out)
+                    task_out["subtasks"] = subtasks_list
 
-                result_tasks.append(
-                    {
-                        "id": f"task_{task_id}",
-                        "title": task.get("title", ""),
-                        "description": task.get("description"),
-                        "due_date": task.get("due_date"),
-                        "deadline_type": task.get("deadline_type", "preferred"),
-                        "status": task.get("status", "pending"),
-                        "category": task.get("project_name") or task.get("category"),
-                        "priority": task.get("priority", "medium"),
-                        "tags": task.get("tags") or [],
-                        "parent_id": f"task_{task.get('parent_id')}"
-                        if task.get("parent_id")
-                        else None,
-                        "subtasks": subtasks_list,
-                        "created_at": task.get("created_at"),
-                        "updated_at": task.get("updated_at"),
-                    }
-                )
+                result_tasks.append(task_out)
 
-            logger.info(f"Found {len(result_tasks)} tasks matching query '{query}'")
+            logger.info(
+                f"Found {total_matches} tasks matching query '{query}', returning {len(result_tasks)}"
+            )
             return json.dumps(
                 {
                     "tasks": result_tasks,
                     "count": len(result_tasks),
+                    "total_matches": total_matches,
                     "current_time": datetime.datetime.now(tz=datetime.UTC).isoformat(),
                 }
             )
