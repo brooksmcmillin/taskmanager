@@ -3268,3 +3268,136 @@ class TestNewsFeedTools:
             result = await tools["force_fetch_feed"].fn(source_id=999)
             parsed = json.loads(result)
             assert "error" in parsed
+
+
+class TestGetTasksAndSearchTasksPayloadShape:
+    """Tests for the summary-by-default response shape of get_tasks and search_tasks."""
+
+    @pytest.fixture
+    def mock_api_client(self) -> MagicMock:
+        return MagicMock()
+
+    def _create_server(self, mock_client: MagicMock) -> Any:
+        from mcp_resource.server import create_resource_server
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_client):
+            server = create_resource_server(
+                port=8001,
+                server_url="https://localhost:8001",
+                auth_server_url="https://localhost:9000",
+                auth_server_public_url="https://localhost:9000",
+                oauth_strict=False,
+            )
+            return server._tool_manager._tools
+
+    @staticmethod
+    def _task_payload(task_id: int = 1) -> dict[str, Any]:
+        return {
+            "id": task_id,
+            "title": "Parent",
+            "description": "A very long description " * 50,
+            "status": "pending",
+            "priority": "medium",
+            "due_date": "2026-05-10",
+            "deadline_type": "preferred",
+            "subtasks": [
+                {
+                    "id": task_id + 100,
+                    "title": "Sub",
+                    "description": "Sub description " * 50,
+                    "status": "pending",
+                    "priority": "medium",
+                }
+            ],
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_tasks_summary_by_default(self, mock_api_client: MagicMock) -> None:
+        import json
+
+        mock_api_client.get_todos.return_value = ApiResponse(
+            success=True,
+            data={"tasks": [self._task_payload()]},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_tasks"].fn()
+            parsed = json.loads(result)
+
+        assert len(parsed["tasks"]) == 1
+        task = parsed["tasks"][0]
+        assert "description" not in task
+        assert "subtasks" not in task
+        # SDK call should reflect the new defaults.
+        call_kwargs = mock_api_client.get_todos.call_args.kwargs
+        assert call_kwargs["limit"] == 50
+        assert call_kwargs["include_subtasks"] is False
+
+    @pytest.mark.asyncio
+    async def test_get_tasks_opt_in_descriptions_and_subtasks(
+        self, mock_api_client: MagicMock
+    ) -> None:
+        import json
+
+        mock_api_client.get_todos.return_value = ApiResponse(
+            success=True,
+            data={"tasks": [self._task_payload()]},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["get_tasks"].fn(include_subtasks=True, include_descriptions=True)
+            parsed = json.loads(result)
+
+        task = parsed["tasks"][0]
+        assert "description" in task
+        assert task["description"].startswith("A very long description")
+        assert task["subtasks"] and "description" in task["subtasks"][0]
+        assert mock_api_client.get_todos.call_args.kwargs["include_subtasks"] is True
+
+    @pytest.mark.asyncio
+    async def test_search_tasks_summary_and_total_matches(self, mock_api_client: MagicMock) -> None:
+        import json
+
+        payloads = [self._task_payload(task_id=i) for i in range(1, 11)]
+        mock_api_client.search_tasks.return_value = ApiResponse(
+            success=True,
+            data={"tasks": payloads},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["search_tasks"].fn(query="x", limit=3)
+            parsed = json.loads(result)
+
+        assert parsed["total_matches"] == 10
+        assert parsed["count"] == 3
+        assert len(parsed["tasks"]) == 3
+        for task in parsed["tasks"]:
+            assert "description" not in task
+            assert "subtasks" not in task
+
+    @pytest.mark.asyncio
+    async def test_search_tasks_opt_in_descriptions(self, mock_api_client: MagicMock) -> None:
+        import json
+
+        mock_api_client.search_tasks.return_value = ApiResponse(
+            success=True,
+            data={"tasks": [self._task_payload()]},
+            status_code=200,
+        )
+
+        with patch("mcp_resource.server.get_api_client", return_value=mock_api_client):
+            tools = self._create_server(mock_api_client)
+            result = await tools["search_tasks"].fn(
+                query="x", include_descriptions=True, include_subtasks=True
+            )
+            parsed = json.loads(result)
+
+        task = parsed["tasks"][0]
+        assert "description" in task
+        assert task["subtasks"] and "description" in task["subtasks"][0]
